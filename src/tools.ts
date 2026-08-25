@@ -15,6 +15,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { SshRegistry, MachineInput } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
+import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -37,7 +38,7 @@ export interface PromptMachineFace {
  */
 export interface PromptAgentFace {
   readonly id: string
-  readonly session?: { readonly header: { readonly cwd?: string } }
+  readonly session?: { readonly header: { readonly cwd?: string; readonly id?: string } }
 }
 
 /** The per-session remote-context fact the prompt renders. */
@@ -81,6 +82,60 @@ export function remotePromptFact(
 /** Render the one emphasis paragraph of the remote-workplace prompt (order 90). */
 export function renderRemotePrompt(fact: RemotePromptFact): string {
   return `⚠ 你当前的工作区是**远程 SSH 工作区**：\`${fact.endpoint}:${fact.displayPath}\`（由本地占位路径 \`${fact.placeholderRoot}\\${fact.connectionId}\\…\` 路由；你看到的占位路径只是路由别名，**所有命令与文件操作都真实发生在远程服务器上**，工作目录为 POSIX 绝对路径）。`
+}
+
+/** The permission fact one side workspace renders as. */
+export interface SideWorkspacePromptFact {
+  label: string
+  /** Display root: `ssh://<id>/<path>` for remote, absolute local path otherwise. */
+  rootKey: string
+  /** `只读` | `读写` */
+  fs: string
+  /** `开` | `关` */
+  exec: string
+}
+
+/** Pure prompt projection of one side workspace (leaf fields only). */
+export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspacePromptFact {
+  return {
+    label: item.label,
+    rootKey: item.rootKey,
+    fs: item.fs === 'r' ? '只读' : '读写',
+    exec: item.exec === 'off' ? '关' : '开',
+  }
+}
+
+/**
+ * R5: render the attached side-workspace list for the per-session prompt.
+ * Empty list → `''` (zero noise for sessions without attachments). The closing
+ * sentence states the enforcement boundary honestly: the exec gate covers the
+ * workspace world (spawn cwd / program path), not path text inside a command.
+ */
+export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
+  if (items.length === 0) return ''
+  const lines = items.map(item => {
+    const fact = sideWorkspacePromptFact(item)
+    return `- 副工作区 **${fact.label}**：\`${fact.rootKey}\`（fs: ${fact.fs} · exec: ${fact.exec}）`
+  })
+  return `**本会话额外关联的工作区（副目录，模型可直接操作）**：\n${lines.join('\n')}\n注意权限标记：只读（fs: 只读）拒绝写入，禁执行（exec: 关）拒绝在该目录下运行命令；被拒绝的操作请改用有权限的工作区或请用户调整。`
+}
+
+/**
+ * Compose the whole workspace prompt of one session: the R4 remote emphasis
+ * (only when the cwd routes remote) plus the R5 side-workspace list (only when
+ * attachments exist). Pure and synchronous; an empty result means zero
+ * injection.
+ */
+export function composeWorkspacePrompt(
+  cwd: string | undefined,
+  machine: PromptMachineFace | undefined,
+  sides: readonly SideWorkspaceItem[],
+  dshBase?: string,
+): string {
+  const fact = remotePromptFact(cwd, machine, dshBase)
+  const remote = fact !== null ? renderRemotePrompt(fact) : ''
+  const side = renderSideWorkspaces(sides)
+  return [remote, side].filter(part => part !== '').join('\n\n')
 }
 
 /** The remote toolbox the R4 remote world needs (bash/pwsh for terminals, rg for glob/searches). */
@@ -165,11 +220,14 @@ async function remoteEnvLine(registry: SshRegistry): Promise<string> {
 }
 
 /**
- * Register the three sw_* tools plus the one-line remote-context prompt
+ * Register the three sw_* tools plus the per-session workspace-context prompt
  * section on the given context. All side effects are effect-bound, so an
  * unloaded row removes every tool and the prompt section.
+ * @param ctx - the mounting context.
+ * @param registry - the machine registry accessor.
+ * @param sides - the side-workspace store accessor (absent → no attachments).
  */
-export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry): void {
+export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry, sides: () => SessionSideWorkspaceStore | undefined): void {
   const tools = [
     defineTool({
       name: 'sw_status',
@@ -288,22 +346,22 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
   }
 
   /**
-   * R4 远程认知：按会话注入「远程工作区」强调提示。
+   * R4 远程认知 + R5 副工作区：按会话注入工作区上下文提示。
    *
    * 注入点选型（侦察结论）：全局 section + `text(context)` 按 scope 反查会话
    * （方案 B）。每个 assembly 的 `context.scope` 就是该会话的 agent 实例
    * （dsh-agent-loop 的 `assembleContextFor` 返回 `{ agent, scope: agent }`；
    * 每会话 scope key 由 `ReactLoopAgent` 构造时的 `createScope(loopCtx, this)`
-   * mint），agent 暴露 `session.header.cwd`（叶子字段）。因此：
-   * - 本地会话：cwd 解析不出远程路由 → 返回 ''，零注入（renderPrompt 丢弃空 section）。
-   * - 远程会话（cwd = `ssh://<id>/…` 或本地占位树 dsw-routes/dsh-ssh-routes/<id>/…）：
-   *   解析出连接 id → 从机器表取 user@host 与 workspace → 渲染强调提示。
+   * mint），agent 暴露 `session.header`（叶子字段：cwd + id）。因此：
+   * - 本地会话无副工作区：远程事实为空、副列表为空 → ''，零注入。
+   * - 远程会话（cwd = `ssh://<id>/…` 或占位树）：按 route 找机器渲染强调提示。
+   * - 含副工作区（session.header.id → store.listFor）：追加副目录清单与权限标记。
    * - 不选方案 A（session/created 里为会话 createScope + 注册 scoped section）：
    *   注册需要持有一份带该 scope 标签的 ctx——agent 的 scoped ctx 对宿主行不可见；
    *   用同一 key 自行 createScope 会让两个 fiber 共存、section 生命周期无法跟随
    *   会话卸载（泄漏到进程退出且 key 又是每会话唯一的，无法回收）。
    * - 「当前 remote」旧文案（全局单行）已删除：它按「全局 active 机器」注入，
-   *   本地会话也会看到远端信息；新文案只按「本会话 cwd 是否路由到远程」注入。
+   *   本地会话也会看到远端信息；新文案只按「本会话上下文」注入。
    */
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'sw-remote',
@@ -311,12 +369,13 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
     text: (context) => {
       const agent = context.scope as PromptAgentFace | undefined
       const cwd = agent?.session?.header.cwd
-      if (cwd === undefined) return ''
-      const route = remoteRouteFromCwd(cwd)
-      if (route === null) return ''
-      const machine = registry().listMachines().machines.find(entry => entry.id === route.connectionId)
-      const fact = remotePromptFact(cwd, machine)
-      return fact !== null ? renderRemotePrompt(fact) : ''
+      const sessionId = agent?.session?.header.id
+      const attached = sessionId !== undefined ? (sides()?.listFor(sessionId) ?? []) : []
+      if (cwd === undefined && attached.length === 0) return ''
+      const route = cwd !== undefined ? remoteRouteFromCwd(cwd) : null
+      if (route === null && attached.length === 0) return ''
+      const machine = route !== null ? registry().listMachines().machines.find(entry => entry.id === route.connectionId) : undefined
+      return composeWorkspacePrompt(cwd, machine, attached)
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')

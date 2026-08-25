@@ -15,6 +15,7 @@ import { SshWorkspaceFlow } from './flow.tsx'
 import { installRowBadges } from './row-badges.ts'
 import type { RowBadgeSources } from './row-badges.ts'
 import { RemoteWorkspaceSettingsPage } from './settings.tsx'
+import { SideWorkspacesAction } from './side-workspaces.tsx'
 
 /** Local, self-contained wire contracts (no cross-plugin value imports). */
 export interface WireEntry {
@@ -148,6 +149,16 @@ export function apply(ctx: Context): void {
       label: () => '远程工作区',
       inject: injected,
     }, RemoteWorkspaceSettingsPage))
+  // R5: one per-session「工作区」button in the header action row — the single
+  // entry point for attached side workspaces (add/edit perms/remove).
+  ctx.slots.inject('conversation.session.header.actions', () =>
+    ctx.slots.register({
+      name: 'conversation.session.header.actions',
+      id: 'dsh-workspace-enhancement-side',
+      order: 25,
+      label: () => '工作区',
+      inject: injected,
+    }, SideWorkspacesAction))
   installSidebarRowBadges(ctx)
 }
 

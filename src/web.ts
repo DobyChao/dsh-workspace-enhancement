@@ -20,7 +20,10 @@ import type { SshConnection } from './connection.ts'
 import type { HostKeyMode } from './hostkey.ts'
 import { registerWorkspaceTools } from './tools.ts'
 import { sshRoutePlaceholder } from './transport.ts'
+import { parseSshRoute } from './registry.ts'
 import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
+import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
+import { normalizeSideRootKey } from './session-workspaces.ts'
 
 /** Channel config. */
 export interface WebChannelConfig extends RegistryConfig {
@@ -163,6 +166,36 @@ function isHostKeyForgetPayload(value: unknown): value is { id?: string; host?: 
   return value.id !== undefined || value.host !== undefined
 }
 
+/** Side-workspace add payload: `{ sessionId, id?, kind, path, label?, fs?, exec? }`. */
+function isSideWorkspaceAddPayload(value: unknown): value is SideWorkspaceInput & { sessionId: string } {
+  if (!isRecord(value)) return false
+  if (!isString(value.sessionId) || value.sessionId.trim() === '') return false
+  if (value.kind !== 'local' && value.kind !== 'remote') return false
+  if (!isString(value.path) || value.path.trim() === '') return false
+  for (const key of ['id', 'label'] as const) {
+    if (value[key] !== undefined && !isString(value[key])) return false
+  }
+  if (value.fs !== undefined && value.fs !== 'r' && value.fs !== 'rw') return false
+  if (value.exec !== undefined && value.exec !== 'on' && value.exec !== 'off') return false
+  return true
+}
+
+/** Side-workspace detach/update payload: `{ sessionId, rootKey }` / `{ rootKey, ...patch }`. */
+function isSideWorkspaceKeyPayload(value: unknown): value is { sessionId?: string; rootKey: string } {
+  return isRecord(value) && isString(value.rootKey) && value.rootKey.trim() !== ''
+    && (value.sessionId === undefined || isString(value.sessionId))
+}
+
+/** Side-workspace update payload: `{ rootKey, label?, fs?, exec? }`. */
+function isSideWorkspaceUpdatePayload(value: unknown): value is { rootKey: string; label?: string; fs?: 'r' | 'rw'; exec?: 'on' | 'off' } {
+  if (!isSideWorkspaceKeyPayload(value)) return false
+  const record = value as { rootKey: string; label?: unknown; fs?: unknown; exec?: unknown }
+  if (record.label !== undefined && !isString(record.label)) return false
+  if (record.fs !== undefined && record.fs !== 'r' && record.fs !== 'rw') return false
+  if (record.exec !== undefined && record.exec !== 'on' && record.exec !== 'off') return false
+  return true
+}
+
 /**
  * Map a channel failure onto the HOST's closed rpc error vocabulary — the
  * client transport validates `code` against its discriminated union and
@@ -193,6 +226,20 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     const connection = registry().get(id)
     if (connection === undefined) throw new Error(`dsw: unknown connection id ${JSON.stringify(id)}`)
     return connection
+  }
+  /** The side-workspace store (R5; mounted by the aggregate row). */
+  const sides = (): SessionSideWorkspaceStore => {
+    const value = ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined
+    if (value === undefined) throw new Error('dsw: the side-workspace store is not mounted')
+    return value
+  }
+  /** R5: a remote side workspace must name a registered machine. */
+  const requireRemoteMachine = (rootKey: string): void => {
+    const route = parseSshRoute(rootKey)
+    if (route === null) throw new Error(`dsw: invalid remote side workspace root ${JSON.stringify(rootKey)}`)
+    if (registry().get(route.id) === undefined) {
+      throw new Error(`dsw: remote side workspace names unknown machine "${route.id}"`)
+    }
   }
 
   /** The remote home directory: the login environment's HOME, else the spec cwd. */
@@ -395,6 +442,50 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const path = await pickNativeDirectory(signal)
           return { ok: true, value: { path } }
         }
+        case 'session.ws.list': {
+          const input = requirePayload(payload, isRecord, 'session.ws.list')
+          if (!isString(input.sessionId) || input.sessionId.trim() === '') {
+            throw new Error('bad-request: session.ws.list needs sessionId')
+          }
+          return { ok: true, value: { items: sides().listFor(input.sessionId) } }
+        }
+        case 'session.ws.add': {
+          const input = requirePayload(payload, isSideWorkspaceAddPayload, 'session.ws.add')
+          // R5: a remote side workspace must name a REGISTERED machine — and the
+          // check runs BEFORE the attach persists anything (an unknown machine
+          // must never leave a record behind).
+          if (input.kind === 'remote') {
+            const rootKey = normalizeSideRootKey('remote', input.path)
+            if (rootKey === null) throw new Error('bad-request: session.ws.add remote path must be ssh://<id>/<absolute>')
+            requireRemoteMachine(rootKey)
+          }
+          const item = sides().attach(input.sessionId, {
+            ...(input.id !== undefined ? { id: input.id } : {}),
+            kind: input.kind,
+            path: input.path,
+            ...(input.label !== undefined ? { label: input.label } : {}),
+            ...(input.fs !== undefined ? { fs: input.fs } : {}),
+            ...(input.exec !== undefined ? { exec: input.exec } : {}),
+          })
+          return { ok: true, value: { item } }
+        }
+        case 'session.ws.update': {
+          const input = requirePayload(payload, isSideWorkspaceUpdatePayload, 'session.ws.update')
+          const updated = sides().update(input.rootKey, {
+            ...(input.label !== undefined ? { label: input.label } : {}),
+            ...(input.fs !== undefined ? { fs: input.fs } : {}),
+            ...(input.exec !== undefined ? { exec: input.exec } : {}),
+          })
+          if (!updated) throw new Error('bad-request: session.ws.update names an unknown root')
+          return { ok: true, value: { item: sides().get(input.rootKey) } }
+        }
+        case 'session.ws.remove': {
+          const input = requirePayload(payload, isSideWorkspaceKeyPayload, 'session.ws.remove')
+          if (!isString(input.sessionId) || input.sessionId.trim() === '') {
+            throw new Error('bad-request: session.ws.remove needs sessionId')
+          }
+          return { ok: true, value: { removed: sides().detach(input.sessionId, input.rootKey) } }
+        }
         default:
           throw new Error(`bad-request: unknown endpoint ${JSON.stringify(endpoint)}`)
       }
@@ -407,5 +498,5 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
 
   const dispose = ctx.connection.rpc.handle('/dsw', dispatch, { authority: 'loopback' })
   ctx.effect(() => dispose, 'dsw: /dsw rpc channel')
-  registerWorkspaceTools(ctx, registry)
+  registerWorkspaceTools(ctx, registry, () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined)
 }

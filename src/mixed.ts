@@ -32,6 +32,7 @@ import type {
   FsWriteIntent,
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import type {
   SubprocessHandle,
   SubprocessSpawnSpec,
@@ -39,8 +40,58 @@ import type {
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import { parseSshTargetKey, remoteRouteFromCwd } from './transport.ts'
+import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
 import type { SshFileSystemEngine } from './filesystem.ts'
+import type { SideWorkspaceItem } from './session-workspaces.ts'
+
+/**
+ * R5: the side-workspace face the mixed providers gate against — the store's
+ * `match(path)` (longest owning root) plus the permission leaves only.
+ */
+export interface SideWorkspaceFace {
+  match(path: string): SideWorkspaceItem | undefined
+}
+
+/** Resolve the owning side workspace of one operation path (no store → none). */
+function sideWorkspaceOf(
+  sides: (() => SideWorkspaceFace | undefined) | undefined,
+  path: string,
+): SideWorkspaceItem | undefined {
+  if (sides === undefined || typeof path !== 'string' || path === '') return undefined
+  return sides()?.match(path)
+}
+
+/** R5 T3: the fs write gate — a `fs: 'r'` side workspace rejects every write. */
+function assertSideWriteAllowed(
+  sides: (() => SideWorkspaceFace | undefined) | undefined,
+  targetKey: string,
+  displayPath: string,
+): void {
+  const side = sideWorkspaceOf(sides, targetKey)
+  if (side !== undefined && side.fs !== 'rw') {
+    throw new FsError(
+      `cannot write "${displayPath}": the side workspace "${side.label}" is read-only (fs: r). Adjust its permission or use a writable workspace.`,
+      'FS_PERMISSION_DENIED',
+    )
+  }
+}
+
+/** R5 T4: the exec gate — an `exec: 'off'` side workspace rejects spawns in its world. */
+function assertSideExecAllowed(
+  sides: (() => SideWorkspaceFace | undefined) | undefined,
+  cwd: string | undefined,
+  argv0: string | undefined,
+): void {
+  const viaCwd = cwd !== undefined ? sideWorkspaceOf(sides, cwd) : undefined
+  const viaProgram = argv0 !== undefined && argv0.length > 0 ? sideWorkspaceOf(sides, argv0) : undefined
+  const side = viaCwd ?? viaProgram
+  if (side !== undefined && side.exec === 'off') {
+    throw new Error(
+      `dsw: execution is disabled for the side workspace "${side.label}" (exec: off). Use a workspace with exec enabled or ask the user to adjust the permission.`,
+    )
+  }
+}
 
 /** The two execution worlds a mixed provider can route one call to. */
 export type ExecutionWorld = 'remote' | 'local'
@@ -111,6 +162,7 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   constructor(
     private readonly local: SubprocessBranch,
     private readonly remote: SshSubprocessEngine,
+    private readonly sides?: () => SideWorkspaceFace | undefined,
   ) {}
 
   /** @inheritdoc — local world (see class doc: resolveExecutable is world-less). */
@@ -120,6 +172,7 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
 
   /** @inheritdoc */
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    assertSideExecAllowed(this.sides, spec.cwd, spec.argv[0])
     if (worldOfCwd(spec.cwd) === 'remote') {
       return this.remote.spawn({ ...spec, argv: remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined) })
     }
@@ -127,7 +180,8 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   }
 
   /** @inheritdoc */
-  spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
+  async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
+    assertSideExecAllowed(this.sides, spec.cwd, spec.argv[0])
     return worldOfCwd(spec.cwd) === 'remote' ? this.remote.spawnTerminal(spec) : this.local.spawnTerminal(spec)
   }
 }
@@ -175,6 +229,7 @@ export class MixedFileSystem implements FileSystemBranch {
   constructor(
     private readonly local: FileSystemBranch,
     private readonly remote: SshFileSystemEngine,
+    private readonly sides?: () => SideWorkspaceFace | undefined,
   ) {}
 
   /** The deployment's confinement fact, as reported by the local backend. */
@@ -184,6 +239,20 @@ export class MixedFileSystem implements FileSystemBranch {
 
   /** @inheritdoc */
   async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
+    // R5 T2: a side-workspace PATH wins over the cwd world — an absolute path
+    // under a remote side root must resolve over its machine even when the
+    // session cwd is local, and vice versa (the cwd only fixes relative paths).
+    const side = sideWorkspaceOf(this.sides, path)
+    if (side !== undefined) {
+      if (side.kind === 'remote') {
+        const route = parseSshRoute(path)
+        if (route !== null) {
+          return this.remote.resolve(route.path, { cwd: side.rootKey, ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
+        }
+      } else {
+        return this.local.resolve(path, opts)
+      }
+    }
     return worldOfCwd(opts?.cwd) === 'remote' ? this.remote.resolve(path, opts) : this.local.resolve(path, opts)
   }
 
@@ -218,6 +287,15 @@ export class MixedFileSystem implements FileSystemBranch {
 
   /** @inheritdoc */
   lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
+    const side = sideWorkspaceOf(this.sides, path)
+    if (side !== undefined) {
+      if (side.kind === 'remote') {
+        const route = parseSshRoute(path)
+        if (route !== null) return this.remote.lstat(route.path, { cwd: side.rootKey }, signal)
+      } else {
+        return this.local.lstat(path, opts, signal)
+      }
+    }
     return worldOfCwd(opts?.cwd) === 'remote' ? this.remote.lstat(path, opts, signal) : this.local.lstat(path, opts, signal)
   }
 
@@ -250,26 +328,31 @@ export class MixedFileSystem implements FileSystemBranch {
   }
 
   /** @inheritdoc — the per-call policy reaches the local backend only. */
-  writeText(
+  async writeText(
     target: FsTarget,
     content: string,
     expected?: FsWriteIntent,
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsWriteOutcome> {
+    // Async method: the gate rejection must be a PROMISE rejection, never a
+    // synchronous throw — the seam contract is promise-returning and callers
+    // may await it without a synchronous guard.
+    assertSideWriteAllowed(this.sides, String(target.targetKey), target.displayPath)
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.writeText(target, content, expected, signal)
       : this.local.writeText(target, content, expected, signal, sandboxPolicy)
   }
 
   /** @inheritdoc — the per-call policy reaches the local backend only. */
-  editText(
+  async editText(
     target: FsTarget,
     edit: FsEditRequest,
     expected?: { version: FsVersion },
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
+    assertSideWriteAllowed(this.sides, String(target.targetKey), target.displayPath)
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.editText(target, edit, expected, signal)
       : this.local.editText(target, edit, expected, signal, sandboxPolicy)

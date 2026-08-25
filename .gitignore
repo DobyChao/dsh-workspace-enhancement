@@ -38,3 +38,6 @@ nul
 # Public repo carries only README (+ concise docs/ when written).
 drafts/
 AGENTS.md
+
+# Artifact of test/mixed-install.test.ts write-probe (recreated by every `npm test`)
+smoke-install.txt

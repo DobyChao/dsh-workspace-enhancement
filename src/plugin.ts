@@ -34,8 +34,9 @@ import SshFileSystem from './filesystem.ts'
 import { SshSubprocessEngine } from './subprocess.ts'
 import { SshFileSystemEngine } from './filesystem.ts'
 import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
+import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { remoteRouteFromCwd } from './transport.ts'
-import type { FileSystemBranch } from './mixed.ts'
+import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -78,15 +79,25 @@ function forceRemoteSandboxMode(ctx: Context): void {
  * @param ctx - the aggregate row's context.
  */
 export function installMixedProviders(ctx: Context): void {
+  // R5: the session-attached side-workspace store. Registered as a cordis
+  // service ('sideWorkspaces') so the web endpoints and the prompt section
+  // resolve the same instance; the mixed providers gate against it lazily
+  // (a missing store means no side workspaces configured — plain R4 behavior).
+  const sides = (): SideWorkspaceFace | undefined => {
+    const value = ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined
+    return value
+  }
+  void new SessionSideWorkspaceStore(ctx)
+
   // Subprocess: the local runtime has no service dependencies, so it can be
   // constructed immediately (the deployment default for local executions).
   const localSubprocess = new LocalSubprocessRuntime(ctx)
   const sshSubprocess = new SshSubprocessEngine(ctx)
-  ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
+  ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess, sides))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
     const sshFs = new SshFileSystemEngine(owner)
-    owner.set('fs', new MixedFileSystem(localFs, sshFs))
+    owner.set('fs', new MixedFileSystem(localFs, sshFs, sides))
   }
 
   // Filesystem: the deployment's local backend is the SANDBOXED one when a
