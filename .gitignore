@@ -34,7 +34,7 @@ secrets/
 # Accidental Windows redirect-output artifact
 nul
 
-# Draft docs — not yet versioned (kept on disk only)
-docs/
+# Local draft notes — research/decisions/roadmap; kept on disk only.
+# Public repo carries only README (+ concise docs/ when written).
+drafts/
 AGENTS.md
-CONTEXT.md
