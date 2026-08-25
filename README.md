@@ -37,6 +37,10 @@ No DSH install on the remote: the model orchestrates locally, commands run remot
 dsh plugin --profile web add <this-repo-path>   # from source: npm run build first (host loads lib/)
 ```
 
+## Roadmap
+
+Current status and remaining milestones: [docs/ROADMAP.md](./docs/ROADMAP.md).
+
 ## References
 
 - [dsh-ssh](https://github.com/UynajGI/dsh-ssh): remote execution engine — `ctx.subprocess` / `ctx.fs` providers, jump chains, PTY, directory-picker seam, `session.route` placeholder.

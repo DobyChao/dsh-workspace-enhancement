@@ -45,6 +45,10 @@ dsh plugin --profile web add <本仓库路径>   # 源码安装前先 npm run bu
 
 
 
+## 路线图
+
+当前进度与剩余里程碑：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。
+
 ## 参考项目
 
 - [dsh-ssh](https://github.com/UynajGI/dsh-ssh)：远程执行引擎——`ctx.subprocess` / `ctx.fs` provider、跳板链、PTY、directory-picker 接缝、`session.route` 占位。
