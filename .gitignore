@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+lib/
+dist/
+*.tsbuildinfo
+
+# Sandbox / dev harness artifacts
+dev-harness/
+.release/
+
+# Logs and temp
+*.log
+*.tmp
+.tmp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets — never commit credentials or machine lists
+*.pem
+known_hosts.json
+machines.json
+dsh-*-connections.json
+secrets/
+
+# Team/agent ephemeral state (do not commit)
+.agent-teams/
+
+# Accidental Windows redirect-output artifact
+nul
+
+# Draft docs — not yet versioned (kept on disk only)
+docs/
+AGENTS.md
+CONTEXT.md
