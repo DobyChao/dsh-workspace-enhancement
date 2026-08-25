@@ -21,7 +21,7 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Secrets — never commit credentials or machine lists
+# Secrets �?never commit credentials or machine lists
 *.pem
 known_hosts.json
 machines.json
@@ -34,7 +34,3 @@ secrets/
 # Accidental Windows redirect-output artifact
 nul
 
-# Draft docs — not yet versioned (kept on disk only)
-docs/
-AGENTS.md
-CONTEXT.md
