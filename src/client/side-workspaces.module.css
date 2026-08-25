@@ -1,0 +1,441 @@
+/*
+ * dsh-workspace-enhancement side-workspaces panel — theme-aware styling.
+ *
+ * Token strategy mirrors flow.module.css: the three anchors (surface / fg /
+ * accent) read host custom properties first (shadcn-style names, then generic
+ * ones); when the host exposes none, a neutral developer-tool palette per
+ * color scheme applies. Derived tones re-mix the anchors with color-mix (each
+ * preceded by a static fallback for older engines), so any host palette stays
+ * internally coherent. Tokens are declared on both the trigger action and the
+ * panel overlay, since the trigger lives outside the panel subtree.
+ */
+
+/* ---------- design tokens (shared by the trigger and the panel) ---------- */
+
+.action,
+.panel {
+  --dswsw-accent: var(--color-primary, var(--accent, var(--primary, #4a6cf7)));
+  --dswsw-accent-fg: #ffffff;
+  --dswsw-surface: var(--color-bg-elevated, var(--background, var(--card, #17181c)));
+  --dswsw-fg: var(--color-fg, var(--foreground, #e8e9ec));
+  --dswsw-danger: var(--color-danger, var(--destructive, #e5534b));
+
+  --dswsw-surface-2: #131418;
+  --dswsw-surface-2: color-mix(in srgb, var(--dswsw-fg) 3%, var(--dswsw-surface));
+  --dswsw-surface-3: #23262e;
+  --dswsw-surface-3: color-mix(in srgb, var(--dswsw-fg) 7%, var(--dswsw-surface));
+  --dswsw-surface-inset: #0f1013;
+  --dswsw-surface-inset: color-mix(in srgb, black 10%, var(--dswsw-surface));
+  --dswsw-line: #232529;
+  --dswsw-line: color-mix(in srgb, var(--dswsw-fg) 8%, var(--dswsw-surface));
+  --dswsw-border: #2c2e34;
+  --dswsw-border: color-mix(in srgb, var(--dswsw-fg) 14%, var(--dswsw-surface));
+  --dswsw-border-strong: #3c3f48;
+  --dswsw-border-strong: color-mix(in srgb, var(--dswsw-fg) 26%, var(--dswsw-surface));
+  --dswsw-fg-muted: #a3a9b3;
+  --dswsw-fg-muted: color-mix(in srgb, var(--dswsw-fg) 65%, var(--dswsw-surface));
+  --dswsw-fg-subtle: #6f7480;
+  --dswsw-fg-subtle: color-mix(in srgb, var(--dswsw-fg) 38%, var(--dswsw-surface));
+  --dswsw-accent-soft: rgba(74, 108, 247, 0.14);
+  --dswsw-accent-soft: color-mix(in srgb, var(--dswsw-accent) 13%, var(--dswsw-surface));
+  --dswsw-danger-soft: rgba(229, 83, 75, 0.13);
+  --dswsw-danger-soft: color-mix(in srgb, var(--dswsw-danger) 12%, var(--dswsw-surface));
+  --dswsw-danger-text: #ee8f8c;
+  --dswsw-danger-text: color-mix(in srgb, var(--dswsw-danger) 55%, var(--dswsw-fg));
+  --dswsw-scrim: rgba(9, 10, 13, 0.58);
+  --dswsw-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  .action,
+  .panel {
+    --dswsw-accent: var(--color-primary, var(--accent, var(--primary, #3b5bdb)));
+    --dswsw-surface: var(--color-bg-elevated, var(--background, var(--card, #ffffff)));
+    --dswsw-fg: var(--color-fg, var(--foreground, #21242a));
+    --dswsw-danger: var(--color-danger, var(--destructive, #c9352f));
+
+    --dswsw-surface-2: #f6f7f9;
+    --dswsw-surface-2: color-mix(in srgb, var(--dswsw-fg) 3%, var(--dswsw-surface));
+    --dswsw-surface-3: #edeef2;
+    --dswsw-surface-3: color-mix(in srgb, var(--dswsw-fg) 7%, var(--dswsw-surface));
+    --dswsw-surface-inset: #f4f5f7;
+    --dswsw-surface-inset: color-mix(in srgb, black 6%, var(--dswsw-surface));
+    --dswsw-line: #e7e9ec;
+    --dswsw-line: color-mix(in srgb, var(--dswsw-fg) 8%, var(--dswsw-surface));
+    --dswsw-border: #d8dbe1;
+    --dswsw-border: color-mix(in srgb, var(--dswsw-fg) 14%, var(--dswsw-surface));
+    --dswsw-border-strong: #c2c6cf;
+    --dswsw-border-strong: color-mix(in srgb, var(--dswsw-fg) 26%, var(--dswsw-surface));
+    --dswsw-fg-muted: #4f5664;
+    --dswsw-fg-muted: color-mix(in srgb, var(--dswsw-fg) 65%, var(--dswsw-surface));
+    --dswsw-fg-subtle: #8b909a;
+    --dswsw-fg-subtle: color-mix(in srgb, var(--dswsw-fg) 38%, var(--dswsw-surface));
+    --dswsw-accent-soft: rgba(59, 91, 219, 0.1);
+    --dswsw-accent-soft: color-mix(in srgb, var(--dswsw-accent) 11%, var(--dswsw-surface));
+    --dswsw-danger-soft: rgba(201, 53, 47, 0.09);
+    --dswsw-danger-soft: color-mix(in srgb, var(--dswsw-danger) 10%, var(--dswsw-surface));
+    --dswsw-danger-text: #8a3230;
+    --dswsw-danger-text: color-mix(in srgb, var(--dswsw-danger) 55%, var(--dswsw-fg));
+    --dswsw-scrim: rgba(15, 17, 21, 0.34);
+    --dswsw-shadow: 0 24px 64px rgba(15, 17, 21, 0.2);
+  }
+}
+
+/* ---------- trigger action ---------- */
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--dswsw-border);
+  border-radius: 6px;
+  background: var(--dswsw-surface);
+  color: var(--dswsw-fg);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action:hover {
+  background: var(--dswsw-surface-3);
+  border-color: var(--dswsw-border-strong);
+}
+
+.action svg {
+  flex: none;
+}
+
+/* ---------- panel overlay ---------- */
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--dswsw-scrim);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'PingFang SC', 'Microsoft YaHei', sans-serif);
+}
+
+.panel button,
+.panel input,
+.panel select {
+  font-family: inherit;
+}
+
+.panel :focus-visible {
+  outline: 2px solid var(--dswsw-accent);
+  outline-offset: 1px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 560px;
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--dswsw-border);
+  background: var(--dswsw-surface);
+  color: var(--dswsw-fg);
+  box-shadow: var(--dswsw-shadow);
+  font-size: 13px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.error {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dswsw-danger-text);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- attached-side list ---------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.loading,
+.empty {
+  font-size: 12px;
+  color: var(--dswsw-fg-muted);
+}
+
+.empty {
+  line-height: 1.55;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--dswsw-border);
+  border-radius: 7px;
+  background: var(--dswsw-surface-2);
+}
+
+.rowIcon {
+  flex: none;
+  color: var(--dswsw-fg-muted);
+}
+
+.itemLabel {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rowPath {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dswsw-fg-muted);
+}
+
+.row .input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.renameButton {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--dswsw-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dswsw-fg-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.renameButton:hover {
+  background: var(--dswsw-surface-3);
+  border-color: var(--dswsw-border-strong);
+  color: var(--dswsw-fg);
+}
+
+/* ---------- add form ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--dswsw-line);
+  padding-top: 10px;
+}
+
+.segment {
+  display: inline-flex;
+  gap: 3px;
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--dswsw-line);
+  border-radius: 9px;
+  background: var(--dswsw-surface-inset);
+}
+
+.segmentButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dswsw-fg-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmentButton:hover:not(.segmentButtonOn):not(:disabled) {
+  color: var(--dswsw-fg);
+}
+
+.segmentButtonOn {
+  background: var(--dswsw-surface-3);
+  color: var(--dswsw-fg);
+  box-shadow: inset 0 0 0 1px var(--dswsw-border-strong);
+}
+
+.segmentButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 8px;
+}
+
+.fieldRow .input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- shared controls ---------- */
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--dswsw-border);
+  background: var(--dswsw-surface-inset);
+  color: var(--dswsw-fg);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--dswsw-fg-subtle);
+}
+
+.input:focus {
+  border-color: var(--dswsw-accent);
+  box-shadow: 0 0 0 3px var(--dswsw-accent-soft);
+}
+
+.select {
+  flex: none;
+  min-width: 72px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--dswsw-border);
+  background: var(--dswsw-surface-inset);
+  color: var(--dswsw-fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.select:focus {
+  border-color: var(--dswsw-accent);
+  box-shadow: 0 0 0 3px var(--dswsw-accent-soft);
+}
+
+.selectWide {
+  width: 100%;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  padding: 5px 13px;
+  border-radius: 7px;
+  border: 1px solid var(--dswsw-border);
+  background: transparent;
+  color: var(--dswsw-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button svg {
+  flex: none;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--dswsw-surface-3);
+  border-color: var(--dswsw-border-strong);
+}
+
+.primary {
+  background: var(--dswsw-accent);
+  border-color: var(--dswsw-accent);
+  color: var(--dswsw-accent-fg);
+}
+
+.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dswsw-accent) 85%, #ffffff);
+  border-color: color-mix(in srgb, var(--dswsw-accent) 85%, #ffffff);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dswsw-fg-muted);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dswsw-surface-3);
+  color: var(--dswsw-fg);
+}
+
+.iconButton.danger {
+  color: var(--dswsw-danger-text);
+}
+
+.iconButton.danger:hover {
+  background: var(--dswsw-danger-soft);
+  color: var(--dswsw-danger-text);
+}
+
+.iconButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 12px;
+  }
+
+  .card {
+    max-height: calc(100vh - 24px);
+  }
+}

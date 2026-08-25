@@ -99,6 +99,21 @@ export function normalizeSideRootKey(kind: SideWorkspaceKind, path: string): str
   return resolve(value)
 }
 
+/**
+ * Canonicalize ANY remote side-workspace spelling into the
+ * `ssh://<id>/<posix>` root key, or null when the path cannot name a remote
+ * root. Three spellings select the same registry route (transport rule): the
+ * `ssh://<id>/<abs>` form and the local placeholder trees
+ * (`dsw-routes/<id>/…`, pre-rename `dsh-ssh-routes/<id>/…`) — so an attach
+ * fed a placeholder path must land on exactly the record {@link sideWorkspaceOf}
+ * matches for that same path.
+ */
+export function remoteSideRootKey(path: string): string | null {
+  const route = remoteRouteFromCwd(path)
+  if (route === null) return null
+  return normalizeRemoteKey(`ssh://${route.connectionId}${route.path}`)
+}
+
 /** Parse a stored root key back into its kind + canonical path parts. */
 export function sideRootKeyOf(rootKey: string): { kind: SideWorkspaceKind; path: string } | null {
   if (rootKey.startsWith('ssh://')) {

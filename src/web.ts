@@ -23,7 +23,7 @@ import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
-import { normalizeSideRootKey } from './session-workspaces.ts'
+import { remoteSideRootKey } from './session-workspaces.ts'
 
 /** Channel config. */
 export interface WebChannelConfig extends RegistryConfig {
@@ -453,16 +453,21 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const input = requirePayload(payload, isSideWorkspaceAddPayload, 'session.ws.add')
           // R5: a remote side workspace must name a REGISTERED machine — and the
           // check runs BEFORE the attach persists anything (an unknown machine
-          // must never leave a record behind).
+          // must never leave a record behind). Every remote spelling (the
+          // ssh:// root AND the local placeholder trees) canonicalizes to the
+          // same ssh://<id>/<posix> root key, so the attach stores exactly the
+          // record sideWorkspaceOf would match for that path.
+          let attachPath = input.path
           if (input.kind === 'remote') {
-            const rootKey = normalizeSideRootKey('remote', input.path)
-            if (rootKey === null) throw new Error('bad-request: session.ws.add remote path must be ssh://<id>/<absolute>')
+            const rootKey = remoteSideRootKey(input.path)
+            if (rootKey === null) throw new Error('bad-request: session.ws.add remote path must be an ssh://<id>/<absolute> route or a dsw-routes/dsh-ssh-routes placeholder')
             requireRemoteMachine(rootKey)
+            attachPath = rootKey
           }
           const item = sides().attach(input.sessionId, {
             ...(input.id !== undefined ? { id: input.id } : {}),
             kind: input.kind,
-            path: input.path,
+            path: attachPath,
             ...(input.label !== undefined ? { label: input.label } : {}),
             ...(input.fs !== undefined ? { fs: input.fs } : {}),
             ...(input.exec !== undefined ? { exec: input.exec } : {}),

@@ -50,6 +50,13 @@ export interface FlowProps {
   onPicked(path: string): void
   onCancel(): void
   onError(message: string): void
+  /**
+   * Skip the host `session.route` adoption when a remote directory is picked:
+   * no placeholder tree is created and no machine workspace is written back —
+   * the raw `ssh://<id><posixPath>` spelling is handed to the owner instead
+   * (the host normalizes it anyway). Defaults to false (unchanged behavior).
+   */
+  suppressSessionRoute?: boolean
 }
 
 /** Which filesystem the browser pane is showing. */
@@ -194,7 +201,7 @@ function describeRemoteFailure(raw: string): RemoteFailure {
 
 /** The directory-flow occupant registered into both workspace holes. */
 export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
-  const { open, busy, onPicked, onCancel, listLocalDirectory, createLocalDirectory, rpc } = props
+  const { open, busy, onPicked, onCancel, listLocalDirectory, createLocalDirectory, rpc, suppressSessionRoute = false } = props
 
   const [mode, setMode] = useState<Mode>({ kind: 'local' })
   const [pane, setPane] = useState<Pane>(EMPTY_PANE)
@@ -262,6 +269,14 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
     if (mode.kind !== 'remote' || pane.path === null || openingRemote) return
     setOpeningRemote(true)
     try {
+      if (suppressSessionRoute) {
+        // Opt-out owner (side-workspaces panel): hand the raw ssh:// spelling
+        // — no placeholder tree, no machine-workspace write-back. Spelling
+        // matches sshTargetKey (`ssh://<id><posixPath>`); the host normalizes
+        // it into the registry connection on attach.
+        onPicked(`ssh://${mode.id}${pane.path}`)
+        return
+      }
       // The host mkdir's the session cwd locally, so hand it the local
       // placeholder that stands in for the remote route (both spellings
       // resolve to the same registry connection in the providers). Adopt it
