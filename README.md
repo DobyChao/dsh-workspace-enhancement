@@ -4,19 +4,20 @@ English | [中文](README.zh.md)
 
 ![npm version](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![license](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![node version](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-DeepSeek Harness plugin: local and remote (SSH) workspaces in one place. Remote execution uses a single SSH connection (multi-hop jumps allowed); bash and files share that link (PTY via the terminal seam). Multi-machine registry with TOFU host keys and OS keychain. Web UI for adding workspaces and editing machines. Also ships 3 `sw_*` model tools. Built on [ssh2](https://github.com/mscdex/ssh2).
+**A DeepSeek Harness workspace-enhancement plugin** — local and remote (SSH) workspaces managed in one place. It solves where workspaces come from, where they live, and how they are operated: remote execution rides a single SSH connection (multi-hop jumps allowed) so bash, files, PTY terminals and directory browsing all land on the server transparently; a session can hold **multiple workspaces** (a main cwd plus side directories) each with its own permissions; machines, TOFU host keys and keys are stored in your local `~/.dsh`. Built on [ssh2](https://github.com/mscdex/ssh2).
 
 ## Features
 
 | Feature | Description |
 |---|---|
-| Remote workspaces | `ctx.subprocess` + `ctx.fs` remote providers: one SSH chain (multi-hop) runs bash / files / PTY (terminal). Tools on those seams switch to remote with no code changes |
-| Multi-machine registry | `remote-workspaces/machines.json` + `ssh://<id>/<path>` routing; recognizes `~/.ssh/config` aliases |
-| Security | TOFU host keys (`accept-new` / `verify` / `off`); per-machine OS keychain (DPAPI / security / secret-tool); credentials redacted in error messages |
-| Web UI | Add workspace (connection sidebar + remote directory browser); machine settings (CRUD / test / set current / forget fingerprint) |
-| Model tools | `sw_status`, `sw_connect` (`save:false` for temporary), `sw_pick_workspace` |
+| Remote workspaces | `ctx.subprocess` + `ctx.fs` transparent remote providers: one SSH chain (multi-hop) runs bash / files / PTY / directory browsing with no code changes on the tools |
+| Multi-workspace sessions | The「⊕ 工作区」button in the session header: attach one or more **side workspaces** (local dirs or remote machine dirs) to a session, each with its own permission (`fs: read-only / read-write` + `exec: on / off`); the model is told about them and can operate them directly |
+| Add-workspace flow | Connection sidebar (saved machines, `~/.ssh/config` aliases, local) + directory browser (breadcrumbs, native chooser, new folder); remote "Connect & open" creates the session straight on the server |
+| Machine settings page | Machine CRUD / test / set-current / forget host key; OS-keychain passwords; TOFU host keys (`accept-new` default) |
+| Session awareness | Remote marker + online tri-state + reconnect in the sidebar; per-session prompt injection states the remote / side-workspace context and its permission marks |
+| Model tools | `sw_status`, `sw_connect` (`save:false` = temporary), `sw_pick_workspace` |
 
-## Architecture
+## How it works
 
 ```mermaid
 flowchart LR
@@ -30,6 +31,12 @@ flowchart LR
 ```
 
 No DSH install on the remote: the model orchestrates locally, commands run remotely, results come back into context.
+
+**Design notes** (implementation facts, not user features):
+
+- **Registry & routing**: `remote-workspaces/machines.json` is the single source of truth; `ssh://<id>/<path>` (and the local `dsw-routes` placeholder tree) route every operation to the right machine; `~/.ssh/config` aliases are recognized.
+- **Security**: TOFU host keys (`accept-new` / `verify` / `off`), per-machine OS keychain (DPAPI / security / secret-tool), credentials redacted in error messages. No credentials ever enter the repo or logs.
+- **Workspace permissions** are enforced at the engine seams (`ctx.subprocess` / `ctx.fs` are this plugin's single implementation): a read-only side workspace rejects writes, `exec: off` rejects spawning in its world; command text is not inspected (documented boundary).
 
 ## Install
 

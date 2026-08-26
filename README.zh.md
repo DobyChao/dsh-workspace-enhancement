@@ -4,23 +4,20 @@
 
 ![npm 版本](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![许可证](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![Node 版本](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-DeepSeek Harness 插件：本地和远程（SSH）工作区放在一起管。远程执行走一条 SSH（可多级跳板），bash、文件、PTY（终端）共用这条连接；多机注册表带 TOFU 指纹和 OS 钥匙串；Web UI 负责加工作区和改机器设置；另外提供 3 个 `sw_*` 模型工具。底层用 [ssh2](https://github.com/mscdex/ssh2)。
+**一个 DeepSeek Harness 工作区增强插件** —— 把本地和远程（SSH）工作区放在一起管：它解决「工作区从哪里来、在哪里、怎么被操作」。远程执行走一条 SSH（可多级跳板），bash、文件、PTY 终端、目录浏览全部透明地落在服务器上；一个会话可以挂**多个工作区**（主工作区 + 副目录），每个副目录独立授权；机器、TOFU 指纹与钥匙串都存在你本机的 `~/.dsh` 下。底层用 [ssh2](https://github.com/mscdex/ssh2)。
 
-## 功能列表
+## 功能
 
+| 功能     | 说明 |
+| ------ | ------ |
+| 远程工作区 | `ctx.subprocess` + `ctx.fs` 透明远程 provider：一条 SSH（多级跳板）跑 bash / 文件 / PTY / 目录浏览，走这两条缝的工具不用改就切到远程 |
+| 多工作区会话 | 会话标题栏「⊕ 工作区」按钮：一个会话可挂一个或多个**副工作区**（本地目录 / 远程机器目录），各自独立权限（`fs: 只读/读写` + `exec: 开/关`）；模型能看到清单并直接操作 |
+| 添加工作区流程 | 连接侧栏（已保存机器、`~/.ssh/config` 别名、本机）+ 目录浏览器（面包屑、系统选择器、新建文件夹）；远程「连接并打开」直接在服务器上建会话 |
+| 机器设置页 | 机器增删改 / 测试 / 设当前 / 忘指纹；OS 钥匙串存密码；TOFU 主机指纹（默认 accept-new） |
+| 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话自动注入远程/副工作区上下文（含权限标记） |
+| 模型工具 | `sw_status`、`sw_connect`（`save:false`=临时）、`sw_pick_workspace` |
 
-| 功能     | 说明                                                                                               |
-| ------ | ------------------------------------------------------------------------------------------------ |
-| 远程工作区  | `ctx.subprocess` + `ctx.fs` 远程 provider：一条 SSH（多级跳板）跑 bash / 文件 / PTY（终端）。走这两条缝的工具不用改就能切到远程    |
-| 多机注册表  | `remote-workspaces/machines.json` + `ssh://<id>/<path>` 路由；能认 `~/.ssh/config` 别名                 |
-| 安全     | TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据 |
-| Web UI | 添加工作区（连接侧栏 + 远程目录浏览）；机器设置页（增删改 / 测试 / 设当前 / 忘指纹）                                                 |
-| 模型工具   | `sw_status`、`sw_connect`（`save:false` 临时）、`sw_pick_workspace`                                    |
-
-
-
-
-## 架构
+## 工作原理
 
 ```mermaid
 flowchart LR
@@ -33,9 +30,13 @@ flowchart LR
     seam -- "一条 SSH（可多级跳板）" --> run
 ```
 
-
-
 远程不用装 DSH：模型在本地编排，命令在远程跑，结果再回本地进上下文。
+
+**设计要点**（实现机制，非用户功能）：
+
+- **注册表与路由**：`remote-workspaces/machines.json` 是单一事实源；`ssh://<id>/<path>`（以及本地 `dsw-routes` 占位树）把每个操作路由到对应机器；能识别 `~/.ssh/config` 别名。
+- **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据——凭据绝不进仓库与日志。
+- **工作区权限**：在引擎接缝处强制（`ctx.subprocess` / `ctx.fs` 是本插件的唯一实现）：只读副工作区拒绝写入；`exec: off` 拒绝在其世界内启动进程；不解析命令文本（文档化边界）。
 
 ## 安装
 
@@ -51,8 +52,6 @@ dsh plugin --profile web add <本仓库路径>
 > `node-pty`、`dsh-subprocess-local`，再执行 `dsh plugin --profile web install`；
 > 否则首次 `add` 会以非 0 退出（`ERR_PNPM_IGNORED_BUILDS`）且 bundle 不会被追加。
 
-
-
 ## 路线图
 
 当前进度与剩余里程碑：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。
@@ -61,8 +60,6 @@ dsh plugin --profile web add <本仓库路径>
 
 - [dsh-ssh](https://github.com/UynajGI/dsh-ssh)：远程执行引擎——`ctx.subprocess` / `ctx.fs` provider、跳板链、PTY、directory-picker 接缝、`session.route` 占位。
 - [dsh-remote](https://github.com/flymysql/dsh-remote)：工作区助手——machines 注册表、TOFU、OS 钥匙串、Web UI 与设置页。
-
-
 
 ## License
 
