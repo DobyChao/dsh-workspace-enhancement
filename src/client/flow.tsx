@@ -57,6 +57,25 @@ export interface FlowProps {
    * (the host normalizes it anyway). Defaults to false (unchanged behavior).
    */
   suppressSessionRoute?: boolean
+  /**
+   * When non-empty, `open` turning true opens the dialog with that saved
+   * connection as the current browse target — the same as clicking the
+   * connection in the sidebar (remote mode + its home listed through
+   * `browse.list`, including its error handling). An id that is not a saved
+   * connection degrades to the default local-home browse; undefined/'' keeps
+   * the current behavior. The value is snapshotted when `open` turns true;
+   * later changes while the dialog stays open do not re-navigate.
+   */
+  initialConnectionId?: string
+  /**
+   * Picker-only mode: the remote footer button reads「选择此目录」and hands the
+   * raw `ssh://<id><posixPath>` spelling straight to `onPicked` — no
+   * `session.route` adoption, no placeholder tree, no write-back (the same
+   * delivery path as `suppressSessionRoute`). Takes precedence over
+   * `suppressSessionRoute` when both are set. Defaults to false (unchanged
+   * behavior).
+   */
+  pickOnly?: boolean
 }
 
 /** Which filesystem the browser pane is showing. */
@@ -201,7 +220,7 @@ function describeRemoteFailure(raw: string): RemoteFailure {
 
 /** The directory-flow occupant registered into both workspace holes. */
 export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
-  const { open, busy, onPicked, onCancel, listLocalDirectory, createLocalDirectory, rpc, suppressSessionRoute = false } = props
+  const { open, busy, onPicked, onCancel, listLocalDirectory, createLocalDirectory, rpc, suppressSessionRoute = false, pickOnly = false, initialConnectionId = '' } = props
 
   const [mode, setMode] = useState<Mode>({ kind: 'local' })
   const [pane, setPane] = useState<Pane>(EMPTY_PANE)
@@ -269,11 +288,13 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
     if (mode.kind !== 'remote' || pane.path === null || openingRemote) return
     setOpeningRemote(true)
     try {
-      if (suppressSessionRoute) {
-        // Opt-out owner (side-workspaces panel): hand the raw ssh:// spelling
-        // — no placeholder tree, no machine-workspace write-back. Spelling
-        // matches sshTargetKey (`ssh://<id><posixPath>`); the host normalizes
-        // it into the registry connection on attach.
+      if (pickOnly || suppressSessionRoute) {
+        // Opt-out owner (side-workspaces panel) / picker-only mode: hand the
+        // raw ssh:// spelling — no placeholder tree, no machine-workspace
+        // write-back. Spelling matches sshTargetKey (`ssh://<id><posixPath>`);
+        // the host normalizes it into the registry connection on attach.
+        // pickOnly wins over suppressSessionRoute when both are present
+        // (identical delivery at this boundary).
         onPicked(`ssh://${mode.id}${pane.path}`)
         return
       }
@@ -296,21 +317,26 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
 
   /**
    * Refresh the connection list. `silent` keeps the previous list on screen
-   * (post-mutation refreshes) instead of flashing the skeleton.
+   * (post-mutation refreshes) instead of flashing the skeleton. Returns the
+   * freshly parsed list ([] when the call failed) so callers can validate an
+   * id against the latest registry state.
    */
-  const refreshConnections = async (silent = false): Promise<void> => {
+  const refreshConnections = async (silent = false): Promise<ConnectionView[]> => {
     if (!silent) setConnectionsLoading(true)
     try {
       const value = unwrap(await rpc('connections.list'), 'connections.list failed')
       if (Array.isArray(value)) {
-        setConnections(value.filter(isRecord).map(asConnectionView))
+        const list = value.filter(isRecord).map(asConnectionView)
+        setConnections(list)
         setConnectionsError(null)
+        return list
       }
     } catch (error) {
       setConnectionsError(error instanceof Error ? error.message : String(error))
     } finally {
       if (!silent) setConnectionsLoading(false)
     }
+    return []
   }
 
   /**
@@ -336,7 +362,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
     }
   }
 
-  /** Open: refresh both sidebar lists and land on the local home. Closed: abort. */
+  /** Open: refresh both sidebar lists and browse the initial target (local home, or the saved connection named by `initialConnectionId` when it exists). Closed: abort. */
   useEffect(() => {
     if (!open) {
       generation.current += 1
@@ -348,6 +374,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
       return
     }
     generation.current += 1
+    const openGeneration = generation.current
     setPane(EMPTY_PANE)
     setFolderDraft(null)
     setFormOpen(false)
@@ -359,10 +386,29 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
     setHostError(null)
     setConfirmTarget(null)
     setNativePicking(false)
-    setMode({ kind: 'local' })
-    void refreshConnections()
     void refreshConfigHosts()
-    void loadLevel(signal => listLocalDirectory(undefined, signal))
+    // Snapshot of the requested starting machine (empty/absent id keeps the
+    // default local-home browse). When it names a saved connection, open the
+    // dialog exactly like clicking that connection once its registry entry is
+    // confirmed; an unknown id degrades back to the local home.
+    const initialId = initialConnectionId.trim()
+    if (initialId === '') {
+      setMode({ kind: 'local' })
+      void refreshConnections()
+      void loadLevel(signal => listLocalDirectory(undefined, signal))
+      return
+    }
+    setMode({ kind: 'remote', id: initialId })
+    void (async () => {
+      const list = await refreshConnections()
+      if (openGeneration !== generation.current) return // closed / superseded before the list arrived
+      if (list.some(connection => connection.id === initialId)) {
+        navigateRemote(initialId)
+      } else {
+        setMode({ kind: 'local' })
+        void loadLevel(signal => listLocalDirectory(undefined, signal))
+      }
+    })()
   }, [open])
 
   /** The active connection view (undefined while browsing locally). */
@@ -964,11 +1010,12 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected) {
             onClick={() => {
               if (pane.path === null) return
               if (mode.kind === 'local') onPicked(pane.path)
+              else if (pickOnly) onPicked(`ssh://${mode.id}${pane.path}`)
               else void openRemotePath()
             }}
           >
             {mode.kind === 'remote' && openingRemote && <SpinnerIcon className={styles.spin} />}
-            {mode.kind === 'remote' ? (openingRemote ? '连接中…' : '连接并打开') : '选择目录'}
+            {mode.kind === 'remote' ? (openingRemote ? '连接中…' : (pickOnly ? '选择此目录' : '连接并打开')) : '选择目录'}
           </button>
         </footer>
       </div>

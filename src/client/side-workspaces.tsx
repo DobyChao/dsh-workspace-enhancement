@@ -67,10 +67,10 @@ function unwrap(result: WireResult): unknown {
 
 /**
  * The flow delivers a remote pick either as its raw `ssh://<id><posixPath>`
- * spelling (suppressSessionRoute) or as the local placeholder that stands in
- * for a remote route (`<DSH_HOME>/dsw-routes/<id>/<path>`, or the legacy
- * `dsh-ssh-routes` spelling). Detect both; the host normalizes either into the
- * same registry-backed root key.
+ * spelling (pickOnly / suppressSessionRoute) or as the local placeholder that
+ * stands in for a remote route (`<DSH_HOME>/dsw-routes/<id>/<path>`, or the
+ * legacy `dsh-ssh-routes` spelling). Detect both; the host normalizes either
+ * into the same registry-backed root key.
  */
 const isRemoteSpelling = (path: string): boolean =>
   /^ssh:\/\//.test(path) || /[\\/](dsw-routes|dsh-ssh-routes)[\\/]/.test(path)
@@ -100,7 +100,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
   const [items, setItems] = useState<SideWorkspaceRow[]>([])
   const [machines, setMachines] = useState<WireMachine[]>([])
   const [busy, setBusy] = useState(true)
-  const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
   const [draftKind, setDraftKind] = useState<'local' | 'remote'>('local')
   const [draftPath, setDraftPath] = useState('')
@@ -144,30 +143,47 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
     return draftKind === 'remote' ? `ssh://${draftMachine}${path}` : path
   }
 
-  /** A pick from the shared flow: add the side workspace directly. */
+  /**
+   * A pick from the shared flow: fill the draft back into the form. The flow
+   * runs in pickOnly mode, so a remote pick arrives as the raw
+   * `ssh://<id>/<posix>` spelling and a local pick as an absolute path;
+   * mounting only goes through the「挂载」button — no `session.ws.add` here.
+   */
   const handlePicked = (path: string): void => {
-    if (adding) return
-    const kind: 'local' | 'remote' = isRemoteSpelling(path) ? 'remote' : 'local'
-    setAdding(true)
     setError('')
-    injected.rpc('session.ws.add', {
-      sessionId,
-      id: `sw-${Date.now().toString(36)}`,
-      kind,
-      path,
-      ...(draftLabel.trim() !== '' ? { label: draftLabel.trim() } : {}),
-      fs: draftFs,
-      exec: draftExec,
-    }).then(() => {
-      setDraftPath('')
-      setDraftLabel('')
-      setBrowseOpen(false)
-      setAdding(false)
-      refresh()
-    }).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : String(reason))
-      setAdding(false)
-    })
+    if (/^ssh:\/\//.test(path)) {
+      // `ssh://<id>/<posix>` → the first segment after the scheme is the
+      // machine id (registry ids never contain '/'), the remainder the POSIX
+      // path in `/xxx` form. `'ssh://'` is 6 characters — slice by its exact
+      // length so the id is never truncated.
+      const segments = path.slice('ssh://'.length).split('/')
+      const id = segments.shift() ?? ''
+      setDraftKind('remote')
+      setDraftMachine(id)
+      setDraftPath(`/${segments.join('/')}`)
+    } else if (isRemoteSpelling(path)) {
+      // Defensive: pickOnly no longer produces placeholder spellings, but a
+      // legacy dsw-routes / dsh-ssh-routes path still means a remote root —
+      // recover the registry id and the POSIX path (the placeholder joins the
+      // remote segments with OS separators, so normalize them back to '/'),
+      // so the draft can be re-spelled as ssh://<id>/<path> on mount. Never
+      // put the placeholder itself into draftPath: the 挂载 spelling would
+      // wrap it again, and the host would reject it.
+      const match = /[\\/](dsw-routes|dsh-ssh-routes)[\\/]([^\\/]+)(?:[\\/](.*))?$/.exec(path)
+      if (match === null) {
+        setError('无法解析该目录的远程路径，请重新浏览')
+        setBrowseOpen(false)
+        return
+      }
+      const rest = (match[3] ?? '').split(/[\\/]+/).filter(segment => segment !== '').join('/')
+      setDraftKind('remote')
+      setDraftMachine(match[2] ?? '')
+      setDraftPath(rest === '' ? '/' : `/${rest}`)
+    } else {
+      setDraftKind('local')
+      setDraftPath(path)
+    }
+    setBrowseOpen(false)
   }
 
   const addSide = (): void => {
@@ -299,8 +315,10 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
 
       <SshWorkspaceFlow
         open={browseOpen}
-        busy={adding}
+        busy={busy}
         suppressSessionRoute
+        pickOnly
+        initialConnectionId={draftKind === 'remote' ? draftMachine : ''}
         onPicked={handlePicked}
         onCancel={() => setBrowseOpen(false)}
         onError={(message) => setError(message)}
