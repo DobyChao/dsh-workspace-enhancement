@@ -4,7 +4,7 @@
 
 ![npm 版本](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![许可证](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![Node 版本](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-**一个 DeepSeek Harness 工作区增强插件**：把本地和远程（SSH）工作区放到一个包里管理，从工作区的来源、位置到日常操作都收口在这里。远程执行走一条 SSH（可多级跳板），bash、文件、PTY 终端、目录浏览都落在服务器上；一个会话可以挂**多个工作区**（主工作区 + 副目录），每个副目录独立授权；机器、TOFU 指纹与钥匙串都存在你本机的 `~/.dsh` 下。底层用 [ssh2](https://github.com/mscdex/ssh2)。
+**一个 DeepSeek Harness 工作区增强插件**：把本地和远程（SSH）工作区放到一个包里统一管理。一个会话可以挂**多个工作区**（主工作区 + 副目录），每个副目录独立授权；机器、TOFU 指纹与钥匙串都存在你本机的 `~/.dsh` 下。底层用 [ssh2](https://github.com/mscdex/ssh2)。
 
 ## 功能
 
@@ -35,8 +35,8 @@ flowchart LR
 **设计要点**（实现机制，非用户功能）：
 
 - **注册表与路由**：`remote-workspaces/machines.json` 是单一事实源；`ssh://<id>/<path>`（以及本地 `dsw-routes` 占位树）把每个操作路由到对应机器；能识别 `~/.ssh/config` 别名。
-- **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据。凭据绝不进仓库，也不进日志。
-- **工作区权限**：在引擎接缝处强制（`ctx.subprocess` / `ctx.fs` 是本插件的唯一实现）：只读副工作区拒绝写入；`exec: off` 拒绝在其世界内启动进程；不解析命令文本（文档化边界）。
+- **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据。
+- **工作区权限**：在引擎接缝处强制（`ctx.subprocess` / `ctx.fs` 是本插件的唯一实现）：只读副工作区拒绝写入；`exec: off` 拒绝在该副工作区下启动进程；不解析命令文本（文档化边界）。
 
 ## 安装
 
@@ -47,7 +47,7 @@ dsh plugin --profile web add dsh-workspace-enhancement
 dsh plugin --profile web add <本仓库路径>
 ```
 
-> **DSH 供应链 pnpm 首次安装须知**：原生构建脚本默认被拦截。先在 profile 的
+> **DSH 供应链 pnpm 首次安装须知**：原生构建脚本默认被拦截。在 profile 的
 > `pnpm-workspace.yaml`（非严格 `allowBuilds`）先放行 `ssh2`、`cpu-features`、`koffi`、
 > `node-pty`、`dsh-subprocess-local`，再执行 `dsh plugin --profile web install`；
 > 否则首次 `add` 会以非 0 退出（`ERR_PNPM_IGNORED_BUILDS`）且 bundle 不会被追加。

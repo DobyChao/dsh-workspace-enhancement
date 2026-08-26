@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 ![npm version](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![license](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![node version](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-**A DeepSeek Harness workspace-enhancement plugin** — local and remote (SSH) workspaces managed in one place. It solves where workspaces come from, where they live, and how they are operated: remote execution rides a single SSH connection (multi-hop jumps allowed) so bash, files, PTY terminals and directory browsing all land on the server transparently; a session can hold **multiple workspaces** (a main cwd plus side directories) each with its own permissions; machines, TOFU host keys and keys are stored in your local `~/.dsh`. Built on [ssh2](https://github.com/mscdex/ssh2).
+**A DeepSeek Harness workspace-enhancement plugin** — local and remote (SSH) workspaces managed in one place. A session can hold **multiple workspaces** (a main cwd plus side directories), each with its own permissions; machines, TOFU host keys and keychain passwords all live in your local `~/.dsh`. Built on [ssh2](https://github.com/mscdex/ssh2).
 
 ## Features
 
@@ -35,8 +35,8 @@ No DSH install on the remote: the model orchestrates locally, commands run remot
 **Design notes** (implementation facts, not user features):
 
 - **Registry & routing**: `remote-workspaces/machines.json` is the single source of truth; `ssh://<id>/<path>` (and the local `dsw-routes` placeholder tree) route every operation to the right machine; `~/.ssh/config` aliases are recognized.
-- **Security**: TOFU host keys (`accept-new` / `verify` / `off`), per-machine OS keychain (DPAPI / security / secret-tool), credentials redacted in error messages. No credentials ever enter the repo or logs.
-- **Workspace permissions** are enforced at the engine seams (`ctx.subprocess` / `ctx.fs` are this plugin's single implementation): a read-only side workspace rejects writes, `exec: off` rejects spawning in its world; command text is not inspected (documented boundary).
+- **Security**: TOFU host keys (`accept-new` / `verify` / `off`), per-machine OS keychain (DPAPI / security / secret-tool), credentials redacted in error messages.
+- **Workspace permissions** are enforced at the engine seams (`ctx.subprocess` / `ctx.fs` are this plugin's single implementation): a read-only side workspace rejects writes, `exec: off` rejects launching a process inside that side workspace; command text is not inspected (documented boundary).
 
 ## Install
 
