@@ -34,8 +34,17 @@ No DSH install on the remote: the model orchestrates locally, commands run remot
 ## Install
 
 ```sh
-dsh plugin --profile web add <this-repo-path>   # from source: npm run build first (host loads lib/)
+# from npm (v0.1.0+)
+dsh plugin --profile web add dsh-workspace-enhancement
+# from source: npm run build first (host loads lib/)
+dsh plugin --profile web add <this-repo-path>
 ```
+
+> **First install with DSH's supply-chain pnpm**: native build scripts are blocked by default —
+> allow them once per profile in `pnpm-workspace.yaml` (unstrict `allowBuilds`):
+> `ssh2`, `cpu-features`, `koffi`, `node-pty`, `dsh-subprocess-local` — then run
+> `dsh plugin --profile web install`. Without it the first `add` exits non-zero
+> (`ERR_PNPM_IGNORED_BUILDS`) and the bundle is not appended.
 
 ## Roadmap
 

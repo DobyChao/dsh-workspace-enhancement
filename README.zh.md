@@ -40,8 +40,16 @@ flowchart LR
 ## 安装
 
 ```sh
-dsh plugin --profile web add <本仓库路径>   # 源码安装前先 npm run build（宿主加载 lib/）
+# 从 npm 安装（v0.1.0+）
+dsh plugin --profile web add dsh-workspace-enhancement
+# 源码安装：先 npm run build（宿主加载 lib/）
+dsh plugin --profile web add <本仓库路径>
 ```
+
+> **DSH 供应链 pnpm 首次安装须知**：原生构建脚本默认被拦截——在 profile 的
+> `pnpm-workspace.yaml`（非严格 `allowBuilds`）先放行 `ssh2`、`cpu-features`、`koffi`、
+> `node-pty`、`dsh-subprocess-local`，再执行 `dsh plugin --profile web install`；
+> 否则首次 `add` 会以非 0 退出（`ERR_PNPM_IGNORED_BUILDS`）且 bundle 不会被追加。
 
 
 
