@@ -18,7 +18,7 @@
 
 ### 特性
 
-- **引擎**：`ctx.subprocess` / `ctx.fs` 混合 provider，按工作目录路由本地/远程；单条 SSH 连接（支持 ProxyJump 多跳）承载 bash / 文件 / PTY / LSP；远端无需安装 DSH。
+- **引擎**：`ctx.subprocess` / `ctx.fs` 混合 provider，按工作目录路由本地/远程；单条 SSH 连接（支持 ProxyJump 多跳）承载 bash / 文件 / PTY（终端）；远端无需安装 DSH。
 - **多机注册表**：`remote-workspaces/machines.json` + `ssh://<id>/<path>` 路由；识别 `~/.ssh/config` 别名。
 - **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`，默认 `accept-new`）；凭据存 OS 钥匙串（DPAPI / security / secret-tool），错误信息脱敏；远程命令参数 POSIX 单引号转义。
 - **Web UI**：添加工作区（连接侧栏 + 远程目录浏览）、机器设置（CRUD / 测试 / 设为当前 / 忘记指纹）、共享机器表单、会话栏远程标识与三态徽标。

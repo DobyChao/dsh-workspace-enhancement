@@ -4,14 +4,14 @@
 
 ![npm 版本](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![许可证](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![Node 版本](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-DeepSeek Harness 插件：本地和远程（SSH）工作区放在一起管。远程执行走一条 SSH（可多级跳板），bash、文件、PTY、LSP 共用这条连接；多机注册表带 TOFU 指纹和 OS 钥匙串；Web UI 负责加工作区和改机器设置；另外提供 3 个 `sw_*` 模型工具。底层用 [ssh2](https://github.com/mscdex/ssh2)。
+DeepSeek Harness 插件：本地和远程（SSH）工作区放在一起管。远程执行走一条 SSH（可多级跳板），bash、文件、PTY（终端）共用这条连接；多机注册表带 TOFU 指纹和 OS 钥匙串；Web UI 负责加工作区和改机器设置；另外提供 3 个 `sw_*` 模型工具。底层用 [ssh2](https://github.com/mscdex/ssh2)。
 
 ## 功能列表
 
 
 | 功能     | 说明                                                                                               |
 | ------ | ------------------------------------------------------------------------------------------------ |
-| 远程工作区  | `ctx.subprocess` + `ctx.fs` 远程 provider：一条 SSH（多级跳板）跑 bash / 文件 / PTY / LSP。走这两条缝的工具不用改就能切到远程    |
+| 远程工作区  | `ctx.subprocess` + `ctx.fs` 远程 provider：一条 SSH（多级跳板）跑 bash / 文件 / PTY（终端）。走这两条缝的工具不用改就能切到远程    |
 | 多机注册表  | `remote-workspaces/machines.json` + `ssh://<id>/<path>` 路由；能认 `~/.ssh/config` 别名                 |
 | 安全     | TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据 |
 | Web UI | 添加工作区（连接侧栏 + 远程目录浏览）；机器设置页（增删改 / 测试 / 设当前 / 忘指纹）                                                 |
@@ -28,7 +28,7 @@ flowchart LR
         agent["agent loop<br/>编排 · 记忆 · LLM 调用"] --> seam["本插件<br/>ctx.subprocess · ctx.fs"]
     end
     subgraph remote["远程主机"]
-        run["bash · 文件 · PTY · LSP"]
+        run["bash · 文件 · PTY（终端）"]
     end
     seam -- "一条 SSH（可多级跳板）" --> run
 ```

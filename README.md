@@ -4,13 +4,13 @@ English | [中文](README.zh.md)
 
 ![npm version](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![license](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![node version](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-DeepSeek Harness plugin: local and remote (SSH) workspaces in one place. Remote execution uses a single SSH connection (multi-hop jumps allowed); bash, files, PTY, and LSP share that link. Multi-machine registry with TOFU host keys and OS keychain. Web UI for adding workspaces and editing machines. Also ships 3 `sw_*` model tools. Built on [ssh2](https://github.com/mscdex/ssh2).
+DeepSeek Harness plugin: local and remote (SSH) workspaces in one place. Remote execution uses a single SSH connection (multi-hop jumps allowed); bash and files share that link (PTY via the terminal seam). Multi-machine registry with TOFU host keys and OS keychain. Web UI for adding workspaces and editing machines. Also ships 3 `sw_*` model tools. Built on [ssh2](https://github.com/mscdex/ssh2).
 
 ## Features
 
 | Feature | Description |
 |---|---|
-| Remote workspaces | `ctx.subprocess` + `ctx.fs` remote providers: one SSH chain (multi-hop) runs bash / files / PTY / LSP. Tools on those seams switch to remote with no code changes |
+| Remote workspaces | `ctx.subprocess` + `ctx.fs` remote providers: one SSH chain (multi-hop) runs bash / files / PTY (terminal). Tools on those seams switch to remote with no code changes |
 | Multi-machine registry | `remote-workspaces/machines.json` + `ssh://<id>/<path>` routing; recognizes `~/.ssh/config` aliases |
 | Security | TOFU host keys (`accept-new` / `verify` / `off`); per-machine OS keychain (DPAPI / security / secret-tool); credentials redacted in error messages |
 | Web UI | Add workspace (connection sidebar + remote directory browser); machine settings (CRUD / test / set current / forget fingerprint) |
@@ -24,7 +24,7 @@ flowchart LR
         agent["agent loop<br/>orchestration · memory · LLM calls"] --> seam["this plugin<br/>ctx.subprocess · ctx.fs"]
     end
     subgraph remote["Remote host"]
-        run["bash · files · PTY · LSP"]
+        run["bash · files · PTY (terminal)"]
     end
     seam -- "one SSH connection (multi-hop jumps)" --> run
 ```
