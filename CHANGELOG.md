@@ -33,7 +33,7 @@
 
 ### 质量
 
-- 单测 172/172（node --test），typecheck 0 错误；每轮 AgentTeams 评审 + 沙箱 E2E 验证 + 真实 3080 实例运行态验证。
+- 单测 175/175（node --test），typecheck 0 错误；每轮 AgentTeams 评审 + 沙箱 E2E 验证 + 真实 3080 实例运行态验证。
 - 已知环境要求：远端需安装 pwsh（PowerShell 工具）与 ripgrep（glob）；终端（bash）开箱即用。
 
 ### 已知边界 / 后续
