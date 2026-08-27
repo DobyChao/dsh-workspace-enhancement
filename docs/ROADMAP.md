@@ -5,7 +5,7 @@
 
 ## 当前状态（2026-08-25）
 
-- **已完成 R0.5–R5 七轮，全部上线本地运行实例（profile web），并逐轮验证**：
+- **已完成 R0.5–R5 七轮 + 三轮打磨，全部上线本地运行实例（profile web，现跑 registry 包 v0.1.0）**：
   引擎（`ctx.subprocess` / `ctx.fs` 混合 provider，按工作目录路由本地/远程）、
   machines 注册表 + 路由（`ssh://<id>/<path>`）、TOFU 主机指纹（默认 accept-new）、
   OS 钥匙串（DPAPI / security / secret-tool）、共享机器表单、会话栏远程标识与三态徽标、
@@ -20,9 +20,8 @@
 | 序 | 里程碑 | 目标 | 前置/备注 |
 |---|---|---|---|
 | 1 | **R6**（Idea I1） | 对话/轨迹区**可扩展面板 Tab**（better-sidecar 式，可插多个面板） | 需前端槽位侦察（以官方 slot 对接，不侵入第三方插件） |
-| 2 | A3 | 发布 npm（`dsh-workspace-enhancement`） | 先查名是否可用；补 v0.1.0 tag + CHANGELOG |
-| 3 | A4 | 端口转发（local/reverse + autoStart） | 移植 dsh-remote forwards 语义 |
-| 4 | A5 | 顺手清理（旧路由占位树的人工清理说明、本地数据归档盘点） | 极小 |
+| 2 | A4 | 端口转发（local/reverse + autoStart） | 移植 dsh-remote forwards 语义 |
+| 3 | A5 | 顺手清理（旧路由占位树的人工清理说明、本地数据归档盘点） | 极小 |
 
 ## 已关闭 / 撤销
 
@@ -41,6 +40,8 @@
 | R3 | A1 抛光轮（表单交互守卫/缓存一致性/同名误标等） | ✅ 上线 |
 | R4 | I2+I4 并轨（远程认知提示 + 混合 provider 真实远程执行 + 执行适配 + 覆盖/编辑修复） | ✅ 上线 |
 | R5 | I3：会话关联多工作区（主 cwd 不变 + 副目录，无焦点切换）+ 逐工作区权限（fs 只读/读写 + 执行开关；本地/远程） | ✅ 上线（2026-08-25；插件自持状态 + 混合门面路径路由/权限，不动 core；175/175 单测，修复经 t2 评审 + t6 复评） |
+| 打磨 | R5 UI 抛光（主题 token 化 + 复用 flow 浏览）+ 浏览交互方案一（picker 定位所选机器、只回填）+ README 品类化/人性化 | ✅ 上线（2026-08-26，分别见 9b38349 / 8fad1fa… / 后续 docs 提交） |
+| A3 | 发布 npm：`dsh-workspace-enhancement@0.1.0`（tag v0.1.0；pack 预检/lab tarball 冒烟/评审通过） | ✅ 已发布（2026-08-26；3080 已换 registry 包并重启验证） |
 
 > 每轮的完整事实记录（部署验证、已知边界、决策背景）在仓库本地草稿 `drafts/CONTEXT.md`
 > （不入库）；想法与拍板在 `drafts/ideas.md`。
