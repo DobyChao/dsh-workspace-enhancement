@@ -15,7 +15,8 @@
 | 添加工作区流程 | 连接侧栏（已保存机器、`~/.ssh/config` 别名、本机）+ 目录浏览器（面包屑、系统选择器、新建文件夹）；远程「连接并打开」直接在服务器上建会话 |
 | 机器设置页 | 机器增删改 / 测试 / 设当前 / 忘指纹；OS 钥匙串存密码；TOFU 主机指纹（默认 accept-new） |
 | 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话自动注入远程/副工作区上下文（含权限标记） |
-| 模型工具 | `sw_status`、`sw_connect`（`save:false`=临时）、`sw_pick_workspace` |
+| 跨服务器执行 | `sw_exec(server, command)` 在**指定服务器**上执行命令（注册表 id（`c1`…）或临时连接 id（`sw_connect save:false`）；缺省=当前会话机器）；目标 OS 每次连接探测一次并上报（POSIX 跑 `bash -c`，win32 跑 `pwsh -Command`）；win32 宿主另注册 `bash` 工具供远程 Linux 工作区使用 |
+| 模型工具 | `sw_status`、`sw_connect`（`save:false`=临时）、`sw_pick_workspace`、`sw_exec`（跨服务器执行） |
 
 ## 工作原理
 
@@ -37,6 +38,8 @@ flowchart LR
 - **注册表与路由**：`remote-workspaces/machines.json` 是单一事实源；`ssh://<id>/<path>`（以及本地 `dsw-routes` 占位树）把每个操作路由到对应机器；能识别 `~/.ssh/config` 别名。
 - **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据。
 - **工作区权限**：在引擎接缝处强制（`ctx.subprocess` / `ctx.fs` 是本插件的唯一实现）：只读副工作区拒绝写入；`exec: off` 拒绝在该副工作区下启动进程；不解析命令文本（文档化边界）。
+- **`sw_exec` 语义**：命令永远在**指定服务器**上执行——`server` 接受注册表 id 或临时连接 id（`sw_connect save:false`），缺省=当前会话机器（本地会话无 server 报错）。目标 OS 每次连接探测一次（`uname -s` → `cmd /c ver` → `unknown`）并在输出首行上报；POSIX/unknown 跑 `bash -c`，win32 跑 `pwsh -Command`。spawn 走同一混合 provider：副工作区 `exec: off` 门与机器路由原样生效。`run_in_background` 与官方 bash 工具一致（即时返回 job id、无 timeout；依赖 `ctx.jobs`，缺服务明确报错）；不提供 `sandbox_permissions`/escalation（部署策略专属）。
+- **win32 `bash` 接缝**：win32 宿主上由本插件补注册 `bash` 工具（官方 bash 执行器未组合、名字可用）——远程 Linux 会话真跑远端 `bash -c`，本地 Windows 会话明确报错而非静默降级；POSIX 宿主不注册（官方 `bash` 工具持有该名字）。
 
 ## 安装
 

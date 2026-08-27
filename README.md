@@ -15,7 +15,8 @@ English | [中文](README.zh.md)
 | Add-workspace flow | Connection sidebar (saved machines, `~/.ssh/config` aliases, local) + directory browser (breadcrumbs, native chooser, new folder); remote "Connect & open" creates the session straight on the server |
 | Machine settings page | Machine CRUD / test / set-current / forget host key; OS-keychain passwords; TOFU host keys (`accept-new` default) |
 | Session awareness | Remote marker + online tri-state + reconnect in the sidebar; per-session prompt injection states the remote / side-workspace context and its permission marks |
-| Model tools | `sw_status`, `sw_connect` (`save:false` = temporary), `sw_pick_workspace` |
+| Cross-server execution | `sw_exec(server, command)` runs a command on a **named server** (a registry id like `c1`, or the temporary id of `sw_connect save:false`; defaults to the session's machine) — the target OS is probed once per connection and reported (`bash -c` on POSIX, `pwsh -Command` on win32); on Windows hosts a `bash` tool is registered for remote-Linux workspaces |
+| Model tools | `sw_status`, `sw_connect` (`save:false` = temporary), `sw_pick_workspace`, `sw_exec` (cross-server execution) |
 
 ## How it works
 
@@ -37,6 +38,8 @@ No DSH install on the remote: the model orchestrates locally, commands run remot
 - **Registry & routing**: `remote-workspaces/machines.json` is the single source of truth; `ssh://<id>/<path>` (and the local `dsw-routes` placeholder tree) route every operation to the right machine; `~/.ssh/config` aliases are recognized.
 - **Security**: TOFU host keys (`accept-new` / `verify` / `off`), per-machine OS keychain (DPAPI / security / secret-tool), credentials redacted in error messages.
 - **Workspace permissions** are enforced at the engine seams (`ctx.subprocess` / `ctx.fs` are this plugin's single implementation): a read-only side workspace rejects writes, `exec: off` rejects launching a process inside that side workspace; command text is not inspected (documented boundary).
+- **`sw_exec` semantics**: the command always runs on a **named server** — `server` takes a registry id or the temporary `sw_connect save:false` id and defaults to the session's machine (a local session without a server errors). The target OS is probed once per connection (`uname -s` → `cmd /c ver` → `unknown`) and reported in the first output line; POSIX/unknown runs `bash -c`, win32 runs `pwsh -Command`. The spawn goes through the same mixed provider, so the side-workspace `exec: off` gate and machine routing apply unchanged. `run_in_background` mirrors the official bash tool (job id returned immediately, no timeout; requires `ctx.jobs` and errors honestly when absent); `sandbox_permissions`/escalation is intentionally unsupported (deployment policy only).
+- **win32 `bash` seam**: on a Windows host the plugin registers the `bash` tool itself (the official bash executor is not composed there, so the name is free) — a remote-Linux session runs `bash -c` on the server, a local Windows session gets a clear error instead of silently degrading; POSIX hosts never register it (the official `bash` tool owns the name).
 
 ## Install
 

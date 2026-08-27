@@ -12,6 +12,7 @@ import { basename, posix } from 'node:path'
 import type { Stats } from 'ssh2'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { registerSwExec, registerWin32Bash } from './exec-tools.ts'
 import type { SshRegistry, MachineInput } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -117,7 +118,7 @@ export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): strin
     const fact = sideWorkspacePromptFact(item)
     return `- 副工作区 **${fact.label}**：\`${fact.rootKey}\`（fs: ${fact.fs} · exec: ${fact.exec}）`
   })
-  return `**本会话额外关联的工作区（副目录，模型可直接操作）**：\n${lines.join('\n')}\n注意权限标记：只读（fs: 只读）拒绝写入，禁执行（exec: 关）拒绝在该目录下运行命令；被拒绝的操作请改用有权限的工作区或请用户调整。`
+  return `**本会话额外关联的工作区（副目录，模型可直接操作）**：\n${lines.join('\n')}\n注意权限标记：只读（fs: 只读）拒绝写入，禁执行（exec: 关）拒绝在该目录下运行命令；被拒绝的操作请改用有权限的工作区或请用户调整。命令默认在主工作区执行；在其它服务器执行请用 \`sw_exec(server, command)\`。`
 }
 
 /**
@@ -379,4 +380,10 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')
+
+  // S1+S2: sw_exec always (server-parameterized remote execution), win32 bash
+  // seam on Windows hosts only (the official bash tool owns `bash` + its
+  // `tool:bash` section on POSIX; a duplicate registration would fail).
+  registerSwExec(ctx, registry)
+  registerWin32Bash(ctx, registry)
 }
