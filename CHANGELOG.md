@@ -2,6 +2,25 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
+## [0.1.1](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-26)
+
+跨服务器执行与主工作区命令接缝。
+
+### 新增
+
+- **`sw_exec` 工具**：在指定 `server`（机器 id）上执行命令，缺省 = 本会话主工作区机器。规格与官方 bash/pwsh 对齐（`command` / `description` / `timeoutMs` / `workdir` / `run_in_background`），另按目标机器 OS 判定选择 `bash -c` 或 `pwsh -Command`（`uname` → `cmd /c ver`，结果按连接缓存），输出首行标注 `server: <id> (<user@host>) · OS: …`；后台任务经 `ctx.jobs`（job_output / job_kill 可收集），命中副工作区 `exec: off` 仍被权限门拒绝。
+- **win32 宿主补注册 `bash` 工具**：Windows 用户在远程 Linux 主工作区直接使用 bash；本地（Windows）会话下明确报错并引导 pwsh，绝不静默降级。POSIX 宿主不注册（避免与官方冲突）。
+- 副工作区提示注入追加：命令默认在主工作区执行，其它服务器请用 `sw_exec(server, command)`。
+
+### 修复
+
+- 中止错误按官方契约归类为 `HarnessError(TOOL_ABORTED)`（name=AbortError），取消不再生成孤儿后台任务（background 注册前 abort 预检）。
+- `timeoutMs` 对齐官方 executor 语义：默认 120s、上限 600s（越界钳制），返回值报告生效值。
+
+### 质量
+
+- 单测 202/202（+27），typecheck 0 错误；沙箱验证（sw_exec 真机直调 17/17 场景）；评审 + 复验闭环（Abort 分类 / background 预检 / 超时钳制）。
+
 ## [0.1.0](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-26)
 
 初始发布：统合 dsh-ssh 与 dsh-remote，把「工作区从哪里来、在哪里、如何被操作」收进一个插件——本地/远程（SSH）工作区、多跳连接、目录选择体验与机器管理，统一命名空间、统一配置、统一 UI。累计 R0.5–R5 七轮开发全部落地并通过真实实例验证。
