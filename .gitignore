@@ -30,6 +30,7 @@ secrets/
 
 # Team/agent ephemeral state (do not commit)
 .agent-teams/
+.workbuddy/
 
 # Accidental Windows redirect-output artifact
 nul
