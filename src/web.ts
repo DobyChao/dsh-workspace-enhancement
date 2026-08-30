@@ -23,7 +23,8 @@ import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
-import { remoteSideRootKey } from './session-workspaces.ts'
+import { normalizeSideRootKey, remoteSideRootKey } from './session-workspaces.ts'
+import { hostLocaleOf } from './locale/host.ts'
 
 /** Channel config. */
 export interface WebChannelConfig extends RegistryConfig {
@@ -217,28 +218,37 @@ const wireError = (code: string, message: string): ChannelResult => {
 export function apply(ctx: Context, config: WebChannelConfig): void {
   ctx.plugin(SshRegistry, { ...(config.stateFile !== undefined ? { stateFile: config.stateFile } : {}) })
   const maxEntries = config.maxEntries ?? 1000
+  // Host-language translate face: `dsw:` protocol errors keep the 'dsw: '
+  // prefix (protocol value, not translated) while the message body follows
+  // the host language (settings.locale.preference ?? en, read live).
+  const locale = hostLocaleOf(ctx)
+  const t = locale.t
   const registry = (): SshRegistry => {
     const value = ctx.get('sshRegistry')
-    if (value === undefined) throw new Error('dsw: the connection registry is not mounted')
+    if (value === undefined) throw new Error(`dsw: ${t('rpc.registryNotMounted')}`)
     return value
   }
   const requireConnection = (id: string): SshConnection => {
     const connection = registry().get(id)
-    if (connection === undefined) throw new Error(`dsw: unknown connection id ${JSON.stringify(id)}`)
+    if (connection === undefined) {
+      throw new Error(`dsw: ${t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`)
+    }
     return connection
   }
   /** The side-workspace store (R5; mounted by the aggregate row). */
   const sides = (): SessionSideWorkspaceStore => {
     const value = ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined
-    if (value === undefined) throw new Error('dsw: the side-workspace store is not mounted')
+    if (value === undefined) throw new Error(`dsw: ${t('rpc.sideStoreNotMounted')}`)
     return value
   }
   /** R5: a remote side workspace must name a registered machine. */
   const requireRemoteMachine = (rootKey: string): void => {
     const route = parseSshRoute(rootKey)
-    if (route === null) throw new Error(`dsw: invalid remote side workspace root ${JSON.stringify(rootKey)}`)
+    if (route === null) {
+      throw new Error(`dsw: ${t('rpc.invalidSideRoot', { root: JSON.stringify(rootKey) })}`)
+    }
     if (registry().get(route.id) === undefined) {
-      throw new Error(`dsw: remote side workspace names unknown machine "${route.id}"`)
+      throw new Error(`dsw: ${t('rpc.unknownMachine', { id: route.id })}`)
     }
   }
 
@@ -252,7 +262,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     const connection = requireConnection(id)
     const resolvedTarget = target ?? await sharedRemoteHome(connection, signal)
     if (!posix.isAbsolute(resolvedTarget)) {
-      throw new Error(`dsw: cannot list ${resolvedTarget}: not a fully qualified path`)
+      throw new Error(`dsw: ${t('rpc.cannotList', { target: resolvedTarget })}`)
     }
     return listRemoteLevel(connection, resolvedTarget, maxEntries, {
       signal,
@@ -262,9 +272,9 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
 
   /** Create one child directory on the remote host (SFTP mkdir, non-recursive). */
   const createRemoteDirectory = async (id: string, path: string, name: string, signal?: AbortSignal): Promise<string> => {
-    if (!posix.isAbsolute(path)) throw new Error(`dsw: cannot create under ${JSON.stringify(path)}: not a fully qualified path`)
+    if (!posix.isAbsolute(path)) throw new Error(`dsw: ${t('rpc.cannotCreate', { path: JSON.stringify(path) })}`)
     if (name.trim() === '' || name === '.' || name === '..' || /[/\\]/.test(name)) {
-      throw new Error(`dsw: ${JSON.stringify(name)} is not a single path segment`)
+      throw new Error(`dsw: ${t('rpc.notSingleSegment', { name: JSON.stringify(name) })}`)
     }
     const target = posix.join(path, name)
     const connection = requireConnection(id)
@@ -272,7 +282,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     const existing = await new Promise<Stats | undefined>((resolvePromise) => {
       sftp.lstat(target, (error, value) => { resolvePromise(error === undefined ? value : undefined) })
     })
-    if (existing !== undefined) throw new Error(`dsw: ${target} already exists`)
+    if (existing !== undefined) throw new Error(`dsw: ${t('rpc.alreadyExists', { target })}`)
     await new Promise<void>((resolvePromise, reject) => {
       sftp.mkdir(target, (error) => { if (error !== undefined) reject(error); else resolvePromise() })
     })
@@ -457,12 +467,23 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           // ssh:// root AND the local placeholder trees) canonicalizes to the
           // same ssh://<id>/<posix> root key, so the attach stores exactly the
           // record sideWorkspaceOf would match for that path.
+          // i18n (t15-r2): the user-visible validation errors of `attach`
+          // (session-workspaces.ts id/sessionId/path) are re-checked HERE with
+          // keyed messages in the host language, so the client never sees the
+          // class-level English fallback; the attach call itself keeps its
+          // internal English messages as an unreachable-in-practice fallback.
+          if ((input.id ?? '').trim() === '') throw new Error(`dsw: ${t('rpc.sideWsIdEmpty')}`)
+          if (input.sessionId.trim() === '') throw new Error(`dsw: ${t('rpc.sideWsSessionEmpty')}`)
           let attachPath = input.path
           if (input.kind === 'remote') {
             const rootKey = remoteSideRootKey(input.path)
-            if (rootKey === null) throw new Error('bad-request: session.ws.add remote path must be an ssh://<id>/<absolute> route or a dsw-routes/dsh-ssh-routes placeholder')
+            if (rootKey === null) {
+              throw new Error(`dsw: ${t('rpc.sideWsPathRemote', { path: JSON.stringify(input.path) })}`)
+            }
             requireRemoteMachine(rootKey)
             attachPath = rootKey
+          } else if (normalizeSideRootKey('local', input.path) === null) {
+            throw new Error(`dsw: ${t('rpc.sideWsPathLocal', { path: JSON.stringify(input.path) })}`)
           }
           const item = sides().attach(input.sessionId, {
             ...(input.id !== undefined ? { id: input.id } : {}),

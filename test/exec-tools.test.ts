@@ -544,11 +544,15 @@ test('registerWin32Bash: POSIX host is a no-op; win32 registers bash + tool:bash
 })
 
 test('registerWin32Bash execute: a local Windows session errors instead of silently degrading', async () => {
+  // t15-r2 (captain decision F4): the guard follows the uniform host-language
+  // rule (settings preference ?? en), so a settings-less composition sees the
+  // EN wording — a design-rule unification with every other model-facing
+  // message, not a regression (zh preference users still read the Chinese copy).
   const fake = fakeToolContext({})
   registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32' })
   await assert.rejects(
     () => fake.registered[0]?.execute?.({ command: 'ls', description: 'List' }, execFace('C:\\Users\\me\\proj')),
-    /bash 工具面向远程 Linux 工作区（本机 Windows 无 bash）；请使用 pwsh 或终端面板/,
+    /The bash tool targets remote Linux workspaces \(this host is Windows and has no local bash\); use pwsh or the terminal panel/,
   )
 })
 

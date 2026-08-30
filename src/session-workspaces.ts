@@ -27,6 +27,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { dshHome } from './hostkey.ts'
 import { parseSshRoute } from './registry.ts'
 import { remoteRouteFromCwd } from './transport.ts'
+import { hostLocaleOf } from './locale/host.ts'
 
 /** The two attachment kinds a side workspace can be. */
 export type SideWorkspaceKind = 'local' | 'remote'
@@ -352,12 +353,18 @@ export class SessionSideWorkspaceStore extends Service {
    * @returns the stored record.
    */
   attach(sessionId: string, input: SideWorkspaceInput): SideWorkspaceItem {
+    // t15-r2 (captain decision F2): the validation errors of this public
+    // surface are keyed in the host language, read live at call time (the
+    // store's context — settings preference ?? en; a settings-less composition
+    // reads the EN wording, identical to the pre-i18n copy). web.ts re-checks
+    // the same conditions before the store call (dispatch boundary).
+    const t = hostLocaleOf(this.ctx).t
     const id = (input.id ?? '').trim()
-    if (id === '') throw new Error('dsw: side workspace id must be a non-empty string')
-    if (sessionId.trim() === '') throw new Error('dsw: session id must be a non-empty string')
+    if (id === '') throw new Error(`dsw: ${t('rpc.sideWsIdEmpty')}`)
+    if (sessionId.trim() === '') throw new Error(`dsw: ${t('rpc.sideWsSessionEmpty')}`)
     const rootKey = normalizeSideRootKey(input.kind, input.path)
     if (rootKey === null) {
-      throw new Error(`dsw: side workspace path must be an ${input.kind === 'remote' ? 'ssh://<id>/<absolute posix path>' : 'absolute local path'}: ${JSON.stringify(input.path)}`)
+      throw new Error(`dsw: ${t(input.kind === 'remote' ? 'rpc.sideWsPathRemote' : 'rpc.sideWsPathLocal', { path: JSON.stringify(input.path) })}`)
     }
     const existing = this.roots.get(rootKey)
     const parsed = sideRootKeyOf(rootKey)

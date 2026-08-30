@@ -30,6 +30,8 @@ import type { HostKeyMode, KnownHostEntry } from './hostkey.ts'
 import { deleteSecret, getSecret, platformBackend, saveSecret } from './credential.ts'
 import type { CredentialBackend } from './credential.ts'
 import type { JumpConfig } from './runtime.ts'
+import { hostLocaleOf } from './locale/host.ts'
+import type { TranslateFn } from './locale/index.ts'
 
 /** Registry plugin config. */
 export interface RegistryConfig {
@@ -706,6 +708,17 @@ export class SshRegistry extends Service {
     this.currentId = state.currentId
   }
 
+  /**
+   * Host-language translate face of the validation/routing errors this class
+   * throws (t15-r2, captain decision F3): every user/model-triggerable
+   * message reads the host language live at call time (settings preference ??
+   * en; a settings-less composition reads the EN wording — identical to the
+   * pre-i18n copy).
+   */
+  private get t(): TranslateFn {
+    return hostLocaleOf(this.ctx).t
+  }
+
   /** The path of the machines.json single source of truth. */
   get statePath(): string {
     return this.machinesFile
@@ -750,14 +763,20 @@ export class SshRegistry extends Service {
     const label = (input.label ?? '').trim() || `${input.username ?? ''}@${input.host}`.replace(/^@/, '')
     const host = input.host.trim()
     const username = (input.username ?? '').trim()
-    if (host === '') throw new Error('dsw: host must be a non-empty string')
-    if (username === '') throw new Error('dsw: username must be a non-empty string')
+    if (host === '') throw new Error(`dsw: ${this.t('rpc.hostEmpty')}`)
+    if (username === '') throw new Error(`dsw: ${this.t('rpc.usernameEmpty')}`)
     const port = input.port ?? 22
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error(`dsw: port must be an integer in 1..65535: ${port}`)
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error(`dsw: ${this.t('rpc.portInvalid', { port })}`)
+    }
     const cwd = (input.cwd ?? '').trim()
-    if (cwd !== '' && !posix.isAbsolute(cwd)) throw new Error(`dsw: cwd must be an absolute POSIX path: ${cwd}`)
+    if (cwd !== '' && !posix.isAbsolute(cwd)) {
+      throw new Error(`dsw: ${this.t('rpc.cwdShape', { cwd })}`)
+    }
     for (const [index, hop] of (input.jump ?? []).entries()) {
-      if (hop.host.trim() === '') throw new Error(`dsw: jump[${index}].host must be a non-empty string`)
+      if (hop.host.trim() === '') {
+        throw new Error(`dsw: ${this.t('rpc.jumpHostEmpty', { index })}`)
+      }
     }
     const id = this.allocateId()
     const spec: SshConnectionSpec = {
@@ -792,9 +811,11 @@ export class SshRegistry extends Service {
   async saveMachine(input: MachineInput): Promise<MachineView> {
     const host = input.host.trim()
     const username = (input.username ?? '').trim() || 'root'
-    if (host === '') throw new Error('dsw: host must be a non-empty string')
+    if (host === '') throw new Error(`dsw: ${this.t('rpc.hostEmpty')}`)
     const port = input.port ?? 22
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error(`dsw: port must be an integer in 1..65535: ${port}`)
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error(`dsw: ${this.t('rpc.portInvalid', { port })}`)
+    }
     const prev = input.id !== undefined ? this.specs.get(input.id) : undefined
     const label = (input.label ?? '').trim() || (input.name ?? '').trim() || prev?.label || `${username}@${host}`
     const id = prev !== undefined ? prev.id : input.id ?? this.allocateId()
@@ -1033,7 +1054,7 @@ export class SshRegistry extends Service {
   connectTemporary(input: MachineInput): { id: string; connection: SshConnection } {
     const host = input.host.trim()
     const username = (input.username ?? '').trim() || 'root'
-    if (host === '') throw new Error('sw_connect: host is required')
+    if (host === '') throw new Error(this.t('tool.sw_connect.error.hostRequired'))
     const port = input.port ?? 22
     const id = `tmp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
     const spec: SshConnectionSpec = {
@@ -1271,7 +1292,7 @@ export class SshRegistry extends Service {
   async probe(id: string, signal?: AbortSignal): Promise<ConnectionStatusView> {
     const spec = this.requireSpec(id)
     const connection = this.get(id)
-    if (connection === undefined) throw new Error('dsw: unknown connection id') // unreachable after requireSpec
+    if (connection === undefined) throw new Error(`dsw: ${this.t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`) // unreachable after requireSpec
     return this.probeLive(id, spec, connection, signal)
   }
 
@@ -1292,13 +1313,13 @@ export class SshRegistry extends Service {
     }
     this.probeCache.delete(id)
     const connection = this.get(id)
-    if (connection === undefined) throw new Error('dsw: unknown connection id') // unreachable after requireSpec
+    if (connection === undefined) throw new Error(`dsw: ${this.t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`) // unreachable after requireSpec
     return this.probeLive(id, spec, connection, signal)
   }
 
   private requireSpec(id: string): SshConnectionSpec {
     const spec = this.specs.get(id)
-    if (spec === undefined) throw new Error(`dsw: unknown connection id ${JSON.stringify(id)}`)
+    if (spec === undefined) throw new Error(`dsw: ${this.t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`)
     return spec
   }
 

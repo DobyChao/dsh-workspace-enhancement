@@ -24,8 +24,8 @@
 import { isAbsolute, posix, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { TOOL_ABORTED, defineTool } from '@deepseek-ai/dsh-tools'
-import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED, defineTool, parameterSchemaSpecToJsonSchema } from '@deepseek-ai/dsh-tools'
+import type { ParameterSchemaSpec, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {
   SubprocessHandle,
   SubprocessOutcome,
@@ -38,6 +38,23 @@ import type { SshRegistry } from './registry.ts'
 import type { SshConnectionSpec } from './connection.ts'
 import type { ExecOutcome } from './ssh-core.ts'
 import { worldOfCwd } from './mixed.ts'
+import { lookup, type DswKey, type TranslateFn } from './locale/index.ts'
+import { hostLocaleOf } from './locale/host.ts'
+
+/**
+ * Fixed-EN translator — the legacy default of the tool-face pure functions:
+ * their pre-i18n copy was English (and the existing tests pin that output).
+ * The tool registration paths pass the live host-language translator instead.
+ */
+const EN_T: TranslateFn = (key, params) => lookup('en', key, params)
+
+/**
+ * Fixed-ZH translator — the baseline compiled into `defineTool` at
+ * registration (the validation closure keeps the ZH-spelled descriptions;
+ * description fields carry no validation meaning, so the baseline language is
+ * irrelevant to checking — ZH key set is the source of truth).
+ */
+const ZH_T: TranslateFn = (key, params) => lookup('zh', key, params)
 
 /** The operating-system fact a probed server gets. */
 export type RemoteOs = 'linux' | 'win32' | 'unknown'
@@ -246,18 +263,21 @@ function ensurePosixAbsolute(value: string): string {
 export function normalizeSwExecWorkdir(
   workdir: string | undefined,
   sessionRoute: { id: string; path: string } | null,
+  tr: TranslateFn = EN_T,
 ): string | undefined {
   if (workdir === undefined) return undefined
-  if (workdir.trim() === '') throw new Error('sw_exec: workdir must not be empty')
+  if (workdir.trim() === '') throw new Error(tr('tool.sw_exec.error.workdirEmpty'))
   if (workdir.startsWith('ssh://')) {
-    if (parseSshRoute(workdir) === null) throw new Error(`sw_exec: invalid remote working directory ${JSON.stringify(workdir)}`)
+    if (parseSshRoute(workdir) === null) {
+      throw new Error(tr('tool.sw_exec.error.invalidWorkdir', { dir: JSON.stringify(workdir) }))
+    }
     return workdir
   }
   if (posix.isAbsolute(workdir)) return workdir
   if (/^[A-Za-z]:[\\/]/.test(workdir) || workdir.startsWith('\\\\')) {
-    throw new Error('sw_exec: workdir must be a POSIX path or ssh://<id>/<path> (remote world)')
+    throw new Error(tr('tool.sw_exec.error.workdirShape'))
   }
-  if (sessionRoute === null) throw new Error('sw_exec: relative workdir requires a remote session cwd')
+  if (sessionRoute === null) throw new Error(tr('tool.sw_exec.error.relativeNoCwd'))
   return posix.resolve(sessionRoute.path, workdir)
 }
 
@@ -272,17 +292,18 @@ export function resolveSwExecCwd(
   workdir: string | undefined,
   serverId: string,
   machineDefault: string,
+  tr: TranslateFn = EN_T,
 ): { cwd: string; machineId: string } {
   if (workdir === undefined) {
     return { cwd: `ssh://${serverId}${ensurePosixAbsolute(machineDefault)}`, machineId: serverId }
   }
   if (workdir.startsWith('ssh://')) {
     const route = parseSshRoute(workdir)
-    if (route === null) throw new Error(`sw_exec: invalid remote working directory ${JSON.stringify(workdir)}`)
+    if (route === null) throw new Error(tr('tool.sw_exec.error.invalidWorkdir', { dir: JSON.stringify(workdir) }))
     return { cwd: workdir, machineId: route.id }
   }
   if (!posix.isAbsolute(workdir)) {
-    throw new Error('sw_exec: workdir must be an absolute POSIX path or ssh://<id>/<path>')
+    throw new Error(tr('tool.sw_exec.error.absoluteShape'))
   }
   return { cwd: `ssh://${serverId}${workdir}`, machineId: serverId }
 }
@@ -298,10 +319,11 @@ export function resolveSwExecCwd(
 export function resolveSwExecServer(
   env: SwExecEnv,
   serverId: string | undefined,
+  tr: TranslateFn = EN_T,
 ): { connection: SwExecConnection; spec: SshConnectionSpec } {
   if (serverId === undefined) {
     const active = env.getActive()
-    if (active === null) throw new Error('sw_exec: no active server — call sw_connect first')
+    if (active === null) throw new Error(tr('tool.sw_exec.error.noActive'))
     return { connection: active.connection, spec: active.spec }
   }
   const connection = env.get(serverId)
@@ -311,7 +333,10 @@ export function resolveSwExecServer(
     return { connection: active.connection, spec: active.spec }
   }
   const known = env.listMachines().machines.map(machine => machine.id)
-  throw new Error(`sw_exec: unknown server "${serverId}"${known.length > 0 ? ` — known: ${known.join(', ')}` : ''}`)
+  throw new Error(
+    tr('tool.sw_exec.error.unknownServer', { id: serverId })
+    + (known.length > 0 ? ` — known: ${known.join(', ')}` : ''),
+  )
 }
 
 /* ---------------------------------------------------------------- deadline */
@@ -425,15 +450,16 @@ export async function swExecCore(
   timeoutMs: number | undefined,
   signal: AbortSignal | undefined,
   osCache: RemoteOsCache,
+  tr: TranslateFn = EN_T,
 ): Promise<SwExecForeground> {
-  if (command.trim() === '') throw new Error('sw_exec: command must be a non-empty string')
-  const target = resolveSwExecServer(env, server)
-  const { cwd, machineId } = resolveSwExecCwd(workdir, target.connection.id, defaultRemoteDir(target.spec))
+  if (command.trim() === '') throw new Error(tr('tool.param.error.commandEmpty'))
+  const target = resolveSwExecServer(env, server, tr)
+  const { cwd, machineId } = resolveSwExecCwd(workdir, target.connection.id, defaultRemoteDir(target.spec), tr)
   let connection = target.connection
   if (machineId !== target.connection.id) {
     // An explicit `ssh://<other>/…` workdir names its machine: the spawn cwd
     // routes there, so OS detection and the report header must follow it.
-    connection = resolveSwExecServer(env, machineId).connection
+    connection = resolveSwExecServer(env, machineId, tr).connection
   }
   const os = await resolveRemoteOs(connection, signal, osCache)
   const argv = buildShellArgv(os, command)
@@ -457,7 +483,7 @@ export async function swExecCore(
     outcome = await handle.done
   } catch (error) {
     deadline.dispose()
-    throw new Error(`sw_exec: spawn failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(tr('tool.sw_exec.error.spawnFailed', { detail: error instanceof Error ? error.message : String(error) }))
   }
   const stdout = streamOf(handle.collected?.stdout)
   const stderr = streamOf(handle.collected?.stderr)
@@ -491,15 +517,18 @@ export interface BackgroundJobs {
 }
 
 /** Map one settled subprocess outcome onto the job-outcome vocabulary. */
-function jobOutcomeOf(outcome: SubprocessOutcome): { status: 'completed' | 'killed'; detail: string } {
+function jobOutcomeOf(outcome: SubprocessOutcome, tr: TranslateFn = EN_T): { status: 'completed' | 'killed'; detail: string } {
   if (outcome.signal !== null || outcome.exitCode === null) {
-    return { status: 'killed', detail: outcome.signal !== null ? `signal: ${outcome.signal}` : 'killed before exit' }
+    return {
+      status: 'killed',
+      detail: outcome.signal !== null ? tr('tool.job.detail.signal', { sig: outcome.signal }) : tr('tool.job.detail.killed'),
+    }
   }
-  return { status: 'completed', detail: `exit code: ${outcome.exitCode}` }
+  return { status: 'completed', detail: tr('tool.job.detail.exit', { code: outcome.exitCode }) }
 }
 
 /** The incremental readOutput hook: two cursors over the collect readers. */
-function incrementalRead(handle: SubprocessHandle): () => string {
+function incrementalRead(handle: SubprocessHandle, tr: TranslateFn = EN_T): () => string {
   let stdoutOffset = 0
   let stderrOffset = 0
   return () => {
@@ -509,12 +538,12 @@ function incrementalRead(handle: SubprocessHandle): () => string {
     if (out !== undefined) {
       stdoutOffset = out.nextOffset
       if (out.text.length > 0) parts.push(out.text)
-      if (out.lossy) parts.push(`[some output was dropped from memory; full output: ${out.spillPath ?? '(unavailable)'}]`)
+      if (out.lossy) parts.push(tr('tool.output.dropped', { path: out.spillPath ?? '(unavailable)' }))
     }
     if (err !== undefined) {
       stderrOffset = err.nextOffset
-      if (err.text.length > 0) parts.push(`[stderr]\n${err.text}`)
-      if (err.lossy) parts.push(`[some output was dropped from memory; full output: ${err.spillPath ?? '(unavailable)'}]`)
+      if (err.text.length > 0) parts.push(`${tr('tool.output.stderrMarker')}\n${err.text}`)
+      if (err.lossy) parts.push(tr('tool.output.dropped', { path: err.spillPath ?? '(unavailable)' }))
     }
     return parts.join('\n')
   }
@@ -530,29 +559,31 @@ export function renderStreamBody(parts: {
   timeoutMs: number
   stdout: SwExecStream
   stderr: SwExecStream
-}): string {
+}, tr: TranslateFn = EN_T): string {
   const streamText = (stream: SwExecStream): string =>
-    stream.truncated ? `${stream.text}\n[output truncated; full output: ${stream.spillPath ?? '(unavailable)'}]` : stream.text
+    stream.truncated
+      ? `${stream.text}\n${tr('tool.output.truncated', { path: stream.spillPath ?? '(unavailable)' })}`
+      : stream.text
   const out = streamText(parts.stdout)
   const err = streamText(parts.stderr)
   let body = out
   if (err.length > 0) {
     if (body.length > 0 && !body.endsWith('\n')) body += '\n'
-    body += `[stderr]\n${err}`
+    body += `${tr('tool.output.stderrMarker')}\n${err}`
   }
-  if (body.length === 0) body = '(no output)'
+  if (body.length === 0) body = tr('tool.output.empty')
   const markers: string[] = []
-  if (parts.timedOut) markers.push(`[timed out after ${parts.timeoutMs}ms]`)
-  if (parts.signal !== null) markers.push(`[killed by signal: ${parts.signal}]`)
-  else if (parts.exitCode !== 0) markers.push(`[exit code: ${parts.exitCode}]`)
+  if (parts.timedOut) markers.push(tr('tool.output.timedOut', { ms: parts.timeoutMs }))
+  if (parts.signal !== null) markers.push(tr('tool.output.killedSignal', { sig: parts.signal }))
+  else if (parts.exitCode !== 0) markers.push(tr('tool.output.exitCode', { code: parts.exitCode }))
   if (markers.length === 0) return body
   if (!body.endsWith('\n')) body += '\n'
   return body + markers.join('\n')
 }
 
 /** sw_exec foreground render: the honest `server/OS` header line first. */
-export function renderSwExecForeground(value: SwExecForeground): string {
-  return `server: ${value.server} (${value.endpoint}) · OS: ${value.os}\n${renderStreamBody(value)}`
+export function renderSwExecForeground(value: SwExecForeground, tr: TranslateFn = EN_T): string {
+  return `${tr('tool.sw_exec.output.header', { id: value.server, endpoint: value.endpoint, os: value.os })}\n${renderStreamBody(value, tr)}`
 }
 
 /* ------------------------------------------------------------------ schema */
@@ -625,46 +656,42 @@ const bashForegroundSchema = {
 
 const bashOutputSchema = { oneOf: [bashBackgroundSchema, bashForegroundSchema] } as const
 
-const commandParameter = {
-  type: 'string',
-  required: true,
-  description: 'The command to execute on the target server.',
-} as const
-const descriptionParameter = {
-  type: 'string',
-  required: true,
-  description: 'Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies".',
-} as const
-const timeoutMsParameter = {
-  type: 'number',
-  description: 'Timeout in milliseconds (executor default 120s, cap 600s — overrides are clamped). The tool kills the command on expiry and reports [timed out after Nms].',
-} as const
-const workdirParameter = {
-  type: 'string',
-  description: 'Working directory on the target server. Defaults to that server\'s primary workspace; a relative path is resolved against the session workspace; `ssh://<id>/<path>` names a machine and directory explicitly.',
-} as const
-const runInBackgroundParameter = {
-  type: 'boolean',
-  description: 'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). No timeout applies.',
-} as const
+/** sw_exec parameter spec builder (descriptions localized per language). */
+const swExecParams = (tr: TranslateFn, backgroundEnabled: boolean): ParameterSchemaSpec => ({
+  command: { type: 'string', required: true, description: tr('tool.param.command') },
+  description: { type: 'string', required: true, description: tr('tool.param.description') },
+  timeoutMs: { type: 'number', description: tr('tool.param.timeout') },
+  workdir: { type: 'string', description: tr('tool.sw_exec.param.workdir') },
+  server: { type: 'string', description: tr('tool.sw_exec.param.server') },
+  ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: tr('tool.param.runInBackground') } } : {}),
+})
+
+/** win32 bash parameter spec builder (descriptions localized per language). */
+const bashParams = (tr: TranslateFn, backgroundEnabled: boolean): ParameterSchemaSpec => ({
+  command: { type: 'string', required: true, description: tr('tool.param.command') },
+  description: { type: 'string', required: true, description: tr('tool.param.description') },
+  timeoutMs: { type: 'number', description: tr('tool.param.timeout') },
+  workdir: { type: 'string', description: tr('tool.bash.param.workdir') },
+  ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: tr('tool.param.runInBackground') } } : {}),
+})
 
 /* --------------------------------------------------------------- validation */
 
 /** S1 arg validation, mirroring the official bash tool's validateBashArgs. */
-export function validateSwExecArgs(args: SwExecArgs): void {
-  if (args.command.trim().length === 0) throw new Error('invalid command: expected a non-empty string')
-  if (args.description.trim().length === 0) throw new Error('invalid description: expected a non-empty string')
+export function validateSwExecArgs(args: SwExecArgs, tr: TranslateFn = EN_T): void {
+  if (args.command.trim().length === 0) throw new Error(tr('tool.param.error.commandEmpty'))
+  if (args.description.trim().length === 0) throw new Error(tr('tool.param.error.descriptionEmpty'))
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
-    throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
+    throw new Error(tr('tool.param.error.timeoutInvalid', { v: JSON.stringify(args.timeoutMs) }))
   }
 }
 
 /** The win32 bash tool mirrors the official bash validation (no escalation args). */
-export function validateBashToolArgs(args: Win32BashArgs): void {
-  if (args.command.trim().length === 0) throw new Error('invalid command: expected a non-empty string')
-  if (args.description.trim().length === 0) throw new Error('invalid description: expected a non-empty string')
+export function validateBashToolArgs(args: Win32BashArgs, tr: TranslateFn = EN_T): void {
+  if (args.command.trim().length === 0) throw new Error(tr('tool.param.error.commandEmpty'))
+  if (args.description.trim().length === 0) throw new Error(tr('tool.param.error.descriptionEmpty'))
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
-    throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
+    throw new Error(tr('tool.param.error.timeoutInvalid', { v: JSON.stringify(args.timeoutMs) }))
   }
 }
 
@@ -675,29 +702,29 @@ function sessionCwdOf(exec: ToolRunContext): string | undefined {
 }
 
 /** Resolve `ctx.subprocess` lazily (mixed provider; a missing seam is honest). */
-function spawnerOf(ctx: Context): { spawn(spec: SubprocessSpawnSpec): SubprocessHandle } {
+function spawnerOf(ctx: Context, tr: TranslateFn = EN_T): { spawn(spec: SubprocessSpawnSpec): SubprocessHandle } {
   const value = ctx.get('subprocess', false) as { spawn(spec: SubprocessSpawnSpec): SubprocessHandle } | undefined
   if (value === undefined) {
-    throw new Error('sw_exec: the subprocess seam is not mounted (is dsh-workspace-enhancement mounted?)')
+    throw new Error(tr('tool.error.subprocessMissing'))
   }
   return value
 }
 
 /** The env face the tool builds from the registry accessor and `ctx.subprocess`. */
-function swExecEnvOf(ctx: Context, registry: () => SshRegistry): SwExecEnv {
+function swExecEnvOf(ctx: Context, registry: () => SshRegistry, tr: TranslateFn = EN_T): SwExecEnv {
   return {
     get: id => registry().get(id),
     getActive: () => registry().getActive(),
     listMachines: () => registry().listMachines(),
-    spawn: spec => spawnerOf(ctx).spawn(spec),
+    spawn: spec => spawnerOf(ctx, tr).spawn(spec),
   }
 }
 
 /** Require the job registry with the same wording as the official bash tool. */
-function jobsOf(ctx: Context): BackgroundJobs {
+function jobsOf(ctx: Context, tr: TranslateFn = EN_T): BackgroundJobs {
   const jobs = ctx.get('jobs', false) as BackgroundJobs | undefined
   if (jobs === undefined) {
-    throw new Error('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+    throw new Error(tr('tool.error.jobsUnavailable'))
   }
   return jobs
 }
@@ -715,56 +742,60 @@ function jobsOf(ctx: Context): BackgroundJobs {
  */
 export function registerSwExec(ctx: Context, registry: () => SshRegistry, opts: { enableRunInBackground?: boolean } = {}): void {
   const backgroundEnabled = opts.enableRunInBackground ?? true
+  const locale = hostLocaleOf(ctx)
+  const t = locale.t
   const osCache = createRemoteOsCache()
-  const backgroundSentence = backgroundEnabled
-    ? 'Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.'
-    : 'Background execution is not available; long-running commands must finish within the timeout.'
+  const backgroundSentenceKey: DswKey = backgroundEnabled ? 'tool.common.backgroundSentence' : 'tool.common.backgroundUnavailable'
+  const describe = (tr: TranslateFn): string => `${tr('tool.sw_exec.description')} ${tr(backgroundSentenceKey)}`
   const tool = defineTool({
     name: 'sw_exec',
-    description:
-      `Execute a command on a registered SSH server and return its stdout/stderr. The \`server\` id selects the machine (a registry id like c1, or the temporary id of sw_connect save:false); it defaults to the current session workspace machine, and a local session without a server errors. The target OS is probed once per connection and reported in the first line: POSIX runs \`bash -c\`, Windows runs \`pwsh -Command\`, unknown runs bash honestly. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass \`workdir\` instead of using \`cd\`. Non-zero exits are reported as \`[exit code: N]\` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. ` + backgroundSentence,
+    description: describe(ZH_T),
+    // Baseline parameter spec (ZH descriptions): inline so defineTool's
+    // precise generic inference (args typing + validation closure) is
+    // preserved; the localized spec lives in the `parameters` getter below.
     parameters: {
-      command: commandParameter,
-      description: descriptionParameter,
-      timeoutMs: timeoutMsParameter,
-      workdir: workdirParameter,
-      server: {
-        type: 'string',
-        description: 'Target server id: a registry machine id (c1, c2, …) or the temporary id of sw_connect save:false. Defaults to the current session workspace machine. Unknown ids error with the known list.',
-      },
-      ...(backgroundEnabled ? { run_in_background: runInBackgroundParameter } : {}),
+      command: { type: 'string', required: true, description: ZH_T('tool.param.command') },
+      description: { type: 'string', required: true, description: ZH_T('tool.param.description') },
+      timeoutMs: { type: 'number', description: ZH_T('tool.param.timeout') },
+      workdir: { type: 'string', description: ZH_T('tool.sw_exec.param.workdir') },
+      server: { type: 'string', description: ZH_T('tool.sw_exec.param.server') },
+      ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: ZH_T('tool.param.runInBackground') } } : {}),
     },
     output: {
       schema: swExecOutputSchema,
       render: (_args, value) => {
         const record = value as { kind?: string; jobId?: string; server?: string; endpoint?: string }
         const text = record.kind === 'background'
-          ? `started background job ${String(record.jobId)} on ${String(record.server)} (${String(record.endpoint)})`
-          : renderSwExecForeground(value as SwExecForeground)
+          ? t('tool.sw_exec.output.background', {
+            jobId: String(record.jobId),
+            server: String(record.server),
+            endpoint: String(record.endpoint),
+          })
+          : renderSwExecForeground(value as SwExecForeground, t)
         return [{ type: 'text', text }]
       },
     },
     async execute(args, exec: ToolRunContext): Promise<SwExecBackground | SwExecForeground> {
-      validateSwExecArgs(args)
-      const env = swExecEnvOf(ctx, registry)
+      validateSwExecArgs(args, t)
+      const env = swExecEnvOf(ctx, registry, t)
       const sessionCwd = sessionCwdOf(exec)
       const route = remoteRouteFromCwd(sessionCwd)
       const serverId = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : route?.connectionId
       if (serverId === undefined) {
-        throw new Error('sw_exec: server required for local sessions')
+        throw new Error(t('tool.sw_exec.error.serverRequired'))
       }
-      const workdir = normalizeSwExecWorkdir(args.workdir, route !== null ? { id: route.connectionId, path: route.path } : null)
+      const workdir = normalizeSwExecWorkdir(args.workdir, route !== null ? { id: route.connectionId, path: route.path } : null, t)
       if (args.run_in_background === true) {
-        if (!backgroundEnabled) throw new Error('run_in_background is disabled for this deployment (enableRunInBackground: false)')
-        const jobs = jobsOf(ctx)
+        if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))
+        const jobs = jobsOf(ctx, t)
         // Official bash contract: an already-cancelled call must never register
         // an orphan background job.
         if (exec.signal.aborted === true) throw toolAbortError()
-        const target = resolveSwExecServer(env, serverId)
-        const { cwd, machineId } = resolveSwExecCwd(workdir, target.connection.id, defaultRemoteDir(target.spec))
+        const target = resolveSwExecServer(env, serverId, t)
+        const { cwd, machineId } = resolveSwExecCwd(workdir, target.connection.id, defaultRemoteDir(target.spec), t)
         const connection = machineId === target.connection.id
           ? target.connection
-          : resolveSwExecServer(env, machineId).connection
+          : resolveSwExecServer(env, machineId, t).connection
         // The OS probe is async and the job hook `run` is synchronous — probe
         // BEFORE registering, then the hook waits on nothing but the spawn.
         const os = await resolveRemoteOs(connection, exec.signal, osCache)
@@ -780,7 +811,7 @@ export function registerSwExec(ctx: Context, registry: () => SshRegistry, opts: 
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
             })
-            const readOutput = incrementalRead(handle)
+            const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),
               done: handle.done.then(jobOutcomeOf, error =>
@@ -791,17 +822,26 @@ export function registerSwExec(ctx: Context, registry: () => SshRegistry, opts: 
         })
         return { kind: 'background', jobId, server: connection.id, endpoint: connection.endpoint }
       }
-      const foreground = await swExecCore(env, serverId, args.command, workdir, args.timeoutMs, exec.signal, osCache)
+      const foreground = await swExecCore(env, serverId, args.command, workdir, args.timeoutMs, exec.signal, osCache, t)
       if (exec.signal.aborted === true) throw toolAbortError()
       return foreground
     },
+  })
+  // Route-B localization (drafts/i18n-design.md §6.2): the description is
+  // composed (base + background sentence) and both properties re-read the
+  // host language on every schemas() projection — see note on localizeTool.
+  Object.defineProperty(tool, 'description', {
+    get: () => describe(locale.t),
+  })
+  Object.defineProperty(tool, 'parameters', {
+    get: () => parameterSchemaSpecToJsonSchema(swExecParams(locale.t, backgroundEnabled)) as unknown as Record<string, unknown>,
   })
   const disposer = ctx.tools.register(tool)
   ctx.effect(() => disposer, 'sw-exec tool')
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:sw-exec',
     order: 105,
-    text: 'sw_exec 在指定服务器上执行命令；workdir 缺省为该服务器主工作区；检查每个结果的 [exit code: N] 标记，非 0 退出先排查再继续。',
+    text: () => locale.t('prompt.section.swExec'),
   })
   ctx.effect(() => sectionDisposer, 'tool:sw-exec system prompt section')
 }
@@ -839,42 +879,44 @@ export function registerWin32Bash(
 ): void {
   if ((options.platform ?? process.platform) !== 'win32') return
   const backgroundEnabled = options.enableRunInBackground ?? true
-  const backgroundSentence = backgroundEnabled
-    ? 'Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.'
-    : 'Background execution is not available; long-running commands must finish within the timeout.'
+  const locale = hostLocaleOf(ctx)
+  const t = locale.t
+  const backgroundSentenceKey: DswKey = backgroundEnabled ? 'tool.common.backgroundSentence' : 'tool.common.backgroundUnavailable'
+  const describe = (tr: TranslateFn): string => `${tr('tool.bash.description')} ${tr(backgroundSentenceKey)}`
   const tool = defineTool({
     name: 'bash',
-    description:
-      `Execute a bash command (\`bash -c\`) on the session's remote Linux workspace and return its stdout/stderr. This host is Windows and has no local bash: the command always runs on the remote server the session routes to, and a local (Windows) session errors — use pwsh there. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass \`workdir\` instead of using \`cd\`. Non-zero exits are reported as \`[exit code: N]\` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. ` + backgroundSentence,
+    description: describe(ZH_T),
+    // Baseline parameter spec (ZH descriptions), see registerSwExec.
     parameters: {
-      command: commandParameter,
-      description: descriptionParameter,
-      timeoutMs: timeoutMsParameter,
-      workdir: {
-        type: 'string',
-        description: 'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it; `ssh://<id>/<path>` names a machine and directory explicitly.',
-      },
-      ...(backgroundEnabled ? { run_in_background: runInBackgroundParameter } : {}),
+      command: { type: 'string', required: true, description: ZH_T('tool.param.command') },
+      description: { type: 'string', required: true, description: ZH_T('tool.param.description') },
+      timeoutMs: { type: 'number', description: ZH_T('tool.param.timeout') },
+      workdir: { type: 'string', description: ZH_T('tool.bash.param.workdir') },
+      ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: ZH_T('tool.param.runInBackground') } } : {}),
     },
     output: {
       schema: bashOutputSchema,
       render: (_args, value) => {
         const record = value as { kind?: string; jobId?: string }
         const text = record.kind === 'background'
-          ? `started background job ${String(record.jobId)}`
-          : renderStreamBody(value as BashForeground)
+          ? t('tool.bash.output.background', { jobId: String(record.jobId) })
+          : renderStreamBody(value as BashForeground, t)
         return [{ type: 'text', text }]
       },
     },
     async execute(args, exec: ToolRunContext): Promise<BashBackground | BashForeground> {
-      validateBashToolArgs(args)
+      validateBashToolArgs(args, t)
       const cwd = resolveWin32BashWorkdir(args.workdir, sessionCwdOf(exec))
       if (cwd === undefined || worldOfCwd(cwd) === 'local') {
-        throw new Error('bash 工具面向远程 Linux 工作区（本机 Windows 无 bash）；请使用 pwsh 或终端面板')
+        // t15-r2 (captain decision F4): the guard follows the SAME host-language
+        // rule as every other model-facing message (settings preference ?? en;
+        // no preference → en) — a design-rule unification, not a regression.
+        // A no-settings composition (tests) therefore sees the EN wording.
+        throw new Error(t('tool.bash.error.localSession'))
       }
       if (args.run_in_background === true) {
-        if (!backgroundEnabled) throw new Error('run_in_background is disabled for this deployment (enableRunInBackground: false)')
-        const jobs = jobsOf(ctx)
+        if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))
+        const jobs = jobsOf(ctx, t)
         // Official bash contract: an already-cancelled call must never register
         // an orphan background job.
         if (exec.signal.aborted === true) throw toolAbortError()
@@ -883,13 +925,13 @@ export function registerWin32Bash(
           label: args.command,
           ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
           run: () => {
-            const handle = spawnerOf(ctx).spawn({
+            const handle = spawnerOf(ctx, t).spawn({
               argv: ['bash', '-c', args.command],
               cwd,
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
             })
-            const readOutput = incrementalRead(handle)
+            const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),
               done: handle.done.then(jobOutcomeOf, error =>
@@ -904,7 +946,7 @@ export function registerWin32Bash(
       const deadline = makeSwExecDeadline(effectiveTimeoutMs, exec.signal)
       let handle: SubprocessHandle
       try {
-        handle = spawnerOf(ctx).spawn({
+        handle = spawnerOf(ctx, t).spawn({
           argv: ['bash', '-c', args.command],
           cwd,
           stdio: COLLECT_STDIO,
@@ -920,7 +962,7 @@ export function registerWin32Bash(
         outcome = await handle.done
       } catch (error) {
         deadline.dispose()
-        throw new Error(`bash: spawn failed: ${error instanceof Error ? error.message : String(error)}`)
+        throw new Error(t('tool.bash.error.spawnFailed', { detail: error instanceof Error ? error.message : String(error) }))
       }
       const stdout = streamOf(handle.collected?.stdout)
       const stderr = streamOf(handle.collected?.stderr)
@@ -939,12 +981,19 @@ export function registerWin32Bash(
       }
     },
   })
+  // Route-B localization (composed description, see registerSwExec).
+  Object.defineProperty(tool, 'description', {
+    get: () => describe(locale.t),
+  })
+  Object.defineProperty(tool, 'parameters', {
+    get: () => parameterSchemaSpecToJsonSchema(bashParams(locale.t, backgroundEnabled)) as unknown as Record<string, unknown>,
+  })
   const disposer = ctx.tools.register(tool)
   ctx.effect(() => disposer, 'win32 bash tool')
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:bash',
     order: 105,
-    text: 'bash 工具面向远程 Linux 工作区；本地（Windows）会话请用 pwsh。检查每个结果的 [exit code: N] 标记。',
+    text: () => locale.t('prompt.section.win32Bash'),
   })
   ctx.effect(() => sectionDisposer, 'tool:bash system prompt section')
 }

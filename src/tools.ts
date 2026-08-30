@@ -12,7 +12,10 @@ import { basename, posix } from 'node:path'
 import type { Stats } from 'ssh2'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { registerSwExec, registerWin32Bash } from './exec-tools.ts'
+import { lookup, type TranslateFn } from './locale/index.ts'
+import { hostLocaleOf, localizeTool } from './locale/host.ts'
 import type { SshRegistry, MachineInput } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -24,6 +27,13 @@ const textOutSchema = {
   additionalProperties: false,
   properties: { text: { type: 'string', required: true } },
 } as const
+
+/**
+ * Fixed-ZH translator — the legacy default of the prompt renderers: their
+ * pre-i18n copy was Chinese, and the render tests pin that output. The live
+ * section callback passes the host-language translator instead.
+ */
+const ZH_T: TranslateFn = (key, params) => lookup('zh', key, params)
 
 /** The machine facts the prompt reads (leaf fields only, no live objects). */
 export interface PromptMachineFace {
@@ -81,8 +91,13 @@ export function remotePromptFact(
 }
 
 /** Render the one emphasis paragraph of the remote-workplace prompt (order 90). */
-export function renderRemotePrompt(fact: RemotePromptFact): string {
-  return `⚠ 你当前的工作区是**远程 SSH 工作区**：\`${fact.endpoint}:${fact.displayPath}\`（由本地占位路径 \`${fact.placeholderRoot}\\${fact.connectionId}\\…\` 路由；你看到的占位路径只是路由别名，**所有命令与文件操作都真实发生在远程服务器上**，工作目录为 POSIX 绝对路径）。`
+export function renderRemotePrompt(fact: RemotePromptFact, tr: TranslateFn = ZH_T): string {
+  return tr('prompt.remote.emphasis', {
+    endpoint: fact.endpoint,
+    displayPath: fact.displayPath,
+    placeholderRoot: fact.placeholderRoot,
+    connectionId: fact.connectionId,
+  })
 }
 
 /** The permission fact one side workspace renders as. */
@@ -97,12 +112,12 @@ export interface SideWorkspacePromptFact {
 }
 
 /** Pure prompt projection of one side workspace (leaf fields only). */
-export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspacePromptFact {
+export function sideWorkspacePromptFact(item: SideWorkspaceItem, tr: TranslateFn = ZH_T): SideWorkspacePromptFact {
   return {
     label: item.label,
     rootKey: item.rootKey,
-    fs: item.fs === 'r' ? '只读' : '读写',
-    exec: item.exec === 'off' ? '关' : '开',
+    fs: item.fs === 'r' ? tr('prompt.side.fs.r') : tr('prompt.side.fs.rw'),
+    exec: item.exec === 'off' ? tr('prompt.side.exec.off') : tr('prompt.side.exec.on'),
   }
 }
 
@@ -112,13 +127,13 @@ export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspaceP
  * sentence states the enforcement boundary honestly: the exec gate covers the
  * workspace world (spawn cwd / program path), not path text inside a command.
  */
-export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
+export function renderSideWorkspaces(items: readonly SideWorkspaceItem[], tr: TranslateFn = ZH_T): string {
   if (items.length === 0) return ''
   const lines = items.map(item => {
-    const fact = sideWorkspacePromptFact(item)
-    return `- 副工作区 **${fact.label}**：\`${fact.rootKey}\`（fs: ${fact.fs} · exec: ${fact.exec}）`
+    const fact = sideWorkspacePromptFact(item, tr)
+    return tr('prompt.side.item', { label: fact.label, rootKey: fact.rootKey, fs: fact.fs, exec: fact.exec })
   })
-  return `**本会话额外关联的工作区（副目录，模型可直接操作）**：\n${lines.join('\n')}\n注意权限标记：只读（fs: 只读）拒绝写入，禁执行（exec: 关）拒绝在该目录下运行命令；被拒绝的操作请改用有权限的工作区或请用户调整。命令默认在主工作区执行；在其它服务器执行请用 \`sw_exec(server, command)\`。`
+  return `${tr('prompt.side.heading')}\n${lines.join('\n')}\n${tr('prompt.side.note')}`
 }
 
 /**
@@ -132,10 +147,11 @@ export function composeWorkspacePrompt(
   machine: PromptMachineFace | undefined,
   sides: readonly SideWorkspaceItem[],
   dshBase?: string,
+  tr: TranslateFn = ZH_T,
 ): string {
   const fact = remotePromptFact(cwd, machine, dshBase)
-  const remote = fact !== null ? renderRemotePrompt(fact) : ''
-  const side = renderSideWorkspaces(sides)
+  const remote = fact !== null ? renderRemotePrompt(fact, tr) : ''
+  const side = renderSideWorkspaces(sides, tr)
   return [remote, side].filter(part => part !== '').join('\n\n')
 }
 
@@ -172,53 +188,89 @@ export function parseRemoteEnvProbe(output: string): RemoteEnvProbe {
   }
 }
 
+/**
+ * Legacy default of the probe renderer: pre-i18n the heading was English
+ * while the missing-tool hint was Chinese — a mixed output the existing tests
+ * pin. The default reproduces it exactly; the live tool path passes the
+ * host-language translator instead.
+ */
+const LEGACY_ENV_PROBE_T: TranslateFn = (key, params) =>
+  lookup(key === 'tool.env.heading' ? 'en' : 'zh', key, params)
+
 /** Render the probe as three check lines plus one hint line (never autoload/install). */
-export function renderRemoteEnvProbe(probe: RemoteEnvProbe): string {
+export function renderRemoteEnvProbe(probe: RemoteEnvProbe, tr: TranslateFn = LEGACY_ENV_PROBE_T): string {
   const mark = (present: boolean): string => (present ? '✓' : '✗')
   const missing: string[] = []
   if (!probe.bash) missing.push('bash')
   if (!probe.pwsh) missing.push('pwsh')
   if (!probe.rg) missing.push('rg')
   const lines = [
-    'Remote environment:',
+    tr('tool.env.heading'),
     `  bash: ${mark(probe.bash)}`,
     `  pwsh: ${mark(probe.pwsh)}`,
     `  rg: ${mark(probe.rg)}`,
   ]
   if (missing.length === 0) return lines.join('\n')
-  lines.push(`提示: 远端缺少 ${missing.join(', ')} —— 安装请在远端执行（仅供参考，不会自动安装）：rg → sudo apt-get install ripgrep；pwsh → https://aka.ms/powershell`)
+  lines.push(tr('prompt.env.missing', { missing: missing.join(', ') }))
   return lines.join('\n')
 }
 
+/** Ping result: the render text plus a structured ok/detail pair for composition. */
+interface PingResult {
+  ok: boolean
+  /** The model-visible text line. */
+  text: string
+  /** The failure reason (model-visible; also feeds the sw_connect failure error). */
+  detail: string
+}
+
 /** Ping the active connection with a bounded budget (never hangs the tool). */
-async function pingActive(registry: SshRegistry): Promise<string> {
+async function pingActive(registry: SshRegistry, tr: TranslateFn): Promise<PingResult> {
   const active = registry.getActive()
-  if (active === null) return 'No active machine — call sw_connect with a host to get started.'
+  if (active === null) return { ok: false, text: tr('tool.common.noActive'), detail: tr('tool.common.noActive') }
   const prefix = `${active.spec.username}@${active.spec.host}:${active.spec.port}`
   try {
     const outcome = await active.connection.exec('echo ok', { signal: AbortSignal.timeout(8_000) })
     if (outcome.exitCode === 0) {
-      return `Ping: OK — ${prefix} (${outcome.stdout.replace(/\s+/g, ' ').trim() || 'echo ok'})`
+      const echo = outcome.stdout.replace(/\s+/g, ' ').trim() || 'echo ok'
+      return { ok: true, text: tr('tool.sw_status.ping.ok', { prefix, outcome: echo }), detail: '' }
     }
-    return `Ping: FAILED — ${(outcome.stderr || outcome.stdout || `exit ${String(outcome.exitCode)}`).trim()}`
+    const detail = (outcome.stderr || outcome.stdout || `exit ${String(outcome.exitCode)}`).trim()
+    return { ok: false, text: tr('tool.sw_status.ping.failed', { detail }), detail }
   } catch (error) {
-    return `Ping: FAILED — ${error instanceof Error ? error.message : String(error)}`
+    const detail = error instanceof Error ? error.message : String(error)
+    return { ok: false, text: tr('tool.sw_status.ping.failed', { detail }), detail }
   }
 }
 
 /** Probe the remote toolbox (bash/pwsh/rg) with the same bounded budget. */
-async function remoteEnvLine(registry: SshRegistry): Promise<string> {
+async function remoteEnvLine(registry: SshRegistry, tr: TranslateFn): Promise<string> {
   const active = registry.getActive()
   if (active === null) return ''
   try {
     const outcome = await active.connection.exec(remoteEnvProbeCommand(), { signal: AbortSignal.timeout(8_000) })
     if (outcome.exitCode !== 0) return ''
-    return renderRemoteEnvProbe(parseRemoteEnvProbe(outcome.stdout))
+    return renderRemoteEnvProbe(parseRemoteEnvProbe(outcome.stdout), tr)
   } catch {
     // Connectivity already reported by pingActive.
     return ''
   }
 }
+
+/** sw_connect parameter spec builder (descriptions localized per language). */
+const swConnectParams = (tr: TranslateFn): ParameterSchemaSpec => ({
+  host: { type: 'string', required: true, description: tr('tool.sw_connect.param.host') },
+  username: { type: 'string', description: tr('tool.sw_connect.param.username') },
+  port: { type: 'integer', description: tr('tool.sw_connect.param.port') },
+  password: { type: 'string', description: tr('tool.sw_connect.param.password') },
+  privateKeyPath: { type: 'string', description: tr('tool.sw_connect.param.privateKeyPath') },
+  save: { type: 'boolean', description: tr('tool.sw_connect.param.save') },
+})
+
+/** sw_pick_workspace parameter spec builder. */
+const swPickWorkspaceParams = (tr: TranslateFn): ParameterSchemaSpec => ({
+  path: { type: 'string', required: true, description: tr('tool.sw_pick_workspace.param.path') },
+})
 
 /**
  * Register the three sw_* tools plus the per-session workspace-context prompt
@@ -229,11 +281,12 @@ async function remoteEnvLine(registry: SshRegistry): Promise<string> {
  * @param sides - the side-workspace store accessor (absent → no attachments).
  */
 export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry, sides: () => SessionSideWorkspaceStore | undefined): void {
+  const locale = hostLocaleOf(ctx)
+  const t = locale.t
   const tools = [
-    defineTool({
+    localizeTool(defineTool({
       name: 'sw_status',
-      description:
-        'Show the current remote machine (host/user/port), connection health (ping), the current remote workspace, and the host-key policy/state. Call this first to orient, or when an sw_* call fails to check connectivity.',
+      description: ZH_T('tool.sw_status.description'),
       parameters: {},
       output: {
         schema: textOutSchema,
@@ -243,29 +296,31 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
         const instance = registry()
         const status = instance.status()
         const lines = [
-          `Remote host: ${status.username || '<user>'}@${status.host || '<host>'}:${status.port}${status.activeSource !== 'machine' ? ` (source: ${status.activeSource})` : ''}`,
-          `Current remote workspace: ${status.workspace || '(none — call sw_pick_workspace to set one)'}`,
-          `Connected: ${status.connected ? 'yes' : 'no'}`,
-          `Host key: ${status.hostKeyKnown ? 'trusted' : 'not yet trusted'} (mode=${status.hostKeyMode})`,
-          `Password backend: ${status.backend}`,
+          t('tool.sw_status.outputs.host', {
+            u: status.username || '<user>',
+            h: status.host || '<host>',
+            p: status.port,
+            source: status.activeSource !== 'machine' ? ` (source: ${status.activeSource})` : '',
+          }),
+          status.workspace
+            ? t('tool.sw_status.outputs.workspace', { ws: status.workspace })
+            : t('tool.sw_status.outputs.workspaceNone'),
+          t('tool.sw_status.outputs.connected', { yesno: status.connected ? 'yes' : 'no' }),
+          t('tool.sw_status.outputs.hostKey', {
+            trusted: status.hostKeyKnown ? 'trusted' : 'not yet trusted',
+            mode: status.hostKeyMode,
+          }),
+          t('tool.sw_status.outputs.backend', { backend: status.backend }),
         ]
-        lines.push(await pingActive(instance))
-        lines.push(await remoteEnvLine(instance))
+        lines.push((await pingActive(instance, t)).text)
+        lines.push(await remoteEnvLine(instance, t))
         return { text: lines.join('\n') }
       },
-    }),
-    defineTool({
+    }), locale, { descriptionKey: 'tool.sw_status.description', buildParams: () => ({}) }),
+    localizeTool(defineTool({
       name: 'sw_connect',
-      description:
-        'Connect SSH to a remote host for remote workspace work. Provide host (required), user, optional password or privateKeyPath/port. Defaults to saving the machine to the registry and making it current (save=false keeps it as a temporary connection). Once connected, call sw_pick_workspace to pick the workspace directory this session should work in.',
-      parameters: {
-        host: { type: 'string', required: true, description: 'Remote host IP or hostname' },
-        username: { type: 'string', description: 'SSH user (default root)' },
-        port: { type: 'integer', description: 'SSH port (default 22)' },
-        password: { type: 'string', description: 'SSH password (prefer SSH key when possible)' },
-        privateKeyPath: { type: 'string', description: 'Absolute private-key path' },
-        save: { type: 'boolean', description: 'Save this machine to the registry and make it current (default true)' },
-      },
+      description: ZH_T('tool.sw_connect.description'),
+      parameters: swConnectParams(ZH_T),
       output: {
         schema: textOutSchema,
         render: (_args, value): Array<{ type: 'text'; text: string }> => [{ type: 'text', text: value.text }],
@@ -280,7 +335,7 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
       }): Promise<{ text: string }> {
         const instance = registry()
         const host = String(args.host ?? '').trim()
-        if (host === '') throw new Error('sw_connect: host is required')
+        if (host === '') throw new Error(t('tool.sw_connect.error.hostRequired'))
         const input: MachineInput = {
           host,
           label: host,
@@ -297,20 +352,20 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
         } else {
           id = instance.connectTemporary(input).id
         }
-        const ping = await pingActive(instance)
-        if (ping.startsWith('Ping: FAILED')) {
-          throw new Error(`sw_connect: cannot connect to ${host} — ${ping.slice('Ping: FAILED — '.length)}`)
+        const ping = await pingActive(instance, t)
+        if (!ping.ok) {
+          throw new Error(t('tool.sw_connect.error.connectFailed', { host, detail: ping.detail }))
         }
-        return { text: `Connected to ${host} (id=${id}).\n\npick a workspace with sw_pick_workspace (path=<abs>).` }
+        return { text: t('tool.sw_connect.output', { host, id }) }
       },
+    }), locale, {
+      descriptionKey: 'tool.sw_connect.description',
+      buildParams: swConnectParams,
     }),
-    defineTool({
+    localizeTool(defineTool({
       name: 'sw_pick_workspace',
-      description:
-        'Set the remote workspace directory this session should treat as its working root on the connected remote. Verifies it exists (a directory); persists it on the active machine (recentWorkspaces keeps the last 8).',
-      parameters: {
-        path: { type: 'string', required: true, description: 'Absolute remote directory path, e.g. /home/dev/code/project' },
-      },
+      description: ZH_T('tool.sw_pick_workspace.description'),
+      parameters: swPickWorkspaceParams(ZH_T),
       output: {
         schema: textOutSchema,
         render: (_args, value): Array<{ type: 'text'; text: string }> => [{ type: 'text', text: value.text }],
@@ -318,12 +373,12 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
       async execute(args: { path: string }): Promise<{ text: string }> {
         const path = String(args.path ?? '').trim()
         if (path === '' || !posix.isAbsolute(path)) {
-          throw new Error(`sw_pick_workspace: path must be an absolute remote directory path: ${JSON.stringify(path)}`)
+          throw new Error(t('tool.sw_pick_workspace.error.invalidPath', { path: JSON.stringify(path) }))
         }
         const instance = registry()
         const active = instance.getActive()
         if (active === null) {
-          throw new Error('sw_pick_workspace: no active machine — call sw_connect first')
+          throw new Error(t('tool.sw_pick_workspace.error.noActive'))
         }
         const sftp = await active.connection.getSftp()
         const stats = await new Promise<Stats>((resolvePromise, reject) => {
@@ -333,11 +388,14 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
           })
         })
         if (!stats.isDirectory()) {
-          throw new Error(`sw_pick_workspace: ${path} is not a directory`)
+          throw new Error(t('tool.sw_pick_workspace.error.notDir', { path }))
         }
         instance.setActiveWorkspace(path)
-        return { text: `Workspace set to ${path} (active machine: ${active.spec.username}@${active.spec.host}).` }
+        return { text: t('tool.sw_pick_workspace.output', { path, u: active.spec.username, h: active.spec.host }) }
       },
+    }), locale, {
+      descriptionKey: 'tool.sw_pick_workspace.description',
+      buildParams: swPickWorkspaceParams,
     }),
   ]
 
@@ -376,7 +434,7 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
       const route = cwd !== undefined ? remoteRouteFromCwd(cwd) : null
       if (route === null && attached.length === 0) return ''
       const machine = route !== null ? registry().listMachines().machines.find(entry => entry.id === route.connectionId) : undefined
-      return composeWorkspacePrompt(cwd, machine, attached)
+      return composeWorkspacePrompt(cwd, machine, attached, undefined, t)
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')

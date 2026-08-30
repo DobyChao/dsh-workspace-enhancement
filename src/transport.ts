@@ -23,6 +23,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ExecOutcome, SshRuntime } from './runtime.ts'
 import type { SshRegistry } from './registry.ts'
 import { parseSshRoute } from './registry.ts'
+import { hostLocaleOf } from './locale/host.ts'
 
 /** The connection-owner face both providers consume. */
 export interface SshTransport {
@@ -145,13 +146,13 @@ export function resolveSshCwd(ctx: Context, cwd: string | undefined): SshCwdRout
   if (cwd !== undefined) {
     const parsed = cwd.startsWith('ssh://') ? parseSshRoute(cwd) : routeFromPlaceholder(cwd)
     if (parsed === null && cwd.startsWith('ssh://')) {
-      throw new Error(`dsw: invalid remote working directory ${JSON.stringify(cwd)}`)
+      throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.invalidWorkdir', { dir: JSON.stringify(cwd) })}`)
     }
     if (parsed !== null) {
       const registry = ctx.get('sshRegistry') as SshRegistry | undefined
       const connection = registry?.get(parsed.id)
       if (connection === undefined) {
-        throw new Error(`dsw: remote working directory names unknown connection "${parsed.id}" (is dsw/web mounted?)`)
+        throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.workdirUnknownConnection', { id: parsed.id })}`)
       }
       return { transport: connection, cwd: parsed.path, connectionId: parsed.id }
     }
@@ -168,7 +169,7 @@ export function resolveSshTargetKey(ctx: Context, targetKey: string): SshCwdRout
   const registry = ctx.get('sshRegistry') as SshRegistry | undefined
   const connection = registry?.get(parsed.connectionId)
   if (connection === undefined) {
-    throw new Error(`dsw: target names unknown connection "${parsed.connectionId}" (is dsw/web mounted?)`)
+    throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.targetUnknownConnection', { id: parsed.connectionId })}`)
   }
   return { transport: connection, cwd: parsed.path, connectionId: parsed.connectionId, path: parsed.path }
 }
