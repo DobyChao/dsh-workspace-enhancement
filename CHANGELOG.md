@@ -2,6 +2,20 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
+## [0.1.2](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-31)
+
+依赖对齐修复与运行时国际化（R6 I18N）：客户端 UI、宿主「远程认知」系统提示与 `sw_*` 工具面三面全量双语（zh/en）。
+
+### 新增
+
+- **R6 I18N（运行时国际化）**：复用框架 `ctx.locale`（LocaleRuntime）与设置页 Language 行，单一共享词典 `src/locale/`（命名空间 `dsw`，zh 键集真源 + en 编译校验，zh/en 各 340 键严格相等）；客户端 UI 全部文案走 `t()`——目录浏览流程、连接/机器表单、设置页、副工作区面板、状态徽标（row-badges 语言切换即时重绘），切换即生效并持久化；宿主语言 = `settings.locale.preference ?? 'en'`（每次求值即时读，settings 可选、无缓存）；`sw_*` 工具描述/13 条参数/输出渲染/错误消息（路线 B description/parameters getter 范式）与远程认知系统提示（sw-remote section）按当前语言组装；机器标记（`[exit code: N]`/`[stderr]`/`[timed out after Nms]` 等）两语逐字节一致；`bad-request:` 协议层诊断与协议/品牌枚举值保持原文。
+- **依赖对齐**：`@deepseek-ai` 接缝依赖族对齐 `^0.1.1-rc.2`（dsh-fs/dsh-subprocess/dsh-timeout/dsh-llm 等；对应 0.1.1 发布后的 web profile 依赖诊断），devDeps 增加 `dsh-client-locale`/`dsh-client-ui-slots`/`dsh-settings`（类型源，运行时零新增依赖），`dsh.client.inject` 增 `@deepseek-ai/dsh-client-locale`。
+
+### 质量
+
+- 单测 225/225（含 i18n 22 项：键集全等/模板参数一致/机器标记字节一致/宿主语言解析/localizeTool getter 等，存量 202 零回归）；typecheck 0 错误；硬编码门禁（除词典外中文串 0、英文 UI 抽尽，白名单=注释/日志/库错误透传/协议枚举）通过。
+- lab E2E：设置页 Language 行 中文↔English 即时切换（UI/流程/设置/表单双语一致、row-badges 8 枚重绘）、新建远程会话（c1）系统提示与工具面随语言重新组装（会话日志记录 `System Prompt and Tools Updated`）、重启后语言偏好持久；全程隔离 `.dsh-lab`，未触碰真实实例与 `~/.dsh`。
+
 ## [0.1.1](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-26)
 
 跨服务器执行与主工作区命令接缝。
