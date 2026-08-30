@@ -12,7 +12,14 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ROW_STATUS_KEY, clearRowStatus, isOwnBadgeMutation, markedRowStillQualifies, markRowStatus, remoteSessionIndex, remoteWorkspaceIndex, rowStatusOf, rowTitleOf } from '../src/client/row-badges.ts'
+import { ROW_STATUS_KEY, badgeTextsOf, clearRowStatus, isOwnBadgeMutation, markedRowStillQualifies, markRowStatus, remoteSessionIndex, remoteWorkspaceIndex, rowStatusOf, rowTitleOf } from '../src/client/row-badges.ts'
+import { lookup } from '../src/locale/index.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ConnStatusView } from '../src/client/status.tsx'
+import { zhBaseline } from '../src/client/status.tsx'
+
+/** An EN translate seat (the dictionary's EN half; mirrors the runtime's en preference). */
+const enT: TranslateNS<'dsw'> = (key, params) => lookup('en', key, params)
 
 /** A minimal row stand-in carrying a real dataset record. */
 function fakeRow(): { dataset: Record<string, string | undefined> } {
@@ -195,4 +202,27 @@ test('t6: isOwnBadgeMutation — own badge-paint mutations never re-schedule a s
   assert.equal(isOwnBadgeMutation(row), false)
   assert.equal(isOwnBadgeMutation(null), false)
   assert.equal(isOwnBadgeMutation(undefined), false)
+})
+
+/* ------- t15-r2: badge text projection follows the ACTIVE language (repaint input) ------- */
+
+test('t15-r2: badgeTextsOf — a language switch re-derives the retry button text AND title', () => {
+  const view: ConnStatusView = {
+    id: 'c1', state: 'unknown', connected: false, label: '',
+    host: '10.0.0.1', port: 22, username: 'root', hostKeyKnown: false,
+  }
+  const zh = badgeTextsOf(view, false, zhBaseline)
+  assert.equal(zh.stateLabel, '未检测')
+  assert.equal(zh.buttonText, '重新检测')
+  assert.equal(zh.buttonTitle, '重新检测并尝试连接')
+  const en = badgeTextsOf(view, false, enT)
+  assert.equal(en.stateLabel, 'not detected')
+  assert.equal(en.buttonText, 'Re-check')
+  assert.equal(en.buttonTitle, 'Re-check and try to connect')
+  // Compact rows (session children) use the short button text variant.
+  const zhCompact = badgeTextsOf(view, true, zhBaseline)
+  assert.equal(zhCompact.buttonText, '重连')
+  assert.equal(badgeTextsOf(view, true, enT).buttonText, 'Reconnect')
+  // The projection is what paintBadge writes under its value guard, so a
+  // language-switch repaint updates the button copy/title in place.
 })

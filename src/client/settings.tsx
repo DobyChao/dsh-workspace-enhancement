@@ -13,14 +13,17 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
-import { ConnStatusBadge } from './status.tsx'
+import { ConnStatusBadge, zhBaseline } from './status.tsx'
 
 /** The `/dsw` RPC face injected by the client plugin. */
 export interface SettingsInjected {
   rpc(endpoint: string, payload?: unknown, signal?: AbortSignal): Promise<WireResult>
+  /** Typed translate seat (slot-injected once the registration declares `locale`). */
+  t?: TranslateNS<'dsw'>
 }
 
 /** Owner share of a `settings.section` entry (the shell supplies `close`). */
@@ -108,14 +111,15 @@ function editInitialOf(machine: MachineView): MachineFormInitial {
  * honest fallback marker (encryption requested, OS backend failed) rides
  * along as pure text (no live data; a `MachineSaveView` leaf).
  */
-export function savedBanner(view: MachineSaveView): string {
+export function savedBanner(view: MachineSaveView, t: TranslateNS<'dsw'> = zhBaseline): string {
   const label = view.label || `${view.username}@${view.host}`
-  const fallback = view.encryptFallback === true ? '（⚠ 系统加密后端不可用，密码已明文保存）' : ''
-  return `已保存 ${label}${fallback}`
+  const fallback = view.encryptFallback === true ? t('settings.encrypt.fallback') : ''
+  return t('settings.saved', { label, fallback })
 }
 
 /** The registers page component: machine list + shared form. */
-export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<SettingsOwnerProps>): ReactNode {
+export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected & Partial<SettingsOwnerProps>): ReactNode {
+  const t = tSeat ?? zhBaseline
   const [machines, setMachines] = useState<MachineView[]>([])
   const [currentId, setCurrentId] = useState('')
   const [editing, setEditing] = useState<MachineFormInitial | null>(null)
@@ -126,7 +130,7 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
   const refresh = async (): Promise<void> => {
     try {
       const result = await rpc('machines.list')
-      const state = unwrap<{ machines: unknown; currentId: unknown }>(result, '读取机器列表失败')
+      const state = unwrap<{ machines: unknown; currentId: unknown }>(result, t('settings.rpc.listMachines'))
       setMachines(Array.isArray(state.machines) ? state.machines.map(asMachineView).filter((m): m is MachineView => m !== null) : [])
       setCurrentId(typeof state.currentId === 'string' ? state.currentId : '')
     } catch (error) {
@@ -142,17 +146,17 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
   }
 
   const del = async (id: string): Promise<void> => {
-    if (!window.confirm('确定删除这台机器？')) return
+    if (!window.confirm(t('settings.delete.confirm'))) return
     setBusy(true)
     setErr('')
     setMsg('')
     try {
       const result = await rpc('machines.remove', { id })
-      const state = unwrap<{ machines: unknown; currentId: unknown; removed: boolean }>(result, '删除失败')
+      const state = unwrap<{ machines: unknown; currentId: unknown; removed: boolean }>(result, t('settings.rpc.removeFailed'))
       setMachines(Array.isArray(state.machines) ? state.machines.map(asMachineView).filter((m): m is MachineView => m !== null) : [])
       setCurrentId(typeof state.currentId === 'string' ? state.currentId : '')
       if (editing?.id === id) setEditing(null)
-      setMsg('已删除')
+      setMsg(t('settings.deleted'))
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -166,10 +170,10 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
     setMsg('')
     try {
       const result = await rpc('machines.setCurrent', { id })
-      const state = unwrap<{ machines: unknown; currentId: unknown; ok: boolean }>(result, '切换失败')
+      const state = unwrap<{ machines: unknown; currentId: unknown; ok: boolean }>(result, t('settings.rpc.switchFailed'))
       setMachines(Array.isArray(state.machines) ? state.machines.map(asMachineView).filter((m): m is MachineView => m !== null) : [])
       setCurrentId(typeof state.currentId === 'string' ? state.currentId : '')
-      setMsg('已设为当前机器')
+      setMsg(t('settings.setCurrent'))
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -183,8 +187,8 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
     setMsg('')
     try {
       const result = await rpc('hostkey.forget', { id: machine.id })
-      unwrap<{ ok: boolean; host: string; port: number }>(result, '忘记主机指纹失败')
-      setMsg(`已忘记 ${machine.host}:${machine.port} 的主机指纹（下次连接重新记录）`)
+      unwrap<{ ok: boolean; host: string; port: number }>(result, t('settings.rpc.forgetKeyFailed'))
+      setMsg(t('settings.forgotten', { host: machine.host, port: machine.port }))
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -197,7 +201,7 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
     setErr('')
     // F2: the page-level banner is the durable acknowledgment (the in-form
     // prompt is remounted away); it must stay visible after the refresh.
-    setMsg(savedBanner(view))
+    setMsg(savedBanner(view, t))
     void refresh()
   }
 
@@ -211,48 +215,49 @@ export function RemoteWorkspaceSettingsPage({ rpc }: SettingsInjected & Partial<
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 860 }}>
-      <div style={{ fontSize: 15, fontWeight: 600 }}>远程工作区（机器管理）</div>
+      <div style={{ fontSize: 15, fontWeight: 600 }}>{t('settings.title')}</div>
       <div style={{ fontSize: 12, opacity: 0.8 }}>
-        维护多台 SSH 机器（密码 / 私钥 / 主机指纹信任 / 钥匙串）。路径在新建或选择工作区时选：「本机」走系统文件夹对话框；「远程」选一台机器在其远程目录中选择。
+        {t('settings.description')}
       </div>
 
       {err !== '' ? <div style={{ color: '#e06c75', fontSize: 12 }}>{err}</div> : null}
       {msg !== '' ? <div style={{ color: '#98c379', fontSize: 12 }}>{msg}</div> : null}
 
       <div style={boxStyle}>
-        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>已配置的机器</div>
+        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{t('settings.machines.title')}</div>
         {machines.length > 0
           ? machines.map(machine => (
             <div key={machine.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
               <div style={{ flex: 1, fontSize: 13 }}>
                 {machine.label}{' '}
                 <code style={{ fontSize: 12, opacity: 0.8 }}>{machine.username}@{machine.host}:{machine.port}</code>
-                <ConnStatusBadge id={machine.id} rpc={rpc} />
+                <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
                 {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
-                {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> ⚠ 加密不可用</span> : ''}
+                {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
                 {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
-                {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}> · 当前</span> : null}
+                {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}> {t('settings.machines.currentBadge')}</span> : null}
               </div>
-              <button style={buttonStyle} onClick={() => startEdit(machine)}>编辑</button>
-              <button style={buttonStyle} onClick={() => void del(machine.id)}>删除</button>
+              <button style={buttonStyle} onClick={() => startEdit(machine)}>{t('settings.machines.edit')}</button>
+              <button style={buttonStyle} onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
               <button
                 style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
                 onClick={() => void useNow(machine.id)}
                 disabled={machine.id === currentId || busy}
-              >设为当前</button>
-              <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>忘记指纹</button>
+              >{t('settings.machines.setCurrent')}</button>
+              <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
             </div>
           ))
-          : <div style={{ opacity: 0.6, fontSize: 12 }}>还没有机器。在下方添加。</div>}
+          : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('settings.machines.empty')}</div>}
       </div>
 
       <div style={boxStyle}>
-        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{editing !== null ? '编辑机器' : '添加机器'}</div>
+        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{editing !== null ? t('settings.form.editTitle') : t('settings.form.addTitle')}</div>
         <MachineForm
           key={editing?.id ?? 'blank'}
           mode="settings"
           rpc={rpc}
           initial={editing ?? undefined}
+          t={t}
           onSaved={handleSaved}
         />
       </div>

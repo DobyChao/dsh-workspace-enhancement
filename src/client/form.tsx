@@ -8,6 +8,7 @@
  * @module dsh-workspace-enhancement/client/form
  */
 
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
@@ -33,6 +34,8 @@ export interface ConnectionFormProps {
   rpc: RpcCall
   /** Prefilled fields, when the sidebar opened the form for one config host. */
   draft?: ConnectionDraft | undefined
+  /** Typed translate seat of the `dsw` namespace (threaded from the flow). */
+  t: TranslateNS<'dsw'>
   /** The operator dismissed the form. */
   onClose(): void
   /** A connection was saved; the flow switches the browser to it. */
@@ -55,17 +58,17 @@ function draftToInitial(draft: ConnectionDraft | undefined): MachineFormInitial 
 }
 
 /** The connection form modal (masked password, 密码/私钥二选一). */
-export function ConnectionForm({ rpc, draft, onClose, onSaved }: ConnectionFormProps) {
+export function ConnectionForm({ rpc, draft, t, onClose, onSaved }: ConnectionFormProps) {
   const dialogRef = useDialogA11y(true, onClose)
   return (
     <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div className={styles.form} role="dialog" aria-modal="true" aria-label="新建远程连接" ref={dialogRef}>
+      <div className={styles.form} role="dialog" aria-modal="true" aria-label={t('form.dialog.label')} ref={dialogRef}>
         <div className={styles.formHead}>
           <div className={styles.formHeadText}>
-            <h3 className={styles.formTitle}>新建远程连接</h3>
-            <p className={styles.formSub}>保存后将出现在连接侧栏中，可直接浏览其远程目录</p>
+            <h3 className={styles.formTitle}>{t('form.title')}</h3>
+            <p className={styles.formSub}>{t('form.subtitle')}</p>
           </div>
-          <button type="button" className={styles.iconButton} aria-label="关闭" onClick={onClose}>
+          <button type="button" className={styles.iconButton} aria-label={t('form.close.label')} onClick={onClose}>
             <CloseIcon />
           </button>
         </div>
@@ -74,6 +77,7 @@ export function ConnectionForm({ rpc, draft, onClose, onSaved }: ConnectionFormP
             mode="flow"
             rpc={rpc}
             initial={draftToInitial(draft)}
+            t={t}
             onSaved={onSaved}
             onCancel={onClose}
           />

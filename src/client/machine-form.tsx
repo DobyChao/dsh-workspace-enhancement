@@ -22,7 +22,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
+import { zhBaseline } from './status.tsx'
 import { machinePayload } from './machine-payload.ts'
 import type { MachineFormState } from './machine-payload.ts'
 
@@ -92,6 +94,8 @@ export interface MachineFormProps {
   mode: 'settings' | 'flow'
   rpc: MachineFormRpc
   initial?: MachineFormInitial | undefined
+  /** Typed translate seat (threaded by the shells; defaults to the zh baseline). */
+  t?: TranslateNS<'dsw'>
   /** Save succeeded (the view's id drives the flow's browse switch / list refresh). */
   onSaved(view: MachineSaveView): void
   /** Flow: the surrounding modal also offers 取消. */
@@ -143,11 +147,14 @@ export function formatHop(hop: JumpInput): string {
 }
 
 /** Realtime jump summary: `3 · user@b1 → host:2202`, or the bad-input hint. */
-export function jumpSummaryOf(text: string): string {
+export function jumpSummaryOf(text: string, t: TranslateNS<'dsw'> = zhBaseline): string {
   const hops = parseJumpText(text)
   if (hops.length === 0) return ''
-  if (hops.some(hop => hop.host.trim() === '')) return '跳板链中存在无法解析的段'
-  return `跳板 ${hops.length}${hops.length === 1 ? '' : ' 段'} · ${hops.map(formatHop).join(' → ')}`
+  if (hops.some(hop => hop.host.trim() === '')) return t('form.jump.unresolved')
+  const joined = hops.map(formatHop).join(' → ')
+  return hops.length === 1
+    ? t('form.jump.summaryOne', { count: hops.length, hops: joined })
+    : t('form.jump.summary', { count: hops.length, hops: joined })
 }
 
 /**
@@ -157,12 +164,12 @@ export function jumpSummaryOf(text: string): string {
  * the summary already warned). Returns the error text, or null when the jump
  * is absent or fully parseable.
  */
-export function jumpErrorOf(text: string): string | null {
+export function jumpErrorOf(text: string, t: TranslateNS<'dsw'> = zhBaseline): string | null {
   const trimmed = text.trim()
   if (trimmed === '') return null
   const hops = parseJumpText(trimmed)
   if (hops.length === 0 || hops.some(hop => hop.host.trim() === '')) {
-    return '跳板链中存在无法解析的段，请检查 user@host[:port] 格式'
+    return t('form.jump.unresolvedHint')
   }
   return null
 }
@@ -220,13 +227,13 @@ export function createActionGate(): {
 }
 
 /** The one-line resolve summary: alias → user@host:port · identity · jumps. */
-export function formatResolvedSummary(resolved: ResolvedSshConfigView): string {
+export function formatResolvedSummary(resolved: ResolvedSshConfigView, t: TranslateNS<'dsw'> = zhBaseline): string {
   const endpoint = `${resolved.username !== '' ? `${resolved.username}@` : ''}${resolved.host}${resolved.port !== 22 ? `:${String(resolved.port)}` : ''}`
   const parts: string[] = []
   if (resolved.alias.toLowerCase() !== resolved.host.toLowerCase()) parts.push(`${resolved.alias} → ${endpoint}`)
   else parts.push(endpoint)
-  if (resolved.privateKeyPaths[0] !== undefined) parts.push(`私钥 ${resolved.privateKeyPaths[0] as string}`)
-  if (resolved.jump.length > 0) parts.push(`跳板 ${resolved.jump.map(formatHop).join(' → ')}`)
+  if (resolved.privateKeyPaths[0] !== undefined) parts.push(t('form.resolve.privateKey', { path: resolved.privateKeyPaths[0] as string }))
+  if (resolved.jump.length > 0) parts.push(t('form.resolve.jump', { hops: resolved.jump.map(formatHop).join(' → ') }))
   return parts.join(' · ')
 }
 
@@ -318,7 +325,8 @@ function fieldRow(label: string, control: ReactNode, key: string, hint?: string)
 }
 
 /** The shared form body: fields + feedback + actions (no modal shell). */
-export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFormProps): ReactNode {
+export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }: MachineFormProps): ReactNode {
+  const t = tSeat ?? zhBaseline
   const initialState = (): MachineFormState => ({
     id: initial?.id ?? '',
     name: initial?.name ?? '',
@@ -369,15 +377,15 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
 
   const errorsOf = (): FieldErrors => {
     const errors: FieldErrors = {}
-    if (form.host.trim() === '') errors.host = '请填写主机名或 ~/.ssh/config 别名'
+    if (form.host.trim() === '') errors.host = t('form.error.host')
     const portText = form.port.trim()
-    if (portText === '') errors.port = '必填'
-    else if (!/^\d+$/.test(portText)) errors.port = '端口必须是数字'
+    if (portText === '') errors.port = t('form.error.required')
+    else if (!/^\d+$/.test(portText)) errors.port = t('form.error.port.number')
     else {
       const parsed = Number(portText)
-      if (parsed < 1 || parsed > 65535) errors.port = '端口范围 1–65535'
+      if (parsed < 1 || parsed > 65535) errors.port = t('form.error.port.range')
     }
-    if (form.username.trim() === '') errors.username = '请填写登录用户名'
+    if (form.username.trim() === '') errors.username = t('form.error.username')
     return errors
   }
   const errorOf = (key: keyof FieldErrors): string | undefined => (revealed ? errorsOf()[key] : undefined)
@@ -430,7 +438,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
     setAutoBusy(false)
     setBusy(true)
     setBusyTask('resolve')
-    setFeedback({ kind: 'info', text: '正在读取 ~/.ssh/config…' })
+    setFeedback({ kind: 'info', text: t('form.config.reading') })
     try {
       const result = await rpc('connections.resolve', { host: alias.trim() })
       if (!result.ok) throw new Error(result.error.message)
@@ -440,11 +448,11 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
       applyResolved(resolved, form.workspace, form.username)
       setFeedback({
         kind: 'success',
-        text: `已识别 ${resolved.alias} → ${resolved.username !== '' ? `${resolved.username}@` : ''}${resolved.host}${resolved.port !== 22 ? `:${String(resolved.port)}` : ''}`,
+        text: t('form.config.resolved', { alias: resolved.alias, endpoint: `${resolved.username !== '' ? `${resolved.username}@` : ''}${resolved.host}${resolved.port !== 22 ? `:${String(resolved.port)}` : ''}` }),
       })
       if (expectedCount > 0) setConfigList(previous => previous === null ? previous : previous.filter(host => host.alias !== alias))
     } catch (error) {
-      setFeedback({ kind: 'error', text: `识别失败：${error instanceof Error ? error.message : String(error)}` })
+      setFeedback({ kind: 'error', text: t('form.config.resolveFailed', { message: error instanceof Error ? error.message : String(error) }) })
     } finally {
       if (actionGate.release('resolve')) {
         setBusy(false)
@@ -490,39 +498,39 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
     try {
       setRevealed(true)
       setConfigOpen(false)
-      const jumpError = jumpErrorOf(jumpText)
+      const jumpError = jumpErrorOf(jumpText, t)
       if (jumpError !== null) {
         setFeedback({ kind: 'error', text: jumpError })
         return
       }
       const input = payload()
       if (form.host.trim() === '') {
-        setFeedback({ kind: 'error', text: '请先填写主机名' })
+        setFeedback({ kind: 'error', text: t('form.test.noHost') })
         return
       }
       const editing = form.id !== ''
       if (authKind === 'password' && input.password === undefined && !editing) {
-        setFeedback({ kind: 'error', text: '请填写密码，或改用私钥认证' })
+        setFeedback({ kind: 'error', text: t('form.test.noPassword') })
         return
       }
       if (authKind === 'key' && (input.privateKeyPath === undefined || input.privateKeyPath === '')) {
         // P2-④: an edit cannot show the stored key path; the host keeps it
         // when the payload omits it — only a brand-new machine must carry one.
         if (!editing) {
-          setFeedback({ kind: 'error', text: '请填写私钥文件路径，或改用密码认证' })
+          setFeedback({ kind: 'error', text: t('form.test.noKey') })
           return
         }
       }
       setBusy(true)
       setBusyTask('test')
-      setFeedback({ kind: 'info', text: '正在测试连接…' })
+      setFeedback({ kind: 'info', text: t('form.test.testing') })
       try {
         const result = await rpc('machines.test', input)
         setFeedback(result.ok
-          ? { kind: 'success', text: '连接成功，可以保存了' }
-          : { kind: 'error', text: `连接失败：${result.error.message}` })
+          ? { kind: 'success', text: t('form.test.success') }
+          : { kind: 'error', text: t('form.test.failed', { message: result.error.message }) })
       } catch (error) {
-        setFeedback({ kind: 'error', text: `测试失败：${error instanceof Error ? error.message : String(error)}` })
+        setFeedback({ kind: 'error', text: t('form.test.error', { message: error instanceof Error ? error.message : String(error) }) })
       }
     } finally {
       if (actionGate.release('test')) {
@@ -539,27 +547,27 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
       setConfigOpen(false)
       const found = errorsOf()
       if (found.host !== undefined || found.port !== undefined || found.username !== undefined) {
-        setFeedback({ kind: 'error', text: '请先补全上方必填项' })
+        setFeedback({ kind: 'error', text: t('form.save.incomplete') })
         return
       }
-      const jumpError = jumpErrorOf(jumpText)
+      const jumpError = jumpErrorOf(jumpText, t)
       if (jumpError !== null) {
         setFeedback({ kind: 'error', text: jumpError })
         return
       }
       setBusy(true)
       setBusyTask('save')
-      setFeedback({ kind: 'info', text: '正在保存…' })
+      setFeedback({ kind: 'info', text: t('form.save.saving') })
       try {
         const result = await rpc('machines.add', payload())
         if (!result.ok) throw new Error(result.error.message)
         const raw = isRecord(result.value) ? (result.value as Record<string, unknown>).machine : undefined
         const machineRecord = isRecord(raw) ? raw : null
         const view = asSaveView(machineRecord)
-        if (view === null) throw new Error('保存结果缺少机器 id')
+        if (view === null) throw new Error(t('form.save.missingId'))
         // R1 保持：加密请求落在明文回退时要明说（honest marker）。
         const fallbackHint = machineRecord?.encryptFallback === true
-          ? '（⚠ 系统加密后端不可用，密码已明文保存）'
+          ? t('form.encrypt.fallback')
           : ''
         if (mode === 'settings') {
           setForm(initialState)
@@ -574,7 +582,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
         }
         onSaved({ ...view, ...(fallbackHint !== '' ? { encryptFallback: true } : {}) })
       } catch (error) {
-        setFeedback({ kind: 'error', text: `保存失败：${error instanceof Error ? error.message : String(error)}` })
+        setFeedback({ kind: 'error', text: t('form.save.failed', { message: error instanceof Error ? error.message : String(error) }) })
       }
     } finally {
       if (actionGate.release('save')) {
@@ -595,24 +603,24 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
     setRevealed(false)
   }
 
-  const jumpSummary = jumpSummaryOf(jumpText)
+  const jumpSummary = jumpSummaryOf(jumpText, t)
   const hostError = errorOf('host')
   const portError = errorOf('port')
   const usernameError = errorOf('username')
-  const saveLabel = mode === 'flow' ? '保存并浏览' : '保存'
+  const saveLabel = mode === 'flow' ? t('form.save.flowLabel') : t('form.save.settingsLabel')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
         <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>
-          主机名 / 别名<span style={{ color: '#e06c75' }}> *</span>
+          {t('form.label.host')}<span style={{ color: '#e06c75' }}> *</span>
         </label>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
           <div style={{ display: 'flex', gap: 6 }}>
             <input
               style={{ ...inputStyle, ...(hostError !== undefined ? inputErrorStyle : {}) }}
               value={form.host}
-              placeholder="prod 或 server.example.com"
+              placeholder={t('form.placeholder.host')}
               disabled={busy}
               onChange={event => {
                 setForm(prev => ({ ...prev, host: event.target.value }))
@@ -630,22 +638,22 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
               style={buttonStyle}
               disabled={busy}
               onClick={() => { void toggleConfigList() }}
-            >识别 ssh 配置 ▾</button>
+            >{t('form.config.recognize')} ▾</button>
           </div>
-          {autoBusy && <span style={{ fontSize: 11, opacity: 0.7 }} role="status">正在匹配 ~/.ssh/config…</span>}
+          {autoBusy && <span style={{ fontSize: 11, opacity: 0.7 }} role="status">{t('form.config.matching')}</span>}
           {hostError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{hostError}</span>}
-          <span style={{ fontSize: 11, opacity: 0.6 }}>填写 ~/.ssh/config 里的别名可在失焦时自动补全用户名、端口、私钥与跳板</span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.config.hint')}</span>
         </div>
       </div>
 
       {configOpen && (
         <div style={{ border: '1px solid rgba(128,128,128,0.35)', borderRadius: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto', background: 'rgba(128,128,128,0.06)' }}>
           {configBusy
-            ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>正在读取 ~/.ssh/config…</div>
+            ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>{t('form.config.reading')}</div>
             : configError !== null
               ? <div style={{ padding: 8, fontSize: 12, color: '#e06c75' }}>{configError}</div>
               : (configList ?? []).length === 0
-                ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>~/.ssh/config 里没有可识别的 Host 条目</div>
+                ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>{t('form.config.empty')}</div>
                 : (configList ?? []).map(host => (
                   <div
                     key={host.alias}
@@ -653,7 +661,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
                     style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid rgba(128,128,128,0.25)' }}
                   >
                     {host.alias} → {host.host}{host.username !== '' ? ` (${host.username})` : ''}
-                    {host.identityFile ? ' [私钥]' : ''}{host.jump ? ' ⛳' : ''}
+                    {host.identityFile ? ` ${t('form.config.badge.key')}` : ''}{host.jump ? ' ⛳' : ''}
                   </div>
                 ))}
         </div>
@@ -661,12 +669,12 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
 
       {resolveSummary !== null && (
         <div style={{ fontSize: 12, color: '#98c379', marginBottom: 8 }} role="status">
-          ✓ {formatResolvedSummary(resolveSummary)}
+          ✓ {formatResolvedSummary(resolveSummary, t)}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>端口<span style={{ color: '#e06c75' }}> *</span></label>
+        <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.port')}<span style={{ color: '#e06c75' }}> *</span></label>
         <input
           style={{ ...inputStyle, maxWidth: 110, ...(portError !== undefined ? inputErrorStyle : {}) }}
           value={form.port}
@@ -675,7 +683,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
           onChange={event => { setForm(prev => ({ ...prev, port: event.target.value })) }}
         />
         {portError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{portError}</span>}
-        <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, textAlign: 'right', paddingLeft: 20 }}>用户名<span style={{ color: '#e06c75' }}> *</span></span>
+        <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, textAlign: 'right', paddingLeft: 20 }}>{t('form.label.username')}<span style={{ color: '#e06c75' }}> *</span></span>
         <input
           ref={usernameRef}
           style={{ ...inputStyle, ...(usernameError !== undefined ? inputErrorStyle : {}) }}
@@ -686,34 +694,34 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
         {usernameError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{usernameError}</span>}
       </div>
 
-      {fieldRow('名称（可选）', (
+      {fieldRow(t('form.label.name'), (
         <input
           style={inputStyle}
           value={form.name}
-          placeholder="默认 user@host"
+          placeholder={t('form.placeholder.name')}
           disabled={busy}
           onChange={event => { setForm(prev => ({ ...prev, name: event.target.value })) }}
         />
       ), 'name')}
 
-      {fieldRow('默认工作区（可选）', (
+      {fieldRow(t('form.label.workspace'), (
         <input
           style={inputStyle}
           value={form.workspace}
-          placeholder="/home/username（不填则浏览时选择）"
+          placeholder={t('form.placeholder.workspace')}
           disabled={busy}
           onChange={event => { setForm(prev => ({ ...prev, workspace: event.target.value })) }}
         />
       ), 'workspace')}
 
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 4 }}>认证方式</label>
+        <label style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 4 }}>{t('form.label.auth')}</label>
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" role="radio" aria-checked={authKind === 'key'} style={segmentStyle(authKind === 'key')} disabled={busy} onClick={() => { setAuthKind('key') }}>
-            私钥文件
+            {t('form.auth.keyTab')}
           </button>
           <button type="button" role="radio" aria-checked={authKind === 'password'} style={segmentStyle(authKind === 'password')} disabled={busy} onClick={() => { setAuthKind('password') }}>
-            密码
+            {t('form.auth.passwordTab')}
           </button>
         </div>
         {authKind === 'key' ? (
@@ -721,7 +729,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
             <input
               style={inputStyle}
               value={form.privateKeyPath}
-              placeholder="~/.ssh/id_ed25519"
+              placeholder={t('form.placeholder.keyPath')}
               disabled={busy}
               onChange={event => { setForm(prev => ({ ...prev, privateKeyPath: event.target.value })) }}
             />
@@ -729,7 +737,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
               type="password"
               style={inputStyle}
               value={form.passphrase}
-              placeholder="私钥口令（可选）"
+              placeholder={t('form.placeholder.keyPassphrase')}
               disabled={busy}
               onChange={event => { setForm(prev => ({ ...prev, passphrase: event.target.value })) }}
             />
@@ -740,12 +748,12 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
               type="password"
               style={inputStyle}
               value={form.password}
-              placeholder={form.id !== '' ? '留空 = 保持不变' : 'SSH 密码'}
+              placeholder={form.id !== '' ? t('form.placeholder.password.edit') : t('form.placeholder.password.new')}
               disabled={busy}
               onChange={event => { setForm(prev => ({ ...prev, password: event.target.value })) }}
             />
             <span style={{ display: 'block', fontSize: 11, opacity: 0.6, marginTop: 4 }}>
-              编辑时留空表示保持不变；「加密保存」在下方高级折叠区内。
+              {t('form.password.hint.edit')}
             </span>
           </div>
         )}
@@ -758,42 +766,42 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
           onClick={() => { setAdvanced(value => !value) }}
           aria-expanded={advanced}
         >
-          {advanced ? '▾ 高级（收起）' : '▸ 高级'}
+          {advanced ? t('form.advanced.expanded') : t('form.advanced.collapsed')}
         </button>
         {advanced && (
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {authKind === 'password' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>密码保管</span>
+                <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.credentialStore')}</span>
                 <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }}>
                   <input type="checkbox" checked={form.encryptPassword} disabled={busy}
                     onChange={event => { setForm(prev => ({ ...prev, encryptPassword: event.target.checked })) }} />
-                  加密保存密码（系统钥匙串）
+                  {t('form.encrypt.checkbox')}
                 </label>
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>HostKey 模式</span>
+              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.hostKey')}</span>
               <select
                 style={{ ...inputStyle, maxWidth: 260 }}
                 value={form.hostKeyMode}
                 disabled={busy}
                 onChange={event => { setForm(prev => ({ ...prev, hostKeyMode: event.target.value as MachineFormState['hostKeyMode'] })) }}
               >
-                <option value="">（默认 accept-new）</option>
-                <option value="accept-new">accept-new（信任首次，之后校验）</option>
-                <option value="verify">verify（严格：拒绝陌生主机）</option>
-                <option value="off">off（不校验，不推荐）</option>
+                <option value="">{t('form.hostKey.default')}</option>
+                <option value="accept-new">{t('form.hostKey.acceptNew')}</option>
+                <option value="verify">{t('form.hostKey.verify')}</option>
+                <option value="off">{t('form.hostKey.off')}</option>
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>跳板链（可选）</span>
+              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.jump')}</span>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input
                     style={inputStyle}
                     value={jumpText}
-                    placeholder="bastion 或 user@bastion.example.com:2202，多台用逗号分隔"
+                    placeholder={t('form.placeholder.jump')}
                     disabled={busy}
                     onChange={event => { setJumpText(event.target.value) }}
                   />
@@ -802,7 +810,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
                     style={buttonStyle}
                     disabled={busy || jumpText === ''}
                     onClick={() => { setJumpText('') }}
-                  >清除</button>
+                  >{t('form.jump.clear')}</button>
                 </div>
                 {jumpSummary !== '' && (
                   <span style={{ fontSize: 11, opacity: 0.7 }}>{jumpSummary}</span>
@@ -837,14 +845,14 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
         <button type="button" style={buttonStyle} disabled={busy} onClick={() => { void runTest() }}>
-          {busyTask === 'test' ? '测试中…' : '测试连接'}
+          {busyTask === 'test' ? t('form.test.testing') : t('form.test.button')}
         </button>
         {mode === 'flow' && onCancel !== undefined && (
-          <button type="button" style={buttonStyle} disabled={busy} onClick={onCancel}>取消</button>
+          <button type="button" style={buttonStyle} disabled={busy} onClick={onCancel}>{t('form.cancel')}</button>
         )}
         {mode === 'settings' && (
           <button type="button" style={buttonStyle} disabled={busy} onClick={resetForm}>
-            {initial?.id !== undefined ? '取消编辑' : '清空'}
+            {initial?.id !== undefined ? t('form.clear.edit') : t('form.clear.empty')}
           </button>
         )}
         <button
@@ -853,7 +861,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel }: MachineFo
           disabled={busy}
           onClick={() => { void runSave() }}
         >
-          {busyTask === 'save' ? '保存中…' : saveLabel}
+          {busyTask === 'save' ? t('form.save.saving') : saveLabel}
         </button>
       </div>
     </div>

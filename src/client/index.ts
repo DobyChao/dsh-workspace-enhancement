@@ -8,9 +8,16 @@
  * listing through the `workspaces` service (the Host's `directoryPicker`
  * browse capability) and remote listing/connection management through the
  * package's `/dsw` RPC channel.
+ *
+ * I18N: the `dsw` dictionary pair (src/locale/) is registered against the
+ * framework LocaleRuntime at apply time (drafts/i18n-design.md §9) — the
+ * `locale` service is a hard client dependency (inject), exactly like the
+ * official client-ui packages; the settings page Language row owns switching.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { LocaleDictOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { registerDswLocale } from '../locale/index.ts'
 import { SshWorkspaceFlow } from './flow.tsx'
 import { installRowBadges } from './row-badges.ts'
 import type { RowBadgeSources } from './row-badges.ts'
@@ -90,6 +97,19 @@ export interface ClientConnection {
   }
 }
 
+/**
+ * Minimal duck face of the framework LocaleRuntime (contract: i18n-contracts
+ * §1.2) — only the members the plugin consumes: typed `register` + stable
+ * `bind` + `subscribe` for re-render hooks. Deliberately duck-typed (same
+ * stance as `slots.register`); the official dsh-client-locale client types
+ * are NOT loaded to avoid dragging the official SlotRegistry onto `Context`.
+ */
+export interface ClientLocaleRuntime {
+  register(ns: 'dsw', dicts: Record<'zh' | 'en', LocaleDictOf<'dsw'>>): () => void
+  bind(ns: 'dsw'): TranslateNS<'dsw'>
+  subscribe(fn: () => void): () => void
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     slots: {
@@ -102,15 +122,27 @@ declare module '@deepseek-ai/cordis' {
         order?: number
         /** Registrant-localized display text (label resolver). */
         label?: () => string
+        /**
+         * Declare the registrant locale namespace (SlotCore injects the typed
+         * `t` translate seat into the component props; the renderer derives it
+         * per (namespace, revision), so a language switch re-renders cleanly).
+         */
+        locale?: string
         inject?: (...args: never[]) => Record<string, unknown>
       }, component: unknown): () => void
     }
     workspaces: ClientWorkspaces
+    /** Framework LocaleRuntime (hard dependency; see `inject`). */
+    locale: ClientLocaleRuntime
   }
 }
 
-/** Required client services: the slot registry and the wire-facing workspace service. */
-export const inject = ['slots', 'workspaces', 'sessions']
+/**
+ * Required client services: the slot registry, the wire-facing workspace
+ * service, and the locale runtime (hard dependency — the `dsw` dictionary pair
+ * registers against it; matching the official client-ui packages).
+ */
+export const inject = ['slots', 'workspaces', 'sessions', 'locale']
 
 /**
  * Client plugin body: fill both directory-flow holes with the SSH workspace
@@ -121,24 +153,30 @@ export const inject = ['slots', 'workspaces', 'sessions']
  * @param ctx - client root context.
  */
 export function apply(ctx: Context): void {
+  // I18N: register the `dsw` dictionary pair first; the effect-bound disposer
+  // removes it with this context, and duplicate registration throws early.
+  registerDswLocale(ctx)
+  // Stable per-namespace translate reference (LocaleRuntime.bind contract):
+  // read-time locale resolution, safe for the label thunks below and for any
+  // closure that renders copy at call time.
+  const t = ctx.locale.bind('dsw')
+  const rpcError = (): WireResult => ({ ok: false, error: { code: 'internal', message: t('rpc.transportUnavailable') } })
   const injected = (): Record<string, unknown> => ({
     listLocalDirectory: (path?: string, signal?: AbortSignal) => ctx.workspaces.listDirectory(path, signal),
     createLocalDirectory: (path: string, name: string) => ctx.workspaces.createDirectory(path, name),
     rpc: (endpoint: string, payload?: unknown, signal?: AbortSignal) => {
       const connection = ctx.get('connection') as ClientConnection | undefined
-      if (connection === undefined) {
-        return Promise.resolve({ ok: false, error: { code: 'internal', message: 'dsw: the web transport is not available' } } as WireResult)
-      }
+      if (connection === undefined) return Promise.resolve(rpcError())
       return connection.rpc.call('/dsw', endpoint, payload ?? {}, signal)
     },
   })
   ctx.slots.inject('conversation.hero.workspace.directoryFlow', () =>
     ctx.slots.inject('sidebar.workspaces.directoryFlow', function* () {
       yield ctx.slots.register({
-        name: 'conversation.hero.workspace.directoryFlow', inject: injected,
+        name: 'conversation.hero.workspace.directoryFlow', locale: 'dsw', inject: injected,
       }, SshWorkspaceFlow)
       yield ctx.slots.register({
-        name: 'sidebar.workspaces.directoryFlow', inject: injected,
+        name: 'sidebar.workspaces.directoryFlow', locale: 'dsw', inject: injected,
       }, SshWorkspaceFlow)
     }))
   ctx.slots.inject('settings.section', () =>
@@ -146,7 +184,10 @@ export function apply(ctx: Context): void {
       name: 'settings.section',
       id: 'dsh-workspace-enhancement',
       order: 40,
-      label: () => '远程工作区',
+      // Label thunk: read-time resolution keeps the active locale live without
+      // re-registration (resolveSlotLabel semantics).
+      label: () => t('settings.label'),
+      locale: 'dsw',
       inject: injected,
     }, RemoteWorkspaceSettingsPage))
   // R5: one per-session「工作区」button in the header action row — the single
@@ -156,7 +197,8 @@ export function apply(ctx: Context): void {
       name: 'conversation.session.header.actions',
       id: 'dsh-workspace-enhancement-side',
       order: 25,
-      label: () => '工作区',
+      label: () => t('side.headerAction.label'),
+      locale: 'dsw',
       inject: injected,
     }, SideWorkspacesAction))
   installSidebarRowBadges(ctx)
@@ -188,7 +230,7 @@ function installSidebarRowBadges(ctx: Context): void {
     (endpoint, payload, signal) => {
       const connection = ctx.get('connection') as ClientConnection | undefined
       if (connection === undefined) {
-        return Promise.resolve({ ok: false, error: { code: 'internal', message: 'dsw: the web transport is not available' } } as WireResult)
+        return Promise.resolve({ ok: false, error: { code: 'internal', message: ctx.locale.bind('dsw')('rpc.transportUnavailable') } } as WireResult)
       }
       return connection.rpc.call('/dsw', endpoint, payload ?? {}, signal)
     },
@@ -201,6 +243,9 @@ function installSidebarRowBadges(ctx: Context): void {
         if (un2 !== undefined) un2()
       }
     },
+    // Locale seat + language-switch repaint subscription (design §7: bind gives
+    // read-time locale texts; subscribe repaints injected badges in place).
+    ctx.locale,
   )
   ctx.effect(() => dispose, 'dsw: sidebar row badges')
 }

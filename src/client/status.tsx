@@ -12,7 +12,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { DswKey } from '../locale/index.ts'
+import { lookup } from '../locale/index.ts'
 import type { WireResult } from './index.ts'
+
+/**
+ * zh baseline translate: the design's backward-compatible default for pure
+ * render helpers and for components whose caller does not thread a `t` seat
+ * yet — renders the zh dictionary (identical output to the pre-i18n literals).
+ */
+export const zhBaseline: TranslateNS<'dsw'> = (key, params) => lookup('zh', key, params)
 
 /** Tri-state connection state as wired by `/dsw/conn.*`. */
 export type ConnState = 'unknown' | 'active' | 'offline'
@@ -60,8 +70,8 @@ export function asConnStatus(value: unknown): ConnStatusView | null {
 }
 
 /** Unwrap a wire result into its value (throws the business message). */
-function unwrap(result: WireResult): unknown {
-  if (!result.ok) throw new Error(result.error.message || 'dsw rpc 失败')
+function unwrap(result: WireResult, t: TranslateNS<'dsw'>): unknown {
+  if (!result.ok) throw new Error(result.error.message || t('status.rpc.failed'))
   return result.value
 }
 
@@ -90,6 +100,7 @@ export function createStatusCenter(
   rpc: RpcCall,
   statusTtlMs = DEFAULT_NETWORK_TTL_MS,
   probeTtlMs = DEFAULT_PROBE_TTL_MS,
+  getT: () => TranslateNS<'dsw'> = () => zhBaseline,
 ): StatusCenter {
   const cache = new Map<string, CacheEntry>()
   const inflight = new Map<InflightKey, Promise<ConnStatusView | null>>()
@@ -114,13 +125,16 @@ export function createStatusCenter(
    * (t8: this used to take a per-call `ttl` that nothing consumed — expiry
    * is honored at read time by {@link StatusCenter.peek} / `get` via
    * {@link fresh}; the dead parameter is gone.)
+   * (t15-r2: the translate seat is a LIVE PROVIDER, never a snapshot — the
+   * unwrap fallback reads the active language at call time, so a language
+   * switch needs no re-created center.)
    */
   const networked = (id: string, endpoint: 'conn.status' | 'conn.probe' | 'conn.reconnect'): Promise<ConnStatusView | null> => {
     const key: InflightKey = `${endpoint}:${id}`
     const pending = inflight.get(key)
     if (pending !== undefined) return pending
     const call = rpc(endpoint, { id })
-      .then(result => { const view = asConnStatus(unwrap(result)); return view === null ? null : put(view) })
+      .then(result => { const view = asConnStatus(unwrap(result, getT())); return view === null ? null : put(view) })
       .catch(() => null)
       .finally(() => { inflight.delete(key) })
     inflight.set(key, call)
@@ -140,10 +154,17 @@ export function createStatusCenter(
 }
 
 let sharedCenter: StatusCenter | null = null
+/** The latest live translate provider the shared center unwraps with. */
+let sharedGetT: () => TranslateNS<'dsw'> = () => zhBaseline
 
 /** The app-wide center (one `/dsw` channel in the client bundle). */
-export function getStatusCenter(rpc: RpcCall): StatusCenter {
-  sharedCenter ??= createStatusCenter(rpc)
+export function getStatusCenter(rpc: RpcCall, getT: () => TranslateNS<'dsw'> = () => zhBaseline): StatusCenter {
+  // t15-r2: never cache a translate snapshot in the singleton — the provider
+  // slot is refreshed on every call, so the center's unwrap fallback follows
+  // the ACTIVE language even after a language switch (the center itself holds
+  // no language state).
+  sharedGetT = getT
+  sharedCenter ??= createStatusCenter(rpc, undefined, undefined, () => sharedGetT())
   return sharedCenter
 }
 
@@ -188,10 +209,17 @@ export function useConnStatus(center: StatusCenter | null, id: string | undefine
   }), [center, id, busy, view])
 }
 
-export const CONN_STATE_LABEL: Record<ConnState, string> = {
-  unknown: '未检测',
-  active: '已连接',
-  offline: '离线',
+/**
+ * The dictionary-key mapping of the tri-state label — the single key source
+ * for the React badge AND the DOM row-badge layer (row-badges, t8). The plain
+ * legacy label map ({@link CONN_STATE_LABEL}) was removed in t15-r2: its last
+ * consumer (the DOM row layer) migrated to the KEY mapping in t8, so the
+ * frozen zh-only snapshot only ever threatened to drift from the dictionary.
+ */
+export const CONN_STATE_LABEL_KEY: Record<ConnState, DswKey> = {
+  unknown: 'status.unknown',
+  active: 'status.active',
+  offline: 'status.offline',
 }
 
 export const CONN_STATE_COLOR: Record<ConnState, string> = {
@@ -205,22 +233,25 @@ export const CONN_STATE_COLOR: Record<ConnState, string> = {
  * "re-check and try to connect" button shown for unknown/offline entries.
  */
 export function ConnStatusBadge({
-  id, rpc, center, compact = false,
+  id, rpc, center, compact = false, t: tSeat,
 }: {
   id: string
   rpc: RpcCall
   center?: StatusCenter | null
   compact?: boolean
+  /** Typed translate seat (threaded by the callers; defaults to the zh baseline). */
+  t?: TranslateNS<'dsw'>
 }): ReactNode {
-  const resolved: StatusCenter | null = center !== undefined ? center : getStatusCenter(rpc)
+  const t = tSeat ?? zhBaseline
+  const resolved: StatusCenter | null = center !== undefined ? center : getStatusCenter(rpc, () => t)
   const { view, busy, reconnect } = useConnStatus(resolved, id)
   const state = view?.state ?? 'unknown'
-  const label = busy ? '检测中…' : CONN_STATE_LABEL[state]
-  const actionTitle = '重新检测并尝试连接'
+  const label = busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])
+  const actionTitle = t('status.retryAction.title')
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle' }}>
       <span
-        title={view?.message !== undefined && view.message !== '' ? view.message : CONN_STATE_LABEL[state]}
+        title={view?.message !== undefined && view.message !== '' ? view.message : t(CONN_STATE_LABEL_KEY[state])}
         style={{ width: 8, height: 8, borderRadius: '50%', background: CONN_STATE_COLOR[state], display: 'inline-block', flexShrink: 0 }}
       />
       <span style={{ fontSize: 12, opacity: 0.85, whiteSpace: 'nowrap' }}>{label}</span>
@@ -240,7 +271,7 @@ export function ConnStatusBadge({
             fontSize: compact ? 10 : 11,
             whiteSpace: 'nowrap',
           }}
-        >{compact ? '重连' : '重新检测并尝试连接'}</button>
+        >{compact ? t('status.retryAction.compact') : t('status.retryAction.full')}</button>
       )}
     </span>
   )

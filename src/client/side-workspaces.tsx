@@ -11,9 +11,11 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FlowInjected } from './flow.tsx'
 import { SshWorkspaceFlow } from './flow.tsx'
 import type { WireResult } from './index.ts'
+import { zhBaseline } from './status.tsx'
 import { CloseIcon, FolderIcon, PlusIcon, ServerIcon, TrashIcon } from './icons.tsx'
 import styles from './side-workspaces.module.css'
 
@@ -60,9 +62,9 @@ function asMachine(value: unknown): WireMachine | null {
   return { id: value.id, label, host, username }
 }
 
-function unwrap(result: WireResult): unknown {
+function unwrap(result: WireResult, t: TranslateNS<'dsw'>): unknown {
   if (result.ok) return result.value
-  throw new Error(result.error?.message ?? 'dsw: request failed')
+  throw new Error(result.error?.message ?? t('side.rpc.failed'))
 }
 
 /**
@@ -76,7 +78,8 @@ const isRemoteSpelling = (path: string): boolean =>
   /^ssh:\/\//.test(path) || /[\\/](dsw-routes|dsh-ssh-routes)[\\/]/.test(path)
 
 /** The trigger: one per-session button in the header action row. */
-export function SideWorkspacesAction(props: FlowInjected & { sessionId: string }): JSX.Element {
+export function SideWorkspacesAction(props: FlowInjected & { sessionId: string; t?: TranslateNS<'dsw'> }): JSX.Element {
+  const t = props.t ?? zhBaseline
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -84,19 +87,20 @@ export function SideWorkspacesAction(props: FlowInjected & { sessionId: string }
         type="button"
         className={styles.action}
         onClick={() => setOpen(value => !value)}
-        title="关联工作区（本会话的副目录）"
+        title={t('side.headerAction.title')}
       >
         <PlusIcon width={13} height={13} />
-        工作区
+        {t('side.headerAction.label')}
       </button>
-      {open ? <SideWorkspacesPanel sessionId={props.sessionId} injected={props} onClose={() => setOpen(false)} /> : null}
+      {open ? <SideWorkspacesPanel sessionId={props.sessionId} injected={props} t={t} onClose={() => setOpen(false)} /> : null}
     </>
   )
 }
 
 /** The per-session side-workspaces manager. */
-export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowInjected; onClose: () => void }): JSX.Element {
-  const { sessionId, injected, onClose } = props
+export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowInjected; t?: TranslateNS<'dsw'>; onClose: () => void }): JSX.Element {
+  const { sessionId, injected, onClose, t: tSeat } = props
+  const t = tSeat ?? zhBaseline
   const [items, setItems] = useState<SideWorkspaceRow[]>([])
   const [machines, setMachines] = useState<WireMachine[]>([])
   const [busy, setBusy] = useState(true)
@@ -119,9 +123,9 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
       injected.rpc('session.ws.list', { sessionId }),
       injected.rpc('machines.list', {}),
     ]).then(([listResult, machinesResult]) => {
-      const listValue = unwrap(listResult) as { items?: unknown }
+      const listValue = unwrap(listResult, t) as { items?: unknown }
       setItems(Array.isArray(listValue.items) ? listValue.items.map(asSideWorkspaceRow).filter((row): row is SideWorkspaceRow => row !== null) : [])
-      const machinesValue = unwrap(machinesResult) as { machines?: unknown }
+      const machinesValue = unwrap(machinesResult, t) as { machines?: unknown }
       const rows = Array.isArray(machinesValue.machines) ? machinesValue.machines.map(asMachine).filter((row): row is WireMachine => row !== null) : []
       setMachines(rows)
       setDraftMachine(current => current !== '' ? current : (rows[0]?.id ?? ''))
@@ -171,7 +175,7 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
       // wrap it again, and the host would reject it.
       const match = /[\\/](dsw-routes|dsh-ssh-routes)[\\/]([^\\/]+)(?:[\\/](.*))?$/.exec(path)
       if (match === null) {
-        setError('无法解析该目录的远程路径，请重新浏览')
+        setError(t('side.error.unresolvedPath'))
         setBrowseOpen(false)
         return
       }
@@ -189,11 +193,11 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
   const addSide = (): void => {
     const path = draftPathSpelling()
     if (draftKind === 'remote' && draftMachine === '') {
-      setError('请先选择机器')
+      setError(t('side.error.noMachine'))
       return
     }
     if (path === '') {
-      setError(draftKind === 'remote' ? '请输入远程路径（/ 开头）' : '请输入本地目录路径')
+      setError(draftKind === 'remote' ? t('side.error.path.remote') : t('side.error.path.local'))
       return
     }
     setBusy(true)
@@ -240,17 +244,17 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
 
   return (
     <div className={styles.panel} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div ref={cardRef} className={styles.card} role="dialog" aria-label="关联工作区" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
+      <div ref={cardRef} className={styles.card} role="dialog" aria-label={t('side.card.label')} onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
         <div className={styles.header}>
-          <strong className={styles.title}>关联工作区（本会话副目录）</strong>
-          <button type="button" className={styles.iconButton} onClick={onClose} aria-label="关闭"><CloseIcon width={14} height={14} /></button>
+          <strong className={styles.title}>{t('side.card.title')}</strong>
+          <button type="button" className={styles.iconButton} onClick={onClose} aria-label={t('side.close.label')}><CloseIcon width={14} height={14} /></button>
         </div>
 
         {error !== '' ? <div className={styles.error}>{error}</div> : null}
 
         <div className={styles.list}>
-          {busy && items.length === 0 ? <div className={styles.loading}>加载中…</div> : null}
-          {items.length === 0 ? <div className={styles.empty}>未关联任何副目录。副目录是模型可以直接读写的附加根，各有独立权限。</div> : null}
+          {busy && items.length === 0 ? <div className={styles.loading}>{t('side.loading')}</div> : null}
+          {items.length === 0 ? <div className={styles.empty}>{t('side.empty')}</div> : null}
           {items.map(item => (
             <div key={item.rootKey} className={styles.row}>
               {item.kind === 'remote' ? <ServerIcon className={styles.rowIcon} width={13} height={13} /> : <FolderIcon className={styles.rowIcon} width={13} height={13} />}
@@ -265,50 +269,50 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
                 )
                 : <span className={styles.itemLabel}>{item.label}</span>}
               <span className={styles.rowPath} title={item.rootKey}>{item.rootKey}</span>
-              <select className={styles.select} value={item.fs} onChange={(event) => updateSide(item.rootKey, { fs: event.target.value as 'r' | 'rw' })} aria-label="fs 权限">
-                <option value="rw">读写</option>
-                <option value="r">只读</option>
+              <select className={styles.select} value={item.fs} onChange={(event) => updateSide(item.rootKey, { fs: event.target.value as 'r' | 'rw' })} aria-label={t('side.fs.label')}>
+                <option value="rw">{t('permission.rw')}</option>
+                <option value="r">{t('permission.r')}</option>
               </select>
-              <select className={styles.select} value={item.exec} onChange={(event) => updateSide(item.rootKey, { exec: event.target.value as 'on' | 'off' })} aria-label="执行权限">
-                <option value="on">可执行</option>
-                <option value="off">禁执行</option>
+              <select className={styles.select} value={item.exec} onChange={(event) => updateSide(item.rootKey, { exec: event.target.value as 'on' | 'off' })} aria-label={t('side.exec.label')}>
+                <option value="on">{t('permission.execOn')}</option>
+                <option value="off">{t('permission.execOff')}</option>
               </select>
-              <button type="button" className={styles.renameButton} title="编辑名称" onClick={() => { setEditing(item.rootKey); setEditingLabel(item.label) }}>改名</button>
-              <button type="button" className={`${styles.iconButton} ${styles.danger}`} title="移除" onClick={() => removeSide(item.rootKey)}><TrashIcon width={13} height={13} /></button>
+              <button type="button" className={styles.renameButton} title={t('side.rename.title')} onClick={() => { setEditing(item.rootKey); setEditingLabel(item.label) }}>{t('side.rename.button')}</button>
+              <button type="button" className={`${styles.iconButton} ${styles.danger}`} title={t('side.remove.title')} onClick={() => removeSide(item.rootKey)}><TrashIcon width={13} height={13} /></button>
             </div>
           ))}
         </div>
 
         <div className={styles.form}>
-          <div className={styles.segment} role="group" aria-label="目录类型">
-            <button type="button" className={draftKind === 'local' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('local')}>本机目录</button>
-            <button type="button" className={draftKind === 'remote' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('remote')}>远程目录</button>
+          <div className={styles.segment} role="group" aria-label={t('side.kind.label')}>
+            <button type="button" className={draftKind === 'local' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('local')}>{t('side.kind.local')}</button>
+            <button type="button" className={draftKind === 'remote' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('remote')}>{t('side.kind.remote')}</button>
           </div>
           {draftKind === 'remote' ? (
-            <select className={`${styles.select} ${styles.selectWide}`} value={draftMachine} onChange={(event) => setDraftMachine(event.target.value)} aria-label="机器">
+            <select className={`${styles.select} ${styles.selectWide}`} value={draftMachine} onChange={(event) => setDraftMachine(event.target.value)} aria-label={t('side.machine.label')}>
               {machines.map(machine => <option key={machine.id} value={machine.id}>{machine.label}</option>)}
             </select>
           ) : null}
           <div className={styles.fieldRow}>
             <input
               className={styles.input}
-              placeholder={draftKind === 'remote' ? '远程路径，如 /srv/app（或直接点浏览…）' : '本地目录绝对路径'}
+              placeholder={draftKind === 'remote' ? t('side.draft.path.remote') : t('side.draft.path.local')}
               value={draftPath}
               onChange={(event) => setDraftPath(event.target.value)}
             />
-            <button type="button" className={styles.button} onClick={() => setBrowseOpen(true)}>浏览…</button>
+            <button type="button" className={styles.button} onClick={() => setBrowseOpen(true)}>{t('side.browse')}</button>
           </div>
           <div className={styles.fieldRow}>
-            <input className={styles.input} placeholder="显示名（默认目录名）" value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} />
-            <select className={styles.select} value={draftFs} onChange={(event) => setDraftFs(event.target.value as 'r' | 'rw')} aria-label="添加 fs 权限">
-              <option value="rw">读写</option>
-              <option value="r">只读</option>
+            <input className={styles.input} placeholder={t('side.draft.labelPlaceholder')} value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} />
+            <select className={styles.select} value={draftFs} onChange={(event) => setDraftFs(event.target.value as 'r' | 'rw')} aria-label={t('side.fs.label')}>
+              <option value="rw">{t('permission.rw')}</option>
+              <option value="r">{t('permission.r')}</option>
             </select>
-            <select className={styles.select} value={draftExec} onChange={(event) => setDraftExec(event.target.value as 'on' | 'off')} aria-label="添加执行权限">
-              <option value="on">可执行</option>
-              <option value="off">禁执行</option>
+            <select className={styles.select} value={draftExec} onChange={(event) => setDraftExec(event.target.value as 'on' | 'off')} aria-label={t('side.exec.label')}>
+              <option value="on">{t('permission.execOn')}</option>
+              <option value="off">{t('permission.execOff')}</option>
             </select>
-            <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={addSide}>挂载</button>
+            <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={addSide}>{t('side.mount')}</button>
           </div>
         </div>
       </div>
@@ -325,6 +329,7 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
         listLocalDirectory={injected.listLocalDirectory}
         createLocalDirectory={injected.createLocalDirectory}
         rpc={injected.rpc}
+        t={t}
       />
     </div>
   )

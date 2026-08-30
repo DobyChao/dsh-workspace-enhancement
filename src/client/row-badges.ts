@@ -42,7 +42,8 @@
  */
 
 import type { WireResult } from './index.ts'
-import { CONN_STATE_COLOR, CONN_STATE_LABEL } from './status.tsx'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { CONN_STATE_COLOR, CONN_STATE_LABEL_KEY, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
 
 /**
@@ -109,6 +110,19 @@ export interface RowBadgeSources {
 /** The `/dsw` RPC face (chip shape; see index.ts). */
 export type RowBadgeRpc = (endpoint: string, payload?: unknown, signal?: AbortSignal) => Promise<WireResult>
 
+/**
+ * The locale face the badge layer consumes (structural; the framework
+ * `ctx.locale` satisfies it): the stable per-namespace translate reference
+ * (bind) plus the snapshot subscription that drives the language-switch
+ * repaint of already-injected badges.
+ */
+export interface RowBadgeLocale {
+  /** Stable per-namespace translate reference (LocaleRuntime.bind contract). */
+  bind(ns: 'dsw'): TranslateNS<'dsw'>
+  /** Fires on every snapshot change (language switch AND dictionary registration). */
+  subscribe(fn: () => void): () => void
+}
+
 /** A status view while nothing has been probed yet. */
 function unknownView(connId: string): ConnStatusView {
   return {
@@ -120,6 +134,33 @@ function unknownView(connId: string): ConnStatusView {
     port: 22,
     username: '',
     hostKeyKnown: false,
+  }
+}
+
+/** The badge texts a status view renders (state label + retry button). */
+export interface BadgeTexts {
+  stateLabel: string
+  buttonText: string
+  buttonTitle: string
+}
+
+/** The `data-dsw-compact` badge attribute: the retry button text variant. */
+const COMPACT_KEY = 'dswCompact' as const
+
+/**
+ * Pure badge-text projection (t15-r2): resolves the state label plus the
+ * retry button text/title for ONE language. `paintBadge` replays this after a
+ * language switch, and the unit test pins the zh→en transition of the button
+ * text and title (the in-place rewrite writes only changed values).
+ * @param view - the connection status view.
+ * @param compact - the row's compact variant (session child rows).
+ * @param t - the translate seat (active language).
+ */
+export function badgeTextsOf(view: ConnStatusView, compact: boolean, t: TranslateNS<'dsw'>): BadgeTexts {
+  return {
+    stateLabel: t(CONN_STATE_LABEL_KEY[view.state]),
+    buttonText: compact ? t('status.retryAction.compact') : t('status.retryAction.recheck'),
+    buttonTitle: t('status.retryAction.title'),
   }
 }
 
@@ -306,17 +347,24 @@ const isElement = (value: Element | null): value is HTMLElement => value instanc
 
 /**
  * Install the sidebar row enhancement. Returns the disposer (removes every
- * injected badge, listener, observer, and timer).
+ * injected badge, listener, observer, subscription, and timer).
  * @param rpc - the `/dsw` channel call.
  * @param sources - workspace/session projections.
  * @param subscribe - drives a re-scan on feed changes (caller combines stores).
+ * @param locale - the locale face (bind = read-time translate seat,
+ *   subscribe = language-switch repaint of injected badges); omitted → zh
+ *   baseline (pure-helper/test callers keep the pre-i18n texts).
  */
 export function installRowBadges(
   rpc: RowBadgeRpc,
   sources: RowBadgeSources,
   subscribe: (onChange: () => void) => () => void,
+  locale?: RowBadgeLocale,
 ): () => void {
   if (typeof document === 'undefined') return () => {}
+  // Read-time translate seat: a stable reference that resolves the ACTIVE
+  // locale on every call, so a language switch needs no re-binding here.
+  const t = locale !== undefined ? locale.bind('dsw') : zhBaseline
 
   /** title → connId; ambiguous titles (two connections, one name) are dropped. */
   let remoteByTitle = new Map<string, string>()
@@ -370,15 +418,23 @@ export function installRowBadges(
     const label = badge.querySelector<HTMLElement>('[data-dsw-label]')
     const button = badge.querySelector<HTMLElement>('[data-dsw-action="reconnect"]')
     if (dot !== null) dot.style.background = CONN_STATE_COLOR[view.state]
+    const texts = badgeTextsOf(view, badge.dataset[COMPACT_KEY] === '1', t)
     // t6: write only when the value CHANGES — a same-value textContent
     // assignment still mutates the child list, re-arming the MutationObserver
-    // for nothing. The converged no-change path must not churn the DOM.
-    if (label !== null && label.textContent !== CONN_STATE_LABEL[view.state]) {
-      label.textContent = CONN_STATE_LABEL[view.state]
+    // for nothing. The converged no-change path must not churn the DOM; the
+    // SAME guard makes the language-switch repaint write only the texts that
+    // actually differ (self-induced filter keeps it out of the scan loop).
+    // t15-r2: the retry BUTTON text and title get the same value-guard
+    // rewrite — a language switch previously updated the state label but left
+    // the button copy/title in the old language.
+    if (label !== null && label.textContent !== texts.stateLabel) {
+      label.textContent = texts.stateLabel
     }
     if (button !== null) {
       const display = view.state === 'active' ? 'none' : ''
       if (button.style.display !== display) button.style.display = display
+      if (button.textContent !== texts.buttonText) button.textContent = texts.buttonText
+      if (button.title !== texts.buttonTitle) button.title = texts.buttonTitle
     }
   }
 
@@ -389,6 +445,20 @@ export function installRowBadges(
       // Single attribute contract (F0): rowStatusOf is the paintConn key and
       // the idempotence guard — never a second marker.
       if (rowStatusOf(row) === connId) paintBadge(badge, record.view)
+    }
+  }
+
+  /**
+   * Language-switch repaint (design §7.3): re-derive every injected badge's
+   * texts in place. paintBadge's value guard writes only texts that actually
+   * differ, and the writes are badge-subtree mutations the observer filter
+   * (isOwnBadgeMutation) skips — no scan storm, no badge DOM rebuild.
+   */
+  const repaintAll = (): void => {
+    for (const [row, badge] of marked) {
+      const connId = rowStatusOf(row)
+      if (connId === undefined) continue
+      paintBadge(badge, statuses.get(connId)?.view ?? unknownView(connId))
     }
   }
 
@@ -405,6 +475,9 @@ export function installRowBadges(
     badge.dataset.dswConnId = connId
     // t6: the badge-root mark rowTitleOf skips (see BADGE_MARK_KEY).
     badge.dataset[BADGE_MARK_KEY] = '1'
+    // t15-r2: record the compact variant so the language-switch repaint can
+    // re-resolve the retry button text (compact vs recheck) without rebuilding.
+    badge.dataset[COMPACT_KEY] = compact ? '1' : '0'
     badge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin:0 4px;vertical-align:middle;flex-shrink:0;user-select:none;'
     const globe = document.createElement('span')
     globe.textContent = '🌐'
@@ -415,12 +488,12 @@ export function installRowBadges(
     const label = document.createElement('span')
     label.dataset.dswLabel = ''
     label.style.cssText = 'font-size:11px;opacity:.85;white-space:nowrap;'
-    label.textContent = CONN_STATE_LABEL.unknown
+    label.textContent = t(CONN_STATE_LABEL_KEY.unknown)
     const button = document.createElement('button')
     button.type = 'button'
     button.dataset.dswAction = 'reconnect'
-    button.title = '重新检测并尝试连接'
-    button.textContent = compact ? '重连' : '重新检测'
+    button.title = t('status.retryAction.title')
+    button.textContent = compact ? t('status.retryAction.compact') : t('status.retryAction.recheck')
     button.style.cssText = 'padding:0 5px;border-radius:5px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.12);color:inherit;cursor:pointer;font-size:10px;line-height:16px;white-space:nowrap;'
     badge.append(globe, dot, label, button)
     return badge
@@ -568,7 +641,7 @@ export function installRowBadges(
     event.preventDefault()
     event.stopPropagation()
     const label = badge.querySelector<HTMLElement>('[data-dsw-label]')
-    if (label !== null) label.textContent = '连接中…'
+    if (label !== null) label.textContent = t('status.connecting')
     // The button semantics are reconnect (dispose + rebuild + probe), not a
     // mere status read; the fresh view lands in the status map on resolution.
     void rpc('conn.reconnect', { id: connId })
@@ -592,6 +665,10 @@ export function installRowBadges(
     if (records.some(record => !isOwnBadgeMutation(record.target))) scheduleScan()
   })
   const unsubscribe = subscribe(onChange)
+  // Language switch → in-place repaint of every injected badge (a dictionary
+  // registration at boot is a no-op: nothing is marked yet). The subscription
+  // is released by the returned disposer with everything else.
+  const unsubscribeLocale = locale !== undefined ? locale.subscribe(repaintAll) : undefined
   const rootTarget = document.body ?? document.documentElement
   observer.observe(rootTarget, { childList: true, subtree: true })
   document.addEventListener('click', onClick, true)
@@ -620,6 +697,7 @@ export function installRowBadges(
     }
     marked.clear()
     statuses.clear()
+    unsubscribeLocale?.()
     unsubscribe()
   }
 }
