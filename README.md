@@ -17,6 +17,7 @@ English | [中文](README.zh.md)
 | Session awareness | Remote marker + online tri-state + reconnect in the sidebar; per-session prompt injection states the remote / side-workspace context and its permission marks |
 | Cross-server execution | `sw_exec(server, command)` runs a command on a **named server** (a registry id like `c1`, or the temporary id of `sw_connect save:false`; defaults to the session's machine) — the target OS is probed once per connection and reported (`bash -c` on POSIX, `pwsh -Command` on win32); on Windows hosts a `bash` tool is registered for remote-Linux workspaces |
 | Model tools | `sw_status`, `sw_connect` (`save:false` = temporary), `sw_pick_workspace`, `sw_exec` (cross-server execution) |
+| Runtime localization | UI copy, the per-session remote-context prompt, `sw_*` tool descriptions/errors AND protocol-data validation/routing errors follow the settings-page **Language** option (`zh`/`en`); the UI defaults to the browser language, so a Chinese browser stays Chinese. Only `bad-request:` protocol-layer diagnostics (machine-readable contract) stay English |
 
 ## How it works
 

@@ -17,6 +17,7 @@
 | 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话自动注入远程/副工作区上下文（含权限标记） |
 | 跨服务器执行 | `sw_exec(server, command)` 在**指定服务器**上执行命令（注册表 id（`c1`…）或临时连接 id（`sw_connect save:false`）；缺省=当前会话机器）；目标 OS 每次连接探测一次并上报（POSIX 跑 `bash -c`，win32 跑 `pwsh -Command`）；win32 宿主另注册 `bash` 工具供远程 Linux 工作区使用 |
 | 模型工具 | `sw_status`、`sw_connect`（`save:false`=临时）、`sw_pick_workspace`、`sw_exec`（跨服务器执行） |
+| 运行时国际化 | 客户端 UI 文案、每会话远程认知提示、`sw_*` 工具描述/错误与协议/数据校验/路由错误全部跟随设置页 **Language** 选项（zh/en）；UI 默认跟随浏览器语言（中文浏览器保持中文）。仅 `bad-request:` 协议层诊断（机器可解析契约）保留英文 |
 
 ## 工作原理
 
