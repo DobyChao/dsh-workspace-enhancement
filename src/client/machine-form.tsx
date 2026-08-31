@@ -673,25 +673,29 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.port')}<span style={{ color: '#e06c75' }}> *</span></label>
-        <input
-          style={{ ...inputStyle, maxWidth: 110, ...(portError !== undefined ? inputErrorStyle : {}) }}
-          value={form.port}
-          inputMode="numeric"
-          disabled={busy}
-          onChange={event => { setForm(prev => ({ ...prev, port: event.target.value })) }}
-        />
-        {portError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{portError}</span>}
-        <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, textAlign: 'right', paddingLeft: 20 }}>{t('form.label.username')}<span style={{ color: '#e06c75' }}> *</span></span>
-        <input
-          ref={usernameRef}
-          style={{ ...inputStyle, ...(usernameError !== undefined ? inputErrorStyle : {}) }}
-          value={form.username}
-          disabled={busy}
-          onChange={event => { setForm(prev => ({ ...prev, username: event.target.value })) }}
-        />
-        {usernameError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{usernameError}</span>}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: '1 1 220px', minWidth: 0 }}>
+          <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.port')}<span style={{ color: '#e06c75' }}> *</span></label>
+          <input
+            style={{ ...inputStyle, maxWidth: 110, ...(portError !== undefined ? inputErrorStyle : {}) }}
+            value={form.port}
+            inputMode="numeric"
+            disabled={busy}
+            onChange={event => { setForm(prev => ({ ...prev, port: event.target.value })) }}
+          />
+          {portError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{portError}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: '1 1 220px', minWidth: 0 }}>
+          <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.username')}<span style={{ color: '#e06c75' }}> *</span></label>
+          <input
+            ref={usernameRef}
+            style={{ ...inputStyle, ...(usernameError !== undefined ? inputErrorStyle : {}) }}
+            value={form.username}
+            disabled={busy}
+            onChange={event => { setForm(prev => ({ ...prev, username: event.target.value })) }}
+          />
+          {usernameError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{usernameError}</span>}
+        </div>
       </div>
 
       {fieldRow(t('form.label.name'), (
