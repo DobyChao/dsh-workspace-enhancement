@@ -227,24 +227,32 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
         <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{t('settings.machines.title')}</div>
         {machines.length > 0
           ? machines.map(machine => (
-            <div key={machine.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
-              <div style={{ flex: 1, fontSize: 13 }}>
-                {machine.label}{' '}
-                <code style={{ fontSize: 12, opacity: 0.8 }}>{machine.username}@{machine.host}:{machine.port}</code>
-                <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
-                {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
-                {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
-                {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
-                {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}> {t('settings.machines.currentBadge')}</span> : null}
+            <div key={machine.id} style={{ padding: '6px 0', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 220px', minWidth: 0, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                    <span>{machine.label}</span>
+                    <code style={{ fontSize: 12, opacity: 0.8 }}>{machine.username}@{machine.host}:{machine.port}</code>
+                    {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
+                    {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
+                    {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
+                    {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}>{t('settings.machines.currentBadge')}</span> : null}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => startEdit(machine)}>{t('settings.machines.edit')}</button>
+                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
+                  <button
+                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
+                    onClick={() => void useNow(machine.id)}
+                    disabled={machine.id === currentId || busy}
+                  >{t('settings.machines.setCurrent')}</button>
+                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
+                </div>
               </div>
-              <button style={buttonStyle} onClick={() => startEdit(machine)}>{t('settings.machines.edit')}</button>
-              <button style={buttonStyle} onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
-              <button
-                style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
-                onClick={() => void useNow(machine.id)}
-                disabled={machine.id === currentId || busy}
-              >{t('settings.machines.setCurrent')}</button>
-              <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
             </div>
           ))
           : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('settings.machines.empty')}</div>}
