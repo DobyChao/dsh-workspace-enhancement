@@ -1,0 +1,4 @@
+# Playwright output — never committed.
+# Traces, screenshots, HTML report, curated evidence and JSON dumps all land
+# here (see e2e/README.md §证据).
+artifacts/
