@@ -1,9 +1,9 @@
 # Dependencies
 node_modules/
 
-# Build output
-lib/
-dist/
+# Build output (root-anchored: scripts/lib/ is source and must stay tracked)
+/lib/
+/dist/
 *.tsbuildinfo
 
 # Sandbox / dev harness artifacts
@@ -15,31 +15,38 @@ dev-harness/
 *.tmp
 .tmp/
 
+# E2E evidence: screenshots/traces live in CI artifacts or a local run,
+# never in git (see docs/testing.md).
+e2e/artifacts/
+e2e/test-results/
+playwright-report/
+
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 
-# Secrets — never commit credentials or machine lists
+# Secrets — never commit credentials, machine lists or host keys
 *.pem
 known_hosts.json
 machines.json
 dsh-*-connections.json
 secrets/
 
-# Team/agent ephemeral state (do not commit)
+# Local agent/tool runtime state (not project knowledge)
 .agent-teams/
 .workbuddy/
+.cursor/hooks/state/
 
 # Accidental Windows redirect-output artifact
 nul
 
-# Local draft notes — research/decisions/roadmap; kept on disk only.
-# Public repo carries only README (+ concise docs/ when written).
-drafts/
-AGENTS.md
-
-# Artifact of test/mixed-install.test.ts write-probe (recreated by every `npm test`)
-smoke-install.txt
+# npm pack artifacts
 *.tgz
+
+# Local scratch notes. NOT a knowledge store: anything a fresh clone needs
+# must be promoted into docs/ (see AGENTS.md §真相源). This directory may
+# hold machine-specific data (real hosts, lab paths, profile snapshots) and
+# must never be committed as-is.
+drafts/

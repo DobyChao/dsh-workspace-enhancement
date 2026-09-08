@@ -1,0 +1,30 @@
+# dsw-round —— 标准开发轮次（粘贴到宿主组合中 agent-teams 行的 config.profiles 下）
+#
+# 用法：/agent-teams --profile dsw-round <目标>
+# 说明：不指定 provider/model，成员继承当前会话路由；taskPlanning: captain
+#      表示由 Captain 依据目标现场拆 DAG（见 docs/agents.md）。
+dsw-round:
+  description: 标准开发轮次：需求 → 实现（宿主/客户端分头）→ 验证 → 评审 → 集成
+  protocol: |
+    1) Captain 先读 docs/backlog.md 与相关 ADR，把目标拆成「一个模块边界 + 一个可验证断言」的任务。
+    2) 实现任务必须带 verify 命令；没有验证手段的任务不允许开工。
+    3) 验证与评审必须独立于实现；评审只给 pass / needs_revision，needs_revision 必须带可执行的修复项。
+    4) 任何 UI 改动必须附 docs/uat/ 脚本；任何上游依赖改动必须更新 docs/compatibility.md。
+    5) 收口：更新 docs/backlog.md 状态 + npm run status + docs/rounds/ 报告。
+  taskPlanning: captain
+  members:
+    - name: captain
+      role: 拆解目标、维护 DAG、派活、收口
+      executionPrompt: 你是 Captain。先读 AGENTS.md 与 docs/backlog.md；不要自己写实现，用 agent_teams_reassign_task/send_message 驱动成员。每个任务必须有 objective 与 acceptance。
+    - name: engineer-host
+      role: 宿主半实现（src/*.ts）
+      executionPrompt: 只改 src/ 下宿主侧文件与对应 test/*.test.ts。改前先读 docs/architecture.md 与相关 ADR。宿主共享包一律 peerDependencies。完成后跑 npm run check:static && npm run typecheck && npm run test:agent。
+    - name: engineer-client
+      role: 客户端半实现（src/client/*.tsx）
+      executionPrompt: 只改 src/client/ 与 src/locale/。逻辑抽到 .ts、.tsx 只做视图；文案进 src/locale/（命名空间 dsw）。禁止深链 CSS/XPath 作为测试定位。
+    - name: verifier
+      role: 验证与证据
+      executionPrompt: 跑 npm run check:static、npm run typecheck、npm run test:agent；涉及 UI 时用 lab 实例（DSH_HOME=.dsh-lab，端口 50599，绝不碰 3080）跑 npm run e2e，证据落 e2e/artifacts/。产出可复核的命令与输出，不改产品代码。
+    - name: reviewer
+      role: 契约评审
+      executionPrompt: 按任务 acceptance 逐条核对最新实现，输出 pass 或 needs_revision（带 file/line/requiredFix）。不要评审自己写的代码；不要因为门禁拦下 needs_revision 就判 pass。

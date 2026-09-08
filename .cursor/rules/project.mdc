@@ -1,0 +1,16 @@
+---
+description: dsh-workspace-enhancement 项目规则入口
+alwaysApply: true
+---
+
+本仓库的唯一规则文件是根目录的 `AGENTS.md`。**先读它**，不要在本规则里另立一套。
+
+必知要点（细节以 `AGENTS.md` 为准）：
+
+- 待办真相源是 `docs/backlog.md`；状态快照 `docs/status.md` 由 `npm run status` 生成，禁止手改。
+- 质量门：`npm run check`（静态闸门 + typecheck + 单测 + build + pack 冒烟）。
+  沙箱内跑不了 `npm test`（`spawn EPERM`），用 `npm run test:agent`。
+- 红线：不碰 3080、不碰产品 profile、不 push/打 tag/发布、凭据零泄漏、
+  子代理禁止调用 `cordis_inspect_list` / `cordis_inspect_query`。
+- 改代码前先看 `docs/architecture.md` 与相关 `docs/decisions/ADR-*.md`。
+- 逻辑写 `.ts`、`.tsx` 只做视图；文案进 `src/locale/`（命名空间 `dsw`）。

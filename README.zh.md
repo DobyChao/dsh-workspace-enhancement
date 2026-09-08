@@ -58,7 +58,24 @@ dsh plugin --profile web add <本仓库路径>
 
 ## 路线图
 
-当前进度与剩余里程碑：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。
+当前进度与剩余里程碑：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。唯一待办真相源是
+[docs/backlog.md](./docs/backlog.md)，生成的状态快照是 [docs/status.md](./docs/status.md)。
+
+## 开发
+
+先读 [AGENTS.md](./AGENTS.md)（规则、命令、红线）。然后：
+
+| 文档 | 回答什么 |
+|---|---|
+| [docs/backlog.md](./docs/backlog.md) | 什么在计划中、进行中、被挡住、已完成 |
+| [docs/status.md](./docs/status.md) | 版本、HEAD、待办分布（`npm run status` 生成） |
+| [docs/architecture.md](./docs/architecture.md) | 插件怎么搭、怎么接线 |
+| [docs/decisions/](./docs/decisions/) | 为什么这么做（ADR） |
+| [docs/testing.md](./docs/testing.md) | 测试分层、怎么跑、沙箱限制 |
+| [docs/compatibility.md](./docs/compatibility.md) | 宿主支持窗口与上游漂移追踪 |
+| [docs/rounds/](./docs/rounds/) | 每轮交付了什么、怎么验证的 |
+
+统一质量门：`npm run check`（静态闸门 + typecheck + 单测 + build + pack 冒烟）——CI 跑的就是这一条。
 
 ## 参考项目
 
