@@ -102,10 +102,13 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 
    ```powershell
    git push -u origin <branch>
-   gh pr create --fill            # 模板里的勾选项就是验收清单
-   gh pr checks --watch           # 等 CI：ubuntu 22/24 + windows 22
+   gh pr create --title "fix(<scope>): <what>" --body-file .github/PULL_REQUEST_TEMPLATE.md
+   gh pr checks --watch           # PR 标题 + ubuntu 22/24 + windows 22
    gh pr merge --squash --delete-branch
    ```
+
+   > **PR 标题必须是 Conventional Commit**：squash 合并把它当作 main 上的提交标题，
+   > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 main 必红）。
 
 6. 合并后：状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
 

@@ -58,6 +58,27 @@ jobs:
         run: npm run test:coverage -- --test-reporter=dot
         continue-on-error: true
 
+  pr-title:
+    name: PR title (squash subject)
+    # A squash merge uses the PR TITLE as the commit subject on main, and the
+    # static gate validates that subject. Without this job a bad title only
+    # shows up after the merge, when main is already red.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conventional Commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | grep -qE '^(feat|fix|docs|test|chore|refactor|perf|build|ci|revert)(\([a-z0-9._-]+\))?!?: .+'; then
+            echo "ok: $PR_TITLE"
+            exit 0
+          fi
+          echo "::error::PR title must be a Conventional Commit subject — a squash merge turns it into the commit subject on main."
+          echo "got: $PR_TITLE"
+          echo "example: fix(side-workspaces): keep the read-only gate under junction spellings"
+          exit 1
+
   e2e:
     name: e2e (lab, manual)
     # Manual only: the browser suite needs a live DSH lab instance. Run it with

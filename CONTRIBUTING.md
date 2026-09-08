@@ -32,10 +32,16 @@
 
    ```powershell
    git push -u origin <branch>
-   gh pr create --fill            # PR 模板的勾选项就是验收清单
-   gh pr checks --watch           # CI：ubuntu 22/24 + windows 22
+   # PR 标题必须是 Conventional Commit：squash 合并会把它当成 main 上的提交标题，
+   # 而静态闸门校验的正是这个标题。浏览器新建 PR 默认填分支名，必须改。
+   gh pr create --title "fix(<scope>): <what>" --body-file .github/PULL_REQUEST_TEMPLATE.md
+   gh pr checks --watch           # CI：PR 标题 + ubuntu 22/24 + windows 22
    gh pr merge --squash --delete-branch
    ```
+
+   > `--fill` 在多提交时会把分支名当标题，容易与最终 squash 语义不符——显式写 `--title` 最稳。
+   > PR 标题不合法时 `PR title (squash subject)` 作业会直接拦下（2026-09-10 加，起因是一次
+   > PR 绿、合并后 main 红：squash 标题是分支名）。
 
 6. **验收**：涉及用户可见行为时，随 PR 附 `docs/uat/` 脚本，由用户走查并回填反馈。
 7. **收口**：状态改 `done`/`shipped`，`npm run status` 刷新看板，`docs/rounds/` 写一份报告。
