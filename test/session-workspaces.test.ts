@@ -207,8 +207,10 @@ test('t2-fix: separator-ending root keys (ssh://c1/ and the drive root) match th
   ])
   assert.equal(sideWorkspaceOf(roots, 'ssh://c1/something/deep')?.rootKey, 'ssh://c1/')
   assert.equal(sideWorkspaceOf(roots, 'ssh://c1/')?.rootKey, 'ssh://c1/')
-  assert.equal(sideWorkspaceOf(roots, '/something/deep')?.rootKey, 'ssh://c1/') // win32 bare POSIX spelling
   if (process.platform === 'win32') {
+    // win32-only: a bare POSIX spelling is treated as the remote root's
+    // placeholder. On POSIX `/something/deep` is just an absolute local path.
+    assert.equal(sideWorkspaceOf(roots, '/something/deep')?.rootKey, 'ssh://c1/') // win32 bare POSIX spelling
     assert.equal(normalizeSideRootKey('local', 'C:\\'), 'C:\\')
     const drive = new Map<string, SideWorkspaceItem>([['C:\\', item({ rootKey: 'C:\\' })]])
     assert.equal(sideWorkspaceOf(drive, 'C:/Users/x/y')?.rootKey, 'C:\\')

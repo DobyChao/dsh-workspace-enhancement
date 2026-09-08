@@ -20,12 +20,21 @@ concurrency:
 
 jobs:
   check:
-    name: check (node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    name: check (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        node: ['22', '24']
+        include:
+          - os: ubuntu-latest
+            node: '22'
+          - os: ubuntu-latest
+            node: '24'
+          # The plugin is developed and deployed on Windows: placeholder path
+          # parsing, the DPAPI keychain and the PowerShell audit cases only exist
+          # there. Ubuntu is the cross-platform check, Windows the real target.
+          - os: windows-latest
+            node: '22'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,7 +54,7 @@ jobs:
         run: npm run check
 
       - name: Coverage summary
-        if: matrix.node == '22'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
         run: npm run test:coverage -- --test-reporter=dot
         continue-on-error: true
 
