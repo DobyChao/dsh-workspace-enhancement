@@ -1,0 +1,50 @@
+name: Upstream drift
+
+# Sentinel for "the host moved and nobody told us".
+#
+# @deepseek-ai/dsh shipped 16 versions in 28 days with no changelog and no public
+# issue tracker (has_issues=false), so this job is the only notification channel:
+# it reinstalls the newest published seam packages and runs the gate against them.
+#
+# A red run does NOT mean "fix it now" — it means "look at it now". The job name
+# and the version printout say which family moved. See docs/compatibility.md.
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install (pinned family)
+        run: npm ci
+
+      - name: Print pinned family
+        run: |
+          node -e "const p=require('./package.json');const rows=Object.entries({...p.peerDependencies,...p.devDependencies}).filter(([n])=>n.startsWith('@deepseek-ai/dsh-')).map(([n,v])=>n+'@'+v);console.log(rows.join('\n'))"
+
+      - name: Upgrade to the newest published seam packages
+        run: |
+          PKGS=$(node -e "const p=require('./package.json');console.log(Object.keys(p.peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")
+          npm install --no-save $PKGS 2>&1 | tail -20
+
+      - name: Print resolved family
+        run: |
+          node -e "const fs=require('fs');for(const n of Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-'))){try{console.log(n+'@'+JSON.parse(fs.readFileSync('node_modules/'+n+'/package.json','utf8')).version)}catch(e){console.log(n+'@MISSING')}}"
+
+      - name: Typecheck against the newest host
+        run: npm run typecheck
+
+      - name: Unit suite against the newest host
+        run: npm test
+
+      - name: Family / gate check (this is the drift signal)
+        run: npm run check:static

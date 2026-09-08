@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    ":timezone(Asia/Shanghai)"
+  ],
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "Host-provided seams: one family, one PR, never automerged. The plugin's peer ranges must stay on a single rc family (scripts/check.mjs enforces it), so peer and dev entries must move together.",
+      "groupName": "deepseek harness seams",
+      "matchPackageNames": ["@deepseek-ai/dsh-**"],
+      "rangeStrategy": "replace",
+      "automerge": false,
+      "minimumReleaseAge": "1 day",
+      "labels": ["deps", "upstream"]
+    },
+    {
+      "description": "Cordis is a vendored host singleton with its own version line.",
+      "groupName": "cordis",
+      "matchPackageNames": ["@deepseek-ai/cordis", "@deepseek-ai/schemastery"],
+      "rangeStrategy": "replace",
+      "automerge": false,
+      "labels": ["deps", "upstream"]
+    },
+    {
+      "description": "Build/test toolchain: patch and minor updates are safe to group.",
+      "groupName": "dev toolchain",
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": ["!@deepseek-ai/**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": false,
+      "labels": ["deps"]
+    },
+    {
+      "description": "Runtime dependency: ssh2 only, keep it deliberate.",
+      "matchDepTypes": ["dependencies"],
+      "automerge": false,
+      "labels": ["deps"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "automerge": false
+  }
+}

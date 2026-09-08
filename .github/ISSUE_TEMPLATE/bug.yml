@@ -1,0 +1,44 @@
+name: 缺陷报告
+description: 行为与预期不符。请附环境指纹，否则难以复现。
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 发生了什么？期望是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 插件版本 / 宿主版本
+      placeholder: dsh-workspace-enhancement 0.1.2 · dsh 0.1.2-rc.1
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境指纹
+      description: 浏览器与版本 / 视口 / 缩放 / 主题 / 语言 / 操作系统；远程相关请附目标 OS
+      placeholder: Chrome 140 · 1512x950 · 100% · dark · zh-CN · Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据
+      description: 截图 / trace / 日志（注意脱敏，不要贴真实主机与凭据）
+    validations:
+      required: false

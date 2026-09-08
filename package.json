@@ -64,15 +64,24 @@
   },
   "files": [
     "lib",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "!**/*.map"
   ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc && tsdown",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
-    "prepublishOnly": "npm run typecheck && npm run build",
-    "release": "commit-and-tag-version"
+    "test:agent": "node scripts/test-agent.mjs",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage \"test/**/*.test.ts\"",
+    "check:static": "node scripts/check.mjs",
+    "check": "npm run check:static && npm run typecheck && npm test && npm run build && node scripts/pack-smoke.mjs",
+    "status": "node scripts/status.mjs",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "e2e:headed": "playwright test --config e2e/playwright.config.ts --headed",
+    "e2e:report": "playwright show-report e2e/artifacts/html-report",
+    "prepublishOnly": "npm run check",
+    "release": "commit-and-tag-version --no-git-tag-version"
   },
   "keywords": [
     "deepseek-harness",
@@ -87,7 +96,7 @@
     "workspace-enhancement"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.8.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
@@ -110,8 +119,6 @@
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.0.0",
-    "@commitlint/config-conventional": "^19.0.0",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-agent": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-locale": "^0.1.2-rc.1",
@@ -134,12 +141,12 @@
     "@deepseek-ai/dsh-timeout": "^0.1.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
     "@deepseek-ai/schemastery": "^3.18.2",
+    "@playwright/test": "^1.50.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@types/ssh2": "^1.15.5",
     "commit-and-tag-version": "^13.1.2",
-    "husky": "^9.0.0",
     "lightningcss": "^1.32.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

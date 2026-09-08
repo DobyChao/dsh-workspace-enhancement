@@ -1,0 +1,37 @@
+name: 需求 / 想法
+description: 新的功能、想法或改进。先落 docs/backlog.md，再开工。
+title: "[REQ] "
+labels: ["backlog"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提醒：本仓库的唯一待办真相源是 `docs/backlog.md`。
+        Issue 用来讨论与留痕，拍板后请把结论写回 backlog（含 ID 与状态）。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标（一句话）
+      description: 想解决什么问题？不要写实现方案。
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 背景与观察
+      description: 触发场景、现状痛点、相关截图/日志
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 怎样算做完？可观察、可复现的判定。
+    validations:
+      required: true
+  - type: textarea
+    id: outofscope
+    attributes:
+      label: 明确不做
+    validations:
+      required: false

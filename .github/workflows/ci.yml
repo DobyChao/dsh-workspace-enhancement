@@ -1,0 +1,99 @@
+name: CI
+
+# The single quality gate. Everything here is `npm run check` — the same command
+# a human or an agent runs locally, so a green CI means the local gate is green
+# too (see docs/testing.md for why that matters).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      e2e:
+        description: Run the browser E2E suite against a booted lab instance
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Conventional-Commit gate reads git history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # .npmrc pins legacy-peer-deps=true: the host-provided @deepseek-ai peers
+      # do not form a resolvable tree inside this plugin repo.
+      - name: Install
+        run: npm ci
+
+      - name: Gate (static + typecheck + unit + build + pack smoke)
+        run: npm run check
+
+      - name: Coverage summary
+        if: matrix.node == '22'
+        run: npm run test:coverage -- --test-reporter=dot
+        continue-on-error: true
+
+  e2e:
+    name: e2e (lab, manual)
+    # Manual only: the browser suite needs a live DSH lab instance. Run it with
+    # `gh workflow run CI -f e2e=true`, or locally via `npm run e2e`.
+    if: github.event_name == 'workflow_dispatch' && inputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+
+      - name: Boot isolated lab
+        run: |
+          npm i -g @deepseek-ai/dsh
+          export DSH_HOME="$HOME/.dsh-lab"
+          mkdir -p "$DSH_HOME"
+          dsh plugin --profile web add "$PWD"
+          nohup dsh web --port 50599 --no-open > /tmp/lab.log 2>&1 &
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:50599/ || true)
+            [ "$code" = "200" ] && break
+            sleep 3
+          done
+          curl -s -o /dev/null -w 'lab http %{http_code}\n' http://127.0.0.1:50599/
+
+      - name: Playwright
+        env:
+          DSW_E2E_BASE_URL: http://127.0.0.1:50599
+        run: npm run e2e
+
+      - name: Lab log
+        if: always()
+        run: tail -80 /tmp/lab.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: |
+            e2e/artifacts/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/DobyChao/dsh-workspace-enhancement/security/advisories/new
+    about: 请勿用公开 issue 报告安全问题（凭据泄漏、权限绕过等）。
+  - name: 使用问题与讨论
+    url: https://github.com/DobyChao/dsh-workspace-enhancement/discussions
+    about: 安装、配置、用法讨论。
