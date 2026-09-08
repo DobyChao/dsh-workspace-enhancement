@@ -104,6 +104,21 @@ CI 跑三个组合：**ubuntu 22 / ubuntu 24 / windows 22**。Windows 是真实�
 > （连不需要 shell 的门禁用例也一起死）；两处硬编码 `\\` 让占位路径在 Linux 上永远解析不出。
 > 这批问题在第一次 Linux CI 运行中全部暴露。
 
+**另一类只在特定机器上出现的坑：路径拼写**。同一目录可能有多种拼写（NTFS junction、
+`subst` 虚拟盘、Windows 8.3 短名如 `RUNNER~1`）。凡是「存下来的路径」与「运行时算出的路径」
+做比较的地方，都必须走同一个规范化函数；测试里的期望也要用同一个函数构造，**不要直接和
+`resolve()` 比**——否则测试只在"词法 == realpath"的机器上偶然通过。
+本机复现这类问题的办法：把 `%TEMP%` 指向一个 junction 再跑测试。
+
+```powershell
+New-Item -ItemType Directory -Force 'D:\a\longtarget12345'
+New-Item -ItemType Junction -Path 'D:\a\j' -Target 'D:\a\longtarget12345'
+$env:TEMP='D:\a\j'; $env:TMP='D:\a\j'; npm test
+```
+
+> 这条路径正是 `FIX-5`（只读门静默失效）的发现方式：CI 的 windows runner 的 `%TEMP%`
+> 就是短名/junction 形状，本机全绿而 CI 全红。
+
 **本地验 Linux**：机器上有 WSL 时，push 前先跑 `scripts/verify-linux.sh`
 （复制工作树到 WSL 原生盘 → `npm ci` → 与 CI 相同的全套命令；不碰 Windows 工作树）：
 

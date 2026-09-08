@@ -20,7 +20,7 @@
  * @module dsh-workspace-enhancement/session-workspaces
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, posix, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -85,19 +85,49 @@ function normalizeRemoteKey(path: string): string | null {
 }
 
 /**
+ * Canonicalize a LOCAL path the way the fs backends report target keys.
+ *
+ * A lexical `resolve()` is not enough: `dsh-fs-local` hands the gate
+ * realpath-shaped target keys, so a root key stored lexically stops matching as
+ * soon as the two spellings differ — a junction, a `subst` drive, or a win32 8.3
+ * short name (`RUNNER~1` vs `runneradmin`, which is what a CI runner's `%TEMP%`
+ * looks like) is enough to make the read-only gate miss silently.
+ *
+ * Resolve the nearest EXISTING ancestor through `realpath` (the target file
+ * usually does not exist yet) and re-append the remaining segments lexically.
+ */
+function canonicalLocalPath(value: string): string {
+  const absolute = resolve(value)
+  const rest: string[] = []
+  let head = absolute
+  for (;;) {
+    try {
+      const real = realpathSync.native(head)
+      return rest.length === 0 ? real : join(real, ...rest.slice().reverse())
+    } catch {
+      const parent = dirname(head)
+      if (parent === head) return absolute // no existing ancestor (unreachable drive)
+      rest.push(basename(head))
+      head = parent
+    }
+  }
+}
+
+/**
  * Canonicalize one side-workspace path into a root key, or null when the path
  * cannot name a side root: a `remote` kind requires the `ssh://<id>/<abs>`
  * spelling (any POSIX directory spelled through a machine connection), a
  * `local` kind requires an absolute local path. The remote path is
- * posix-normalized; the local path is `resolve()`d lexically (no realpath —
- * symlink fidelity is the browser/stat layer's job).
+ * posix-normalized; the local path is realpath-canonicalized (see
+ * {@link canonicalLocalPath}) so every spelling of the same directory lands on
+ * one key.
  */
 export function normalizeSideRootKey(kind: SideWorkspaceKind, path: string): string | null {
   if (typeof path !== 'string' || path.trim() === '') return null
   const value = path.trim()
   if (kind === 'remote') return normalizeRemoteKey(value)
   if (!isAbsolute(value)) return null
-  return resolve(value)
+  return canonicalLocalPath(value)
 }
 
 /**
@@ -130,7 +160,7 @@ export function sideRootKeyOf(rootKey: string): { kind: SideWorkspaceKind; path:
 function canonicalStoredKey(entry: string): string | null {
   if (entry.startsWith('ssh://')) return normalizeRemoteKey(entry)
   if (!isAbsolute(entry)) return null
-  return resolve(entry)
+  return canonicalLocalPath(entry)
 }
 
 /** The path separator a stored root key canonically uses. */
@@ -220,7 +250,10 @@ export function sideWorkspaceOf(
     return best
   }
   if (isAbsolute(value)) {
-    const key = resolve(value)
+    // Realpath-canonical key: the fs layer reports realpath-shaped target keys,
+    // so a lexical `resolve()` here would miss every junction/short-name
+    // spelling and let a write through a read-only root.
+    const key = canonicalLocalPath(value)
     const insensitive = process.platform === 'win32'
     return bestMatchingRoot(roots, root => !root.startsWith('ssh://') && isUnderRoot(root, key, insensitive))
   }
@@ -342,6 +375,9 @@ export class SessionSideWorkspaceStore extends Service {
 
   /** The longest owning record of one operation path (routing/permission). */
   match(path: string): SideWorkspaceItem | undefined {
+    // Short-circuit: with no side workspace the matcher must not touch the
+    // filesystem (canonicalLocalPath does a realpath probe) on every fs call.
+    if (this.roots.size === 0) return undefined
     return sideWorkspaceOf(this.roots, path)
   }
 
