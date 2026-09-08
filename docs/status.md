@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-08 12:29 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-08 12:53 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `main` / `24ec425` |
-| HEAD 提交 | `fix(deps): declare host-shared packages as peerDependencies` (2026-09-08) |
-| 与远端 | 1 ahead / 0 behind origin/main |
+| 分支 / HEAD | `fix/infra-1-ci-cross-platform` / `97f6131` |
+| HEAD 提交 | `test: commit the side-workspace permission attack audit` (2026-09-08) |
+| 与远端 | in sync with origin/main |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
 | 单测文件 | 21 |
-| 单测用例（静态计数） | 245 |
+| 单测用例（静态计数） | 241 |
 | E2E 场景文件 | 8 |
 | ADR | 12 |
 | 轮次报告 | 11 |
@@ -31,7 +31,7 @@
 | `todo` | 7 |
 | `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 14 |
+| `done` | 15 |
 | `shipped` | 3 |
 | `dropped` | 5 |
 

@@ -19,24 +19,36 @@
 
 `drafts/` 是本地草稿（不入库、可能含机器专属数据），**只作素材**：结论一旦拍板就搬进上面这些文件。
 
-## 2. 一轮的完整流程
+## 2. 一轮的完整流程（短分支 + PR）
+
+**分支模型**：`main` 只收经过 CI 的提交。改动一律走短分支 + PR + **squash merge**
+（全历史保持线性，当前 0 个 merge 提交）。
 
 1. **入账**：在 `docs/backlog.md` 加一行（ID + `todo`），写清目标与验收标准。
-2. **开工**：状态改 `doing`；从 `main` 拉短分支 `feat/<id>-slug` 或 `fix/<id>-slug`。
+2. **开工**：状态改 `doing`；从 `main` 拉短分支 `feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. **实现**：小步提交，Conventional Commits；提交信息尾行写 `Refs: <ID>`。
 4. **验证**：`npm run check`；UI 改动加 `npm run e2e`；组合改动跑 `--dump-config` 断言。
-5. **评审**：开 PR（哪怕只有自己），PR 模板里的勾选项就是验收清单。
-6. **验收**：涉及用户可见行为时，随 PR 附 `docs/uat/` 脚本，由用户走查并回填反馈。
-7. **合并**：squash 合并到 `main`，状态改 `done`/`shipped`，`npm run status` 刷新看板。
-8. **留痕**：在 `docs/rounds/` 写一份报告（目标/拆解/验证/结果/遗留）。
+5. **交付**：代理只做本地提交（不 push）。所有者执行：
 
-> 小修（一行文档、一个错别字）可以跳过 1 和 8，但 4 不能跳。
+   ```powershell
+   git push -u origin <branch>
+   gh pr create --fill            # PR 模板的勾选项就是验收清单
+   gh pr checks --watch           # CI：ubuntu 22/24 + windows 22
+   gh pr merge --squash --delete-branch
+   ```
+
+6. **验收**：涉及用户可见行为时，随 PR 附 `docs/uat/` 脚本，由用户走查并回填反馈。
+7. **收口**：状态改 `done`/`shipped`，`npm run status` 刷新看板，`docs/rounds/` 写一份报告。
+
+> 例外：错别字、一行文案、纯注释这类不可能改变行为的改动可直接提交到 `main`；
+> 但第 4 步不能跳。**分支上永远不要直接 push 到 `main`。**
 
 ## 3. 发布清单
 
 发布由仓库所有者执行（npm 2FA）。发版前逐条确认：
 
-- [ ] `npm run check` 全绿（本地与 CI 都跑过）
+- [ ] `npm run check` 全绿（本地与 CI 都跑过；PR 上 CI 绿才算）
+- [ ] 待发布的改动已通过 PR **squash 合并**到 `main`
 - [ ] `docs/compatibility.md` 支持窗口已更新
 - [ ] `CHANGELOG.md` 有该版本小节（静态闸门会校验）
 - [ ] `npm run status` 已刷新，`docs/status.md` 与 package.json 版本一致
@@ -44,6 +56,10 @@
 - [ ] 工作树干净、`main` 与 `origin/main` 同步
 - [ ] 打 tag 放在**发布成功之后**：`git tag vX.Y.Z && git push origin vX.Y.Z`
 - [ ] 发布后在 `docs/compatibility.md` 记录实际发布版本
+
+> **`v0.1.2` tag 待修正**：它当前指向 `d30dc57`（准备发布时的中间提交，从未发布，之后又落了提交）。
+> 发布 0.1.2 时应在发布成功后重打：
+> `git tag -f v0.1.2 <被发布的提交> && git push -f origin v0.1.2`（仅此一次；此后 tag 一律只打一次）。
 
 `npm run release` 会跑 `commit-and-tag-version --no-git-tag-version`：它更新版本号、锁文件与 CHANGELOG，
 **不打 tag**——tag 是发布的产物，不是准备动作的产物（历史上出现过 tag 指向中间提交、与 HEAD 不一致）。

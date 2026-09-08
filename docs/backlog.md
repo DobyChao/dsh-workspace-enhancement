@@ -60,6 +60,7 @@
 | FIX-1 | `dsh-session` 0.1.2-rc.1 移除 `Session.events` 导致 t6 静默失败 | done | — | 2026-09-08 起坏了 2 天无人发现；CI 建立当日定位并修复（改用 `ownEvents()`）。见 `docs/compatibility.md` §2 |
 | FIX-2 | 设置页用户名输入框溢出卡片 13px（`inputStyle` 缺 `minWidth: 0`） | done | — | E2E-02 首跑抓到；`d30dc57` 修复的残留。见 `src/client/machine-form.tsx` |
 | FIX-3 | npm 包内含 source map（118 文件 / 0.40 MB） | done | — | `pack-smoke` 首跑抓到；`files` 加 `!**/*.map` 后 80 文件 / 0.26 MB |
+| FIX-4 | 测试套件的 Windows 假设让 Linux CI 首跑全红 | done | — | 三处：模块顶层抛错的 PowerShell 解析、两处硬编码 `\\`、`AUDIT-TC08` 大小写归一。CI 矩阵已加 `windows-latest`；Linux 侧先在 WSL 复验 |
 
 ## 5. 明确不做（决策留痕）
 
