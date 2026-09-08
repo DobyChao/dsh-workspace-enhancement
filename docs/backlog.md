@@ -62,6 +62,7 @@
 | FIX-3 | npm 包内含 source map（118 文件 / 0.40 MB） | done | — | `pack-smoke` 首跑抓到；`files` 加 `!**/*.map` 后 80 文件 / 0.26 MB |
 | FIX-4 | 测试套件的 Windows 假设让 Linux CI 首跑全红 | done | — | 三处：模块顶层抛错的 PowerShell 解析、两处硬编码 `\\`、`AUDIT-TC08` 大小写归一。CI 矩阵已加 `windows-latest`；Linux 侧先在 WSL 复验 |
 | FIX-5 | 只读门在 junction / subst / 8.3 短路径下静默失效 | done | — | **安全相关**：store 存词法路径、fs 层给 realpath → 前缀匹配落空。Windows CI 的 `%TEMP%` 就是这种拼写。根键改为 realpath 规范化（见 `ADR-0013`），并加 junction 回归用例 |
+| FIX-6 | PR 标题非 Conventional → 合并后 main 必红 | done | — | squash 合并用 PR 标题当提交标题，而闸门校验 HEAD 标题；PR 上绿、合并后红。新增 `PR title (squash subject)` 作业在合并前拦截，闸门报错文案补充指引 |
 
 ## 5. 明确不做（决策留痕）
 

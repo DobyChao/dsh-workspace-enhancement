@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-08 13:15 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-08 16:40 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `fix/infra-1-ci-cross-platform` / `d12477d` |
-| HEAD 提交 | `docs: adopt the short-branch + PR workflow and document the CI matrix` (2026-09-08) |
-| 与远端 | 2 ahead / 0 behind origin/main |
+| 分支 / HEAD | `fix/pr-title-gate` / `f0ee3ed` |
+| HEAD 提交 | `fix/infra 1 ci cross platform (#1)` (2026-09-09) |
+| 与远端 | in sync with origin/main |
 
 ## 质量
 
@@ -31,7 +31,7 @@
 | `todo` | 7 |
 | `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 16 |
+| `done` | 17 |
 | `shipped` | 3 |
 | `dropped` | 5 |
 

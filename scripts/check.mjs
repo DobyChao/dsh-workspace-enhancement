@@ -241,7 +241,10 @@ try {
   if (git.status !== 0) throw new Error(git.stderr.trim() || `git exit ${git.status}`)
   const subject = git.stdout.trim()
   const ok = /^(feat|fix|docs|test|chore|refactor|perf|build|ci|revert)(\([a-z0-9._-]+\))?!?:\s.{1,}$/.test(subject)
-  check('HEAD commit follows Conventional Commits', ok, subject.slice(0, 90))
+  check('HEAD commit follows Conventional Commits', ok,
+    ok
+      ? subject.slice(0, 90)
+      : `${subject.slice(0, 90)} — a squash merge uses the PR TITLE as the subject; rename the PR or amend the commit`)
 } catch (error) {
   check('git log readable', false, String(error.message || error))
 }
