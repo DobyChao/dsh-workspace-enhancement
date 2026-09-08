@@ -65,7 +65,8 @@ test('t8 ⑧⑨: renderRemoteEnvProbe emits three check lines plus a hint (never
   const partial = renderRemoteEnvProbe({ bash: true, pwsh: false, rg: false })
   assert.ok(partial.split('\n').length >= 5)
   assert.ok(partial.includes('pwsh: ✗') && partial.includes('rg: ✗') && partial.includes('bash: ✓'))
-  assert.ok(partial.includes('提示: 远端缺少 pwsh, rg'))
+  // REQ-I6 ①: model-facing output is English only, whatever the UI language.
+  assert.ok(partial.includes('the remote is missing pwsh, rg'))
   assert.ok(partial.includes('sudo apt-get install ripgrep'), 'hint names the install command as reference only')
   assert.ok(!partial.includes('命令已执行'), 'hint must not claim execution')
 })
@@ -73,5 +74,5 @@ test('t8 ⑧⑨: renderRemoteEnvProbe emits three check lines plus a hint (never
 test('t10: all-missing probe renders three ✗ lines and the hint (not silently dropped)', () => {
   const empty = renderRemoteEnvProbe(parseRemoteEnvProbe(''))
   assert.ok(empty.includes('bash: ✗') && empty.includes('pwsh: ✗') && empty.includes('rg: ✗'))
-  assert.ok(empty.includes('提示: 远端缺少 bash, pwsh, rg'))
+  assert.ok(empty.includes('the remote is missing bash, pwsh, rg'))
 })

@@ -297,24 +297,6 @@ const en: Record<DswKey, string> = {
   'status.retryAction.full': 'Re-check and try to connect',
   'status.retryAction.recheck': 'Re-check',
 
-  /* ------------------------------------------------------- prompt (host) */
-  'prompt.remote.emphasis':
-    '⚠ Your current workspace is a **remote SSH workspace**: `{endpoint}:{displayPath}` (routed through the local placeholder path `{placeholderRoot}\\{connectionId}\\…`; the placeholder path you see is only a routing alias — **all commands and file operations truly happen on the remote server**, and the working directory is a POSIX absolute path).',
-  'prompt.side.fs.r': 'read-only',
-  'prompt.side.fs.rw': 'read-write',
-  'prompt.side.exec.off': 'off',
-  'prompt.side.exec.on': 'on',
-  'prompt.side.item': '- Side workspace **{label}**: `{rootKey}` (fs: {fs} · exec: {exec})',
-  'prompt.side.heading': '**Extra workspaces linked to this session (side directories the model can operate on directly)**:',
-  'prompt.side.note':
-    'Note the permission markers: read-only (fs: read-only) rejects writes, and execution disabled (exec: off) rejects running commands under that directory; for rejected operations use a workspace with permission or ask the user to adjust. Commands run in the main workspace by default; to run on another server use `sw_exec(server, command)`.',
-  'prompt.env.missing':
-    'Hint: the remote is missing {missing} — install them on the remote (for reference only; not auto-installed): rg → sudo apt-get install ripgrep; pwsh → https://aka.ms/powershell',
-  'prompt.section.swExec':
-    "sw_exec executes a command on the specified server; workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
-  'prompt.section.win32Bash':
-    'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
-
   /* ------------------------------------------------ tool: shared fragments */
   'tool.common.noActive': 'No active machine — call sw_connect with a host to get started.',
   'tool.common.backgroundSentence':
@@ -326,7 +308,6 @@ const en: Record<DswKey, string> = {
     'Show the current remote machine (host/user/port), connection health (ping), the current remote workspace, and the host-key policy/state. Call this first to orient, or when an sw_* call fails to check connectivity.',
   'tool.sw_status.ping.ok': 'Ping: OK — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: FAILED — {detail}',
-  'tool.env.heading': 'Remote environment:',
   'tool.sw_status.outputs.host': 'Remote host: {u}@{h}:{p}{source}',
   'tool.sw_status.outputs.workspace': 'Current remote workspace: {ws}',
   'tool.sw_status.outputs.workspaceNone': 'Current remote workspace: (none — call sw_pick_workspace to set one)',
