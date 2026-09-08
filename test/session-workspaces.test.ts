@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
@@ -24,12 +24,12 @@ import { sshRoutesRoot } from '../src/transport.ts'
 
 /* ---------------------------------------------------- 1) 根键规范化 */
 
-test('normalizeSideRootKey: local requires an absolute path; resolves lexically', () => {
+test('normalizeSideRootKey: local requires an absolute path; canonicalizes absolutely', () => {
   assert.equal(normalizeSideRootKey('local', ''), null)
   assert.equal(normalizeSideRootKey('local', '   '), null)
   assert.equal(normalizeSideRootKey('local', 'relative/path'), null)
-  assert.equal(normalizeSideRootKey('local', resolve(tmpdir(), 'side')), resolve(tmpdir(), 'side'))
-  assert.equal(normalizeSideRootKey('local', `${resolve(tmpdir(), 'side')}${sep()}..${sep()}side`), resolve(tmpdir(), 'side'))
+  assert.equal(normalizeSideRootKey('local', resolve(tmpdir(), 'side')), localKey(tmpdir(), 'side'))
+  assert.equal(normalizeSideRootKey('local', `${resolve(tmpdir(), 'side')}${sep()}..${sep()}side`), localKey(tmpdir(), 'side'))
 })
 
 test('normalizeSideRootKey: remote requires the ssh://<id>/<abs> spelling; posix-normalizes', () => {
@@ -56,8 +56,22 @@ function item(over: Partial<SideWorkspaceItem>): SideWorkspaceItem {
   return { id: 'sw-1', kind: 'local', rootKey: '', label: 'x', fs: 'rw', exec: 'on', ...over }
 }
 
+/**
+ * The canonical local root key the store would persist for `parts`.
+ *
+ * Tests must build expectations through this helper, not `resolve()`: the store
+ * canonicalizes through the nearest existing ancestor's realpath, so a lexical
+ * expectation is only accidentally equal (it breaks under a junction, a subst
+ * drive or a win32 8.3 short name — e.g. a CI runner's `%TEMP%`).
+ */
+function localKey(...parts: string[]): string {
+  const key = normalizeSideRootKey('local', join(...parts))
+  assert.ok(key !== null, `not a local path: ${parts.join(', ')}`)
+  return key
+}
+
 test('sideWorkspaceOf: local roots match equal and descendants, never siblings', () => {
-  const root = resolve(tmpdir(), 'sw', 'proj')
+  const root = localKey(tmpdir(), 'sw', 'proj')
   const roots = new Map<string, SideWorkspaceItem>([[root, item({ rootKey: root })]])
   assert.equal(sideWorkspaceOf(roots, root)?.rootKey, root)
   assert.equal(sideWorkspaceOf(roots, join(root, 'deep', 'file.txt'))?.rootKey, root)
@@ -81,7 +95,7 @@ test('sideWorkspaceOf: remote roots match by machine + POSIX prefix, never a dif
 })
 
 test('sideWorkspaceOf: the LONGEST matching root wins (nested roots)', () => {
-  const outer = resolve(tmpdir(), 'sw', 'outer')
+  const outer = localKey(tmpdir(), 'sw', 'outer')
   const inner = join(outer, 'inner')
   const roots = new Map<string, SideWorkspaceItem>([
     [outer, item({ id: 'sw-out', rootKey: outer })],
@@ -117,7 +131,7 @@ test('loadSideWorkspaces: missing file reads empty; corrupt file warns and reads
 
 test('normalizeSideWorkspaceRecord: valid records pass; bad kinds/defaults resolve honestly', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
-  const local = resolve(dir, 'proj')
+  const local = localKey(dir, 'proj')
   assert.deepEqual(normalizeSideWorkspaceRecord({ id: 'a', kind: 'local', rootKey: local, label: '  P  ', fs: 'r', exec: 'off' as const }), {
     id: 'a', kind: 'local', rootKey: local, label: 'P', fs: 'r', exec: 'off',
   })
@@ -134,7 +148,7 @@ test('SessionSideWorkspaceStore: attach/list/detach/update/persist roundtrip', (
   const file = join(dir, 'state.json')
   const ctx = new Context()
   const store = new SessionSideWorkspaceStore(ctx, { file })
-  const local = resolve(dir, 'proj')
+  const local = localKey(dir, 'proj')
   const remote = 'ssh://c1/srv/work'
 
   const first = store.attach('session-1', { id: 'sw-a', kind: 'local', path: local, label: 'P' })
@@ -180,7 +194,7 @@ test('SessionSideWorkspaceStore: invalid attach rejects with a dsw: error', () =
   const store = new SessionSideWorkspaceStore(new Context(), { file: join(dir, 's.json') })
   assert.throws(() => store.attach('s1', { id: 'x', kind: 'local', path: 'relative' }), /absolute local path/)
   assert.throws(() => store.attach('s1', { id: 'x', kind: 'remote', path: '/home/uuz' }), /ssh:\/\/<id>/)
-  assert.throws(() => store.attach('', { id: 'x', kind: 'local', path: resolve(dir, 'p') }), /session id/)
+  assert.throws(() => store.attach('', { id: 'x', kind: 'local', path: localKey(dir, 'p') }), /session id/)
 })
 
 function sep(): string {
@@ -207,8 +221,10 @@ test('t2-fix: separator-ending root keys (ssh://c1/ and the drive root) match th
   ])
   assert.equal(sideWorkspaceOf(roots, 'ssh://c1/something/deep')?.rootKey, 'ssh://c1/')
   assert.equal(sideWorkspaceOf(roots, 'ssh://c1/')?.rootKey, 'ssh://c1/')
-  assert.equal(sideWorkspaceOf(roots, '/something/deep')?.rootKey, 'ssh://c1/') // win32 bare POSIX spelling
   if (process.platform === 'win32') {
+    // win32-only: a bare POSIX spelling is treated as the remote root's
+    // placeholder. On POSIX `/something/deep` is just an absolute local path.
+    assert.equal(sideWorkspaceOf(roots, '/something/deep')?.rootKey, 'ssh://c1/') // win32 bare POSIX spelling
     assert.equal(normalizeSideRootKey('local', 'C:\\'), 'C:\\')
     const drive = new Map<string, SideWorkspaceItem>([['C:\\', item({ rootKey: 'C:\\' })]])
     assert.equal(sideWorkspaceOf(drive, 'C:/Users/x/y')?.rootKey, 'C:\\')
@@ -216,9 +232,34 @@ test('t2-fix: separator-ending root keys (ssh://c1/ and the drive root) match th
   }
 })
 
+test('t2-fix: a junction/symlink spelling of a side root still matches (gate holds)', () => {
+  // A lexical root key used to miss the fs layer's realpath-shaped target keys
+  // whenever the two spellings differed — a junction, a subst drive, or a win32
+  // 8.3 short name (a CI runner's %TEMP%) was enough to silently disable the
+  // read-only gate. Both sides must canonicalize onto one key.
+  const real = mkdtempSync(join(tmpdir(), 'dsw-link-real-'))
+  const holder = mkdtempSync(join(tmpdir(), 'dsw-link-holder-'))
+  const link = join(holder, 'j')
+  try {
+    symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+  } catch {
+    return // no privilege for links in this environment; the case tests still cover matching
+  }
+
+  const viaLink = normalizeSideRootKey('local', link)
+  const viaReal = normalizeSideRootKey('local', real)
+  assert.ok(viaLink !== null && viaReal !== null)
+  assert.equal(viaLink, viaReal, 'both spellings must canonicalize onto one root key')
+
+  const roots = new Map<string, SideWorkspaceItem>([[viaLink, item({ rootKey: viaLink, fs: 'r' })]])
+  assert.equal(sideWorkspaceOf(roots, join(real, 'file.txt'))?.rootKey, viaLink)
+  assert.equal(sideWorkspaceOf(roots, join(link, 'file.txt'))?.rootKey, viaLink)
+  assert.equal(sideWorkspaceOf(roots, join(real, '..', 'elsewhere.txt')), undefined)
+})
+
 test('t2-fix: win32 local matching is case-insensitive; POSIX remote stays case-sensitive', () => {
   if (process.platform !== 'win32') return
-  const root = resolve(tmpdir(), 'CaseProj')
+  const root = localKey(tmpdir(), 'CaseProj')
   const roots = new Map<string, SideWorkspaceItem>([[root, item({ rootKey: root })]])
   assert.equal(sideWorkspaceOf(roots, join(resolve(tmpdir(), 'CASEPROJ'), 'file.txt'))?.rootKey, root)
   const remote = new Map<string, SideWorkspaceItem>([['ssh://c1/A', item({ rootKey: 'ssh://c1/A', kind: 'remote' })]])
@@ -230,14 +271,14 @@ test('t2-fix: normalizeSideWorkspaceRecord re-canonicalizes degenerate root keys
   const remote = normalizeSideWorkspaceRecord({ id: 'r', kind: 'remote', rootKey: 'ssh://c1//a//b/' })!
   assert.equal(remote.rootKey, 'ssh://c1/a/b')
   const local = normalizeSideWorkspaceRecord({ id: 'l', kind: 'local', rootKey: join(resolve(tmpdir(), 'sw'), 'x', '..', 'proj') })!
-  assert.equal(local.rootKey, resolve(tmpdir(), 'sw', 'proj'))
+  assert.equal(local.rootKey, localKey(tmpdir(), 'sw', 'proj'))
 })
 
 test('t2-fix: detach prunes the empty session account from the persisted state', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
   const file = join(dir, 'state.json')
   const store = new SessionSideWorkspaceStore(new Context(), { file })
-  const local = resolve(dir, 'proj')
+  const local = localKey(dir, 'proj')
   store.attach('s1', { id: 'sw-a', kind: 'local', path: local })
   assert.equal(store.detach('s1', local), true)
   const revived = new SessionSideWorkspaceStore(new Context(), { file })
@@ -270,7 +311,7 @@ test('t2-fix: loadSideWorkspaces re-canonicalizes references and drops emptied a
 test('t2-fix: attach/listFor/detach treat padded session ids consistently', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
   const store = new SessionSideWorkspaceStore(new Context(), { file: join(dir, 's.json') })
-  const local = resolve(dir, 'proj')
+  const local = localKey(dir, 'proj')
   store.attach('  sess-1  ', { id: 'sw-a', kind: 'local', path: local })
   store.attach('  sess-1  ', { id: 'sw-b', kind: 'remote', path: 'ssh://c1/x', fs: 'r' })
   assert.deepEqual(store.listFor('sess-1').map(entry => entry.id), ['sw-a', 'sw-b'])
@@ -284,6 +325,6 @@ test('t2-fix: a failing persist warns instead of throwing (in-memory stays autho
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
   // The state "file" IS a directory: read and write both fail, never throw.
   const store = new SessionSideWorkspaceStore(new Context(), { file: dir })
-  assert.doesNotThrow(() => store.attach('s1', { id: 'sw-a', kind: 'local', path: resolve(dir, 'proj') }))
+  assert.doesNotThrow(() => store.attach('s1', { id: 'sw-a', kind: 'local', path: localKey(dir, 'proj') }))
   assert.equal(store.listFor('s1').length, 1)
 })

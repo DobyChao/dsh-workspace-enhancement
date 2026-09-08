@@ -317,14 +317,16 @@ test('rename: the placeholder root is dsw-routes', () => {
 })
 
 test('rename: new dsw-routes placeholders route to the registry connection', () => {
-  const parsed = parseSshTargetKey(`${sshRoutesRoot()}\\c1\\home\\uuz`)
+  // Build with `join`: a hardcoded `\\` produced a single filename on POSIX
+  // (CI runs ubuntu + windows), so the placeholder never parsed there.
+  const parsed = parseSshTargetKey(join(sshRoutesRoot(), 'c1', 'home', 'uuz'))
   assert.equal(parsed.connectionId, 'c1')
   assert.equal(parsed.path, '/home/uuz')
 })
 
 test('rename: legacy dsh-ssh-routes placeholders keep routing (existing session cwd)', () => {
-  const legacy = `${sshRoutesRoot().replace(/[\\/]dsw-routes$/u, `${sep}dsh-ssh-routes`)}\\c1\\home\\uuz`
-  const parsed = parseSshTargetKey(legacy)
+  const legacyRoot = sshRoutesRoot().replace(/[\\/]dsw-routes$/u, `${sep}dsh-ssh-routes`)
+  const parsed = parseSshTargetKey(join(legacyRoot, 'c1', 'home', 'uuz'))
   assert.ok(parsed !== null)
   assert.equal(parsed.connectionId, 'c1')
   assert.equal(parsed.path, '/home/uuz')

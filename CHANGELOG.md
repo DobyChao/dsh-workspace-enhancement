@@ -13,6 +13,7 @@
 
 ### 修复
 
+- **副工作区只读门在 junction / subst / 8.3 短路径下静默失效**（`src/session-workspaces.ts`，`ADR-0013`）：store 用词法 `resolve()` 存 rootKey，而 `ctx.fs` 的本地后端交给门禁的是 realpath 形状的 targetKey —— 同一目录存在两种拼写时前缀匹配落空，写操作被放行且无任何报错。本地根键改为"最近存在祖先的 realpath + 词法尾段"规范化，持久化加载时自动愈合旧记录；新增 junction 回归用例。
 - **设置页用户名输入框溢出卡片**（`src/client/machine-form.tsx`）：共享 `inputStyle` 只有 `flex: 1`，缺 `minWidth: 0`——flex 项的 `min-width: auto` 会退回输入框固有宽度（约 169px），在 1440px 视口下用户名输入框越出卡片 13px。补 `minWidth: 0` + `boxSizing: border-box`。
 - **`test/mixed-install.test.ts` t6 静默失败**：`@deepseek-ai/dsh-session` 0.1.2-rc.1 移除了 `Session.events`（改为 `ownEvents()` / `snapshotEvents()`），断言自 2026-09-08 起失败而无人察觉（无 CI）。改用 `ownEvents()`。
 - **测试污染仓库根目录**：`mixed-install` 的写入探针改为私有临时目录，不再每次 `npm test` 生成 `smoke-install.txt`。

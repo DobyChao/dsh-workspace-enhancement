@@ -83,3 +83,45 @@ dsh --profile <scratch> --dump-config   # 检查 bundle 行、patch 行、工具
 - 远端主机需装 `pwsh`（PowerShell 工具）与 `ripgrep`（glob）；终端（bash）开箱即用。
 - 本机 Playwright 浏览器二进制在 `%LOCALAPPDATA%\ms-playwright`；`@playwright/test` 是 devDependency。
 - Node ≥ 22.8（`--experimental-test-isolation` 与内置 TS transform 的最低要求）。
+
+## 7. 跨平台与 CI 矩阵
+
+CI 跑三个组合：**ubuntu 22 / ubuntu 24 / windows 22**。Windows 是真实开发与部署平台
+（占位路径解析、DPAPI 钥匙串、PowerShell 审计用例只在那里存在），ubuntu 是跨平台正确性检查。
+
+平台相关的测试写法（踩过坑，务必遵守）：
+
+| 情况 | 写法 |
+|---|---|
+| 断言依赖 win32 语义（盘符、裸 POSIX 占位拼写、大小写不敏感） | 包在 `if (process.platform === 'win32') { … }` 里，或早期 `return` |
+| 需要真实 PowerShell 的用例（`AUDIT-TC04/05/06/12` 的 spawn） | 用 `shellTest`（非 win32 或无 shell 时自动 skip），**不要**在模块顶层 `throw` |
+| 拼接占位路径 | 用 `join()` / `sep`，**不要写死 `\\`**——在 POSIX 上那是文件名的一部分 |
+
+> 注意：GitHub 的 ubuntu runner **自带 pwsh**，所以「POSIX 上没有 PowerShell」不能当作跳过条件；
+> 判据是 `process.platform === 'win32'`（这些用例复现的是 Windows 部署路径的命令文本语义）。
+
+> 历史教训：`AUDIT` 文件在模块顶层解析 PowerShell 并抛错，导致整个文件在 Linux 上加载失败
+> （连不需要 shell 的门禁用例也一起死）；两处硬编码 `\\` 让占位路径在 Linux 上永远解析不出。
+> 这批问题在第一次 Linux CI 运行中全部暴露。
+
+**另一类只在特定机器上出现的坑：路径拼写**。同一目录可能有多种拼写（NTFS junction、
+`subst` 虚拟盘、Windows 8.3 短名如 `RUNNER~1`）。凡是「存下来的路径」与「运行时算出的路径」
+做比较的地方，都必须走同一个规范化函数；测试里的期望也要用同一个函数构造，**不要直接和
+`resolve()` 比**——否则测试只在"词法 == realpath"的机器上偶然通过。
+本机复现这类问题的办法：把 `%TEMP%` 指向一个 junction 再跑测试。
+
+```powershell
+New-Item -ItemType Directory -Force 'D:\a\longtarget12345'
+New-Item -ItemType Junction -Path 'D:\a\j' -Target 'D:\a\longtarget12345'
+$env:TEMP='D:\a\j'; $env:TMP='D:\a\j'; npm test
+```
+
+> 这条路径正是 `FIX-5`（只读门静默失效）的发现方式：CI 的 windows runner 的 `%TEMP%`
+> 就是短名/junction 形状，本机全绿而 CI 全红。
+
+**本地验 Linux**：机器上有 WSL 时，push 前先跑 `scripts/verify-linux.sh`
+（复制工作树到 WSL 原生盘 → `npm ci` → 与 CI 相同的全套命令；不碰 Windows 工作树）：
+
+```powershell
+wsl -e bash -lc "bash /mnt/d/ZCodeProject/dsh-workspace-enhancement/scripts/verify-linux.sh"
+```

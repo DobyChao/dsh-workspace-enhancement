@@ -11,7 +11,7 @@
  * DSH sandbox piped stdio fails with EPERM, file redirection does not.
  */
 import { spawnSync } from 'node:child_process'
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -49,10 +49,23 @@ const check = (name, ok, detail = '') => {
   if (!ok) failures.push(name)
 }
 
-function npmCli() {
-  if (process.env.npm_execpath) return process.env.npm_execpath
-  const candidate = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-  return candidate
+/**
+ * Resolve how to run `npm pack`.
+ *
+ * `npm_execpath` is set when this script runs under `npm run check` (CI and the
+ * normal path). Running the script directly (`node scripts/pack-smoke.mjs`) has
+ * no such variable, so fall back to the CLI next to the running node, then to
+ * `npm` on PATH.
+ */
+function npmInvocation() {
+  const execpath = process.env.npm_execpath
+  if (execpath !== undefined && execpath !== '' && existsSync(execpath)) {
+    return { command: process.execPath, args: [execpath], shell: false }
+  }
+  const beside = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  if (existsSync(beside)) return { command: process.execPath, args: [beside], shell: false }
+  const isWindows = process.platform === 'win32'
+  return { command: isWindows ? 'npm.cmd' : 'npm', args: [], shell: isWindows }
 }
 
 const work = mkdtempSync(join(tmpdir(), 'dsh-pack-smoke-'))
@@ -62,8 +75,10 @@ const outFd = openSync(outPath, 'w')
 const errFd = openSync(errPath, 'w')
 let result
 try {
-  result = spawnSync(process.execPath, [npmCli(), 'pack', '--dry-run', '--json'], {
+  const npm = npmInvocation()
+  result = spawnSync(npm.command, [...npm.args, 'pack', '--dry-run', '--json'], {
     cwd: ROOT,
+    shell: npm.shell,
     stdio: ['ignore', outFd, errFd],
   })
 } finally {

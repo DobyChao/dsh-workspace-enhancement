@@ -89,14 +89,28 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 - **i18n**：所有面向用户/模型的文案进 `src/locale/`（命名空间 `dsw`），禁止硬编码（闸门会拦）。
 - **测试**：逻辑放 `.ts`，`.tsx` 只做视图（否则沙箱内覆盖不到）；见 `docs/testing.md`。
 
-## 7. 一轮的工作流
+## 7. 一轮的工作流（短分支 + PR）
+
+**分支模型**：`main` 只接受经过 CI 的提交；改动走短分支 + PR，**squash merge** 保持线性历史
+（当前全历史 0 个 merge 提交，不要破坏它）。
 
 1. 在 `docs/backlog.md` 加行（ID + `todo`），写清目标与验收标准。
-2. 状态改 `doing`，拉短分支 `feat/<id>-slug` / `fix/<id>-slug`。
+2. 状态改 `doing`，从 `main` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. 小步提交，Conventional Commits，尾行 `Refs: <ID>`。
 4. 验证：`npm run check`（或沙箱内 `check:static` + `typecheck` + `test:agent`）。
-5. 开 PR（模板即验收清单）；涉及 UI 附 `docs/uat/` 脚本。
+5. **代理到此为止（不 push）**。仓库所有者执行：
+
+   ```powershell
+   git push -u origin <branch>
+   gh pr create --fill            # 模板里的勾选项就是验收清单
+   gh pr checks --watch           # 等 CI：ubuntu 22/24 + windows 22
+   gh pr merge --squash --delete-branch
+   ```
+
 6. 合并后：状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
+
+> **例外**：错别字、一行文案、纯注释这类不可能改变行为的改动，可直接提交到 `main`——
+> 但 `npm run check` 不能跳。UI 改动在 PR 里附 `docs/uat/` 脚本。
 
 ## 8. 接手三分钟
 

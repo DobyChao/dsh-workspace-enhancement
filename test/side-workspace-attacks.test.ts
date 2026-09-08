@@ -93,8 +93,12 @@ const STDIO = {
   stderr: { maxBytes: 8192, spill: { maxBytes: 8192 } },
 } as const
 
-/** 解析审计用的 PowerShell 可执行文件（pwsh 7 优先，回退系统 5.1；可用环境变量覆盖）。 */
-function auditShell(): string {
+/**
+ * 解析审计用的 PowerShell 可执行文件（pwsh 7 优先，回退系统 5.1；可用环境变量覆盖）。
+ * 找不到时返回 undefined —— **不要在模块顶层抛错**：那会让整个文件在 POSIX CI 上
+ * 加载失败（G1 门禁用例本来无需 shell 也能跑）。
+ */
+function findAuditShell(): string | undefined {
   const override = process.env.DSW_AUDIT_SHELL
   if (override !== undefined && override !== '') return override
   const candidates = [
@@ -102,11 +106,27 @@ function auditShell(): string {
     'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
   ]
   const found = candidates.find((candidate) => existsSync(candidate))
-  if (found === undefined) throw new Error('no PowerShell executable found for audit spawn cases')
-  return found
+  if (found !== undefined) return found
+  // A POSIX box (or a Windows box with pwsh only on PATH) may still have one.
+  const names = process.platform === 'win32'
+    ? ['pwsh.exe', 'powershell.exe']
+    : ['pwsh', 'powershell']
+  for (const dir of (process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':')) {
+    for (const name of names) {
+      const candidate = dir === '' ? name : join(dir, name)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+  return undefined
 }
 
-const SHELL = auditShell()
+const SHELL = findAuditShell()
+/**
+ * G2/G3 的 spawn 用例复现的是**Windows 部署路径**（`pwsh` 工具的命令文本、反斜杠相对
+ * 路径、DACL 语义）。POSIX 上即使装了 pwsh 也语义不同 —— 跳过并说明原因，而不是让整个
+ * 文件崩掉。Windows（本机 + CI 的 windows job）会照常执行。
+ */
+const shellTest = process.platform === 'win32' && SHELL !== undefined ? test : test.skip
 
 /** 经混合门面真实 spawn 一个 PowerShell（对齐官方 pwsh 工具的调用形态）。 */
 async function runShell(
@@ -114,6 +134,7 @@ async function runShell(
   cwd: string,
   command: string,
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+  if (SHELL === undefined) throw new Error('audit spawn case ran without a PowerShell executable')
   const handle: SubprocessHandle = subprocess.spawn({
     argv: [SHELL, '-NoProfile', '-Command', command],
     cwd,
@@ -177,6 +198,10 @@ test('AUDIT-TC07 (control): reads from fs:r side roots stay allowed (by design)'
 })
 
 test('AUDIT-TC08: case/separator-normalized path into fs:r root is still rejected (matcher holds)', async () => {
+  // win32-only property: on a case-insensitive filesystem a differently-cased
+  // spelling reaches the SAME file, so the gate must still match. On POSIX a
+  // case change is simply a different (non-existent) path.
+  if (process.platform !== 'win32') return
   const sneaky = A.toLowerCase().replace(/\\/g, '/') + '/attack-tc08.txt'
   const target = await danger.fs.resolve(sneaky, { cwd: MAIN })
   await assert.rejects(
@@ -227,7 +252,7 @@ test('AUDIT-TC11: spawnTerminal is gated by the same exec check (PTY path)', asy
 
 /* ------------------------------------------------- G2 已知绕过路径 --------- */
 
-test('AUDIT-TC04 (KNOWN BYPASS): a MAIN-workdir pwsh command writes an ABSOLUTE path into fs:r+exec:off root', async () => {
+shellTest('AUDIT-TC04 (KNOWN BYPASS): a MAIN-workdir pwsh command writes an ABSOLUTE path into fs:r+exec:off root', async () => {
   const outcome = await runShell(
     danger.subprocess,
     MAIN,
@@ -238,13 +263,13 @@ test('AUDIT-TC04 (KNOWN BYPASS): a MAIN-workdir pwsh command writes an ABSOLUTE 
   assert.equal(existsSync(join(A, 'attack-tc04.txt')), true, 'BYPASS: write landed in a read-only workspace')
 })
 
-test('AUDIT-TC05 (KNOWN BYPASS, CONTEXT §7-⑧): workdir INSIDE fs:r+exec:on root lets the command write relatively', async () => {
+shellTest('AUDIT-TC05 (KNOWN BYPASS, CONTEXT §7-⑧): workdir INSIDE fs:r+exec:on root lets the command write relatively', async () => {
   const outcome = await runShell(danger.subprocess, B, `Set-Content -LiteralPath '.\\attack-tc05.txt' -Value 'tc05-bypass'`)
   assert.equal(outcome.exitCode, 0, `command must succeed, stderr: ${outcome.stderr}`)
   assert.equal(existsSync(join(B, 'attack-tc05.txt')), true, 'BYPASS: r+on combo is not read-only against shells')
 })
 
-test('AUDIT-TC06 (KNOWN BYPASS): a MAIN-workdir command DELETES the fs:r root canary (no integrity protection)', async () => {
+shellTest('AUDIT-TC06 (KNOWN BYPASS): a MAIN-workdir command DELETES the fs:r root canary (no integrity protection)', async () => {
   assert.equal(existsSync(join(A, 'canary.txt')), true, 'precondition: canary present')
   const outcome = await runShell(danger.subprocess, MAIN, `Remove-Item -LiteralPath '${join(A, 'canary.txt')}' -Force`)
   assert.equal(outcome.exitCode, 0, `command must succeed, stderr: ${outcome.stderr}`)
@@ -253,7 +278,7 @@ test('AUDIT-TC06 (KNOWN BYPASS): a MAIN-workdir command DELETES the fs:r root ca
 
 /* ------------------------------------------------- G3 防纵深探测 ----------- */
 
-test('AUDIT-TC12 (defense-in-depth): under workspace-write the RUNTIME still adds no fence for command-text writes', async () => {
+shellTest('AUDIT-TC12 (defense-in-depth): under workspace-write the RUNTIME still adds no fence for command-text writes', async () => {
   const low = await wired({ defaultMode: 'workspace-write', workspaceRoot: MAIN })
   // fs 门依旧先于沙箱策略生效（gate-first）：
   const target = await low.fs.resolve(join(A, 'attack-tc12-fs.txt'), { cwd: MAIN })
