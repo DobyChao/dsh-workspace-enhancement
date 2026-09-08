@@ -291,7 +291,12 @@ interface FieldErrors {
 
 /** Shared inline styles (settings-page vocabulary; used by both shells). */
 const inputStyle: CSSProperties = {
-  flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(128,128,128,0.35)',
+  // `minWidth: 0` is load-bearing: a flex item defaults to `min-width: auto`,
+  // which for an <input> is its intrinsic width (~169px). Without it the
+  // Username field refuses to shrink and pushes ~13px past the card edge at a
+  // 1440px viewport (E2E-02 / E2E-04 regression guards).
+  flex: 1, minWidth: 0, boxSizing: 'border-box',
+  padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(128,128,128,0.35)',
   background: 'rgba(128,128,128,0.08)', color: 'inherit', outline: 'none', fontSize: 13,
 }
 const inputErrorStyle: CSSProperties = { borderColor: '#e06c75' }

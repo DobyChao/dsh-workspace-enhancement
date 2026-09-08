@@ -8,17 +8,23 @@
  */
 
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { installMixedProviders } from '../src/plugin.ts'
 import { MixedFileSystem, MixedSubprocessRuntime } from '../src/mixed.ts'
 
 test('installMixedProviders: ctx.subprocess/ctx.fs resolve to the mixed facades (wire mechanism)', async () => {
+  // Write probe goes to a private temp workspace: a repository-root write left
+  // a `smoke-install.txt` artifact behind on every `npm test` run.
+  const workspace = mkdtempSync(join(tmpdir(), 'dsw-mixed-install-'))
   const ctx = new Context()
   await ctx.plugin({ apply(c) {
     c.provide('sandboxPolicy', {
       defaultMode: 'danger-full-access',
-      resolve: () => ({ mode: 'danger-full-access', workspaceRoot: process.cwd() }),
+      resolve: () => ({ mode: 'danger-full-access', workspaceRoot: workspace }),
     })
   } })
   installMixedProviders(ctx)
@@ -35,7 +41,7 @@ test('installMixedProviders: ctx.subprocess/ctx.fs resolve to the mixed facades 
   // t6: a LOCAL write through the facade reaches the sandboxed backend's
   // inject contract (its checkedTarget accesses `this.ctx.sandboxPolicy`
   // when the tool passes no per-call policy).
-  const target = await fs.resolve('smoke-install.txt', { cwd: process.cwd() })
+  const target = await fs.resolve('mixed-install-probe.txt', { cwd: workspace })
   const outcome = await fs.writeText(target, 'ok', undefined, undefined, undefined)
   assert.equal((outcome as { version?: unknown }).version !== undefined, true)
 })
@@ -65,6 +71,9 @@ test('t6: remote sessions get a forced danger-full-access sandbox override (sess
     }
     return undefined
   }
-  assert.equal(modeOf(remote.events), 'danger-full-access', 'remote session must be forced to full')
-  assert.equal(modeOf(local.events), undefined, 'local session must keep no override')
+  // dsh-session 0.1.2-rc.1 replaced the old `session.events` array with the
+  // `ownEvents()` accessor (snapshotEvents/ownEvents). Keep the assertion on the
+  // live event log this session owns.
+  assert.equal(modeOf(remote.ownEvents()), 'danger-full-access', 'remote session must be forced to full')
+  assert.equal(modeOf(local.ownEvents()), undefined, 'local session must keep no override')
 })
