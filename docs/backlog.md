@@ -31,6 +31,8 @@
 | PUB-1 | 发布 0.1.2（依赖对齐 + i18n） | todo | P1 | 用户 2FA 执行；本地已就绪 |
 | PUB-2 | 3080 换装 0.1.2 + 重启 | todo | P1 | 重启由用户执行（`scripts/restart-3080.ps1`） |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards 语义 |
+| REQ-I6 | 系统提示词英文化 + 按工作区状态按需注入 | todo | P2 | 用户 2026-09-09 提出（原话「bug2」）。① **英文化**：model-facing 文案统一英文、不随 UI 语言切换——`prompt.remote.emphasis`/`prompt.side.*`/`prompt.env.missing`（`src/tools.ts` 的 `sw-remote` section）与 `prompt.section.swExec`、`prompt.section.win32Bash`（`src/exec-tools.ts`）；② **按需注入**：无远程事实、无副工作区时 `tool:sw-exec`/`tool:bash` 两段零注入。验收：本地会话系统提示不出现本插件文案；远程会话文案全英文且仅在远程事实成立时出现；`npm run check` 绿。实现时需同步闸门词典规则并补一条 ADR（决策：model-facing 文案不入 i18n） |
+| UX-1 | 远程会话 composer 权限预设显示 `Custom` | todo | P2 | 用户 2026-09-09 复现（新建远程工作区会话，权限显示 `Custom`）；推荐方案 A（部署预制表补 `remote-full={sandbox:full, approval:ask}`）；改 `cordis.patch.yml` 需 lab 验证，代理只产出片段不碰产品 profile |
 | REQ-A5 | 顺手清理（旧 `dsh-ssh-routes/` 占位树、`$DSH_HOME` 归档盘点） | todo | P3 | 确认无引用后人工清理 |
 | REQ-I5 | 远期：vscode-server 式「把部分 DSH 能力部署到远端」 | todo | P4 | 愿景备忘，未排期 |
 
@@ -41,7 +43,6 @@
 | SEC-1 | 副工作区 `fs:只读 + exec:开` 可被 `workdir` 命令绕写 | blocked | P1 | 待用户拍板；候选 a 提示强化 / b 门层拒绝该组合 / c UI 联动 / d 文档边界。见 `docs/decisions/ADR-0012` |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 契约与可粘贴配置已入库（`docs/agents.md`）；**需仓库所有者**把 `profiles:` 合入宿主组合并重启（代理不碰产品 profile） |
 | SEC-2 | 主 workdir 命令可写/删只读副工作区（命令面无围栏） | blocked | P2 | 同上，属 SSH 固有 + 沙箱档位边界 |
-| UX-1 | 远程会话 composer 权限预设显示 `Custom` | blocked | P3 | 推荐方案 A（部署预制表补 `remote-full={sandbox:full, approval:ask}`）；改 `cordis.patch.yml` 需 lab 验证 |
 | UX-2 | 副工作区面板「浏览」输入框去留 | blocked | P3 | 等用户实际使用几天后再定 |
 | BUG-1 | 用户截图「设置页顶部空白边框条」lab 未复现 | blocked | P3 | 需用户环境指纹（浏览器/视口/缩放/主题/语言）才能复现 |
 
