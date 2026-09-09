@@ -1,0 +1,51 @@
+name: Release
+
+# Publishes to npm with OIDC trusted publishing: the npm CLI exchanges this
+# workflow's GitHub OIDC token for a short-lived publish credential, so there is
+# no NPM_TOKEN secret and no interactive 2FA / passkey anywhere in the loop.
+#
+# One-time setup (repository owner, on npmjs.com): package -> Settings ->
+# Trusted Publisher -> GitHub Actions, with
+#   owner      DobyChao
+#   repository dsh-workspace-enhancement
+#   workflow   release.yml
+#
+# Cutting a release then means: bump the version in a merged PR, then
+#   git tag vX.Y.Z && git push origin vX.Y.Z
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: The npm CLI must support trusted publishing (>= 11.5.1)
+        run: |
+          npm --version
+          node -e "const [maj, min] = require('node:child_process').execSync('npm --version').toString().trim().split('.').map(Number); if (maj < 11 || (maj === 11 && min < 5)) { console.error('npm >= 11.5.1 is required for trusted publishing'); process.exit(1) }"
+
+      - name: The tag must match package.json
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "tag=$GITHUB_REF_NAME package.json=$PKG"
+          [ "$PKG" = "$TAG" ] || { echo "::error::tag $GITHUB_REF_NAME does not match the package.json version $PKG"; exit 1; }
+
+      - run: npm ci
+
+      - name: Quality gate (npm publish also re-runs prepublishOnly)
+        run: npm run check
+
+      - run: npm publish --access public

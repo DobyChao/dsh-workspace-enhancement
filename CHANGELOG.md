@@ -2,9 +2,33 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
-## [0.1.2](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-31)
+## [0.1.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-09)
 
-依赖对齐修复与运行时国际化（R6 I18N）：客户端 UI、宿主「远程认知」系统提示与 `sw_*` 工具面三面全量双语（zh/en）。
+依赖对齐发布 + 模型提示词英文化 + 带图请求修复。
+
+### 新增
+
+- **模型提示词英文化与按需注入（REQ-I6）**：model-facing 文案统一英文、不随 UI 语言切换（`prompt.remote.emphasis` / `prompt.side.*` / `prompt.env.missing` / `prompt.section.swExec` / `prompt.section.win32Bash`），且只在会话确有远程事实或副工作区时注入——本地会话的系统提示不再出现本插件文案；词典删 12 键（340→328，zh/en 仍严格相等）。决策见 `ADR-0014`。
+
+### 修复
+
+- **带图请求全部变成 `TRANSPORT`（BUG-2）**：`ctx.fs` 门面 `MixedFileSystem` 只实现了 `dsh-fs` 接缝的 12 个方法，缺第 13 个 `processPathFromHostPath`——图片附件解析正是走 `ctx.get("fs")?.processPathFromHostPath(hostPath)`，贴图必现 `TypeError` 并被适配器包成 `LlmError(TRANSPORT)`（请求根本没出网）。补齐该方法并转发 local 后端（远程世界不共享宿主文件），另加反射式契约用例锁定上游 13 个方法全集，删任一方法即红。
+- **测试套件里的 Linux 假设（PR #3）**：新增契约用例用裸 POSIX 路径冒充远程 cwd（`worldOfCwd` 的 `/…`→remote 判定只对 win32 生效），Ubuntu 矩阵红、Windows 绿；改用 `sshRoutesRoot()`。
+- **本地 Linux 复验脚本在 Windows 检出下不可执行（FIX-7）**：缺 `.gitattributes` 导致 `scripts/*.sh` 被检出为 CRLF，WSL 里 `set -euo pipefail` 直接报错；补 `*.sh text eol=lf`，并把 WSL 复验写进 push 前必做（`AGENTS.md`）。
+- **发布物依赖形态（ADR-0009）**：0.1.2 的 npm 产物仍是旧的 `dependencies` 形态（13 个 `@deepseek-ai/*` 落在 dependencies），本版起 `dependencies` 仅 `ssh2`、宿主共享包全部走 `peerDependencies`（rc 通道）。
+
+### 质量
+
+- 单测 **259 用例**（`npm test`，CI 权威：ubuntu 22/24 + windows 22 矩阵）；typecheck 0 错误；静态闸门 16 项；`npm pack` 冒烟通过。
+- 新增 WSL Linux 全量复验通道（`scripts/verify-linux.sh`），push 前必跑。
+- 发布改用 **npm Trusted Publishing（OIDC）**：推 `v*` tag 由 GitHub Actions 发布并生成 provenance，不再需要本地 `npm login` 与通行密钥。
+
+### 基建
+
+- 默认分支 `main` → `master`，并加分支保护（必需 CI 检查、禁强推、禁删除）。
+
+## [0.1.2](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-08-31)
+（R6 I18N）：客户端 UI、宿主「远程认知」系统提示与 `sw_*` 工具面三面全量双语（zh/en）。
 
 ### 新增
 

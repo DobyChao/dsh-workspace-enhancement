@@ -51,7 +51,15 @@
 
 ## 3. 发布清单
 
-发布由仓库所有者执行（npm 2FA）。发版前逐条确认：
+发布走 **npm Trusted Publishing（OIDC）**：本地不需要 `npm login`、不需要通行密钥。一次性配置在 npmjs.com（包 → Settings → Trusted Publisher → GitHub Actions：owner `DobyChao`、仓库 `dsh-workspace-enhancement`、工作流文件名 `release.yml`）；之后每次发版只推 tag：
+
+```powershell
+git switch master && git pull --ff-only
+git tag vX.Y.Z
+git push origin vX.Y.Z      # 触发 .github/workflows/release.yml
+```
+
+发版前逐条确认：
 
 - [ ] `npm run check` 全绿（本地与 CI 都跑过；PR 上 CI 绿才算）
 - [ ] 待发布的改动已通过 PR **squash 合并**到 `master`
@@ -60,7 +68,7 @@
 - [ ] `npm run status` 已刷新，`docs/status.md` 与 package.json 版本一致
 - [ ] `docs/rounds/` 有本轮报告，`docs/backlog.md` 状态已更新
 - [ ] 工作树干净、`master` 与 `origin/master` 同步
-- [ ] 打 tag 放在**发布成功之后**：`git tag vX.Y.Z && git push origin vX.Y.Z`
+- [ ] tag 打在版本提交合并之后：`git tag vX.Y.Z && git push origin vX.Y.Z`（触发 `release.yml` 自动发布）
 - [ ] 发布后在 `docs/compatibility.md` 记录实际发布版本
 
 > **`v0.1.2` tag 待修正**：它当前指向 `d30dc57`（准备发布时的中间提交，从未发布，之后又落了提交）。

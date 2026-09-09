@@ -1,18 +1,18 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 09:43 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 09:53 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.1.2` |
+| package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `feat/REQ-I6-model-prompts-english` / `9df367b` |
-| HEAD 提交 | `docs(uat): add the R13 acceptance script for the English on-demand prompts` (2026-09-09) |
-| 与远端 | 6 ahead / 0 behind origin/main |
+| 分支 / HEAD | `chore/release-0.1.3` / `8dea759` |
+| HEAD 提交 | `feat(prompt): make model-facing prompts English and inject them on demand (#5)` (2026-09-09) |
+| 与远端 | 1 ahead / 0 behind origin/main |
 
 ## 质量
 
@@ -28,10 +28,10 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 10 |
-| `doing` | 0 |
+| `todo` | 8 |
+| `doing` | 1 |
 | `blocked` | 7 |
-| `done` | 21 |
+| `done` | 22 |
 | `shipped` | 4 |
 | `dropped` | 5 |
 
