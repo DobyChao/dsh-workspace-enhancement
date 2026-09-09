@@ -2,20 +2,38 @@ name: Upstream drift
 
 # Sentinel for "the host moved and nobody told us".
 #
-# @deepseek-ai/dsh shipped 16 versions in 28 days with no changelog and no public
-# issue tracker (has_issues=false), so this job is the only notification channel:
-# it reinstalls the newest published seam packages and runs the gate against them.
+# @deepseek-ai/dsh ships fast with no changelog and no public issue tracker, so
+# this job is the notification channel: it reinstalls the seam packages from a
+# published dist-tag and runs the gate against them.
 #
-# A red run does NOT mean "fix it now" — it means "look at it now". The job name
-# and the version printout say which family moved. See docs/compatibility.md.
+# Two channels are probed on purpose:
+#   next  — the rc family our peers anchor (^0.1.2-rc.1). Red means the family
+#           we already claim to support moved: look now.
+#   alpha — the NEXT generation (0.1.5-alpha.x at the time of writing; it already
+#           pulls packages we do not depend on, e.g. @deepseek-ai/dsh-brand and
+#           @deepseek-ai/dsh-invariants). Alpha is where seam breaks land first;
+#           when alpha content is promoted to rc our plugin must already be
+#           adapted. A red alpha run is an EARLY WARNING with a longer fuse, not
+#           a merge blocker — but it opens/updates an issue so it cannot be
+#           missed. See docs/compatibility.md.
 on:
   schedule:
-    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+    - cron: '0 3 * * 1' # Monday 03:00 UTC — next + alpha
+    - cron: '0 3 * * 4' # Thursday 03:00 UTC — alpha gets its own slot
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   drift:
+    name: drift (${{ matrix.channel }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [next, alpha]
     steps:
       - uses: actions/checkout@v4
 
@@ -29,22 +47,77 @@ jobs:
 
       - name: Print pinned family
         run: |
-          node -e "const p=require('./package.json');const rows=Object.entries({...p.peerDependencies,...p.devDependencies}).filter(([n])=>n.startsWith('@deepseek-ai/dsh-')).map(([n,v])=>n+'@'+v);console.log(rows.join('\n'))"
+          node -e "const p=require('./package.json');console.log(Object.entries({...p.peerDependencies,...p.devDependencies}).filter(([n])=>n.startsWith('@deepseek-ai/dsh-')).map(([n,v])=>n+'@'+v).join('\n'))"
 
-      - name: Upgrade to the newest published seam packages
+      - name: Install the '${{ matrix.channel }}' seam family
+        id: family
+        # --legacy-peer-deps: the probe deliberately installs a family that our
+        # peer ranges do not satisfy yet; npm would otherwise refuse with ERESOLVE.
         run: |
-          PKGS=$(node -e "const p=require('./package.json');console.log(Object.keys(p.peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")
-          npm install --no-save $PKGS 2>&1 | tail -20
+          PKGS=""
+          for name in $(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))"); do
+            v="$(npm view "$name@${{ matrix.channel }}" version 2>/dev/null | tail -1)"
+            if [ -n "$v" ]; then
+              PKGS="$PKGS $name@$v"
+            else
+              echo "::warning::$name has no '${{ matrix.channel }}' tag — skipped"
+            fi
+          done
+          echo "family=$PKGS" >> "$GITHUB_OUTPUT"
+          echo "installing:$PKGS"
+          npm install --no-save --legacy-peer-deps $PKGS 2>&1 | tail -25
 
       - name: Print resolved family
         run: |
-          node -e "const fs=require('fs');for(const n of Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-'))){try{console.log(n+'@'+JSON.parse(fs.readFileSync('node_modules/'+n+'/package.json','utf8')).version)}catch(e){console.log(n+'@MISSING')}}"
+          node -e "for (const n of Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-'))) { try { console.log('  '+n+'@'+require('./node_modules/'+n+'/package.json').version) } catch { console.log('  '+n+'@MISSING') } }"
 
-      - name: Typecheck against the newest host
+      - name: Typecheck against the '${{ matrix.channel }}' host
         run: npm run typecheck
 
-      - name: Unit suite against the newest host
+      - name: Unit suite against the '${{ matrix.channel }}' host
         run: npm test
 
       - name: Family / gate check (this is the drift signal)
         run: npm run check:static
+
+      - name: Open or update the drift issue
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          CHANNEL: ${{ matrix.channel }}
+          FAMILY: ${{ steps.family.outputs.family }}
+        with:
+          script: |
+            const channel = process.env.CHANNEL
+            const title = `[upstream drift] the '${channel}' seam family moved`
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const body = [
+              `The \`${channel}\` probe failed on ${new Date().toISOString().slice(0, 10)}.`,
+              '',
+              `Run: ${runUrl}`,
+              '',
+              `Resolved family:`,
+              '',
+              '```',
+              process.env.FAMILY || '(see the run log)',
+              '```',
+              '',
+              channel === 'alpha'
+                ? 'This is the EARLY WARNING channel: alpha content will be promoted to rc, so a break here becomes a break we must fix before the next rc bump.'
+                : 'This is the family our peers already anchor — the break is live.',
+              '',
+              'See `docs/compatibility.md`.',
+            ].join('\n')
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100,
+            })
+            const existing = open.find(issue => issue.title === title)
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body,
+              })
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+              })
+            }

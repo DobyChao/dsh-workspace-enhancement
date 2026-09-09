@@ -1,18 +1,18 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 09:53 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 16:34 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.1.3` |
-| npm 已发布版本 | `0.1.2` |
-| 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `chore/release-0.1.3` / `8dea759` |
-| HEAD 提交 | `feat(prompt): make model-facing prompts English and inject them on demand (#5)` (2026-09-09) |
-| 与远端 | 1 ahead / 0 behind origin/main |
+| npm 已发布版本 | `0.1.3` |
+| 最新 tag | `v0.1.3` |
+| 分支 / HEAD | `master` / `66d9576` |
+| HEAD 提交 | `ci(release): gate the publish job behind an owner-approved environment` (2026-09-09) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -29,10 +29,10 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 8 |
-| `doing` | 1 |
+| `doing` | 0 |
 | `blocked` | 7 |
-| `done` | 22 |
-| `shipped` | 4 |
+| `done` | 23 |
+| `shipped` | 5 |
 | `dropped` | 5 |
 
 ## 被挡住 / 待拍板
