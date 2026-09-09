@@ -22,6 +22,7 @@
 | INFRA-6 | 状态看板生成器 `npm run status` | done | P1 | 输出 `docs/status.md`，闸门校验不得过期 |
 | INFRA-7 | UAT 脚本与反馈模板 | done | P1 | `docs/uat/`（含 R6 真实示例） |
 | INFRA-8 | AgentTeams profile 固化（标准轮次角色与 DAG） | todo | P2 | 见 §5 |
+| INFRA-11 | 开发安装（`link:`）的 `lib/` 产物漂移无人拦 | todo | P2 | **实锤（2026-09-09）**：3080 的 profile 以 `link:D:/ZCodeProject/dsh-workspace-enhancement` 装本插件、直接加载 gitignore 的 `lib/`；3080 进程 14:11:22 启动，而 `lib/` 最后构建 11:47:33——**早于 PR #3（BUG-2，15:14）与 PR #5（REQ-I6，17:52）**，即线上跑的是旧产物（重建后 5 个文件变化：`tools.js`/`exec-tools.js`/`dsw.js`/`dsw.en.js`/`client.js`）。**本轮已做**：`scripts/check.mjs` 加「`lib/` 早于 `src/`」**非阻断** WARN（CI 检出无 `lib/` 时跳过，不误红）+ `AGENTS.md` §3 写明「改 `src/` 必须 `npm run build`，否则重启无效」。**待做**：① 升级为阻断（需比 mtime 更稳的信号——构建戳/内容哈希，避免「重建跳过字节相同的产物」造成的假阳性）；② `scripts/restart-3080.ps1` 重启前自动 `npm run build`（根治：重启即生效）。验收：故意改 `src/` 不 build 时提示明确、正常流程不误报 |
 
 ## 2. 已排期（按优先级）
 
