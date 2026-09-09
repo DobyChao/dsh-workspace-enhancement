@@ -40,6 +40,9 @@ import type { ExecOutcome } from './ssh-core.ts'
 import { worldOfCwd } from './mixed.ts'
 import { lookup, type DswKey, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
+import { modelPrompt } from './model-prompts.ts'
+import { hasRemoteWorkspaceContext } from './session-remote-context.ts'
+import type { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
  * Fixed-EN translator — the legacy default of the tool-face pure functions:
@@ -739,8 +742,15 @@ function jobsOf(ctx: Context, tr: TranslateFn = EN_T): BackgroundJobs {
  * @param registry - the machine registry accessor (server id lookup).
  * @param opts - `enableRunInBackground` mirrors the official bash flag
  *   (`?? true`); background requires `ctx.jobs` and errors honestly when absent.
+ *   `sides` is the side-workspace store accessor: REQ-I6 ② uses it (with the
+ *   session cwd route) to decide whether the model-facing section is injected
+ *   at all — a local session without attachments gets zero prompt text.
  */
-export function registerSwExec(ctx: Context, registry: () => SshRegistry, opts: { enableRunInBackground?: boolean } = {}): void {
+export function registerSwExec(
+  ctx: Context,
+  registry: () => SshRegistry,
+  opts: { enableRunInBackground?: boolean; sides?: () => SessionSideWorkspaceStore | undefined } = {},
+): void {
   const backgroundEnabled = opts.enableRunInBackground ?? true
   const locale = hostLocaleOf(ctx)
   const t = locale.t
@@ -841,7 +851,10 @@ export function registerSwExec(ctx: Context, registry: () => SshRegistry, opts: 
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:sw-exec',
     order: 105,
-    text: () => locale.t('prompt.section.swExec'),
+    // REQ-I6: model-facing, ENGLISH ONLY (ADR-0014) and injected only when the
+    // session is in the remote workspace world (remote cwd route or a side
+    // workspace) — a plain local session sees no sw_exec prompt text at all.
+    text: (context) => (hasRemoteWorkspaceContext(context, opts.sides) ? modelPrompt('sectionSwExec') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:sw-exec system prompt section')
 }
@@ -870,12 +883,17 @@ export function resolveWin32BashWorkdir(modelWorkdir: string | undefined, sessio
  * @param registry - reserved: routing is cwd-based; the accessor keeps the
  *   calling convention uniform with `registerSwExec`.
  * @param options - `platform` injectable for tests; `enableRunInBackground`
- *   mirrors the official bash flag (`?? true`).
+ *   mirrors the official bash flag (`?? true`); `sides` is the side-workspace
+ *   store accessor used by the REQ-I6 ② injection decision.
  */
 export function registerWin32Bash(
   ctx: Context,
   registry: () => SshRegistry,
-  options: { platform?: NodeJS.Platform; enableRunInBackground?: boolean } = {},
+  options: {
+    platform?: NodeJS.Platform
+    enableRunInBackground?: boolean
+    sides?: () => SessionSideWorkspaceStore | undefined
+  } = {},
 ): void {
   if ((options.platform ?? process.platform) !== 'win32') return
   const backgroundEnabled = options.enableRunInBackground ?? true
@@ -993,7 +1011,10 @@ export function registerWin32Bash(
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:bash',
     order: 105,
-    text: () => locale.t('prompt.section.win32Bash'),
+    // REQ-I6: model-facing, ENGLISH ONLY (ADR-0014) and injected only for a
+    // remote-context session — a local Windows session gets zero bash prompt
+    // text (the tool itself stays registered and errors honestly if called).
+    text: (context) => (hasRemoteWorkspaceContext(context, options.sides) ? modelPrompt('sectionWin32Bash') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:bash system prompt section')
 }

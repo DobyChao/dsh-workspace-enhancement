@@ -85,6 +85,11 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    ① 部署包 `$DSH_HOME/profiles/web/node_modules/@deepseek-ai/*`；
    ② 全局安装包 `<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/*`；
    ③ 本仓库 `node_modules/@deepseek-ai/*`。找不到就回来问，不要猜服务/槽位名。
+   **被禁的 Inspect 有磁盘等价物**：`<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/`
+   `dsh-cordis-client-runner/lib/client.js`（`CLIENT_SLOT_API` 约 :2135、Service Catalog 约 :1105、
+   Event Catalog 约 :2103），含每个槽位的 registerOptions / ownerProps / standardProps / declaredBy /
+   occupants / replaceRisk / example / source。它是**生成产物**（文件头 `do not edit by hand`），
+   只读引用、不可修改；上游升级后路径与行号需重新核对。详见 `docs/architecture.md` §8.1。
 
 ## 6. 写插件代码 / 改 Cordis 组合前的固定动作
 

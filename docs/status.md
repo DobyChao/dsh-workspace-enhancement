@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 09:34 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 09:43 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,36 +10,38 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `chore/rename-default-branch-to-master` / `13291be` |
-| HEAD 提交 | `fix(mixed-fs): implement processPathFromHostPath for host image paths (#3)` (2026-09-09) |
-| 与远端 | in sync with origin/main |
+| 分支 / HEAD | `feat/REQ-I6-model-prompts-english` / `9df367b` |
+| HEAD 提交 | `docs(uat): add the R13 acceptance script for the English on-demand prompts` (2026-09-09) |
+| 与远端 | 6 ahead / 0 behind origin/main |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 22 |
-| 单测用例（静态计数） | 251 |
+| 单测文件 | 24 |
+| 单测用例（静态计数） | 263 |
 | E2E 场景文件 | 8 |
-| ADR | 13 |
-| 轮次报告 | 13 |
+| ADR | 16 |
+| 轮次报告 | 15 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
+| `todo` | 10 |
 | `doing` | 0 |
-| `blocked` | 5 |
-| `done` | 20 |
-| `shipped` | 3 |
+| `blocked` | 7 |
+| `done` | 21 |
+| `shipped` | 4 |
 | `dropped` | 5 |
 
 ## 被挡住 / 待拍板
 
+- UX-1 — 远程会话 composer 权限预设显示 `Custom`
 - SEC-1 — 副工作区 `fs:只读 + exec:开` 可被 `workdir` 命令绕成
 - INFRA-8 — AgentTeams 标准 profile 注册
-- SEC-2 — 主 workdir 命令可成/删只读副工作区（命令面无围栏）
+- SEC-2 — 主 workdir 命令可写/删只读副工作区（命令面无围栏）
+- SEC-3 — full 沙箱风险确认门按 preset id 判定，`remote-full` 等价 full 却无二次确认
 - UX-2 — 副工作区面板「浏览」输入框去留
 - BUG-1 — 用户截图「设置页顶部空白边框条」lab 未复现
 

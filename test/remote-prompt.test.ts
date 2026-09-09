@@ -96,13 +96,16 @@ test('remotePromptFact: legacy placeholder also composes the fact', () => {
 
 /* ------------------------------------------------------ 3) 强调提示文案 */
 
-test('renderRemotePrompt: the emphasis paragraph carries endpoint, display path, and routing alias', () => {
+test('renderRemotePrompt: the emphasis paragraph is ENGLISH ONLY and carries endpoint, display path, routing alias', () => {
   const fact = remotePromptFact(join(ROOT, 'c1', 'srv', 'work'), machine({ workspace: '/srv/proj' }), BASE)
   assert.ok(fact !== null)
   const text = renderRemotePrompt(fact)
-  assert.ok(text.includes('远程 SSH 工作区'))
+  // REQ-I6 ①: model-facing copy never follows the UI language (ADR-0014).
+  assert.ok(text.includes('remote SSH workspace'))
   assert.ok(text.includes('uuz@c1:/srv/proj'))
   assert.ok(text.includes('dsw-routes\\c1\\…'))
-  assert.ok(text.includes('所有命令与文件操作都真实发生在远程服务器上'))
-  assert.ok(text.includes('POSIX 绝对路径'))
+  assert.ok(text.includes('all commands and file operations truly happen on the remote server'))
+  assert.ok(text.includes('POSIX absolute path'))
+  // The pre-ADR Chinese copy is gone from the model-facing path.
+  assert.ok(!text.includes('远程 SSH 工作区'))
 })

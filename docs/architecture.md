@@ -81,9 +81,9 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 
 ## 4. 模块地图
 
-`src/` 共 40 个文件：顶层 23、`src/client/` 13、`src/locale/` 4。
+`src/` 共 42 个文件：顶层 25、`src/client/` 13、`src/locale/` 4。
 
-### 4.1 宿主（顶层 23）
+### 4.1 宿主（顶层 25）
 
 | 模块 | 职责 | 关键导出 |
 |---|---|---|
@@ -108,6 +108,8 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 | `src/session-workspaces.ts` | 副工作区状态服务 `ctx.sideWorkspaces`：roots/sessions 双映射、最长前缀匹配、CRUD | `SessionSideWorkspaceStore`、`sideWorkspaceOf`、`normalizeSideRootKey`、`loadSideWorkspaces` |
 | `src/web.ts` | `/dsw` RPC 通道（loopback 信任栅栏）与端点派发 | `apply`、`Config`、`WebChannelConfig`、`inject` |
 | `src/tools.ts` | 3 个 `sw_*` 管理工具 + 每会话远程认知提示 section | `registerWorkspaceTools`、`renderRemotePrompt`、`renderSideWorkspaces`、`composeWorkspacePrompt`、`renderRemoteEnvProbe` |
+| `src/model-prompts.ts` | **model-facing 英文文案常量**（系统提示段 + 远端工具箱提示），刻意不入 i18n（ADR-0014） | `MODEL_PROMPTS`、`modelPrompt`、`ModelPromptKey` |
+| `src/session-remote-context.ts` | 每会话工作区事实（cwd / sessionId / 副工作区）与「是否远程世界」判定，供三条提示 section 共用 | `sessionWorkspaceContextOf`、`hasRemoteWorkspaceContext`、`PromptAgentFace` |
 | `src/exec-tools.ts` | `sw_exec`（跨服务器执行）+ win32 宿主 `bash` 接缝 | `registerSwExec`、`registerWin32Bash`、`swExecCore`、`resolveRemoteOs`、`buildShellArgv`、`renderSwExecForeground` |
 | `src/css-modules.d.ts` | CSS Modules 类型声明（构建期内联） | 无运行时导出 |
 
@@ -213,7 +215,8 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
     （异步方法，抛的是 promise rejection）；
   - **exec 门**：`spawn` / `spawnTerminal` 只看 `spec.cwd` 与 `spec.argv[0]`，命中 `exec:'off'` 根 → 抛
     `dsw: execution is disabled for the side workspace "…" (exec: off) …`。
-- 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（`fs` / `exec` 标记；无副工作区 = 零注入）。
+- 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（`fs` / `exec` 标记；无副工作区 = 零注入）；
+  文案是 model-facing 英文常量（`src/model-prompts.ts`，ADR-0014）。
 - RPC：`session.ws.list` / `add` / `update` / `remove`（远程机器先校验存在再落盘）。
 - 语义与边界：只读/禁执行是**启动层**强制，命令文本有意不扫描；已知绕过见 §7 与 ADR-0012。
 
@@ -234,6 +237,10 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 - `tools.ts` 注册三个管理工具：`sw_status`（主机/工作区/连接/主机指纹/后端 + ping + 远端环境自检）、
   `sw_connect`（含 `save:false` 临时连接）、`sw_pick_workspace`（校验存在后设远程工作区）；
   外加系统提示 section `sw-remote`（order 90，按 `context.scope` 反查会话，本地零噪音）。
+- **提示 section 的注入判定（REQ-I6 ②）**：`session-remote-context.ts` 的
+  `hasRemoteWorkspaceContext(context, sides)` = 会话 cwd 解析出远程路由 **或** 该会话有副工作区。
+  `sw-remote`（order 90）按会话事实组合；`tool:sw-exec` / `tool:bash`（order 105）由静态字符串改为
+  `text: context => 判定 ? 文案 : ''`——纯本地会话三段**全部零注入**。
 - `exec-tools.ts` 注册：
   - **`sw_exec`**：在**指定服务器**上执行命令。`server` 接受注册表机器 id 或 `sw_connect save:false` 的临时 id，
     缺省 = 会话主工作区机器，未知 id 报错并列出已知 id；目标 OS 每连接探测一次
@@ -253,8 +260,11 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 - **命名空间必须是 `dsw`**：官方 client 包已注册 `sidebar` / `conversation` / `workspace` /
   `settings` / `settings.locale` / `common` 等，而 `ctx.locale.register` 对重复 (ns, locale) **抛错** ——
   用 `workspace` 会与 `dsh-client-ui-workspace` 直接冲突崩溃。
-- 键命名 `<surface>.<scope>.<item>`，surface ∈ {flow, form, side, settings, status, rpc, prompt, tool, permission}；
+- 键命名 `<surface>.<scope>.<item>`，surface ∈ {flow, form, side, settings, status, rpc, tool, permission}；
   模板参数 `{name}`，不做复数逻辑；禁止字符串拼接键名。
+  > **注（REQ-I6 / ADR-0014）**：`prompt` surface 已废弃并从词典删除——**model-facing 文案（系统提示段、
+  > 远端工具箱提示）统一为英文常量**，放在 `src/model-prompts.ts`，不随 UI 语言切换；词典只保留
+  > 人类面（客户端 UI + 用户能读到的宿主消息/工具错误）。键集因此从 340 降到 328（zh/en 仍严格相等）。
 - 客户端：`ctx.effect(() => ctx.locale.register('dsw', { zh, en }))`；槽位注册带 `locale: 'dsw'` 拿到类型化 `t`；
   非渲染路径用 `ctx.locale.bind('dsw')`；语言解析、`<html lang>` 同步、设置页 Language 行全部交给框架，
   本插件不写 preference、不加语言 UI。
@@ -337,3 +347,41 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
   无拍板日期与处置计划——来源未明确。
 - **各 ADR 被否方案的最终放弃时点**（例如镜像草案、`ws_*` 命名）只有「被某条决策取代」的记录，
   没有单独的撤销日期——来源未明确。
+
+### 8.1 契约侦察的磁盘权威源（`cordis_inspect_*` 的等价物）
+
+`AGENTS.md` §5 红线 7 禁止子代理调用 `cordis_inspect_list` / `cordis_inspect_query`（client 查询依赖
+页面应答，页面不响应会**永久挂起**）。但这两个工具**供模型读取的那份数据本身就在磁盘上**，因此契约
+侦察完全不必碰 Inspect：
+
+| 项 | 事实 |
+|---|---|
+| 路径 | `<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-cordis-client-runner/lib/client.js`（本机实测：只有全局安装树有该包；部署包 `$DSH_HOME/profiles/web/node_modules/` 与本仓库 `node_modules/` 均无） |
+| 包身份 | `@deepseek-ai/dsh-cordis-client-runner`，`@deepseek-ai/dsh` 的直接依赖（同家族 `0.1.2-rc.1`） |
+| 槽位目录 | `CLIENT_SLOT_API`（约 `:2135` 起，至 `:4198`；`SLOT_CATALOG = new Map(...)` 在 `:4199`）——宿主 web bundle 声明的**每一个**槽位 |
+| 服务目录 | Service Catalog，模块头注释在 `:1105`（`//#region lib/types/client/api-catalog.js` 起于 `:1099`） |
+| 事件目录 | Event Catalog，见 `:2103` 的投影注释（同一 `api-catalog` 模块） |
+| 槽位条目字段 | `key` / `kind` / `scope` / `summary` / `doc` / `registerOptions`（name + requirement + type + doc）/ `ownerProps` / `ownerPropsReferences` / `standardProps` / `keyDomain` / `hookContext` / `slotInject` / `declaredBy` / `occupants` / **`replaceRisk`** / `example` / `source`（上游源码路径:行） |
+
+**用途**：给「这个槽位能不能插、插进去会不会遮蔽官方 UI、注册要传哪些 options、组件实收哪些 props」
+一次性答案。`replaceRisk` 是上游自己的判断（`none` = 新 id 追加在既有 entry 旁边；
+`shadows-shipped-ui` = 注册即替换），比自行推断可靠；`example` 直接给出可用的
+`ctx.slots.inject(...)` 骨架；`source` 指回上游 `src/`，可继续深挖。
+
+**与 `cordis_inspect_*` 的关系**：**替代，不是补充**。这份 `client.js` 就是 Inspect 的 Slot / Service /
+Event provider 的**数据源**（文件头注明 `Generated by scripts/gen-cordis-inspect-catalog.ts`），
+所以「以后槽位/服务/事件契约侦察走磁盘，不必碰 Inspect」——两者读的是同一份生成数据，
+磁盘路径只是绕开了那次需要页面应答的 client 往返。
+
+**失效条件**（命中任一条即需重新核对，不可继续引用旧行号）：
+
+1. 上游家族升级（peer 范围 `^0.1.2-rc.1` 变更，见 `docs/compatibility.md` §1）或 `dsh` 升级导致该包换版；
+2. 全局安装树被重装 / `npm root -g` 变化，或该包不再作为 `dsh` 的直接依赖（路径失效）；
+3. 行号漂移——`client.js` 是**生成产物**（文件头 `do not edit by hand`），只能**只读引用**，
+   任何编辑都会被上游的 `verify-cordis-inspect-catalog` 判为过期；
+4. 槽位契约与包内 `.d.ts` 出现分歧时，**以部署包的 `lib/types/**/*.d.ts` 为准**，目录仅用于
+   补 `replaceRisk` / `occupants` / `example` 这类类型文件里没有的信息。
+
+**已用案例**：`docs/decisions/ADR-0016-conversation-panel-tab-slot.md` 用该目录确认
+`conversation.view` 的 `replaceRisk: none`、occupants（`chat` / `trajectory`）与上游注册示例，
+并与 `dsh-client-ui-conversation` 的 `.d.ts` / `client.js` 双向核对。

@@ -306,24 +306,6 @@ export const zh = {
   'status.retryAction.full': '重新检测并尝试连接',
   'status.retryAction.recheck': '重新检测',
 
-  /* ------------------------------------------------------- prompt (host) */
-  'prompt.remote.emphasis':
-    '⚠ 你当前的工作区是**远程 SSH 工作区**：`{endpoint}:{displayPath}`（由本地占位路径 `{placeholderRoot}\\{connectionId}\\…` 路由；你看到的占位路径只是路由别名，**所有命令与文件操作都真实发生在远程服务器上**，工作目录为 POSIX 绝对路径）。',
-  'prompt.side.fs.r': '只读',
-  'prompt.side.fs.rw': '读写',
-  'prompt.side.exec.off': '关',
-  'prompt.side.exec.on': '开',
-  'prompt.side.item': '- 副工作区 **{label}**：`{rootKey}`（fs: {fs} · exec: {exec}）',
-  'prompt.side.heading': '**本会话额外关联的工作区（副目录，模型可直接操作）**：',
-  'prompt.side.note':
-    '注意权限标记：只读（fs: 只读）拒绝写入，禁执行（exec: 关）拒绝在该目录下运行命令；被拒绝的操作请改用有权限的工作区或请用户调整。命令默认在主工作区执行；在其它服务器执行请用 `sw_exec(server, command)`。',
-  'prompt.env.missing':
-    '提示: 远端缺少 {missing} —— 安装请在远端执行（仅供参考，不会自动安装）：rg → sudo apt-get install ripgrep；pwsh → https://aka.ms/powershell',
-  'prompt.section.swExec':
-    'sw_exec 在指定服务器上执行命令；workdir 缺省为该服务器主工作区；检查每个结果的 [exit code: N] 标记，非 0 退出先排查再继续。',
-  'prompt.section.win32Bash':
-    'bash 工具面向远程 Linux 工作区；本地（Windows）会话请用 pwsh。检查每个结果的 [exit code: N] 标记。',
-
   /* ------------------------------------------------ tool: shared fragments */
   'tool.common.noActive': '没有活动的机器——请先用 sw_connect 指定主机。',
   'tool.common.backgroundSentence':
@@ -335,7 +317,6 @@ export const zh = {
     '显示当前远程机器（主机/用户/端口）、连接健康（ping）、当前远程工作区与主机指纹策略/状态。先调用它以了解现状，或在某个 sw_* 调用失败时检查连通性。',
   'tool.sw_status.ping.ok': 'Ping: 正常 — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: 失败 — {detail}',
-  'tool.env.heading': '远程环境：',
   'tool.sw_status.outputs.host': '远程主机：{u}@{h}:{p}{source}',
   'tool.sw_status.outputs.workspace': '当前远程工作区：{ws}',
   'tool.sw_status.outputs.workspaceNone': '当前远程工作区：（无——调用 sw_pick_workspace 设置）',

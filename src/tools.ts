@@ -16,6 +16,8 @@ import type { ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { registerSwExec, registerWin32Bash } from './exec-tools.ts'
 import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf, localizeTool } from './locale/host.ts'
+import { modelPrompt } from './model-prompts.ts'
+import { sessionWorkspaceContextOf } from './session-remote-context.ts'
 import type { SshRegistry, MachineInput } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -29,9 +31,9 @@ const textOutSchema = {
 } as const
 
 /**
- * Fixed-ZH translator — the legacy default of the prompt renderers: their
- * pre-i18n copy was Chinese, and the render tests pin that output. The live
- * section callback passes the host-language translator instead.
+ * Fixed-ZH translator — the baseline compiled into `defineTool` at
+ * registration (the `tool.*` faces keep their per-language dictionary copy;
+ * the model-facing prompt copy of this module does NOT — see ADR-0014).
  */
 const ZH_T: TranslateFn = (key, params) => lookup('zh', key, params)
 
@@ -45,12 +47,11 @@ export interface PromptMachineFace {
 /**
  * Minimal agent face read by the prompt probe: `dsh-agent-loop`'s
  * `ReactLoopAgent` (the per-session scope key) exposes `id` and `session`;
- * only these leaf fields are touched.
+ * only these leaf fields are touched. Re-exported from
+ * `session-remote-context.ts` (the shared home of the per-session prompt
+ * facts, so `exec-tools.ts` needs no import back into this module).
  */
-export interface PromptAgentFace {
-  readonly id: string
-  readonly session?: { readonly header: { readonly cwd?: string; readonly id?: string } }
-}
+export type { PromptAgentFace } from './session-remote-context.ts'
 
 /** The per-session remote-context fact the prompt renders. */
 export interface RemotePromptFact {
@@ -90,9 +91,12 @@ export function remotePromptFact(
   }
 }
 
-/** Render the one emphasis paragraph of the remote-workplace prompt (order 90). */
-export function renderRemotePrompt(fact: RemotePromptFact, tr: TranslateFn = ZH_T): string {
-  return tr('prompt.remote.emphasis', {
+/**
+ * Render the one emphasis paragraph of the remote-workplace prompt (order 90).
+ * ENGLISH ONLY — model-facing copy never follows the UI language (ADR-0014).
+ */
+export function renderRemotePrompt(fact: RemotePromptFact): string {
+  return modelPrompt('remoteEmphasis', {
     endpoint: fact.endpoint,
     displayPath: fact.displayPath,
     placeholderRoot: fact.placeholderRoot,
@@ -100,24 +104,24 @@ export function renderRemotePrompt(fact: RemotePromptFact, tr: TranslateFn = ZH_
   })
 }
 
-/** The permission fact one side workspace renders as. */
+/** The permission fact one side workspace renders as (English, model-facing). */
 export interface SideWorkspacePromptFact {
   label: string
   /** Display root: `ssh://<id>/<path>` for remote, absolute local path otherwise. */
   rootKey: string
-  /** `只读` | `读写` */
+  /** `read-only` | `read-write` */
   fs: string
-  /** `开` | `关` */
+  /** `off` | `on` */
   exec: string
 }
 
 /** Pure prompt projection of one side workspace (leaf fields only). */
-export function sideWorkspacePromptFact(item: SideWorkspaceItem, tr: TranslateFn = ZH_T): SideWorkspacePromptFact {
+export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspacePromptFact {
   return {
     label: item.label,
     rootKey: item.rootKey,
-    fs: item.fs === 'r' ? tr('prompt.side.fs.r') : tr('prompt.side.fs.rw'),
-    exec: item.exec === 'off' ? tr('prompt.side.exec.off') : tr('prompt.side.exec.on'),
+    fs: modelPrompt(item.fs === 'r' ? 'sideFsReadOnly' : 'sideFsReadWrite'),
+    exec: modelPrompt(item.exec === 'off' ? 'sideExecOff' : 'sideExecOn'),
   }
 }
 
@@ -126,32 +130,32 @@ export function sideWorkspacePromptFact(item: SideWorkspaceItem, tr: TranslateFn
  * Empty list → `''` (zero noise for sessions without attachments). The closing
  * sentence states the enforcement boundary honestly: the exec gate covers the
  * workspace world (spawn cwd / program path), not path text inside a command.
+ * ENGLISH ONLY (ADR-0014).
  */
-export function renderSideWorkspaces(items: readonly SideWorkspaceItem[], tr: TranslateFn = ZH_T): string {
+export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
   if (items.length === 0) return ''
   const lines = items.map(item => {
-    const fact = sideWorkspacePromptFact(item, tr)
-    return tr('prompt.side.item', { label: fact.label, rootKey: fact.rootKey, fs: fact.fs, exec: fact.exec })
+    const fact = sideWorkspacePromptFact(item)
+    return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey, fs: fact.fs, exec: fact.exec })
   })
-  return `${tr('prompt.side.heading')}\n${lines.join('\n')}\n${tr('prompt.side.note')}`
+  return `${modelPrompt('sideHeading')}\n${lines.join('\n')}\n${modelPrompt('sideNote')}`
 }
 
 /**
  * Compose the whole workspace prompt of one session: the R4 remote emphasis
  * (only when the cwd routes remote) plus the R5 side-workspace list (only when
  * attachments exist). Pure and synchronous; an empty result means zero
- * injection.
+ * injection. ENGLISH ONLY (ADR-0014).
  */
 export function composeWorkspacePrompt(
   cwd: string | undefined,
   machine: PromptMachineFace | undefined,
   sides: readonly SideWorkspaceItem[],
   dshBase?: string,
-  tr: TranslateFn = ZH_T,
 ): string {
   const fact = remotePromptFact(cwd, machine, dshBase)
-  const remote = fact !== null ? renderRemotePrompt(fact, tr) : ''
-  const side = renderSideWorkspaces(sides, tr)
+  const remote = fact !== null ? renderRemotePrompt(fact) : ''
+  const side = renderSideWorkspaces(sides)
   return [remote, side].filter(part => part !== '').join('\n\n')
 }
 
@@ -189,29 +193,25 @@ export function parseRemoteEnvProbe(output: string): RemoteEnvProbe {
 }
 
 /**
- * Legacy default of the probe renderer: pre-i18n the heading was English
- * while the missing-tool hint was Chinese — a mixed output the existing tests
- * pin. The default reproduces it exactly; the live tool path passes the
- * host-language translator instead.
+ * Render the probe as three check lines plus one hint line (never
+ * autoload/install). ENGLISH ONLY — this is model-facing tool output
+ * (ADR-0014); the heading and the missing-tool hint both come from the same
+ * English source instead of the pre-ADR mixed zh/en pair.
  */
-const LEGACY_ENV_PROBE_T: TranslateFn = (key, params) =>
-  lookup(key === 'tool.env.heading' ? 'en' : 'zh', key, params)
-
-/** Render the probe as three check lines plus one hint line (never autoload/install). */
-export function renderRemoteEnvProbe(probe: RemoteEnvProbe, tr: TranslateFn = LEGACY_ENV_PROBE_T): string {
+export function renderRemoteEnvProbe(probe: RemoteEnvProbe): string {
   const mark = (present: boolean): string => (present ? '✓' : '✗')
   const missing: string[] = []
   if (!probe.bash) missing.push('bash')
   if (!probe.pwsh) missing.push('pwsh')
   if (!probe.rg) missing.push('rg')
   const lines = [
-    tr('tool.env.heading'),
+    modelPrompt('envHeading'),
     `  bash: ${mark(probe.bash)}`,
     `  pwsh: ${mark(probe.pwsh)}`,
     `  rg: ${mark(probe.rg)}`,
   ]
   if (missing.length === 0) return lines.join('\n')
-  lines.push(tr('prompt.env.missing', { missing: missing.join(', ') }))
+  lines.push(modelPrompt('envMissing', { missing: missing.join(', ') }))
   return lines.join('\n')
 }
 
@@ -244,13 +244,13 @@ async function pingActive(registry: SshRegistry, tr: TranslateFn): Promise<PingR
 }
 
 /** Probe the remote toolbox (bash/pwsh/rg) with the same bounded budget. */
-async function remoteEnvLine(registry: SshRegistry, tr: TranslateFn): Promise<string> {
+async function remoteEnvLine(registry: SshRegistry): Promise<string> {
   const active = registry.getActive()
   if (active === null) return ''
   try {
     const outcome = await active.connection.exec(remoteEnvProbeCommand(), { signal: AbortSignal.timeout(8_000) })
     if (outcome.exitCode !== 0) return ''
-    return renderRemoteEnvProbe(parseRemoteEnvProbe(outcome.stdout), tr)
+    return renderRemoteEnvProbe(parseRemoteEnvProbe(outcome.stdout))
   } catch {
     // Connectivity already reported by pingActive.
     return ''
@@ -313,7 +313,7 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
           t('tool.sw_status.outputs.backend', { backend: status.backend }),
         ]
         lines.push((await pingActive(instance, t)).text)
-        lines.push(await remoteEnvLine(instance, t))
+        lines.push(await remoteEnvLine(instance))
         return { text: lines.join('\n') }
       },
     }), locale, { descriptionKey: 'tool.sw_status.description', buildParams: () => ({}) }),
@@ -421,20 +421,19 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
    *   会话卸载（泄漏到进程退出且 key 又是每会话唯一的，无法回收）。
    * - 「当前 remote」旧文案（全局单行）已删除：它按「全局 active 机器」注入，
    *   本地会话也会看到远端信息；新文案只按「本会话上下文」注入。
+   * - REQ-I6 ①：本 section 的文案是 **model-facing 英文常量**（`src/model-prompts.ts`），
+   *   不随 UI 语言切换（ADR-0014）。
    */
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'sw-remote',
     order: 90,
     text: (context) => {
-      const agent = context.scope as PromptAgentFace | undefined
-      const cwd = agent?.session?.header.cwd
-      const sessionId = agent?.session?.header.id
-      const attached = sessionId !== undefined ? (sides()?.listFor(sessionId) ?? []) : []
+      const { cwd, sides: attached } = sessionWorkspaceContextOf(context, sides)
       if (cwd === undefined && attached.length === 0) return ''
       const route = cwd !== undefined ? remoteRouteFromCwd(cwd) : null
       if (route === null && attached.length === 0) return ''
       const machine = route !== null ? registry().listMachines().machines.find(entry => entry.id === route.connectionId) : undefined
-      return composeWorkspacePrompt(cwd, machine, attached, undefined, t)
+      return composeWorkspacePrompt(cwd, machine, attached)
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')
@@ -442,6 +441,7 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
   // S1+S2: sw_exec always (server-parameterized remote execution), win32 bash
   // seam on Windows hosts only (the official bash tool owns `bash` + its
   // `tool:bash` section on POSIX; a duplicate registration would fail).
-  registerSwExec(ctx, registry)
-  registerWin32Bash(ctx, registry)
+  // `sides` is passed on so both sections can decide per session (REQ-I6 ②).
+  registerSwExec(ctx, registry, { sides })
+  registerWin32Bash(ctx, registry, { sides })
 }

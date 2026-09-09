@@ -21,7 +21,10 @@
 | R6（I18N） | 运行时国际化：客户端 UI / 远程认知提示 / `sw_*` 工具面三面双语 | ✅ 代码完成（`0.1.2` 待发布） | `src/locale/`（340 键）、设置页 Language 行、`row-badges` 就地重绘 | [R6-i18n.md](./R6-i18n.md) |
 | INFRA-1 | 工程化基建改造（真相源入库 / 统一质量门 / CI / 上游追踪 / E2E 资产化 / 状态看板 / UAT） | ✅ 完成（本地提交） | `AGENTS.md`、`docs/`（含 12 ADR、12 轮报告、UAT）、`e2e/`（9/9）、`.github/workflows/`、`scripts/{check,status,test-agent,pack-smoke}.mjs` | [INFRA-1.md](./INFRA-1.md) |
 
-**尚未开工的轮次**（来源里只有排期，故无报告）：R6 I1（对话/轨迹区可扩展面板 Tab，📋 排期）、
+| R13 | REQ-I6 系统提示词英文化/按需注入 + UX-1、REQ-I1 侦察 + 发布事实校正 | ✅ 代码完成（本地提交） | `src/model-prompts.ts`、`src/session-remote-context.ts`、`ADR-0014..0016`、`AGENTS.md` §5 磁盘等价物、`PUB-3`/`SEC-3` | [R13-req-i6-and-recon.md](./R13-req-i6-and-recon.md) |
+
+**尚未开工的轮次**（来源里只有排期，故无报告）：R6 I1（对话/轨迹区可扩展面板 Tab，📋 排期；
+前置槽位侦察已于 R13 完成，见 `ADR-0016`）、
 A4 端口转发（排后）、A5 顺手清理（排后）。**已撤销/不做**：A2 上游 PR（撤销）、镜像/同步与审计日志（明确不做）。
 
 ## 2. 每份报告的固定五段
