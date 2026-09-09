@@ -43,6 +43,15 @@ jobs:
           echo "tag=$GITHUB_REF_NAME package.json=$PKG"
           [ "$PKG" = "$TAG" ] || { echo "::error::tag $GITHUB_REF_NAME does not match the package.json version $PKG"; exit 1; }
 
+      - name: Print the OIDC identity npm will see
+        # Diagnostics: when the registry answers "OIDC permission denied for
+        # this action", compare these claims field by field with the package's
+        # Trusted Publisher entry on npmjs.com.
+        run: |
+          curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" \
+            | node -e "let raw='';process.stdin.on('data',c=>raw+=c).on('end',()=>{const claims=JSON.parse(Buffer.from(JSON.parse(raw).value.split('.')[1],'base64url').toString());for (const k of ['iss','aud','sub','repository','repository_owner','workflow_ref','job_workflow_ref','ref','environment','event_name']) console.log(k + ' = ' + (claims[k] ?? '(absent)'));})"
+
       - run: npm ci
 
       - name: Quality gate (npm publish also re-runs prepublishOnly)
