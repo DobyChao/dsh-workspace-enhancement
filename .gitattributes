@@ -1,0 +1,7 @@
+# Shell scripts must stay LF in the working tree.
+#
+# Without this, a Windows checkout (core.autocrlf=true, the Git for Windows
+# default) writes CRLF, and `bash scripts/verify-linux.sh` under WSL dies at
+# `set -euo pipefail` with "set: pipefail: invalid option name" — the one
+# local check that catches Linux-only failures was silently unrunnable.
+*.sh text eol=lf
