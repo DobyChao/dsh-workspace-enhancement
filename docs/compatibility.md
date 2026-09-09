@@ -25,6 +25,8 @@
 | 2026-08-30 | 接缝包家族版本劈叉（`dsh-fs`/`dsh-subprocess`/`dsh-timeout` 停在 `^0.1.0-rc.6`，`dsh-llm` 钉 `0.1.1-rc.1`，其余 `^0.1.1-rc.2`） | pnpm hoist 图出现重复副本 → Cordis 服务身份分裂（service/工具注册失效） | 全家族对齐同一 rc；`dependencies` 只留 `ssh2` | `check.mjs` #6「一个 rc 家族」+ #6b「peer 用 rc 通道」 |
 | 2026-09-08 | `@deepseek-ai/dsh-session` 升到 `0.1.2-rc.1`，`Session.events` 数组被 `ownEvents()` / `snapshotEvents()` 取代 | `test/mixed-install.test.ts` 的 t6 静默失败 **2 天无人发现**（无 CI、代理跑不了测试） | 改用 `ownEvents()` | `ci.yml` 全量单测 + `upstream.yml` 每周哨兵 |
 
+| 2026-09-09（**alpha 预警**） | `alpha` 通道 `0.1.5-alpha.2`：上游 `FileSystem` 新增抽象成员 `readByteRange`；家族新增 `@deepseek-ai/dsh-brand`、`@deepseek-ai/dsh-invariants` | `drift (alpha)` 红：`Non-abstract class 'SshFileSystem' does not implement inherited abstract member readByteRange`（`src/filesystem.ts:589`）；同一次 `drift (next)` 绿 | **尚未处置**（alpha 还没并入 rc）；并入前需给 `SshFileSystem` / `MixedFileSystem`（`FileSystemBranch`）实现 `readByteRange` | `upstream.yml` 双通道哨兵（每周四 alpha）+ 自动 issue #7 |
+
 > 第二个案例是建立 CI 的直接动因：**依赖升级能悄悄弄坏测试，而当时没有任何机制会喊一声。**
 
 ## 3. 四层防护
