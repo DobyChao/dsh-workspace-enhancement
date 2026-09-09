@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-08 17:07 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 03:06 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `main` / `8e0bcec` |
-| HEAD 提交 | `ci: reject non-conventional PR titles before the squash merge (#2)` (2026-09-09) |
-| 与远端 | in sync with origin/main |
+| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `e0334ac` |
+| HEAD 提交 | `docs(backlog): record the prompt-language policy and the remote permission preset bug` (2026-09-09) |
+| 与远端 | 1 ahead / 0 behind origin/main |
 
 ## 质量
 
@@ -29,7 +29,7 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 9 |
-| `doing` | 0 |
+| `doing` | 1 |
 | `blocked` | 5 |
 | `done` | 17 |
 | `shipped` | 3 |
