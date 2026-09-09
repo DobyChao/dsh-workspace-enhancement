@@ -47,6 +47,15 @@
 改完代码后**至少**跑 `npm run check:static && npm run typecheck && npm run test:agent`；
 能跑 shell 时跑完整 `npm run check`。
 
+**改了测试或跨平台代码，push 前必须跑 Linux 复验**（Windows 全绿抓不到 Linux-only 假设）：
+
+```bash
+wsl -e bash -lc "bash /mnt/d/<repo>/scripts/verify-linux.sh"
+```
+
+> PR #3 的教训：一条用例用裸 POSIX 路径冒充远程 cwd，只有 Ubuntu 红；而该脚本曾因
+> `.sh` 在 Windows 检出为 CRLF 而**根本跑不起来**（见 `FIX-7`），所以「本地全绿」是假的。
+
 ## 4. 沙箱现实（代理必读）
 
 DSH 文件沙箱（workspace-write）**不能开管道**：
@@ -66,7 +75,9 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    `dsh plugin --profile web add|remove <pkg>`，禁止手工编辑。
 3. **不碰 3080**：一切开发验证在隔离 lab（`DSH_HOME=.dsh-lab`、端口 50599）；
    3080 的重启**只由用户执行**（`scripts/restart-3080.ps1`，会话外）。
-4. **不 push、不打 tag、不 publish**：代理只做本地 commit；push / tag / npm publish 由用户执行。
+4. **push/PR 归代理，tag/publish/合并归用户**（2026-09-09 用户授权）：代理可 `git push` 分支、
+   `gh pr create`、盯 CI 并自己迭代到绿；`git tag`、`npm publish`（用户 2FA）、squash 合并进 `main`、
+   重启 3080 仍**只由用户执行**。
 5. **主机指纹默认校验**（TOFU：首次记录、变化即拒），降级必须文档警告。
 6. **远程命令注入防护**：拼进 shell 的参数一律 POSIX 单引号转义。
 7. **子代理禁止调用 `cordis_inspect_list` / `cordis_inspect_query`**：client 查询依赖页面应答，
@@ -98,12 +109,17 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 2. 状态改 `doing`，从 `main` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. 小步提交，Conventional Commits，尾行 `Refs: <ID>`。
 4. 验证：`npm run check`（或沙箱内 `check:static` + `typecheck` + `test:agent`）。
-5. **代理到此为止（不 push）**。仓库所有者执行：
+5. **代理 push + 开 PR + 盯 CI 到绿**（改测试/跨平台代码前先跑 §3 的 WSL Linux 复验）：
 
    ```powershell
    git push -u origin <branch>
    gh pr create --title "fix(<scope>): <what>" --body-file .github/PULL_REQUEST_TEMPLATE.md
    gh pr checks --watch           # PR 标题 + ubuntu 22/24 + windows 22
+   ```
+
+   CI 红了就自己定位、修、再推，直到全绿。**合并仍由仓库所有者执行**：
+
+   ```powershell
    gh pr merge --squash --delete-branch
    ```
 

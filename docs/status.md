@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 03:17 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 05:11 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `478dac1` |
-| HEAD 提交 | `docs(backlog): record BUG-2 mixed fs image TRANSPORT` (2026-09-09) |
-| 与远端 | 2 ahead / 0 behind origin/main |
+| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `735e549` |
+| HEAD 提交 | `docs(rounds): correct the R14 audit seam member count` (2026-09-09) |
+| 与远端 | 4 ahead / 0 behind origin/main |
 
 ## 质量
 
@@ -31,7 +31,7 @@
 | `todo` | 12 |
 | `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 18 |
+| `done` | 19 |
 | `shipped` | 3 |
 | `dropped` | 5 |
 
