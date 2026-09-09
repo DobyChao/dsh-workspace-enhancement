@@ -23,6 +23,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The owner's explicit release decision: a tag only QUEUES this job. The
+    # job waits on the `npm-publish` environment until the required reviewer
+    # (the repository owner) approves it in the Actions UI, so nothing reaches
+    # the registry without a human click.
+    environment: npm-publish
     steps:
       - uses: actions/checkout@v4
 

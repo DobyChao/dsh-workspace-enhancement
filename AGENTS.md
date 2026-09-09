@@ -76,8 +76,11 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 3. **不碰 3080**：一切开发验证在隔离 lab（`DSH_HOME=.dsh-lab`、端口 50599）；
    3080 的重启**只由用户执行**（`scripts/restart-3080.ps1`，会话外）。
 4. **push/PR 归代理，tag/publish/合并归用户**（2026-09-09 用户授权）：代理可 `git push` 分支、
-   `gh pr create`、盯 CI 并自己迭代到绿；`git tag`、`npm publish`（用户 2FA）、squash 合并进 `master`、
-   重启 3080 仍**只由用户执行**。
+   `gh pr create`、盯 CI 并自己迭代到绿；`git tag`、`npm publish`、squash 合并进 `master`、
+   重启 3080 仍**只由用户执行**。**发布闸门**：`.github/workflows/release.yml` 只在 `v*` tag 上触发，
+   且 publish 作业挂在 `npm-publish` environment 上——**推 tag 只排队，真正的 `npm publish` 必须由
+   仓库所有者在 Actions 里点 Approve**。代理任何情况下都不得推 tag 或触发/批准发布，除非用户在当次
+   对话里明确说「发」。
 5. **主机指纹默认校验**（TOFU：首次记录、变化即拒），降级必须文档警告。
 6. **远程命令注入防护**：拼进 shell 的参数一律 POSIX 单引号转义。
 7. **子代理禁止调用 `cordis_inspect_list` / `cordis_inspect_query`**：client 查询依赖页面应答，
@@ -132,6 +135,11 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 master 必红）。
 
 6. 合并后：状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
+
+7. **发布只由仓库所有者决定**：合并进 `master` 不会发布。`release.yml` 只在 `v*` tag 上跑，且
+   publish 作业挂在 `npm-publish` environment 上——**推 tag 只是排队，真正的 `npm publish` 要
+   owner 在 Actions 里点 Approve**。所有者确认要发后：
+   `git tag vX.Y.Z && git push origin vX.Y.Z` → 在 Actions 页面点 Approve → CI 用 OIDC 发布。
 
 > **例外**：错别字、一行文案、纯注释这类不可能改变行为的改动，可直接提交到 `master`——
 > 但 `npm run check` 不能跳。UI 改动在 PR 里附 `docs/uat/` 脚本。
