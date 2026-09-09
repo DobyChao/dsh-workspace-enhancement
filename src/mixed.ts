@@ -186,12 +186,19 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   }
 }
 
-/** The minimal filesystem surface both branches implement (the seam's 12 methods). */
+/** The minimal filesystem surface both branches implement (the seam's 13 methods). */
 export type FileSystemBranch = {
   /** The backend's default confinement mode, when it confines at all. */
   readonly sandboxMode?: unknown
   resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget>
   processPath(target: FsTarget): string
+  /**
+   * Map an absolute HARNESS-HOST path into this branch's execution world, or
+   * `undefined` when that world cannot read the host file (the seam method the
+   * base `FileSystem` declares with an empty body). BUG-2: it was missing from
+   * this contract, so `tsc` could not catch a branch that never implemented it.
+   */
+  processPathFromHostPath(hostPath: string): string | undefined
   fileUrl(target: FsTarget): string
   contains(parent: FsTarget, child: FsTarget): boolean
   stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined>
@@ -261,6 +268,22 @@ export class MixedFileSystem implements FileSystemBranch {
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.processPath(target)
       : this.local.processPath(target)
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * BUG-2: unlike `processPath`/`fileUrl` there is NO target key to route on —
+   * the argument is an absolute HARNESS-HOST path, and only the local world
+   * shares the host filesystem. The remote world runs on another machine, so
+   * `SshFileSystemEngine` can never read that host file and is deliberately NOT
+   * consulted (returning a remote path here would fabricate a mapping that does
+   * not exist); the local delegate owns the answer, including the "no mapping"
+   * case (`LocalFileSystem`: `isAbsolute(hostPath) ? resolve(hostPath) :
+   * undefined`, inherited by `SandboxedFileSystem`).
+   */
+  processPathFromHostPath(hostPath: string): string | undefined {
+    return this.local.processPathFromHostPath(hostPath)
   }
 
   /** @inheritdoc */

@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-08 16:40 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 05:11 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `fix/pr-title-gate` / `f0ee3ed` |
-| HEAD 提交 | `fix/infra 1 ci cross platform (#1)` (2026-09-09) |
-| 与远端 | in sync with origin/main |
+| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `735e549` |
+| HEAD 提交 | `docs(rounds): correct the R14 audit seam member count` (2026-09-09) |
+| 与远端 | 4 ahead / 0 behind origin/main |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 21 |
-| 单测用例（静态计数） | 242 |
+| 单测文件 | 22 |
+| 单测用例（静态计数） | 251 |
 | E2E 场景文件 | 8 |
 | ADR | 13 |
-| 轮次报告 | 11 |
+| 轮次报告 | 13 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 7 |
+| `todo` | 12 |
 | `doing` | 0 |
-| `blocked` | 6 |
-| `done` | 17 |
+| `blocked` | 5 |
+| `done` | 19 |
 | `shipped` | 3 |
 | `dropped` | 5 |
 
@@ -40,7 +40,6 @@
 - SEC-1 — 副工作区 `fs:只读 + exec:开` 可被 `workdir` 命令绕写
 - INFRA-8 — AgentTeams 标准 profile 注册
 - SEC-2 — 主 workdir 命令可写/删只读副工作区（命令面无围栏）
-- UX-1 — 远程会话 composer 权限预设显示 `Custom`
 - UX-2 — 副工作区面板「浏览」输入框去留
 - BUG-1 — 用户截图「设置页顶部空白边框条」lab 未复现
 
