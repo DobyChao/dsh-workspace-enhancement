@@ -76,7 +76,7 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 3. **不碰 3080**：一切开发验证在隔离 lab（`DSH_HOME=.dsh-lab`、端口 50599）；
    3080 的重启**只由用户执行**（`scripts/restart-3080.ps1`，会话外）。
 4. **push/PR 归代理，tag/publish/合并归用户**（2026-09-09 用户授权）：代理可 `git push` 分支、
-   `gh pr create`、盯 CI 并自己迭代到绿；`git tag`、`npm publish`（用户 2FA）、squash 合并进 `main`、
+   `gh pr create`、盯 CI 并自己迭代到绿；`git tag`、`npm publish`（用户 2FA）、squash 合并进 `master`、
    重启 3080 仍**只由用户执行**。
 5. **主机指纹默认校验**（TOFU：首次记录、变化即拒），降级必须文档警告。
 6. **远程命令注入防护**：拼进 shell 的参数一律 POSIX 单引号转义。
@@ -102,11 +102,11 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 
 ## 7. 一轮的工作流（短分支 + PR）
 
-**分支模型**：`main` 只接受经过 CI 的提交；改动走短分支 + PR，**squash merge** 保持线性历史
+**分支模型**：`master` 只接受经过 CI 的提交；改动走短分支 + PR，**squash merge** 保持线性历史
 （当前全历史 0 个 merge 提交，不要破坏它）。
 
 1. 在 `docs/backlog.md` 加行（ID + `todo`），写清目标与验收标准。
-2. 状态改 `doing`，从 `main` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
+2. 状态改 `doing`，从 `master` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. 小步提交，Conventional Commits，尾行 `Refs: <ID>`。
 4. 验证：`npm run check`（或沙箱内 `check:static` + `typecheck` + `test:agent`）。
 5. **代理 push + 开 PR + 盯 CI 到绿**（改测试/跨平台代码前先跑 §3 的 WSL Linux 复验）：
@@ -123,12 +123,12 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    gh pr merge --squash --delete-branch
    ```
 
-   > **PR 标题必须是 Conventional Commit**：squash 合并把它当作 main 上的提交标题，
-   > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 main 必红）。
+   > **PR 标题必须是 Conventional Commit**：squash 合并把它当作 master 上的提交标题，
+   > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 master 必红）。
 
 6. 合并后：状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
 
-> **例外**：错别字、一行文案、纯注释这类不可能改变行为的改动，可直接提交到 `main`——
+> **例外**：错别字、一行文案、纯注释这类不可能改变行为的改动，可直接提交到 `master`——
 > 但 `npm run check` 不能跳。UI 改动在 PR 里附 `docs/uat/` 脚本。
 
 ## 8. 接手三分钟

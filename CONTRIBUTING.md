@@ -21,18 +21,18 @@
 
 ## 2. 一轮的完整流程（短分支 + PR）
 
-**分支模型**：`main` 只收经过 CI 的提交。改动一律走短分支 + PR + **squash merge**
+**分支模型**：`master` 只收经过 CI 的提交。改动一律走短分支 + PR + **squash merge**
 （全历史保持线性，当前 0 个 merge 提交）。
 
 1. **入账**：在 `docs/backlog.md` 加一行（ID + `todo`），写清目标与验收标准。
-2. **开工**：状态改 `doing`；从 `main` 拉短分支 `feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
+2. **开工**：状态改 `doing`；从 `master` 拉短分支 `feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. **实现**：小步提交，Conventional Commits；提交信息尾行写 `Refs: <ID>`。
 4. **验证**：`npm run check`；UI 改动加 `npm run e2e`；组合改动跑 `--dump-config` 断言。
-5. **交付**：代理只做本地提交（不 push）。所有者执行：
+5. **交付**：代理 push 分支、开 PR 并盯 CI 到绿（2026-09-09 用户授权）。
 
    ```powershell
    git push -u origin <branch>
-   # PR 标题必须是 Conventional Commit：squash 合并会把它当成 main 上的提交标题，
+   # PR 标题必须是 Conventional Commit：squash 合并会把它当成 master 上的提交标题，
    # 而静态闸门校验的正是这个标题。浏览器新建 PR 默认填分支名，必须改。
    gh pr create --title "fix(<scope>): <what>" --body-file .github/PULL_REQUEST_TEMPLATE.md
    gh pr checks --watch           # CI：PR 标题 + ubuntu 22/24 + windows 22
@@ -41,25 +41,25 @@
 
    > `--fill` 在多提交时会把分支名当标题，容易与最终 squash 语义不符——显式写 `--title` 最稳。
    > PR 标题不合法时 `PR title (squash subject)` 作业会直接拦下（2026-09-10 加，起因是一次
-   > PR 绿、合并后 main 红：squash 标题是分支名）。
+   > PR 绿、合并后 master 红：squash 标题是分支名）。
 
 6. **验收**：涉及用户可见行为时，随 PR 附 `docs/uat/` 脚本，由用户走查并回填反馈。
 7. **收口**：状态改 `done`/`shipped`，`npm run status` 刷新看板，`docs/rounds/` 写一份报告。
 
-> 例外：错别字、一行文案、纯注释这类不可能改变行为的改动可直接提交到 `main`；
-> 但第 4 步不能跳。**分支上永远不要直接 push 到 `main`。**
+> 例外：错别字、一行文案、纯注释这类不可能改变行为的改动可直接提交到 `master`；
+> 但第 4 步不能跳。**分支上永远不要直接 push 到 `master`。**
 
 ## 3. 发布清单
 
 发布由仓库所有者执行（npm 2FA）。发版前逐条确认：
 
 - [ ] `npm run check` 全绿（本地与 CI 都跑过；PR 上 CI 绿才算）
-- [ ] 待发布的改动已通过 PR **squash 合并**到 `main`
+- [ ] 待发布的改动已通过 PR **squash 合并**到 `master`
 - [ ] `docs/compatibility.md` 支持窗口已更新
 - [ ] `CHANGELOG.md` 有该版本小节（静态闸门会校验）
 - [ ] `npm run status` 已刷新，`docs/status.md` 与 package.json 版本一致
 - [ ] `docs/rounds/` 有本轮报告，`docs/backlog.md` 状态已更新
-- [ ] 工作树干净、`main` 与 `origin/main` 同步
+- [ ] 工作树干净、`master` 与 `origin/master` 同步
 - [ ] 打 tag 放在**发布成功之后**：`git tag vX.Y.Z && git push origin vX.Y.Z`
 - [ ] 发布后在 `docs/compatibility.md` 记录实际发布版本
 

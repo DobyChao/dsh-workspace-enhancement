@@ -37,13 +37,27 @@ const headSubject = git(['log', '-1', '--format=%s']) || 'unknown'
 const headDate = git(['log', '-1', '--format=%cs']) || 'unknown'
 const tags = git(['tag', '--sort=-v:refname']).split('\n').filter(Boolean)
 const latestTag = tags[0] ?? 'none'
-const aheadBehind = git(['rev-list', '--left-right', '--count', 'origin/main...HEAD'])
+/**
+ * The remote default branch this board compares against. Resolved from
+ * `origin/HEAD` (set by clone/fetch) with a fallback to the known names, so the
+ * board survives the main -> master rename and either clone spelling.
+ */
+function upstreamRef() {
+  const symbolic = git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])
+  if (symbolic) return symbolic
+  for (const candidate of ['origin/master', 'origin/main']) {
+    if (git(['rev-parse', '--verify', '--quiet', candidate])) return candidate
+  }
+  return ''
+}
+const upstream = upstreamRef()
+const aheadBehind = upstream ? git(['rev-list', '--left-right', '--count', `${upstream}...HEAD`]) : ''
 const [behind, ahead] = aheadBehind ? aheadBehind.split(/\s+/).map(Number) : [NaN, NaN]
 const remoteState = Number.isNaN(ahead)
-  ? 'unknown (no origin/main ref)'
+  ? `unknown (no ${upstream || 'origin'} ref)`
   : ahead === 0 && behind === 0
-    ? 'in sync with origin/main'
-    : `${ahead} ahead / ${behind} behind origin/main`
+    ? `in sync with ${upstream}`
+    : `${ahead} ahead / ${behind} behind ${upstream}`
 
 // Published version — best effort; offline is an acceptable answer.
 function publishedVersion() {
