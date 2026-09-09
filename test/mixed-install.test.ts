@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { installMixedProviders } from '../src/plugin.ts'
@@ -44,6 +44,22 @@ test('installMixedProviders: ctx.subprocess/ctx.fs resolve to the mixed facades 
   const target = await fs.resolve('mixed-install-probe.txt', { cwd: workspace })
   const outcome = await fs.writeText(target, 'ok', undefined, undefined, undefined)
   assert.equal((outcome as { version?: unknown }).version !== undefined, true)
+  // BUG-2: 带图请求走的是接缝的第 13 个方法 `processPathFromHostPath`
+  // （图片附件解析 → resolveImageAccess → ctx.get('fs')?.[…]）。安装后的门面
+  // 缺它即 TypeError → LlmError(TRANSPORT)。这里断言它存在且映射正确。
+  assert.equal(typeof fs.processPathFromHostPath, 'function', 'the installed facade must expose processPathFromHostPath')
+  assert.equal(fs.processPathFromHostPath(join(workspace, 'shot.png')), resolve(join(workspace, 'shot.png')))
+  assert.equal(fs.processPathFromHostPath('relative/shot.png'), undefined)
+})
+
+test('BUG-2: the installed facade maps host paths for the bare local backend too', () => {
+  const ctx = new Context()
+  installMixedProviders(ctx)
+  const fs = ctx.get('fs')
+  assert.equal(typeof fs.processPathFromHostPath, 'function', 'the installed facade must expose processPathFromHostPath')
+  const hostPath = join(tmpdir(), 'dsw-bug2-install.png')
+  assert.equal(fs.processPathFromHostPath(hostPath), resolve(hostPath))
+  assert.equal(fs.processPathFromHostPath('shot.png'), undefined)
 })
 
 test('installMixedProviders: without a sandbox policy the bare local backend backs the facade', () => {

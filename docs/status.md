@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 03:06 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 03:17 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.1.2` |
 | npm 已发布版本 | `0.1.2` |
 | 最新 tag | `v0.1.2` |
-| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `e0334ac` |
-| HEAD 提交 | `docs(backlog): record the prompt-language policy and the remote permission preset bug` (2026-09-09) |
-| 与远端 | 1 ahead / 0 behind origin/main |
+| 分支 / HEAD | `fix/BUG-2-mixed-fs-hostpath` / `478dac1` |
+| HEAD 提交 | `docs(backlog): record BUG-2 mixed fs image TRANSPORT` (2026-09-09) |
+| 与远端 | 2 ahead / 0 behind origin/main |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 21 |
-| 单测用例（静态计数） | 242 |
+| 单测文件 | 22 |
+| 单测用例（静态计数） | 251 |
 | E2E 场景文件 | 8 |
 | ADR | 13 |
-| 轮次报告 | 11 |
+| 轮次报告 | 13 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 9 |
-| `doing` | 1 |
+| `todo` | 12 |
+| `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 17 |
+| `done` | 18 |
 | `shipped` | 3 |
 | `dropped` | 5 |
 

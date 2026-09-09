@@ -205,6 +205,10 @@ function stubFileSystemBranch(label: 'local' | 'remote'): FileSystemBranch & { c
       calls.push(`processPath:${label}:${String(target.targetKey)}`)
       return `/world/${label}`
     },
+    processPathFromHostPath(hostPath: string): string | undefined {
+      calls.push(`processPathFromHostPath:${label}:${hostPath}`)
+      return `/host/${label}${hostPath}`
+    },
     fileUrl(target: FsTarget): string {
       calls.push(`fileUrl:${label}:${String(target.targetKey)}`)
       return `file:///world/${label}`
@@ -301,6 +305,17 @@ test('MixedFileSystem: writeText/editText forward the policy to LOCAL only; remo
   assert.deepEqual(local.calls, ['writeText:local', 'editText:local'])
 })
 
+test('BUG-2: host-path mapping never reroutes to the remote branch, even for a remote session', () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+  const hostPath = join(tmpdir(), 'dsw-bug2-host.png')
+  assert.equal(mixed.processPathFromHostPath(hostPath), `/host/local${hostPath}`)
+  // 这条接缝没有 targetKey/cwd 可路由：宿主文件只属于 local 世界。
+  assert.deepEqual(local.calls, [`processPathFromHostPath:local:${hostPath}`])
+  assert.deepEqual(remote.calls, [])
+})
+
 /* ---------------------------------------------- 4) 本地委托冒烟（不劣化） */
 
 /** 本地 f/s 冒烟：经混合门面的本地分支真实读/写/列表（官方 LocalFileSystem 原实现）。 */
@@ -312,6 +327,9 @@ test('MixedFileSystem: local cwd reads/writes/lists through the real local backe
       throw new Error('remote branch must not be reached for local targets')
     },
     processPath(): string {
+      throw new Error('remote branch must not be reached for local targets')
+    },
+    processPathFromHostPath(): undefined {
       throw new Error('remote branch must not be reached for local targets')
     },
     fileUrl(): string {
