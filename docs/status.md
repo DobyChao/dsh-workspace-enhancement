@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 16:51 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 17:00 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `chore/INFRA-11-dev-build-drift` / `cf8e755` |
-| HEAD 提交 | `chore(infra): warn when the linked dev build is older than src` (2026-09-10) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/INFRA-11-dev-build-drift` / `9f3a8fa` |
+| HEAD 提交 | `docs(status): refresh the board after the INFRA-11 gate change` (2026-09-10) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 10 |
+| `todo` | 11 |
 | `doing` | 0 |
 | `blocked` | 7 |
 | `done` | 23 |
