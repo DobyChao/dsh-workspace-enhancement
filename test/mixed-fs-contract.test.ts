@@ -26,6 +26,7 @@ import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import { MixedFileSystem } from '../src/mixed.ts'
 import type { FileSystemBranch } from '../src/mixed.ts'
+import { sshRoutesRoot } from '../src/transport.ts'
 import type { SshFileSystemEngine } from '../src/filesystem.ts'
 
 /** 具体后端上的内部实现细节：不是接缝契约的一部分，不参与反射断言。 */
@@ -215,8 +216,14 @@ test('BUG-2: real local backend semantics — absolute maps, relative/blank are 
 test('BUG-2: a REMOTE session cwd does not change the host mapping world', async () => {
   // 修复前的路由思路（按 cwd/targetKey 路由）在这里会错：宿主文件永远属于
   // local 世界。远程 cwd 只是会话事实，与宿主路径映射无关。
+  //
+  // 远程 cwd 必须取自插件自己的占位路由树，**不能**用裸 POSIX 绝对路径：
+  // `worldOfCwd` 只对 win32 把 `/…` 当成远程世界（src/mixed.ts:122），在
+  // Linux 上 `/srv/work` 是合法本地路径 → 走 local → 断言变成「本该拒绝却
+  // 成功」（PR #3 的 Ubuntu 红）。`sshRoutesRoot()` 在两种平台都被识别为路由。
   const mixed = new MixedFileSystem(realLocal(), explodingRemote())
-  await assert.rejects(() => mixed.resolve('a.png', { cwd: '/srv/work' }), /must never be consulted/)
+  const remoteCwd = join(sshRoutesRoot(), 'c1', 'srv', 'work')
+  await assert.rejects(() => mixed.resolve('a.png', { cwd: remoteCwd }), /must never be consulted/)
   const hostPath = join(tmpdir(), 'dsw-bug2-remote-cwd.png')
   assert.equal(mixed.processPathFromHostPath(hostPath), resolvePath(hostPath))
 })
