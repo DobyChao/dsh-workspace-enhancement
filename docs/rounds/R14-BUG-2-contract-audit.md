@@ -14,7 +14,7 @@
 
 ## 1. ctx.fs 门面成员矩阵（上游 `FileSystem` 全集，HOST dsh-fs/lib/types/index.d.ts:61–211）
 
-上游成员共 15 个（1 个 getter + 14 个方法，其中 `processPathFromHostPath` 是**非抽象具现方法**，dsh-fs/lib/index.js:83 默认空实现返回 undefined）。
+上游成员共 14 个（1 个 getter + 13 个方法，其中 `processPathFromHostPath` 是**非抽象具现方法**，dsh-fs/lib/index.js:83 默认空实现返回 undefined；`constructor` 不是 seam 方法、不计入，矩阵正好 14 行）。
 
 | 成员 | 上游声明 | 门面实现 | 宿主调用点（file:line） | 判定 |
 |---|---|---|---|---|
