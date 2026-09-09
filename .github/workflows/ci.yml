@@ -5,7 +5,7 @@ name: CI
 # too (see docs/testing.md for why that matters).
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -60,9 +60,9 @@ jobs:
 
   pr-title:
     name: PR title (squash subject)
-    # A squash merge uses the PR TITLE as the commit subject on main, and the
+    # A squash merge uses the PR TITLE as the commit subject on master, and the
     # static gate validates that subject. Without this job a bad title only
-    # shows up after the merge, when main is already red.
+    # shows up after the merge, when master is already red.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +74,7 @@ jobs:
             echo "ok: $PR_TITLE"
             exit 0
           fi
-          echo "::error::PR title must be a Conventional Commit subject — a squash merge turns it into the commit subject on main."
+          echo "::error::PR title must be a Conventional Commit subject — a squash merge turns it into the commit subject on master."
           echo "got: $PR_TITLE"
           echo "example: fix(side-workspaces): keep the read-only gate under junction spellings"
           exit 1
