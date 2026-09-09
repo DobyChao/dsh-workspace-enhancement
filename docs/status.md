@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-09 16:36 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-09 16:51 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `master` / `04aa284` |
-| HEAD 提交 | `ci(upstream): probe the alpha channel too and file a drift issue on failure` (2026-09-10) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `chore/INFRA-11-dev-build-drift` / `cf8e755` |
+| HEAD 提交 | `chore(infra): warn when the linked dev build is older than src` (2026-09-10) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -22,13 +22,13 @@
 | 单测用例（静态计数） | 263 |
 | E2E 场景文件 | 8 |
 | ADR | 16 |
-| 轮次报告 | 15 |
+| 轮次报告 | 16 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 9 |
+| `todo` | 10 |
 | `doing` | 0 |
 | `blocked` | 7 |
 | `done` | 23 |
