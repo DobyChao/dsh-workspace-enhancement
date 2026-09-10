@@ -85,6 +85,7 @@ export const zh = {
   'flow.loading.label': '正在加载目录',
   'flow.browse.error.remote': '无法读取远程目录',
   'flow.browse.error.local': '无法读取目录',
+  'flow.error.directoryUnavailable': '目录服务不可用（uiWorkspace 未挂载）',
   'flow.auth.complete': '补全认证',
   'flow.empty.title': '没有子文件夹',
   'flow.empty.hidden': '另有 {n} 个点开头的文件夹未显示',

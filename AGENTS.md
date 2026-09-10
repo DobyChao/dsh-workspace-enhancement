@@ -35,7 +35,7 @@
 | 命令 | 用途 | 谁能跑 |
 |---|---|---|
 | `npm run check` | **唯一质量门**：静态闸门 + typecheck + 单测 + build + pack 冒烟 | CI / 本地 shell |
-| `npm run check:static` | 静态闸门（词典/密钥/peer 家族/版本/提交信息等 12 项） | 代理 / CI |
+| `npm run check:static` | 静态闸门（词典/密钥/peer 家族/版本/提交信息等 12 项 + `lib/` 漂移 WARN） | 代理 / CI |
 | `npm run typecheck` | `tsc --noEmit` | 代理 / CI |
 | `npm test` | 全量单测（`node --test`，21 文件） | CI / 本地 shell |
 | `npm run test:agent` | 沙箱内单测（单进程、无 esbuild；自动分类沙箱受限失败） | **代理** |
@@ -46,6 +46,11 @@
 
 改完代码后**至少**跑 `npm run check:static && npm run typecheck && npm run test:agent`；
 能跑 shell 时跑完整 `npm run check`。
+
+**改了 `src/` 必须 `npm run build`**：`lib/` 是 gitignore 的产物，而 3080 的 profile 以
+`link:` 装本仓库、直接加载 `lib/`——不 build 就重启，跑的仍是旧代码（2026-09-09 实锤：
+3080 的进程跑着 6 小时前的 build，REQ-I6 没生效，见 `INFRA-11`）。闸门在「`lib/` 早于
+`src/`」时打 WARN（非阻断，CI 无 `lib/` 时跳过）。
 
 **改了测试或跨平台代码，push 前必须跑 Linux 复验**（Windows 全绿抓不到 Linux-only 假设）：
 
@@ -151,4 +156,6 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 3. `docs/status.md` 的「质量门」表 —— 你能跑哪些命令。
 4. `docs/compatibility.md` —— 别在错误的上游家族上开工。
 
-**当前唯一即刻事项**：`PUB-1` 发布 0.1.2（用户 2FA）→ `PUB-2` 3080 换装并重启。
+**当前即刻事项**（2026-09-09 更新）：① **用户重启 3080** 验收 0.1.3（`scripts/restart-3080.ps1`，会话外；
+`lib/` 已重建，重启才生效）；② 下一轮开发主线待定，候选见 `docs/backlog.md` §2（`REQ-I1` P1 侦察就绪 →
+`UPSTREAM-1`）；③ 被挡住需拍板：`UX-1` / `SEC-1` / `SEC-3` / `INFRA-8`。

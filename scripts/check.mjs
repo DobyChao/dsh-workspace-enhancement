@@ -21,8 +21,13 @@
  * 10. HEAD commit subject follows Conventional Commits.
  * 11. No stray build/test artifacts in the repository root.
  * 12. Every docs/backlog.md row carries an id and a status.
+ *
+ * Plus one non-fatal diagnostic (never fails the run):
+ *
+ * 13. `lib/` is not older than `src/` — the linked dev install loads `lib/`, so
+ *     a stale build silently keeps old code running (WARN only; see INFRA-11).
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { runCapture } from './lib/run.mjs'
@@ -266,6 +271,34 @@ try {
     `${rows.length} row(s), ${bad.length} malformed`)
 } catch (error) {
   check('docs/backlog.md readable', false, String(error.message || error))
+}
+
+// ---- 13. local build artifacts are not older than their sources -------------
+/**
+ * `lib/` is gitignored, and the development install of this plugin is a `link:`
+ * into this working tree, so a stale `lib/` keeps an OLD plugin running in the
+ * GUI even after the source was fixed: on 2026-09-09 the 3080 instance was
+ * running a build made six hours before the REQ-I6 merge. Deliberately a WARN
+ * and never a failure — mtimes are a heuristic (a rebuild skips byte-identical
+ * outputs, so an old mtime does not always mean stale code), and CI checks out
+ * without `lib/` at all. See backlog INFRA-11.
+ */
+const libDir = resolve(ROOT, 'lib')
+if (existsSync(libDir)) {
+  const newest = (dir, exts) => {
+    let value = 0
+    for (const file of walk(resolve(ROOT, dir), exts, ['node_modules'])) {
+      value = Math.max(value, statSync(file).mtimeMs)
+    }
+    return value
+  }
+  const built = newest('lib', ['.js'])
+  const source = newest('src', ['.ts', '.tsx'])
+  if (built > 0 && source > built) {
+    console.log('[check.mjs] WARN  lib/ is older than src/ — run `npm run build`:'
+      + ` the linked dev install loads lib/, not src/ (src ${new Date(source).toISOString()},`
+      + ` build ${new Date(built).toISOString()})`)
+  }
 }
 
 // ---- result ----------------------------------------------------------------
