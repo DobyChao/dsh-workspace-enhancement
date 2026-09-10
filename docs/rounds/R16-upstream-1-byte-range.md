@@ -32,7 +32,11 @@
 - `npm run typecheck` —— **0 错误**（对老家族 0.1.2-rc.1：加法改动没伤它，这就是"还能用吗"的直接证据）
 - `npm run test:agent` —— **240 pass / 0 fail / 1 skipped**（22 文件）；`test/mixed-fs-contract` + `test/upstream-1-byte-range` 16 例：15 pass、1 skip（语义用例需要 0.1.5 家族）
 - `npm run check:static` —— ALL PASS，新增 5 条 #6 断言全绿（`0.1.2-rc.1 || ^0.1.5-rc.1: 13 pkg` / `dev=0.1.2-rc.1` / `2 families: 0.1.2-rc.1 | ^0.1.5-rc.1`）
-- **新家族验证**：由 `upstream.yml` 三通道在 CI 上跑（`legacy` 走 0.1.2-rc.1、`next`/`alpha` 走 0.1.5 线）；本机只装了老家族，**没有**在新家族上跑过完整套件 —— 这一点不遮掩
+- **新家族验证（CI，run 34467974837 首次三通道）**：
+  - `drift (legacy)`（0.1.2-rc.1，**线上家族**）—— **全绿**
+  - `drift (next)` / `drift (alpha)`（0.1.5 线）—— **typecheck 通过**（原 TS2515 消失），新用例全部通过，其中
+    `real local backend: window semantics match the seam … ok 245` **在真实 0.1.5 后端上跑过且通过**（是对齐上游语义最强的证据）
+  - 同一轮暴露**探针自身的缺口**（非产品缺陷）：`dsh-subprocess@0.1.5-rc.1` 依赖 `@deepseek-ai/dsh-http-proxy`，而 `npm install --no-save --legacy-peer-deps` 在既有树上替换家族成员时**没把新依赖带进来** → `mixed-install`/`mixed-routing`/`side-workspace-attacks` 三个套件 `ERR_MODULE_NOT_FOUND` 红。已修：探针新增"家族闭包"第二遍安装（扫描已装家族的 `dependencies`，缺失的按同一通道补装）
 
 ## 4. 覆盖边界（诚实标注）
 

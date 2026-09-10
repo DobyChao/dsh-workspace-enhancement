@@ -101,6 +101,42 @@ jobs:
           echo "installing:$PKGS"
           npm install --no-save --legacy-peer-deps $PKGS 2>&1 | tail -25
 
+          # Second pass — the family's OWN dependencies. Our peer list is not the
+          # whole family, and npm can leave a newly required package out when it
+          # replaces members inside an existing tree: 0.1.5's dsh-subprocess
+          # depends on @deepseek-ai/dsh-http-proxy, which never got installed and
+          # broke three suites with ERR_MODULE_NOT_FOUND. Whatever the installed
+          # family itself depends on must resolve through the same channel.
+          WANT="${{ matrix.family }}"
+          if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
+          MISSING="$(node -e "
+            const fs = require('fs');
+            const peers = Object.keys(require('./package.json').peerDependencies).filter((n) => n.startsWith('@deepseek-ai/dsh-'));
+            const out = new Set();
+            for (const name of peers) {
+              let manifest;
+              try { manifest = JSON.parse(fs.readFileSync('node_modules/' + name + '/package.json', 'utf8')); } catch { continue; }
+              for (const dep of Object.keys(manifest.dependencies ?? {})) {
+                if (!dep.startsWith('@deepseek-ai/')) continue;
+                if (!fs.existsSync('node_modules/' + dep + '/package.json')) out.add(dep);
+              }
+            }
+            console.log([...out].join(' '));
+          ")"
+          if [ -n "$MISSING" ]; then
+            DEPS=""
+            for dep in $MISSING; do
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1)"
+              if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; fi
+            done
+            if [ -n "$DEPS" ]; then
+              echo "family closure:$DEPS"
+              npm install --no-save --legacy-peer-deps $DEPS 2>&1 | tail -10
+            else
+              echo "::warning::family closure needed but unresolved on '$WANT': $MISSING"
+            fi
+          fi
+
       - name: Print resolved family
         run: |
           node -e "for (const n of Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-'))) { try { console.log('  '+n+'@'+require('./node_modules/'+n+'/package.json').version) } catch { console.log('  '+n+'@MISSING') } }"
