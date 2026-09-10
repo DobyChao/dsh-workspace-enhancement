@@ -237,6 +237,45 @@ export class SshFileSystemEngine {
     return bytes
   }
 
+  /**
+   * Read one byte window `[offset, offset + length)` of a regular file — the
+   * seam method the 0.1.5 line added to `FileSystem` (UPSTREAM-1). Semantics
+   * mirror the upstream implementation exactly: an empty `length` is empty
+   * without any I/O, a window starting at or past EOF is empty, a window that
+   * runs past EOF comes back short, and the file is never buffered whole —
+   * `start`/`end` bound the transfer to the window (ssh2's `end` is inclusive,
+   * and a read at/past EOF simply ends the stream, so no `stat`-based clamping
+   * is needed).
+   */
+  async readByteRange(
+    target: FsTarget,
+    range: { offset: number; length: number },
+    signal?: AbortSignal,
+  ): Promise<Uint8Array> {
+    await this.requireRegular(target, signal)
+    if (range.length === 0) return new Uint8Array(0)
+    const route = this.routeTarget(target)
+    const sftp = await route.transport.getSftp()
+    const stream = sftp.createReadStream(route.path, {
+      start: range.offset,
+      end: range.offset + range.length - 1,
+    }) as Readable
+    try {
+      const chunks: Buffer[] = []
+      let bytes = 0
+      for await (const chunk of stream) {
+        assertNotAborted(signal, 'read')
+        const buffer = Buffer.from(chunk as Uint8Array)
+        chunks.push(buffer)
+        bytes += buffer.length
+      }
+      assertNotAborted(signal, 'read')
+      return Buffer.concat(chunks, bytes)
+    } catch (error: unknown) {
+      throw mapError(error, 'read', target.displayPath, signal)
+    }
+  }
+
   async streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>> {
     await this.requireRegular(target, signal)
     const route = this.routeTarget(target)
@@ -630,6 +669,19 @@ export class SshFileSystem extends FileSystem {
 
   readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array> {
     return this.engine.readBytes(target, signal, maxBytes)
+  }
+
+  /**
+   * Deliberately declared WITHOUT `override`: the pre-0.1.5 base class has no
+   * `readByteRange`, and `override` on a member that the base does not declare
+   * is TS4113 — the plugin must compile against BOTH families (UPSTREAM-1).
+   */
+  readByteRange(
+    target: FsTarget,
+    range: { offset: number; length: number },
+    signal?: AbortSignal,
+  ): Promise<Uint8Array> {
+    return this.engine.readByteRange(target, range, signal)
   }
 
   listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]> {
