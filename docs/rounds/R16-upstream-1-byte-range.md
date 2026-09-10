@@ -36,7 +36,8 @@
   - `drift (legacy)`（0.1.2-rc.1，**线上家族**）—— **全绿**
   - `drift (next)` / `drift (alpha)`（0.1.5 线）—— **typecheck 通过**（原 TS2515 消失），新用例全部通过，其中
     `real local backend: window semantics match the seam … ok 245` **在真实 0.1.5 后端上跑过且通过**（是对齐上游语义最强的证据）
-  - 同一轮暴露**探针自身的缺口**（非产品缺陷）：`dsh-subprocess@0.1.5-rc.1` 依赖 `@deepseek-ai/dsh-http-proxy`，而 `npm install --no-save --legacy-peer-deps` 在既有树上替换家族成员时**没把新依赖带进来** → `mixed-install`/`mixed-routing`/`side-workspace-attacks` 三个套件 `ERR_MODULE_NOT_FOUND` 红。已修：探针新增"家族闭包"第二遍安装（扫描已装家族的 `dependencies`，缺失的按同一通道补装）
+  - 同一轮暴露**探针自身的缺口**（非产品缺陷）：`dsh-subprocess@0.1.5-rc.1` 把 `@deepseek-ai/dsh-http-proxy` 声明为 **peerDependency**，而探针必须用 `--legacy-peer-deps`（否则会因为装了 peer 范围外的家族而 ERESOLVE），该开关**恰恰不会自动安装 peer** → 包从未进树，`mixed-install`/`mixed-routing`/`side-workspace-attacks` 三个套件在跑到任何断言之前就 `ERR_MODULE_NOT_FOUND` 红。已修：探针新增"家族闭包"第二遍安装（扫描已装家族的 `dependencies` / `peerDependencies` / `optionalDependencies`，缺失的按同一通道补装），并打印 `closure probe`、`ls node_modules/@deepseek-ai`、`require.resolve` 三条诊断 —— 否则这类缺口会伪装成"产品在别的套件里坏了"。
+  - **修复后复跑（run 34468804623）：`drift (next)` / `drift (alpha)` / `drift (legacy)` 三通道全绿** —— 同一份代码同时通过 0.1.2-rc.1（线上）、0.1.5-rc.1（宿主 `latest`）与 0.1.5-alpha.2（下一代）的 typecheck + 全量单测 + 静态闸门
 
 ## 4. 覆盖边界（诚实标注）
 

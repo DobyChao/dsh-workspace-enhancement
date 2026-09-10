@@ -68,6 +68,13 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
 > 历史坑：旧版哨兵 `npm install --no-save <pkg>` 不带版本，装的是 `latest` 标签（`0.0.1-rc.1`），
 > 比 `next` 还旧——等于每周测了一个更老的家族。现在按 dist-tag 显式解析、并打印实际解析结果。
 
+> 探针自身的坑（2026-09-10）：家族成员会把新包声明为 **peer**（`dsh-subprocess@0.1.5-rc.1` →
+> `@deepseek-ai/dsh-http-proxy`），而探针为了装"peer 范围外的家族"必须带 `--legacy-peer-deps`，
+> 该开关**不自动安装 peer** → 包不进树，三个套件在跑到断言前就 `ERR_MODULE_NOT_FOUND`，
+> 看起来像"产品在别处坏了"。故哨兵现在补装"家族闭包"（扫家族成员的 `dependencies` /
+> `peerDependencies` / `optionalDependencies`，缺失的按同一通道补），并打印 `closure probe`、
+> `ls node_modules/@deepseek-ai`、`require.resolve` 三条诊断。
+
 ## 4. 运行时能力探测约定（写代码时遵守）
 
 1. **可选服务**用 `ctx.get('name')` 判空，不要用 `inject` 硬绑（硬依赖才 `inject`）。
