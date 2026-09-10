@@ -136,6 +136,12 @@ jobs:
               echo "::warning::family closure needed but unresolved on '$WANT': $MISSING"
             fi
           fi
+          # Diagnostics: a family member's own dependencies are exactly what a
+          # probe must not silently get wrong (this is what hid the 0.1.5
+          # dsh-http-proxy gap behind three unrelated-looking suite failures).
+          echo "closure probe: want=$WANT missing=[$MISSING]"
+          ls node_modules/@deepseek-ai | sort | tr '\n' ' ' | head -c 900; echo
+          node -e "for (const n of ['@deepseek-ai/dsh-http-proxy']) { try { console.log(n + ' -> ' + require.resolve(n + '/package.json')) } catch { console.log(n + ' -> UNRESOLVED') } }" || true
 
       - name: Print resolved family
         run: |
