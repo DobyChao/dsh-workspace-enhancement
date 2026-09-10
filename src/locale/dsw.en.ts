@@ -74,6 +74,7 @@ const en: Record<DswKey, string> = {
   'flow.loading.label': 'Loading directory',
   'flow.browse.error.remote': 'Cannot read the remote directory',
   'flow.browse.error.local': 'Cannot read the directory',
+  'flow.error.directoryUnavailable': 'the directory service (uiWorkspace) is not available',
   'flow.auth.complete': 'Complete authentication',
   'flow.empty.title': 'No subfolders',
   'flow.empty.hidden': '{n} more dot-prefixed folders are hidden',

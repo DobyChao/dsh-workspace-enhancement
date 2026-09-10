@@ -5,8 +5,9 @@
  * page (`settings.section`). Registered into both directory-flow holes and the
  * settings section, so mounting `dsh-workspace-enhancement` composes the whole
  * picking interaction. Cross-plane calls ride the shared web transport: local
- * listing through the `workspaces` service (the Host's `directoryPicker`
- * browse capability) and remote listing/connection management through the
+ * listing through the client `uiWorkspace` service (the Host `directoryPicker`
+ * browse capability — NOT the `workspaces` controller face, see BUG-3 and
+ * `./local-directory.ts`) and remote listing/connection management through the
  * package's `/dsw` RPC channel.
  *
  * I18N: the `dsw` dictionary pair (src/locale/) is registered against the
@@ -19,6 +20,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleDictOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { registerDswLocale } from '../locale/index.ts'
 import { SshWorkspaceFlow } from './flow.tsx'
+import { createLocalDirectorySeats } from './local-directory.ts'
+import type { ClientUiWorkspace } from './local-directory.ts'
 import { installRowBadges } from './row-badges.ts'
 import type { RowBadgeSources } from './row-badges.ts'
 import { RemoteWorkspaceSettingsPage } from './settings.tsx'
@@ -64,10 +67,13 @@ export type WireResult =
   | { ok: true; value: unknown }
   | { ok: false; error: { code: string; message: string } }
 
-/** The client workspace service's directory faces. */
+/**
+ * The client `workspaces` service (the Workspace Controller's own face):
+ * create / rename / delete / archiveSession / list. It carries NO directory
+ * methods — those live on `uiWorkspace` (`./local-directory.ts`), which is why
+ * BUG-3 threw `ctx.workspaces.listDirectory is not a function`.
+ */
 export interface ClientWorkspaces {
-  listDirectory(path?: string, signal?: AbortSignal): Promise<WireListing>
-  createDirectory(path: string, name: string): Promise<string>
   /** The workspaces feed (present once the runtime workspace service is up). */
   list?: ClientSnapshot<{ items: readonly WorkspaceRowLike[] }>
 }
@@ -161,9 +167,15 @@ export function apply(ctx: Context): void {
   // closure that renders copy at call time.
   const t = ctx.locale.bind('dsw')
   const rpcError = (): WireResult => ({ ok: false, error: { code: 'internal', message: t('rpc.transportUnavailable') } })
+  // Local pane seats (BUG-3): the directory capability lives on `uiWorkspace`,
+  // resolved lazily and optionally so a missing service degrades to one
+  // localized line instead of keeping the plugin from mounting.
+  const localSeats = createLocalDirectorySeats(
+    () => ctx.get('uiWorkspace') as ClientUiWorkspace | undefined,
+    () => t('flow.error.directoryUnavailable'),
+  )
   const injected = (): Record<string, unknown> => ({
-    listLocalDirectory: (path?: string, signal?: AbortSignal) => ctx.workspaces.listDirectory(path, signal),
-    createLocalDirectory: (path: string, name: string) => ctx.workspaces.createDirectory(path, name),
+    ...localSeats,
     rpc: (endpoint: string, payload?: unknown, signal?: AbortSignal) => {
       const connection = ctx.get('connection') as ClientConnection | undefined
       if (connection === undefined) return Promise.resolve(rpcError())
