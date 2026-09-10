@@ -7,8 +7,10 @@ name: Upstream drift
 # published dist-tag and runs the gate against them.
 #
 # Two channels are probed on purpose:
-#   next  — the rc family our peers anchor (^0.1.2-rc.1). Red means the family
-#           we already claim to support moved: look now.
+#   next  — the rc family our peers anchor. Red means the family we already
+#           claim to support moved: look now. (Resolves to 0.1.5-rc.1 as of
+#           2026-09-10 — the same family that added `FileSystem.readByteRange`,
+#           i.e. UPSTREAM-1.)
 #   alpha — the NEXT generation (0.1.5-alpha.x at the time of writing; it already
 #           pulls packages we do not depend on, e.g. @deepseek-ai/dsh-brand and
 #           @deepseek-ai/dsh-invariants). Alpha is where seam breaks land first;
@@ -16,9 +18,16 @@ name: Upstream drift
 #           adapted. A red alpha run is an EARLY WARNING with a longer fuse, not
 #           a merge blocker — but it opens/updates an issue so it cannot be
 #           missed. See docs/compatibility.md.
+#
+# A third channel keeps a DUAL-FAMILY peer claim honest:
+#   legacy — pins the exact family the deployed host still runs (0.1.2-rc.1).
+#           The peer union in package.json (`^0.1.2-rc.1 || ^0.1.5-rc.1`) claims
+#           support for both lines, so both must be exercised by CI: `next`
+#           covers the newer line, `legacy` covers the one in production.
+#           scripts/check.mjs fails when a declared family has no row here.
 on:
   schedule:
-    - cron: '0 3 * * 1' # Monday 03:00 UTC — next + alpha
+    - cron: '0 3 * * 1' # Monday 03:00 UTC — next + alpha + legacy
     - cron: '0 3 * * 4' # Thursday 03:00 UTC — alpha gets its own slot
   workflow_dispatch:
 
@@ -33,7 +42,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        channel: [next, alpha]
+        # `tag:` resolves every host-shared package through a dist-tag; `family:`
+        # pins them all to one exact version. One row per family the peer union
+        # declares — the union's alternatives are 0.1.2-rc.1 and 0.1.5-rc.1.
+        include:
+          - channel: next
+            tag: next
+            family: ''
+          - channel: alpha
+            tag: alpha
+            family: ''
+          - channel: legacy
+            tag: ''
+            family: 0.1.2-rc.1
     steps:
       - uses: actions/checkout@v4
 
@@ -52,20 +73,78 @@ jobs:
       - name: Install the '${{ matrix.channel }}' seam family
         id: family
         # --legacy-peer-deps: the probe deliberately installs a family that our
-        # peer ranges do not satisfy yet; npm would otherwise refuse with ERESOLVE.
+        # peer ranges may not satisfy (alpha), or an older one than the dev deps
+        # resolve (legacy); npm would otherwise refuse with ERESOLVE.
         run: |
           PKGS=""
-          for name in $(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))"); do
-            v="$(npm view "$name@${{ matrix.channel }}" version 2>/dev/null | tail -1)"
-            if [ -n "$v" ]; then
-              PKGS="$PKGS $name@$v"
-            else
-              echo "::warning::$name has no '${{ matrix.channel }}' tag — skipped"
-            fi
-          done
+          NAMES="$(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")"
+          if [ -n "${{ matrix.family }}" ]; then
+            for name in $NAMES; do
+              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1)"
+              if [ -n "$v" ]; then
+                PKGS="$PKGS $name@$v"
+              else
+                echo "::warning::$name has no ${{ matrix.family }} release — skipped"
+              fi
+            done
+          else
+            for name in $NAMES; do
+              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1)"
+              if [ -n "$v" ]; then
+                PKGS="$PKGS $name@$v"
+              else
+                echo "::warning::$name has no '${{ matrix.tag }}' tag — skipped"
+              fi
+            done
+          fi
           echo "family=$PKGS" >> "$GITHUB_OUTPUT"
           echo "installing:$PKGS"
           npm install --no-save --legacy-peer-deps $PKGS 2>&1 | tail -25
+
+          # Second pass — the family's OWN requirements. Our peer list is not the
+          # whole family: 0.1.5's dsh-subprocess declares @deepseek-ai/dsh-http-proxy
+          # as a PEER, and `--legacy-peer-deps` (needed to install a family our
+          # ranges may not satisfy) deliberately skips auto-installing peers — so
+          # it was never installed and three suites died with
+          # ERR_MODULE_NOT_FOUND before reaching any assertion. Whatever the
+          # installed family itself requires must resolve through the same channel.
+          WANT="${{ matrix.family }}"
+          if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
+          MISSING="$(node -e "
+            const fs = require('fs');
+            const peers = Object.keys(require('./package.json').peerDependencies).filter((n) => n.startsWith('@deepseek-ai/dsh-'));
+            const out = new Set();
+            for (const name of peers) {
+              let manifest;
+              try { manifest = JSON.parse(fs.readFileSync('node_modules/' + name + '/package.json', 'utf8')); } catch { continue; }
+              for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+                for (const dep of Object.keys(manifest[field] ?? {})) {
+                  if (!dep.startsWith('@deepseek-ai/')) continue;
+                  if (!fs.existsSync('node_modules/' + dep + '/package.json')) out.add(dep);
+                }
+              }
+            }
+            console.log([...out].join(' '));
+          ")"
+          if [ -n "$MISSING" ]; then
+            DEPS=""
+            for dep in $MISSING; do
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1)"
+              if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; fi
+            done
+            if [ -n "$DEPS" ]; then
+              echo "family closure:$DEPS"
+              npm install --no-save --legacy-peer-deps $DEPS 2>&1 | tail -10
+            else
+              echo "::warning::family closure needed but unresolved on '$WANT': $MISSING"
+            fi
+          fi
+          # Diagnostics: a family member's own dependencies are exactly what a
+          # probe must not silently get wrong (this is what hid the 0.1.5
+          # dsh-http-proxy gap behind three unrelated-looking suite failures).
+          echo "closure probe: want=$WANT missing=[$MISSING]"
+          ls node_modules/@deepseek-ai | sort | tr '\n' ' ' | head -c 900; echo
+          node -e "for (const n of ['@deepseek-ai/dsh-http-proxy']) { try { console.log(n + ' -> ' + require.resolve(n + '/package.json')) } catch { console.log(n + ' -> UNRESOLVED') } }" || true
 
       - name: Print resolved family
         run: |
@@ -104,7 +183,9 @@ jobs:
               '',
               channel === 'alpha'
                 ? 'This is the EARLY WARNING channel: alpha content will be promoted to rc, so a break here becomes a break we must fix before the next rc bump.'
-                : 'This is the family our peers already anchor — the break is live.',
+                : channel === 'legacy'
+                  ? 'This is the family the DEPLOYED host still runs (the peer union claims support for it): a break here means the shipped plugin would fail on the current production host.'
+                  : 'This is the family our peers already anchor — the break is live.',
               '',
               'See `docs/compatibility.md`.',
             ].join('\n')

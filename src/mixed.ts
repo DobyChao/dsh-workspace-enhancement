@@ -186,7 +186,7 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   }
 }
 
-/** The minimal filesystem surface both branches implement (the seam's 13 methods). */
+/** The minimal filesystem surface both branches implement (the seam's methods). */
 export type FileSystemBranch = {
   /** The backend's default confinement mode, when it confines at all. */
   readonly sandboxMode?: unknown
@@ -206,6 +206,18 @@ export type FileSystemBranch = {
   readText(target: FsTarget, signal?: AbortSignal): Promise<string>
   streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>
   readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>
+  /**
+   * One byte window `[offset, offset + length)` — the seam method the 0.1.5
+   * line added (UPSTREAM-1). Optional **on delegates only**, and deliberately
+   * so: the pre-0.1.5 host's own filesystem service has no such method, and a
+   * required member here would make `plugin.ts` stop compiling against the
+   * family we still ship for. The FACADE always implements it (the reflection
+   * contract in `test/mixed-fs-contract.test.ts` is what locks that down) and
+   * answers with a clear `FsError` for a local target when its delegate
+   * predates the method — never a `TypeError`, and never a silent whole-file
+   * buffer.
+   */
+  readByteRange?(target: FsTarget, range: { offset: number; length: number }, signal?: AbortSignal): Promise<Uint8Array>
   listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
   writeText(
     target: FsTarget,
@@ -341,6 +353,33 @@ export class MixedFileSystem implements FileSystemBranch {
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.readBytes(target, signal, maxBytes)
       : this.local.readBytes(target, signal, maxBytes)
+  }
+
+  /**
+   * UPSTREAM-1: the 0.1.5 line calls `ctx.get('fs')?.readByteRange(...)`, so the
+   * facade is what the host actually reaches — exactly the BUG-2 shape. Remote
+   * targets forward to the SSH engine; a local target forwards to the local
+   * delegate, which only has the method from the 0.1.5 line on. On an older
+   * host nothing calls this (no caller exists before that line), so the guard
+   * below is a defensive, honest failure instead of a `TypeError` — and instead
+   * of a fallback that would buffer the whole file, which the seam forbids.
+   */
+  async readByteRange(
+    target: FsTarget,
+    range: { offset: number; length: number },
+    signal?: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (worldOfTargetKey(String(target.targetKey)) === 'remote') {
+      return this.remote.readByteRange(target, range, signal)
+    }
+    const reader = this.local.readByteRange
+    if (reader === undefined) {
+      throw new FsError(
+        `cannot read "${target.displayPath}": the local filesystem backend does not support windowed reads (dsh-fs before the 0.1.5 line)`,
+        'FS_IO_ERROR',
+      )
+    }
+    return reader.call(this.local, target, range, signal)
   }
 
   /** @inheritdoc */

@@ -184,7 +184,22 @@ if (existsSync(resolve(ROOT, 'test'))) {
 }
 check('no focused (.only/.skip) tests', focused === 0, `${focused} marker(s)`)
 
-// ---- 6. host-shared packages: peerDependencies, one rc family --------------
+// ---- 6. host-shared packages: peerDependencies, one declared range ---------
+/**
+ * Three rules, bound together:
+ *
+ *  - every host-shared package is a PEER (never a dependency) — a second copy
+ *    would shadow the host singleton (service identity is module-level);
+ *  - all peers declare ONE identical range, and all devDependencies declare ONE
+ *    identical range that is one of that range's `||` alternatives. A union peer
+ *    range is how a dual-family claim is expressed (UPSTREAM-1:
+ *    `^0.1.2-rc.1 || ^0.1.5-rc.1`) while dev keeps installing one concrete family
+ *    for CI;
+ *  - a multi-alternative peer range must be probed: every alternative has to be
+ *    named in `.github/workflows/upstream.yml`, so a support claim can never
+ *    outrun its verification (2026-09-10: the host package's `latest` was already
+ *    0.1.5-rc.1 while we still claimed only the 0.1.2 line).
+ */
 const peer = pkg.peerDependencies ?? {}
 const deps = pkg.dependencies ?? {}
 const dev = pkg.devDependencies ?? {}
@@ -192,22 +207,49 @@ const isHostFamily = name => name.startsWith('@deepseek-ai/dsh-')
 const hostInDeps = Object.keys(deps).filter(isHostFamily)
 check('host-shared packages are never dependencies', hostInDeps.length === 0, hostInDeps.join(', '))
 
-const family = new Map()
-for (const source of [peer, dev]) {
+/** One range string per group; a leading range operator is not part of identity. */
+const coreOf = range => String(range).replace(/^[\^~>=<\s]+/, '')
+function rangesOf(source) {
+  const seen = new Map()
   for (const [name, range] of Object.entries(source)) {
     if (!isHostFamily(name)) continue
-    const core = String(range).replace(/^[\^~>=<\s]+/, '')
-    if (!family.has(core)) family.set(core, [])
-    family.get(core).push(name)
+    const core = coreOf(range)
+    if (!seen.has(core)) seen.set(core, [])
+    seen.get(core).push(name)
   }
+  return seen
 }
-check('@deepseek-ai/dsh-* declared on one rc family', family.size === 1,
-  [...family.entries()].map(([core, names]) => `${core}: ${names.length} pkg`).join(' | '))
+const peerRanges = rangesOf(peer)
+const devRanges = rangesOf(dev)
+const describe = map => [...map.entries()].map(([core, names]) => `${core}: ${names.length} pkg`).join(' | ')
+
+check('@deepseek-ai/dsh-* peers declare one range', peerRanges.size === 1, describe(peerRanges))
+check('@deepseek-ai/dsh-* devDependencies declare one range', devRanges.size === 1, describe(devRanges))
+
+const peerCore = [...peerRanges.keys()][0] ?? ''
+const devCore = [...devRanges.keys()][0] ?? ''
+const peerFamilies = peerCore.split('||').map(part => part.trim()).filter(Boolean)
+check('devDependencies range is one of the peer range alternatives',
+  devCore === '' || peerFamilies.includes(devCore),
+  `dev=${devCore || '(none)'} peer=${peerCore || '(none)'}`)
 
 const nonRcPeers = Object.entries(peer)
   .filter(([name, range]) => isHostFamily(name) && !String(range).includes('-rc.'))
   .map(([name, range]) => `${name}@${range}`)
 check('peer ranges use the rc channel', nonRcPeers.length === 0, nonRcPeers.join(', '))
+
+if (peerFamilies.length > 1) {
+  try {
+    const workflow = read('.github/workflows/upstream.yml')
+    const missing = peerFamilies.filter(family => !workflow.includes(family))
+    check('every declared peer family is probed in upstream.yml', missing.length === 0,
+      missing.length === 0
+        ? `${peerFamilies.length} families: ${peerFamilies.join(' | ')}`
+        : `declared as supported but never probed: ${missing.join(', ')}`)
+  } catch (error) {
+    check('upstream.yml readable for the family probe check', false, String(error.message || error))
+  }
+}
 
 // ---- 7. CHANGELOG covers the current version -------------------------------
 try {
