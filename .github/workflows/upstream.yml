@@ -101,12 +101,13 @@ jobs:
           echo "installing:$PKGS"
           npm install --no-save --legacy-peer-deps $PKGS 2>&1 | tail -25
 
-          # Second pass — the family's OWN dependencies. Our peer list is not the
-          # whole family, and npm can leave a newly required package out when it
-          # replaces members inside an existing tree: 0.1.5's dsh-subprocess
-          # depends on @deepseek-ai/dsh-http-proxy, which never got installed and
-          # broke three suites with ERR_MODULE_NOT_FOUND. Whatever the installed
-          # family itself depends on must resolve through the same channel.
+          # Second pass — the family's OWN requirements. Our peer list is not the
+          # whole family: 0.1.5's dsh-subprocess declares @deepseek-ai/dsh-http-proxy
+          # as a PEER, and `--legacy-peer-deps` (needed to install a family our
+          # ranges may not satisfy) deliberately skips auto-installing peers — so
+          # it was never installed and three suites died with
+          # ERR_MODULE_NOT_FOUND before reaching any assertion. Whatever the
+          # installed family itself requires must resolve through the same channel.
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
           MISSING="$(node -e "
@@ -116,9 +117,11 @@ jobs:
             for (const name of peers) {
               let manifest;
               try { manifest = JSON.parse(fs.readFileSync('node_modules/' + name + '/package.json', 'utf8')); } catch { continue; }
-              for (const dep of Object.keys(manifest.dependencies ?? {})) {
-                if (!dep.startsWith('@deepseek-ai/')) continue;
-                if (!fs.existsSync('node_modules/' + dep + '/package.json')) out.add(dep);
+              for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+                for (const dep of Object.keys(manifest[field] ?? {})) {
+                  if (!dep.startsWith('@deepseek-ai/')) continue;
+                  if (!fs.existsSync('node_modules/' + dep + '/package.json')) out.add(dep);
+                }
               }
             }
             console.log([...out].join(' '));
