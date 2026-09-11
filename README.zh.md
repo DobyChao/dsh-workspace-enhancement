@@ -56,6 +56,21 @@ dsh plugin --profile web add <本仓库路径>
 > `node-pty`、`dsh-subprocess-local`，再执行 `dsh plugin --profile web install`；
 > 否则首次 `add` 会以非 0 退出（`ERR_PNPM_IGNORED_BUILDS`）且 bundle 不会被追加。
 
+## 版本兼容
+
+装哪个版本的插件，取决于你跑的 **DSH 宿主家族**——用 `dsh --version` 查看（家族版本可看
+DSH 安装目录下的 `@deepseek-ai/`，如 `<npm root -g>/@deepseek-ai/`）：
+
+| 你的 DSH 宿主 | 该装哪个版本 | 说明 |
+|---|---|---|
+| **`0.1.5` 线**（`0.1.5-rc.1`、`0.1.5-rc.2`…） | **0.1.4 或更新** | **唯一**受支持的家族（peer 收窄为 `^0.1.5-rc.1`）。浏览器通道挂官方共享 `/api`（`/api/dsw/<端点>`），不再自挂 `/dsw` |
+| `0.1.2-rc.1` 家族（`0.1.2`、`0.1.3` 发布物） | `0.1.3`——该线的最后一个版本 | **已停止支持**（2026-09-11 退场）。该线挪动了 Connection 接缝（`connection.rpc.handle` 已无法注册通道），不会再回填修复 |
+| 其它 / 更老的线 | — | 从未支持 |
+
+**宿主与插件必须同步升级。** 0.1.4 线说 `/api/dsw/*`，0.1.3 及更早说 `/dsw/*`，且 0.1.3 没有
+`readByteRange`：混用会让宿主起得来、但连接/目录 UI **静默拿不到数据**（机器列表读不出、目录浏览报错）。
+支持窗口与上游漂移记录见 [docs/compatibility.md](./docs/compatibility.md)。
+
 ## 路线图
 
 当前进度与剩余里程碑：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。唯一待办真相源是

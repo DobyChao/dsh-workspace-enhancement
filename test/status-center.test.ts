@@ -16,7 +16,7 @@ import { createStatusCenter } from '../src/client/status.tsx'
 import type { RpcCall } from '../src/client/status.tsx'
 import type { ConnStatusView } from '../src/client/status.tsx'
 
-/** A scripted `/dsw` channel: records calls and resolves on demand. */
+/** A scripted channel call: records calls and resolves on demand (see `../src/web-channel.ts`). */
 function scriptedRpc() {
   const calls: Array<{ endpoint: string; payload: unknown }> = []
   const waiters: Array<{ endpoint: string; resolve: (value: unknown) => void }> = []

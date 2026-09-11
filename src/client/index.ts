@@ -8,7 +8,7 @@
  * listing through the client `uiWorkspace` service (the Host `directoryPicker`
  * browse capability — NOT the `workspaces` controller face, see BUG-3 and
  * `./local-directory.ts`) and remote listing/connection management through the
- * package's `/dsw` RPC channel.
+ * package's channel on the shared `/api` transport (`../web-channel.ts`).
  *
  * I18N: the `dsw` dictionary pair (src/locale/) is registered against the
  * framework LocaleRuntime at apply time (drafts/i18n-design.md §9) — the
@@ -18,12 +18,16 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleDictOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { API_CHANNEL, channelEndpointOf } from '../web-channel.ts'
 import { registerDswLocale } from '../locale/index.ts'
 import { SshWorkspaceFlow } from './flow.tsx'
 import { createLocalDirectorySeats } from './local-directory.ts'
 import type { ClientUiWorkspace } from './local-directory.ts'
 import { installRowBadges } from './row-badges.ts'
 import type { RowBadgeSources } from './row-badges.ts'
+import { createRemoteStatusSeats, remoteStatusRegisterOptions, REMOTE_STATUS_SLOT } from './remote-status.ts'
+import type { RemoteSessionsFeed } from './remote-status.ts'
+import { RemoteStatusAction } from './remote-status-entry.tsx'
 import { RemoteWorkspaceSettingsPage } from './settings.tsx'
 import { SideWorkspacesAction } from './side-workspaces.tsx'
 
@@ -174,12 +178,24 @@ export function apply(ctx: Context): void {
     () => ctx.get('uiWorkspace') as ClientUiWorkspace | undefined,
     () => t('flow.error.directoryUnavailable'),
   )
+  // t4: the session feed behind the header's remote-status cell. Optional
+  // service (`ctx.get`, never `inject`): a runtime without the store leaves the
+  // cell hidden instead of holding the whole plugin back. Built ONCE so the
+  // seat function identities stay stable across renders (the cell's effect
+  // depends on them).
+  // The store lives on `sessions.list` — the service face itself carries
+  // open/fork/search/…, so resolving the face as a feed would break the cell.
+  const remoteSeats = createRemoteStatusSeats(() => {
+    const sessions = ctx.get('sessions') as unknown as { list?: RemoteSessionsFeed } | undefined
+    return sessions?.list
+  })
   const injected = (): Record<string, unknown> => ({
     ...localSeats,
+    ...remoteSeats,
     rpc: (endpoint: string, payload?: unknown, signal?: AbortSignal) => {
       const connection = ctx.get('connection') as ClientConnection | undefined
       if (connection === undefined) return Promise.resolve(rpcError())
-      return connection.rpc.call('/dsw', endpoint, payload ?? {}, signal)
+      return connection.rpc.call(API_CHANNEL, channelEndpointOf(endpoint), payload ?? {}, signal)
     },
   })
   ctx.slots.inject('conversation.hero.workspace.directoryFlow', () =>
@@ -213,6 +229,16 @@ export function apply(ctx: Context): void {
       locale: 'dsw',
       inject: injected,
     }, SideWorkspacesAction))
+  // t4: the header's remote-status cell. `conversation.session.header.utilities`
+  // is the official right-aligned utilities list seat that BOTH supported
+  // families declare (0.1.2-rc.1 — the family the live deployment runs — and
+  // 0.1.5-rc.2), so the cell is visible on both; the title-adjacent
+  // `conversation.session.header.actions` group above keeps its own cell and is
+  // NOT second-registered. No conditional double registration exists anywhere:
+  // `slots.inject` waits for a declaration and cannot answer whether a key
+  // exists (see ADR-0017).
+  ctx.slots.inject(REMOTE_STATUS_SLOT, () =>
+    ctx.slots.register({ ...remoteStatusRegisterOptions(t), inject: injected }, RemoteStatusAction))
   installSidebarRowBadges(ctx)
 }
 
@@ -244,7 +270,7 @@ function installSidebarRowBadges(ctx: Context): void {
       if (connection === undefined) {
         return Promise.resolve({ ok: false, error: { code: 'internal', message: ctx.locale.bind('dsw')('rpc.transportUnavailable') } } as WireResult)
       }
-      return connection.rpc.call('/dsw', endpoint, payload ?? {}, signal)
+      return connection.rpc.call(API_CHANNEL, channelEndpointOf(endpoint), payload ?? {}, signal)
     },
     sources,
     onChange => {

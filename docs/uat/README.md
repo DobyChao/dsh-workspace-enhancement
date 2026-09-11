@@ -1,4 +1,4 @@
-﻿# 用户验收（UAT）流程
+# 用户验收（UAT）流程
 
 > 本目录是**入库的用户验收文档**：UAT 在交付流程中的位置、lab 实例怎么用、证据怎么留、反馈怎么回填。
 > 轮次事实档案见 [docs/rounds/](../rounds/README.md)；面向用户的进度概览见 [docs/ROADMAP.md](../ROADMAP.md)。
@@ -59,7 +59,7 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | **组合一致** | lab 的组合（`dsh --profile web --dump-config`）应与真实 profile 同构，验收结论才可外推 |
 
 地址：`http://127.0.0.1:50599/`（**文档中回环地址统一写作占位地址**，端口 50599 为 lab 专用）。
-启动后应确认三件事：HTTP 200、页面引用了插件 client bundle、`POST /dsw/<endpoint>` 返回 `ok:true`。
+启动后应确认三件事：HTTP 200、页面引用了插件 client bundle、`POST /api/dsw/<endpoint>` 返回 `ok:true`。
 
 > 部署动作另有一套脚本 `scripts/restart-3080.ps1`（会话外执行 + 三项验证 + 回滚提示）。
 > **重启 3080 一律由用户执行**，UAT 阶段不涉及。
@@ -93,6 +93,9 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | [README.md](./README.md) | 本文件：UAT 流程说明 |
 | [TEMPLATE.md](./TEMPLATE.md) | UAT 脚本骨架（可直接复制） |
 | [R6-i18n.md](./R6-i18n.md) | 真实示例：R6 运行时国际化轮验收脚本 |
+| [R13-req-i6.md](./R13-req-i6.md) | 真实示例：R13 系统提示词英文化 / 按需注入 |
+| [R15-local-directory-pane.md](./R15-local-directory-pane.md) | 真实示例：R15 `BUG-3` 本机目录面 |
+| [R17-rc2-official-slot-entry.md](./R17-rc2-official-slot-entry.md) | 真实示例：R17 官方槽（header 工具区「远程状态」）+ 徽标/目录回归 |
 | [FEEDBACK.md](./FEEDBACK.md) | 用户反馈模板 |
 
 来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`drafts/CONTEXT.md` §0/§6.1；`docs/ROADMAP.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）

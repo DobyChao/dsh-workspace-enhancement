@@ -37,20 +37,24 @@
 | `npm run check` | **唯一质量门**：静态闸门 + typecheck + 单测 + build + pack 冒烟 | CI / 本地 shell |
 | `npm run check:static` | 静态闸门（词典/密钥/peer 家族/版本/提交信息等 12 项 + `lib/` 漂移 WARN） | 代理 / CI |
 | `npm run typecheck` | `tsc --noEmit` | 代理 / CI |
-| `npm test` | 全量单测（`node --test`，21 文件） | CI / 本地 shell |
+| `npm test` | 全量单测（`node --test`） | CI / 本地 shell |
 | `npm run test:agent` | 沙箱内单测（单进程、无 esbuild；自动分类沙箱受限失败） | **代理** |
 | `npm run build` | `tsc` + `tsdown` | 代理 / CI |
 | `npm run e2e` | Playwright 黑盒（lab 50599） | 本地 shell / CI |
 | `npm run status` | 重新生成 `docs/status.md` | 任何人 |
+| `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5.7） | 代理 / CI |
+| `node scripts/boot-smoke.mjs [--no-channel]` | **真 boot 哨兵**：临时 `DSH_HOME` → 起宿主 → 断言进程存活 / `GET /` 200 / `POST /api/dsw/connections.list` 200 + `result.ok=true`（`upstream.yml` 每条通道都跑，**强断言**；见 §4） | 代理 / CI |
 | `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例 | 本地 shell |
 
 改完代码后**至少**跑 `npm run check:static && npm run typecheck && npm run test:agent`；
 能跑 shell 时跑完整 `npm run check`。
 
-**改了 `src/` 必须 `npm run build`**：`lib/` 是 gitignore 的产物，而 3080 的 profile 以
-`link:` 装本仓库、直接加载 `lib/`——不 build 就重启，跑的仍是旧代码（2026-09-09 实锤：
-3080 的进程跑着 6 小时前的 build，REQ-I6 没生效，见 `INFRA-11`）。闸门在「`lib/` 早于
-`src/`」时打 WARN（非阻断，CI 无 `lib/` 时跳过）。
+**改了 `src/` 必须 `npm run build`**：`lib/` 是 gitignore 的产物，而**以 `link:` 装本仓库的 profile
+直接加载 `lib/`**——不 build 就重启，跑的仍是旧代码（2026-09-09 实锤：进程跑着 6 小时前的 build，
+REQ-I6 没生效，见 `INFRA-11`）。**2026-09-11 起产品 profile（3080）已不再安装本插件**，唯一以
+`link:` 装本仓库的实例是隔离 lab `C:\Users\Admin\.dsh-lab`（`DSH_HOME=.dsh-lab`，端口 50599）；
+真机验证一律在那里做，`.tmp/engineer-host/lab-home-probe.ps1` 是现成的探针（不删 home、自带清理）。
+闸门在「`lib/` 早于 `src/`」时打 WARN（非阻断，CI 无 `lib/` 时跳过）。
 
 **改了测试或跨平台代码，push 前必须跑 Linux 复验**（Windows 全绿抓不到 Linux-only 假设）：
 
@@ -71,6 +75,11 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 - 真进程用例（`(process-level)`、`AUDIT-TC*`）与 `SetFileSecurityW` 失败属**沙箱受限**，
   `test:agent` 会归类并仍返回 0；权威判定是 CI 的 `npm test`。
 - 子进程捕获输出要用**文件描述符重定向**（见 `scripts/lib/run.mjs`），不要用 `execFileSync` 默认管道。
+
+**「能编译 ≠ 能运行」**：typecheck 与单测**抓不到宿主装配问题**——2026-09-10 的 F1 就是标本：
+插件在 `0.1.5` 家族上**启动即崩**，而两代家族的 typecheck + 240 例单测**全绿**。
+凡改动**服务/inject/cordis 组合/路由挂载**，验证必须含一次真 boot
+（`node scripts/boot-smoke.mjs`，§3）；`upstream.yml` 每条通道已强制包含此步骤。
 
 ## 5. 红线（违反即回滚）
 
@@ -94,10 +103,12 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    ② 全局安装包 `<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/*`；
    ③ 本仓库 `node_modules/@deepseek-ai/*`。找不到就回来问，不要猜服务/槽位名。
    **被禁的 Inspect 有磁盘等价物**：`<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/`
-   `dsh-cordis-client-runner/lib/client.js`（`CLIENT_SLOT_API` 约 :2135、Service Catalog 约 :1105、
-   Event Catalog 约 :2103），含每个槽位的 registerOptions / ownerProps / standardProps / declaredBy /
-   occupants / replaceRisk / example / source。它是**生成产物**（文件头 `do not edit by hand`），
-   只读引用、不可修改；上游升级后路径与行号需重新核对。详见 `docs/architecture.md` §8.1。
+   `dsh-cordis-client-runner/lib/client.js`（生成产物 `CLIENT_SLOT_API` / Service Catalog / Event Catalog，
+   含每个槽位的 registerOptions / ownerProps / standardProps / declaredBy / occupants / replaceRisk /
+   example / source）。它是**生成产物**（文件头 `do not edit by hand`），只读引用、不可修改。
+   **不要手写解析脚本**：直接 `npm run slots -- --list|--key|--diff <bundle.js…>`（§3）。
+   **行号不是契约**：只认 `key`/字段名与符号名；引用行号必须注明它属于哪份 bundle，
+   不同快照的行号**不可互换**。详见 `docs/architecture.md` §8.1 与 `ADR-0017` §1.1。
 
 ## 6. 写插件代码 / 改 Cordis 组合前的固定动作
 
@@ -156,6 +167,10 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 3. `docs/status.md` 的「质量门」表 —— 你能跑哪些命令。
 4. `docs/compatibility.md` —— 别在错误的上游家族上开工。
 
-**当前即刻事项**（2026-09-09 更新）：① **用户重启 3080** 验收 0.1.3（`scripts/restart-3080.ps1`，会话外；
-`lib/` 已重建，重启才生效）；② 下一轮开发主线待定，候选见 `docs/backlog.md` §2（`REQ-I1` P1 侦察就绪 →
-`UPSTREAM-1`）；③ 被挡住需拍板：`UX-1` / `SEC-1` / `SEC-3` / `INFRA-8`。
+**当前即刻事项**（2026-09-11 更新）：① **`UPSTREAM-3` 三条全部落地**（F1 启动崩溃 / F2 通道 405 / F3 哨兵缺口），
+通道改挂**官方共享 `/api` 的精确 Fetch 路由**（`ADR-0018`），`0.1.5` 家族**已可宣称运行时支持**（真机实证
+`POST /api/dsw/connections.list → 200, result.ok=true`）；② **`UPSTREAM-4`：0.1.2 家族退场**——peer/dev 收窄为
+`^0.1.5-rc.1`，`upstream.yml` 只剩 `next`/`alpha` 两条通道，`--channel-warn` 降级口已删；
+③ 下一轮候选：`AUDIT-5`（会话子行徽标，两代共有；`AUDIT-4` 是它的邻居）与 `AUDIT-4`（判定分离），
+两者都已登记待排期；④ 发布 `0.1.4` 由所有者决定（含本轮的通道换轨，**与已发布的 0.1.3 客户端半不兼容**——
+但 3080 已不装本插件，故无线上影响）。

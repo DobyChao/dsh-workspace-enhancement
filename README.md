@@ -57,6 +57,23 @@ dsh plugin --profile web add <this-repo-path>
 > `dsh plugin --profile web install`. Without it the first `add` exits non-zero
 > (`ERR_PNPM_IGNORED_BUILDS`) and the bundle is not appended.
 
+## Compatibility
+
+Which plugin version to install depends on the **DSH host family** you run — check it with `dsh --version`
+(and the family under your DSH install, e.g. `<npm root -g>/@deepseek-ai/`):
+
+| Your DSH host | Install | Notes |
+|---|---|---|
+| **`0.1.5` line** (`0.1.5-rc.1`, `0.1.5-rc.2`, …) | **0.1.4 or newer** | The **only** supported family (peers are `^0.1.5-rc.1`). The browser channel rides the official shared `/api` transport (`/api/dsw/<endpoint>`), so no standalone `/dsw` route is needed |
+| `0.1.2-rc.1` family (`0.1.2`, `0.1.3` releases) | `0.1.3` — the last release of that line | **No longer supported** (retired 2026-09-11). That line moved the Connection seam — `connection.rpc.handle` can no longer register a channel — so no fix is backported to it |
+| any other / older line | — | Never supported |
+
+**Host and plugin must move together.** The 0.1.4 line speaks `/api/dsw/*` while 0.1.3 and earlier speak
+`/dsw/*`, and 0.1.3 has no `readByteRange`. Mixing them leaves the connection / directory UI without a data
+channel (the host still boots, the UI silently cannot load machines or browse). Upgrading DSH means upgrading
+this plugin in the same step; the full window and the upstream drift log are in
+[docs/compatibility.md](./docs/compatibility.md).
+
 ## Roadmap
 
 Current status and remaining milestones: [docs/ROADMAP.md](./docs/ROADMAP.md). The single backlog lives in [docs/backlog.md](./docs/backlog.md); the generated state snapshot is [docs/status.md](./docs/status.md).

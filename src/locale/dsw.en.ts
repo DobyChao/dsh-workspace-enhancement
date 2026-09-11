@@ -280,6 +280,10 @@ const en: Record<DswKey, string> = {
   'side.draft.labelPlaceholder': 'display name (defaults to the directory name)',
   'side.mount': 'Mount',
 
+  /* ----------------------------------------------- remote-status-entry.tsx */
+  'header.remote.label': 'Remote status',
+  'header.remote.title': 'Remote connection of this session: {machine} (click to re-check)',
+
   /* ------------------------------------------------------------ permission */
   'permission.rw': 'read-write',
   'permission.r': 'read-only',

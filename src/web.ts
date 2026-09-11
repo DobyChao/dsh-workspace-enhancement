@@ -1,10 +1,14 @@
 /**
  * Web-facing RPC channel of dsh-workspace-enhancement: mounts the connection
- * registry and registers the `/dsw` unary channel on the shared web transport
- * with the loopback trust fence. The client half drives connection management
- * and remote directory browsing through it; endpoints are plain JSON. Remote
- * listing shares one level walk with the directory-picker backend
+ * registry and registers the plugin's unary channel as exact Fetch routes on the
+ * shared `/api` transport (the loopback/Host fence and the browser-session check
+ * are applied by that transport, not here). The client half drives connection
+ * management and remote directory browsing through it; endpoints are plain JSON.
+ * Remote listing shares one level walk with the directory-picker backend
  * ({@link module:dsh-workspace-enhancement/listing}).
+ *
+ * The wire identity (channel path, namespace, envelope) lives in
+ * `./web-channel.ts`, which the client half imports too.
  * @module dsh-workspace-enhancement/web
  */
 
@@ -25,6 +29,8 @@ import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
 import { normalizeSideRootKey, remoteSideRootKey } from './session-workspaces.ts'
 import { hostLocaleOf } from './locale/host.ts'
+import { channelRouteOf, isAlreadyRegistered } from './web-channel.ts'
+import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel.ts'
 
 /** Channel config. */
 export interface WebChannelConfig extends RegistryConfig {
@@ -32,10 +38,7 @@ export interface WebChannelConfig extends RegistryConfig {
   maxEntries?: number
 }
 
-/** The unary RPC result shape the shared transport expects. */
-export type ChannelResult =
-  | { ok: true; value: unknown }
-  | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } }
+export type { ChannelResult } from './web-channel.ts'
 
 /** One wire directory row / crumb. */
 interface WireEntry {
@@ -55,14 +58,17 @@ interface WireListing {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Host connection transport; the shared RPC channel registry lives here. */
+    /**
+     * Host connection transport. Only the surface this row uses is declared —
+     * the exact Fetch-route registry on the shared `/api` channel, mirrored from
+     * `@deepseek-ai/dsh-client-connection`'s `HostConnectionFetch` /
+     * `ConnectionFetchRoute` types. `connection.rpc.handle` is deliberately NOT
+     * declared: it is unusable on the 0.1.5 line (see `./web-channel.ts`), and
+     * leaving it out keeps it from creeping back in.
+     */
     connection: {
-      rpc: {
-        handle(
-          channel: string,
-          handler: (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<ChannelResult>,
-          options: { authority: 'loopback' | 'trusted-host' },
-        ): () => Promise<void>
+      fetch: {
+        register(route: ChannelRoute): () => Promise<void>
       }
     }
   }
@@ -211,7 +217,52 @@ const wireError = (code: string, message: string): ChannelResult => {
 }
 
 /**
- * Mount the connection registry and the `/dsw` channel.
+ * Every endpoint this row serves, in one place.
+ *
+ * The dispatch switch below is the implementation and this list is the mount
+ * surface, so the two can drift; `test/web-channel.test.ts` reads this file and
+ * fails when a `case 'x':` is not listed here (or vice versa).
+ */
+export const CHANNEL_ENDPOINTS = [
+  'connections.list',
+  'config.hosts',
+  'connections.resolve',
+  'connections.add',
+  'connections.remove',
+  'connections.test',
+  'machines.list',
+  'machines.current',
+  'machines.setCurrent',
+  'machines.add',
+  'machines.remove',
+  'machines.test',
+  'hostkey.forget',
+  'status',
+  'conn.status',
+  'conn.probe',
+  'conn.reconnect',
+  'browse.home',
+  'browse.list',
+  'browse.mkdir',
+  'session.route',
+  'local.pickNative',
+  'session.ws.list',
+  'session.ws.add',
+  'session.ws.update',
+  'session.ws.remove',
+] as const
+
+/**
+ * Live dispatch per endpoint, refreshed by every {@link apply}.
+ *
+ * A route registered by a PREVIOUS apply can survive a plugin reload (see
+ * {@link isAlreadyRegistered}); routing through this map keeps it serving the
+ * newest host code instead of a stale closure.
+ */
+const liveDispatch = new Map<string, ChannelDispatch>()
+
+/**
+ * Mount the connection registry and this row's `/api/dsw/*` channel.
  * @param ctx - the mounting Cordis context.
  * @param config - state file and listing bound.
  */
@@ -522,7 +573,33 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     }
   }
 
-  const dispose = ctx.connection.rpc.handle('/dsw', dispatch, { authority: 'loopback' })
-  ctx.effect(() => dispose, 'dsw: /dsw rpc channel')
+  // The channel rides the official shared `/api` transport as exact Fetch
+  // routes. `connection.fetch.register` only touches the Connection service's
+  // own effect scope — it never reads `owner.webServer`, which is what killed
+  // the old standalone `/dsw` channel on this line (F1/F2: see
+  // `./web-channel.ts` and `docs/rounds/R18-F2-dsw-405.md`). A host without a
+  // web transport therefore just never serves these routes; nothing to guard.
+  //
+  // Registration happens per endpoint and is REVERSIBLE: the returned disposer
+  // is bound to this context through `ctx.effect`. A reload that leaves the
+  // Connection service (and thus the previous routes) alive hits the registry's
+  // duplicate-path guard instead of throwing out of `apply` — the survivor is
+  // the same stateless route and reads `liveDispatch`, so it already serves this
+  // apply's handler.
+  for (const endpoint of CHANNEL_ENDPOINTS) {
+    liveDispatch.set(endpoint, dispatch)
+    const route = channelRouteOf(endpoint, (name) => liveDispatch.get(name))
+    ctx.effect(() => {
+      try {
+        return ctx.connection.fetch.register(route)
+      } catch (error) {
+        if (!isAlreadyRegistered(error)) throw error
+        ctx.logger.debug(`dsw: ${route.path} was already registered; serving the new dispatch through it`)
+        // The surviving registration owns the route; this apply adds nothing to
+        // dispose (the route reads `liveDispatch`, so it is already current).
+        return async () => {}
+      }
+    }, `dsw: ${route.path}`)
+  }
   registerWorkspaceTools(ctx, registry, () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined)
 }
