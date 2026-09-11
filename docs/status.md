@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-11 08:32 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-11 12:33 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `master` / `96c7ae9` |
-| HEAD 提交 | `fix(fs): implement readByteRange for the 0.1.5 seam line (#10)` (2026-09-11) |
+| 分支 / HEAD | `master` / `69c721f` |
+| HEAD 提交 | `fix(web): mount the browser channel on the shared /api transport (#11)` (2026-09-11) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
