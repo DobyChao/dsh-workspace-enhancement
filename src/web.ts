@@ -173,7 +173,13 @@ function isHostKeyForgetPayload(value: unknown): value is { id?: string; host?: 
   return value.id !== undefined || value.host !== undefined
 }
 
-/** Side-workspace add payload: `{ sessionId, id?, kind, path, label? }`. */
+/**
+ * Side-workspace add payload: `{ sessionId, id?, kind, path, label? }`.
+ *
+ * Lenient whitelist: unknown keys (e.g. legacy `fs`/`exec` from clients
+ * ≤0.1.3) pass validation and are dropped by the attach call — the request
+ * is accepted, not rejected (ADR-0019 §3).
+ */
 function isSideWorkspaceAddPayload(value: unknown): value is SideWorkspaceInput & { sessionId: string } {
   if (!isRecord(value)) return false
   if (!isString(value.sessionId) || value.sessionId.trim() === '') return false
@@ -191,7 +197,12 @@ function isSideWorkspaceKeyPayload(value: unknown): value is { sessionId?: strin
     && (value.sessionId === undefined || isString(value.sessionId))
 }
 
-/** Side-workspace update payload: `{ rootKey, label? }`. */
+/**
+ * Side-workspace update payload: `{ rootKey, label? }`.
+ *
+ * Same lenient whitelist as the add guard: unknown keys such as legacy
+ * `fs`/`exec` are ignored and the request is accepted (ADR-0019 §3).
+ */
 function isSideWorkspaceUpdatePayload(value: unknown): value is { rootKey: string; label?: string } {
   if (!isSideWorkspaceKeyPayload(value)) return false
   const record = value as { rootKey: string; label?: unknown }

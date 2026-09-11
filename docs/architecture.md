@@ -220,7 +220,8 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 - 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（每行 label + rootKey，无档位标记；
   无副工作区 = 零注入）；文案是 model-facing 英文常量（`src/model-prompts.ts`，ADR-0014）。
 - RPC：`session.ws.list` / `add` / `update(label)` / `remove`（远程机器先校验存在再落盘；
-  add/update 的参数已收窄，不再接受 `fs`/`exec`）。
+  add/update 只消费 `id`/`kind`/`path`/`label`，payload 校验是宽松白名单——旧客户端仍发
+  `fs`/`exec` 等未知字段时被忽略、请求照常受理）。
 - 真正的隔离手段回归两层：每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
   远程命令围栏走 `AUDIT-6`/`REQ-I9` 线。
 

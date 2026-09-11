@@ -21,7 +21,7 @@
 | 2 | `src/mixed.ts` | 删 `assertSideWriteAllowed`（fs 写门）与 `assertSideExecAllowed`（exec 门）及全部调用点；`MixedSubprocessRuntime` 构造器去掉 `sides` 参数（spawn 面不再消费副根）；`MixedFileSystem` 保留 `sides` 仅作路由（`resolve`/`lstat` 先看副根） |
 | 3 | `src/model-prompts.ts` / `src/tools.ts` | 删 4 个权限词常量；`sideItem` 行只渲染 `{label}`+`{rootKey}`；`sideNote` 改无档位表述（副根=本会话可直接操作的附加目录；命令默认主工作区执行；跨机用 `sw_exec`）；`SideWorkspacePromptFact` 收缩为两字段 |
 | 4 | `src/client/side-workspaces.tsx` | 删两个权限下拉（行内 + 表单）与 `draftFs`/`draftExec`/`updateSide`；`SideWorkspaceRow` 去权限字段；面板只剩挂/卸 + label |
-| 5 | `src/web.ts` | `session.ws.add`/`session.ws.update` 的 payload 校验与 store 调用收窄（仍带 `fs`/`exec` 的请求以 `bad-request` 拒绝） |
+| 5 | `src/web.ts` | `session.ws.add`/`session.ws.update` 的 payload 校验与 store 调用收窄（校验是宽松白名单：仍带 `fs`/`exec` 的旧请求照常受理，未知字段被静默忽略，attach/update 只挑 `id`/`kind`/`path`/`label`） |
 | 6 | `src/plugin.ts` | `MixedSubprocessRuntime` 装配去掉 `sides`；注释更新 |
 | 7 | `src/locale/dsw.ts` / `dsw.en.ts` | 同步删 6 键：`side.fs.label`、`side.exec.label`、`permission.rw`、`permission.r`、`permission.execOn`、`permission.execOff`；`side.empty` 文案去权限表述（331→325，zh/en 相等） |
 | 8 | 测试 | `test/side-workspace-gates.test.ts` → **删**，接替者 `test/side-workspace-routing.test.ts`（resolve/lstat 副根路由、无匹配回退 cwd 世界、嵌套内根获胜、REQ-I7 写操作纯按 targetKey 路由无门；stub 补全 14 方法含 `processPathFromHostPath`/`readByteRange`）；`test/side-workspace-attacks.test.ts` **删除**（其对象就是门禁行为）；`test/side-prompt.test.ts` 改无权限标记断言（含负向断言 `!fs:`/`!exec:`/`!read-only`）；`test/session-workspaces.test.ts` 去权限字段断言 + 旧字段加载忽略回归（两个 fixture 故意带旧字段）；`test/exec-tools.test.ts` spawn 拒绝传播改通用错误；`test/{workspace-prompt-mount,prompt-injection}.test.ts` 的 `sideItem()` 去字段 |
@@ -54,7 +54,25 @@ lab 真机挂/卸副根的手动 UAT 留给浏览器轮（本插件未装在 308
 
 ## 4. 影响面
 
-- **兼容性**：旧状态文件零迁移加载；旧客户端半（≤0.1.3）若向新宿主半发带 `fs`/`exec` 的
-  `session.ws.add/update` 会得到 `bad-request`——本插件宿主半+客户端半同装同卸，无线上组合。
+- **兼容性**：旧状态文件零迁移加载；`session.ws.add/update` 对仍带 `fs`/`exec` 的旧请求照常受理
+  （payload 校验是宽松白名单，未知字段被静默忽略）——RPC 面的破坏性落在**权限行为变更**：
+  旧客户端半（≤0.1.3）发来的档位不再产生任何限权效果。本插件宿主半+客户端半同装同卸，无线上组合。
 - **清账**：SEC-1/SEC-2 dropped；AUDIT-3 关闭；ADR-0012 作废。
 - **保留**：面板、store、提示词清单、路由索引——REQ-I8（工作区生命周期 spike）的载体。
+
+## 5. 第 1 轮评审返修（2026-09-12）
+
+- **发现（F1：文档与行为不一致）**：评审确认 `src/web.ts` 的 `isSideWorkspaceAddPayload` / 
+  `isSideWorkspaceUpdatePayload` 是**宽松白名单**——只校验已知必需字段的类型、不拒绝未知键；
+  仍带 `fs`/`exec` 的旧请求通过校验，attach/update 只挑 `id`/`kind`/`path`/`label`，
+  旧字段被静默接受并忽略，**不会**得到 `bad-request`。而 4 处文档声称「以 bad-request 拒绝」。
+- **修复方向：A（文档侧如实化，评审推荐）**——不改运行时行为，把 4 处 + 1 处措辞改为如实描述：
+  ① ADR-0019 §3 兼容性段重写（宽松白名单、未知字段忽略、请求照常受理；RPC 面破坏性依据
+  改落在「权限行为变更」而非「请求被拒」）；② 本报告 §2 表第 5 行；③ 本报告 §4 第 1 条；
+  ④ `CHANGELOG.md` 0.1.4 破坏性条目内括号句；⑤ `docs/architecture.md` §5.5 RPC 行
+  （「不再接受 `fs`/`exec`」→「宽松白名单：未知字段被忽略、请求照常受理」）。
+  另在两个守卫的 JSDoc 上写明宽松契约（防再漂移；注释级改动，无行为变化）。
+- **验证（四条命令重跑）**：`check:static` / `typecheck` / `test:agent`（本轮 1 例 process-level
+  spawn EPERM，沙箱受限照旧归类；首轮的 `SetFileSecurityW` 类本轮未触发，同属既有受限类）/
+  `build` 全绿，结果与 §3 表一致；`boot-smoke --no-channel` 沿用 R20 原证据（本轮仅改文档与
+  注释，`lib/` 行为产物与 R20 构建一致）。
