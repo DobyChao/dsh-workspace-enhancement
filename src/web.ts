@@ -173,7 +173,7 @@ function isHostKeyForgetPayload(value: unknown): value is { id?: string; host?: 
   return value.id !== undefined || value.host !== undefined
 }
 
-/** Side-workspace add payload: `{ sessionId, id?, kind, path, label?, fs?, exec? }`. */
+/** Side-workspace add payload: `{ sessionId, id?, kind, path, label? }`. */
 function isSideWorkspaceAddPayload(value: unknown): value is SideWorkspaceInput & { sessionId: string } {
   if (!isRecord(value)) return false
   if (!isString(value.sessionId) || value.sessionId.trim() === '') return false
@@ -182,8 +182,6 @@ function isSideWorkspaceAddPayload(value: unknown): value is SideWorkspaceInput 
   for (const key of ['id', 'label'] as const) {
     if (value[key] !== undefined && !isString(value[key])) return false
   }
-  if (value.fs !== undefined && value.fs !== 'r' && value.fs !== 'rw') return false
-  if (value.exec !== undefined && value.exec !== 'on' && value.exec !== 'off') return false
   return true
 }
 
@@ -193,13 +191,11 @@ function isSideWorkspaceKeyPayload(value: unknown): value is { sessionId?: strin
     && (value.sessionId === undefined || isString(value.sessionId))
 }
 
-/** Side-workspace update payload: `{ rootKey, label?, fs?, exec? }`. */
-function isSideWorkspaceUpdatePayload(value: unknown): value is { rootKey: string; label?: string; fs?: 'r' | 'rw'; exec?: 'on' | 'off' } {
+/** Side-workspace update payload: `{ rootKey, label? }`. */
+function isSideWorkspaceUpdatePayload(value: unknown): value is { rootKey: string; label?: string } {
   if (!isSideWorkspaceKeyPayload(value)) return false
-  const record = value as { rootKey: string; label?: unknown; fs?: unknown; exec?: unknown }
+  const record = value as { rootKey: string; label?: unknown }
   if (record.label !== undefined && !isString(record.label)) return false
-  if (record.fs !== undefined && record.fs !== 'r' && record.fs !== 'rw') return false
-  if (record.exec !== undefined && record.exec !== 'on' && record.exec !== 'off') return false
   return true
 }
 
@@ -541,8 +537,6 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
             kind: input.kind,
             path: attachPath,
             ...(input.label !== undefined ? { label: input.label } : {}),
-            ...(input.fs !== undefined ? { fs: input.fs } : {}),
-            ...(input.exec !== undefined ? { exec: input.exec } : {}),
           })
           return { ok: true, value: { item } }
         }
@@ -550,8 +544,6 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const input = requirePayload(payload, isSideWorkspaceUpdatePayload, 'session.ws.update')
           const updated = sides().update(input.rootKey, {
             ...(input.label !== undefined ? { label: input.label } : {}),
-            ...(input.fs !== undefined ? { fs: input.fs } : {}),
-            ...(input.exec !== undefined ? { exec: input.exec } : {}),
           })
           if (!updated) throw new Error('bad-request: session.ws.update names an unknown root')
           return { ok: true, value: { item: sides().get(input.rootKey) } }

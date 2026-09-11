@@ -28,21 +28,13 @@ export const MODEL_PROMPTS = {
   /** R4 remote emphasis paragraph (`sw-remote` section, order 90). */
   remoteEmphasis:
     '⚠ Your current workspace is a **remote SSH workspace**: `{endpoint}:{displayPath}` (routed through the local placeholder path `{placeholderRoot}\\{connectionId}\\…`; the placeholder path you see is only a routing alias — **all commands and file operations truly happen on the remote server**, and the working directory is a POSIX absolute path).',
-  /** Permission word of a read-only side workspace. */
-  sideFsReadOnly: 'read-only',
-  /** Permission word of a read-write side workspace. */
-  sideFsReadWrite: 'read-write',
-  /** Permission word of a side workspace with execution disabled. */
-  sideExecOff: 'off',
-  /** Permission word of a side workspace with execution enabled. */
-  sideExecOn: 'on',
-  /** One side-workspace line. */
-  sideItem: '- Side workspace **{label}**: `{rootKey}` (fs: {fs} · exec: {exec})',
+  /** One side-workspace line (REQ-I7: declaration only, no permission marks). */
+  sideItem: '- Side workspace **{label}**: `{rootKey}`',
   /** Side-workspace list heading (R5). */
   sideHeading: '**Extra workspaces linked to this session (side directories the model can operate on directly)**:',
-  /** Side-workspace permission boundary, stated honestly. */
+  /** Side-workspace boundary note, tier-free since REQ-I7 (ADR-0019). */
   sideNote:
-    'Note the permission markers: read-only (fs: read-only) rejects writes, and execution disabled (exec: off) rejects running commands under that directory; for rejected operations use a workspace with permission or ask the user to adjust. Commands run in the main workspace by default; to run on another server use `sw_exec(server, command)`.',
+    'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default; to run a command on another server use `sw_exec(server, command)`.',
   /** `sw_status` remote-toolbox report heading. */
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */

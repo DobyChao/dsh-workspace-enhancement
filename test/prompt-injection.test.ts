@@ -81,7 +81,7 @@ function assemblyContext(cwd: string | undefined, sessionId: string | undefined)
 }
 
 function sideItem(over: Partial<SideWorkspaceItem> = {}): SideWorkspaceItem {
-  return { id: 'sw-1', kind: 'local', rootKey: join(sshRoutesRoot(), '..', 'side-proj'), label: 'side', fs: 'rw', exec: 'on', ...over }
+  return { id: 'sw-1', kind: 'local', rootKey: join(sshRoutesRoot(), '..', 'side-proj'), label: 'side', ...over }
 }
 
 /** Render one captured section's text for a given assembly context. */

@@ -1,12 +1,13 @@
 /**
- * R5: the session header action「⊕ 工作区」and its side-workspaces panel —
- * one session's attached extra roots (local dirs / remote machine dirs), each
- * with its permission pair (fs r|rw, exec on|off). Add/edit/remove ride the
- * `/dsw session.ws.*` endpoints; the picker reuses the shared add-workspace
- * directory flow (`SshWorkspaceFlow`), so local and remote browsing go through
- * the very same modal the main add-workspace flow uses. Registered into
- * `conversation.session.header.actions` (official additive list slot; the
- * framework passes `sessionId` as a standard prop).
+ * R5 → REQ-I7: the session header action「⊕ 工作区」and its side-workspaces
+ * panel — one session's attached extra roots (local dirs / remote machine
+ * dirs), a thin declaration list (mount/unmount + label; the fs/exec
+ * permission tiers were retired with REQ-I7, ADR-0019). Add/edit/remove ride
+ * the `/dsw session.ws.*` endpoints; the picker reuses the shared
+ * add-workspace directory flow (`SshWorkspaceFlow`), so local and remote
+ * browsing go through the very same modal the main add-workspace flow uses.
+ * Registered into `conversation.session.header.actions` (official additive
+ * list slot; the framework passes `sessionId` as a standard prop).
  * @module dsh-workspace-enhancement/client/side-workspaces
  */
 
@@ -19,14 +20,12 @@ import { zhBaseline } from './status.tsx'
 import { CloseIcon, FolderIcon, PlusIcon, ServerIcon, TrashIcon } from './icons.tsx'
 import styles from './side-workspaces.module.css'
 
-/** One side workspace as the wire returns it. */
+/** One side workspace as the wire returns it (REQ-I7: declaration only). */
 export interface SideWorkspaceRow {
   id: string
   kind: 'local' | 'remote'
   rootKey: string
   label: string
-  fs: 'r' | 'rw'
-  exec: 'on' | 'off'
 }
 
 /** The machines.list wire machine (leaf fields the picker needs). */
@@ -48,8 +47,6 @@ function asSideWorkspaceRow(value: unknown): SideWorkspaceRow | null {
     kind: value.kind === 'remote' ? 'remote' : 'local',
     rootKey: value.rootKey,
     label: typeof value.label === 'string' ? value.label : value.rootKey,
-    fs: value.fs === 'r' ? 'r' : 'rw',
-    exec: value.exec === 'off' ? 'off' : 'on',
   }
 }
 
@@ -109,8 +106,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
   const [draftPath, setDraftPath] = useState('')
   const [draftMachine, setDraftMachine] = useState('')
   const [draftLabel, setDraftLabel] = useState('')
-  const [draftFs, setDraftFs] = useState<'r' | 'rw'>('rw')
-  const [draftExec, setDraftExec] = useState<'on' | 'off'>('on')
   const [browseOpen, setBrowseOpen] = useState(false)
   const [editing, setEditing] = useState('') // rootKey being label-edited
   const [editingLabel, setEditingLabel] = useState('')
@@ -208,8 +203,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
       kind: draftKind,
       path,
       ...(draftLabel.trim() !== '' ? { label: draftLabel.trim() } : {}),
-      fs: draftFs,
-      exec: draftExec,
     }).then(() => {
       setDraftPath('')
       setDraftLabel('')
@@ -219,11 +212,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
       setError(reason instanceof Error ? reason.message : String(reason))
       setBusy(false)
     })
-  }
-
-  const updateSide = (rootKey: string, patch: { fs?: 'r' | 'rw'; exec?: 'on' | 'off' }): void => {
-    injected.rpc('session.ws.update', { rootKey, ...patch }).then(() => refresh())
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
   }
 
   const updateLabel = (rootKey: string, label: string): void => {
@@ -269,14 +257,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
                 )
                 : <span className={styles.itemLabel}>{item.label}</span>}
               <span className={styles.rowPath} title={item.rootKey}>{item.rootKey}</span>
-              <select className={styles.select} value={item.fs} onChange={(event) => updateSide(item.rootKey, { fs: event.target.value as 'r' | 'rw' })} aria-label={t('side.fs.label')}>
-                <option value="rw">{t('permission.rw')}</option>
-                <option value="r">{t('permission.r')}</option>
-              </select>
-              <select className={styles.select} value={item.exec} onChange={(event) => updateSide(item.rootKey, { exec: event.target.value as 'on' | 'off' })} aria-label={t('side.exec.label')}>
-                <option value="on">{t('permission.execOn')}</option>
-                <option value="off">{t('permission.execOff')}</option>
-              </select>
               <button type="button" className={styles.renameButton} title={t('side.rename.title')} onClick={() => { setEditing(item.rootKey); setEditingLabel(item.label) }}>{t('side.rename.button')}</button>
               <button type="button" className={`${styles.iconButton} ${styles.danger}`} title={t('side.remove.title')} onClick={() => removeSide(item.rootKey)}><TrashIcon width={13} height={13} /></button>
             </div>
@@ -304,14 +284,6 @@ export function SideWorkspacesPanel(props: { sessionId: string; injected: FlowIn
           </div>
           <div className={styles.fieldRow}>
             <input className={styles.input} placeholder={t('side.draft.labelPlaceholder')} value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} />
-            <select className={styles.select} value={draftFs} onChange={(event) => setDraftFs(event.target.value as 'r' | 'rw')} aria-label={t('side.fs.label')}>
-              <option value="rw">{t('permission.rw')}</option>
-              <option value="r">{t('permission.r')}</option>
-            </select>
-            <select className={styles.select} value={draftExec} onChange={(event) => setDraftExec(event.target.value as 'on' | 'off')} aria-label={t('side.exec.label')}>
-              <option value="on">{t('permission.execOn')}</option>
-              <option value="off">{t('permission.execOff')}</option>
-            </select>
             <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={addSide}>{t('side.mount')}</button>
           </div>
         </div>
