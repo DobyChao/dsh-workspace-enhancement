@@ -22,6 +22,12 @@
 | INFRA-1 | 工程化基建改造（真相源入库 / 统一质量门 / CI / 上游追踪 / E2E 资产化 / 状态看板 / UAT） | ✅ 完成（本地提交） | `AGENTS.md`、`docs/`（含 12 ADR、12 轮报告、UAT）、`e2e/`（9/9）、`.github/workflows/`、`scripts/{check,status,test-agent,pack-smoke}.mjs` | [INFRA-1.md](./INFRA-1.md) |
 
 | R13 | REQ-I6 系统提示词英文化/按需注入 + UX-1、REQ-I1 侦察 + 发布事实校正 | ✅ 代码完成（本地提交） | `src/model-prompts.ts`、`src/session-remote-context.ts`、`ADR-0014..0016`、`AGENTS.md` §5 磁盘等价物、`PUB-3`/`SEC-3` | [R13-req-i6-and-recon.md](./R13-req-i6-and-recon.md) |
+| R14 | BUG-2 修复 + 门面/上游声明面契约审计 | ✅ 上线（PR #3） | `MixedFileSystem.processPathFromHostPath`、反射契约用例、审计观察 O1/O2 | [R14-BUG-2-fix.md](./R14-BUG-2-fix.md) |
+| R15 | BUG-3 本机目录接错服务 + `lib/` 产物漂移（INFRA-11） | ✅ 上线（PR #8 / 本地提交） | `src/client/local-directory.ts`、懒解析可选服务、构建漂移 WARN | [R15-BUG-3-local-directory.md](./R15-BUG-3-local-directory.md) |
+| R16 | UPSTREAM-1：`readByteRange` 与双家族声明（**双家族已于 R19 退场**） | ✅ 上线（PR #10） | 引擎窗口读 + 门面路由 + 老宿主守卫、peer 联合范围、哨兵 `legacy` 通道 | [R16-upstream-1-byte-range.md](./R16-upstream-1-byte-range.md) |
+| R17 | rc.2 槽位重排侦察（`UPSTREAM-2`）+ 行徽标存活验证（F1/F3 首次暴露） | ⚠️ 侦察/验证完成，徽标修复推迟 | `ADR-0017`、`scripts/slot-catalog.mjs`（`npm run slots`）、`scripts/boot-smoke.mjs`、F1/F2/F3 缺陷编号 | [R17-rc2-slot-recon.md](./R17-rc2-slot-recon.md) |
+| R18 | F2 根因定位（`/dsw` 在 0.1.5 上 405） | ⚠️ 定位报告（当时未改代码） | `connection.rpc.handle` 被自家 `inject` 废掉；候选 A 在构建副本实测三家族 200 | [R18-F2-dsw-405.md](./R18-F2-dsw-405.md) |
+| R19 | F2 落地：通道改走官方 `/api` 精确 Fetch 路由 + 0.1.2 家族退场 | ✅ 代码完成（待 PR/CI） | `src/web-channel.ts`、`connection.fetch.register`、`test/web-channel.test.ts`、`ADR-0018`、peer/dev 收窄 `^0.1.5-rc.1` | [R19-f2-shared-api-channel.md](./R19-f2-shared-api-channel.md) |
 
 **尚未开工的轮次**（来源里只有排期，故无报告）：R6 I1（对话/轨迹区可扩展面板 Tab，📋 排期；
 前置槽位侦察已于 R13 完成，见 `ADR-0016`）、

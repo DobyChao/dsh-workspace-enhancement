@@ -2,6 +2,26 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
+## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (未发布)
+
+0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场**。
+
+### 修复
+
+- **`/dsw` 通道在 `0.1.5` 家族上返回 405（`UPSTREAM-3` F2）**：`ctx.connection.rpc.handle('/dsw', …)` 不可用——`dsh-client-connection` 的 `register` 末行读 `owner.webServer`，而 `owner` 是 **Connection 服务自己的 ctx**，该包在 0.1.5 上只声明 `["credentials"]` ⇒ 抛 `cannot get property "webServer" without inject`，注册**从未发生**（F1 的启动崩溃是它的行级形态，子 fiber 化后就是静默 405）。通道改挂**官方共享 `/api` 的精确 Fetch 路由**（`ctx.connection.fetch.register`）：`rpc.intercept('/api')` 这条官方扩展点被单占位的 `dsh-api-gateway` 占死，而精确路由**先于**拦截器被分发且不读 `owner.webServer`（`dsh-client-file-upload` 同款）。客户端改为 `rpc.call('/api', 'dsw/<endpoint>')`，**信封协议不变**。决策见 `ADR-0018`，实证见 `docs/rounds/R19-f2-shared-api-channel.md`。
+- **启动崩溃（`UPSTREAM-3` F1）**：同上根因；换轨后宿主启动不再依赖「哪个上下文能读 `webServer`」。
+- **`dsh-subprocess@0.1.5` 的 `@deepseek-ai/dsh-http-proxy` peer 未落盘**：仓库 `.npmrc` 的 `legacy-peer-deps=true` 不会自动装 peer ⇒ 三个套件在 0.1.5 类型面下直接 `ERR_MODULE_NOT_FOUND`；补进 devDependencies。
+
+### 变更（**破坏性**）
+
+- **放弃 0.1.2 家族支持（`UPSTREAM-4`，所有者 2026-09-11 拍板）**：peer 13 项 + dev 21 项全部收窄为 `^0.1.5-rc.1`；`upstream.yml` 删除 `legacy`（0.1.2-rc.1）通道，哨兵只剩 `next` / `alpha`；`scripts/boot-smoke.mjs` 的 `--channel-warn`「已知破坏」降级口删除，每通道都强断言。
+- **浏览器通道路径变更**：`/dsw/<endpoint>` → `/api/dsw/<endpoint>`（`docs/architecture.md` §5.6）。**与已发布的 0.1.3 客户端半不兼容**；升级宿主必须一并升级本插件。
+
+### 质量
+
+- `scripts/boot-smoke.mjs` 探测改新路径并强断言 `result.ok=true`；新增 `test/web-channel.test.ts`（线身份、信封/方法不符、415/400/404、dispatch 抛错 500、重载契约、端点清单 ↔ dispatch switch 一致性、两半不得再硬编码通道）。
+- 真机实证（lab profile + `0.1.5-rc.2` 宿主）：`POST /api/dsw/connections.list → 200, result.ok=true`；同一探针在修前构建上给 405。
+
 ## [0.1.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-09)
 
 依赖对齐发布 + 模型提示词英文化 + 带图请求修复。

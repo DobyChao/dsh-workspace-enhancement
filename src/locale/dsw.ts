@@ -289,6 +289,10 @@ export const zh = {
   'side.draft.labelPlaceholder': '显示名（默认目录名）',
   'side.mount': '挂载',
 
+  /* ----------------------------------------------- remote-status-entry.tsx */
+  'header.remote.label': '远程状态',
+  'header.remote.title': '当前会话的远程连接：{machine}（点击重新检测）',
+
   /* ------------------------------------------------------------ permission */
   'permission.rw': '读写',
   'permission.r': '只读',

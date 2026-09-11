@@ -57,7 +57,7 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 | `fs-sandbox`（`@deepseek-ai/dsh-fs-sandbox`） | `disabled: true` | 同上 |
 | `ssh-remote`（`dsh-workspace-enhancement`） | insert | 聚合行：挂 `ctx.ssh`，并把 `ctx.subprocess` / `ctx.fs` 换成混合门面；config 是一组占位连接参数（懒连接，真实连接来自 UI 里创建并持久化的注册表条目） |
 | `directory-picker-ssh`（`dsh-workspace-enhancement/picker`） | insert | `maxEntries: 1000` 的目录 browse 后端 |
-| `ssh-web-channel`（`dsh-workspace-enhancement/web`） | insert | 注册表 + `/dsw` RPC 通道 |
+| `ssh-web-channel`（`dsh-workspace-enhancement/web`） | insert | 注册表 + `/api/dsw/*` 浏览器通道 |
 
 - 注释与源码都强调：profile 自身的 `cordis.patch.yml` 与 `--patch` 覆盖在本层之后生效，部署可以改写或关掉任意行；
   sandbox 策略行与沙箱化 shell 执行器保持启用，它们消费的是混合 `ctx.subprocess`（`src/plugin.ts` 文件头）。
@@ -75,7 +75,7 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 | `conversation.session.header.actions` | `dsh-workspace-enhancement-side` / order 25 | `SideWorkspacesAction` | 会话标题栏「工作区」按钮与副工作区面板 |
 
 - 每个注册都带 `locale: 'dsw'`（拿到类型化 `t`）与 `inject`（`listLocalDirectory` / `createLocalDirectory` /
-  `rpc('/dsw', …)`）；列表标签用 label thunk（`() => t('settings.label')`）读时求值。
+  `rpc('/api', 'dsw/…')`）；列表标签用 label thunk（`() => t('settings.label')`）读时求值。
 - 会话栏**行级**徽标没有官方槽位，由 `installRowBadges`（`src/client/row-badges.ts`）用 DOM 增辉层 +
   MutationObserver 注入，随 `ctx.effect` 回收（上游 PR 提案已撤销，见 ADR-0011）。
 
@@ -99,14 +99,15 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 | `src/output.ts` | 远程输出流的有界收集 + 私有（0700）spill 文件 | `SshOutputCollector` |
 | `src/environment.ts` | 远端登录环境读取与 scrub（剔 `DSH_*` / 凭据形变量） | `readRemoteEnvironment`、`scrubRemoteEnvironment`、`serializeEnvironment` |
 | `src/filesystem.ts` | `ctx.fs` 远程 provider（SFTP；原子写、写意图/版本） | `SshFileSystemEngine`、`SshFileSystem`、`isOwnStagingDirectory`、`overwritePublicationCommand` |
-| `src/listing.ts` | 远程目录单层遍历（picker 与 `/dsw browse` 共用） | `listRemoteLevel`、`remoteHome`、`ancestryCrumbs`、`asError`、`raceAbort` |
+| `src/listing.ts` | 远程目录单层遍历（picker 与通道 `browse` 端点共用） | `listRemoteLevel`、`remoteHome`、`ancestryCrumbs`、`asError`、`raceAbort` |
 | `src/picker.ts` | `ctx.directoryPicker` browse 后端（本机/远程统一；win32 双根） | `SshDirectoryPicker`、`Config` |
 | `src/registry.ts` | 机器注册表服务 `ctx.sshRegistry`：持久化、CRUD、TOFU、keychain、`~/.ssh/config` 解析、连接状态/探测/重连 | `SshRegistry`、`loadMachinesState`、`normalizeMachine`、`parseSshRoute`、`deriveConnectionState` |
 | `src/hostkey.ts` | TOFU 主机指纹：模式、指纹计算、known_hosts 存取、`%DSH_HOME%` 路径 | `HostKeyMode`、`HostKeyStore`、`HostKeyGuard`、`keyFingerprint`、`dshHome`、`remoteWorkspacesRoot`、`defaultKnownHostsFile`、`defaultSecretsDir` |
 | `src/credential.ts` | OS 钥匙串密码存取（DPAPI / security / secret-tool，best-effort 回退明文） | `platformBackend`、`saveSecret`、`getSecret`、`deleteSecret` |
 | `src/mixed.ts` | 混合 provider 门面（`ctx.subprocess`/`ctx.fs` 唯一实现）+ 路径路由 + 逐副工作区权限门 | `MixedSubprocessRuntime`、`MixedFileSystem`、`worldOfCwd`、`worldOfTargetKey`、`remoteArgvOf` |
 | `src/session-workspaces.ts` | 副工作区状态服务 `ctx.sideWorkspaces`：roots/sessions 双映射、最长前缀匹配、CRUD | `SessionSideWorkspaceStore`、`sideWorkspaceOf`、`normalizeSideRootKey`、`loadSideWorkspaces` |
-| `src/web.ts` | `/dsw` RPC 通道（loopback 信任栅栏）与端点派发 | `apply`、`Config`、`WebChannelConfig`、`inject` |
+| `src/web.ts` | 浏览器通道的宿主半：`/api/dsw/*` 精确 Fetch 路由注册与端点派发 | `apply`、`Config`、`WebChannelConfig`、`CHANNEL_ENDPOINTS`、`inject` |
+| `src/web-channel.ts` | 通道线协议单一来源（两半共用）：路径、命名空间、信封校验与 Fetch 适配器 | `API_CHANNEL`、`CHANNEL_NAMESPACE`、`channelPathOf`、`channelEndpointOf`、`channelRouteOf`、`isAlreadyRegistered` |
 | `src/tools.ts` | 3 个 `sw_*` 管理工具 + 每会话远程认知提示 section | `registerWorkspaceTools`、`renderRemotePrompt`、`renderSideWorkspaces`、`composeWorkspacePrompt`、`renderRemoteEnvProbe` |
 | `src/model-prompts.ts` | **model-facing 英文文案常量**（系统提示段 + 远端工具箱提示），刻意不入 i18n（ADR-0014） | `MODEL_PROMPTS`、`modelPrompt`、`ModelPromptKey` |
 | `src/session-remote-context.ts` | 每会话工作区事实（cwd / sessionId / 副工作区）与「是否远程世界」判定，供三条提示 section 共用 | `sessionWorkspaceContextOf`、`hasRemoteWorkspaceContext`、`PromptAgentFace` |
@@ -220,17 +221,31 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 - RPC：`session.ws.list` / `add` / `update` / `remove`（远程机器先校验存在再落盘）。
 - 语义与边界：只读/禁执行是**启动层**强制，命令文本有意不扫描；已知绕过见 §7 与 ADR-0012。
 
-### 5.6 RPC 通道 `/dsw`（`web.ts`）
+### 5.6 浏览器通道 `/api/dsw/*`（`web.ts` + `web-channel.ts`）
 
-- 用 `ctx.connection.rpc.handle('/dsw', dispatch, { authority: 'loopback' })` 注册一元通道，
-  disposer 随 `ctx.effect` 回收；`inject = ['connection', 'tools', 'systemPrompt']`。
-- 端点分组（`src/web.ts` 的 `switch`）：`connections.list|resolve|add|remove|test`、`config.hosts`、
-  `machines.list|current|setCurrent|add|remove|test`、`hostkey.forget`、`status`、
+- 通道是**官方共享 `/api` 传输上的精确 Fetch 路由**：`ctx.connection.fetch.register({ path, methods: ['POST'],
+  requestBody: 'buffered', fetch })`，路径 `/api/dsw/<端点的点号名>`，disposer 随 `ctx.effect` 回收；
+  `inject = ['connection', 'tools', 'systemPrompt']`。
+  - **为什么不是 `rpc.handle('/dsw', …)`**：`dsh-client-connection` 的 `register` 末行读 `owner.webServer`，
+    而 `owner` 是 **Connection 服务自己的 ctx**；该包在 0.1.5 上只声明 `["credentials"]` ⇒ 任何调用者都会抛
+    `cannot get property "webServer" without inject`（F1 启动崩溃 / F2 `/dsw` 405，见 `docs/rounds/R18-F2-dsw-405.md`）。
+  - **为什么不是 `rpc.intercept('/api', …)`**：共享通道的拦截器是**单占位**（`registerInterceptor` 二次注册抛错），
+    `@deepseek-ai/dsh-api-gateway` 已占用；精确 Fetch 路由在分发时**先于**拦截器被查（`createSharedFetchHandler`），
+    且物理载波仍会先做 loopback/Host 栅栏与浏览器会话校验。决策见 `ADR-0018`。
+- **线协议单一来源**：`src/web-channel.ts`（两半共用）给出通道路径、命名空间与信封校验；客户端只发
+  `connection.rpc.call('/api', 'dsw/<endpoint>', payload)`，服务端回
+  `{type:'server-response', rpcId, result}`（信封与上游一致，`method` 取 `/api` 之下的完整端点路径）。
+- 端点分组（`src/web.ts` 的 `switch`，与 `CHANNEL_ENDPOINTS` 由用例锁定一致）：`connections.list|resolve|add|remove|test`、
+  `config.hosts`、`machines.list|current|setCurrent|add|remove|test`、`hostkey.forget`、`status`、
   `conn.status|probe|reconnect`、`browse.home|list|mkdir`、`session.route`、`local.pickNative`、
   `session.ws.list|add|update|remove`。
+- 重载语义：路由是**无状态**的（按请求从 `liveDispatch` 取当前 dispatch）。注册落在 Connection 服务的
+  effect 作用域内，因此「重装后旧路由仍在」时第二次注册会撞 `already registered`——此时**捕获并继续**
+  （旧路由已服务新 handler），不得抛错（`AGENTS.md` §6 的可逆性红线）。
 - 远程目录列举与 picker 共用 `listRemoteLevel`（`src/listing.ts`）；`maxEntries` 默认 1000。
 - 错误契约：协议层 `bad-request: …` 保留英文；业务/路由错误用 `dsw:` 前缀并按宿主语言取词；
-  通道失败映射到宿主封闭的 rpc 错误词表（`connection-failed` / `internal` 等）。
+  非法信封由 `web-channel.ts` 以 `gateway/bad-request`（与上游同码）回答；通道失败映射到宿主封闭的
+  rpc 错误词表（`connection-failed` / `internal` 等）。
 
 ### 5.7 `sw_*` 工具（`tools.ts` / `exec-tools.ts`）
 
