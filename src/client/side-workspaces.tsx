@@ -324,6 +324,7 @@ export function SideWorkspacesPanel(props: SideWorkspacesProps & { injected: Flo
 
         {/* 2. side roots — the REQ-I7 declaration list, behaviour unchanged. */}
         <div className={`${styles.section} ${styles.divided}`}>
+          <div className={styles.sectionTitle}>{t('side.roots.heading')}</div>
           <div className={styles.list}>
             {busy && items.length === 0 ? <div className={styles.loading}>{t('side.loading')}</div> : null}
             {items.length === 0 ? <div className={styles.empty}>{t('side.empty')}</div> : null}

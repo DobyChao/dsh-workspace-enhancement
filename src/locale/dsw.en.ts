@@ -297,6 +297,7 @@ const en: Record<DswKey, string> = {
   'side.conn.hint': 'Once connected, the official file tools reach that machine through ssh://<id>/ paths, and sw_exec becomes available to this session.',
   'side.main.heading': 'Main workspace',
   'side.main.none': 'Local session — no remote main workspace',
+  'side.roots.heading': 'Side workspaces',
 
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': 'Remote status',

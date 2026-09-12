@@ -306,6 +306,7 @@ export const zh = {
   'side.conn.hint': '连接后，官方文件工具可用 ssh://<id>/ 路径直达该机器；本会话同时出现 sw_exec。',
   'side.main.heading': '主工作区',
   'side.main.none': '本地会话，无远程主工作区',
+  'side.roots.heading': '副工作区',
 
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': '远程状态',
