@@ -39,7 +39,7 @@ import type {
   SubprocessTerminalHandle,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import { parseSshTargetKey, remoteRouteFromCwd } from './transport.ts'
+import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
 import type { SshFileSystemEngine } from './filesystem.ts'
@@ -213,6 +213,14 @@ export type FileSystemBranch = {
  * escalation honestly); the per-call sandbox policy is forwarded to the local
  * delegate and dropped for remote targets — a write on the server can never
  * be fenced by the local sandbox.
+ *
+ * REQ-I11: routing is REGISTRY-level, not side-root-level. An `ssh://<id>/<path>`
+ * spelling (or its local placeholder) names the remote world on its own, so the
+ * official read/write/edit/glob/grep tools reach any registered machine from a
+ * LOCAL session cwd too — declaring a side workspace is no longer a
+ * precondition for routing. The session's connected-machine set is a gate at
+ * the TOOL layer only (ADR-0021): this face is a visibility gate, never a
+ * fence — anything that can spell the path reaches the machine.
  */
 export class MixedFileSystem implements FileSystemBranch {
   constructor(
@@ -228,15 +236,21 @@ export class MixedFileSystem implements FileSystemBranch {
 
   /** @inheritdoc */
   async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
+    // REQ-I11: a remote spelling routes remote FIRST, before any side-root or
+    // cwd consideration — the machine id in the path is the whole decision.
+    const route = remoteRouteFromCwd(path)
+    if (route !== null) {
+      return this.remote.resolve(route.path, { cwd: sshTargetKey(route.connectionId, route.path), ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
+    }
     // R5 T2: a side-workspace PATH wins over the cwd world — an absolute path
     // under a remote side root must resolve over its machine even when the
     // session cwd is local, and vice versa (the cwd only fixes relative paths).
     const side = sideWorkspaceOf(this.sides, path)
     if (side !== undefined) {
       if (side.kind === 'remote') {
-        const route = parseSshRoute(path)
-        if (route !== null) {
-          return this.remote.resolve(route.path, { cwd: side.rootKey, ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
+        const sideRoute = parseSshRoute(path)
+        if (sideRoute !== null) {
+          return this.remote.resolve(sideRoute.path, { cwd: side.rootKey, ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
         }
       } else {
         return this.local.resolve(path, opts)
@@ -292,11 +306,16 @@ export class MixedFileSystem implements FileSystemBranch {
 
   /** @inheritdoc */
   lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
+    // REQ-I11: registry-level routing (see `resolve`).
+    const route = remoteRouteFromCwd(path)
+    if (route !== null) {
+      return this.remote.lstat(route.path, { cwd: sshTargetKey(route.connectionId, route.path) }, signal)
+    }
     const side = sideWorkspaceOf(this.sides, path)
     if (side !== undefined) {
       if (side.kind === 'remote') {
-        const route = parseSshRoute(path)
-        if (route !== null) return this.remote.lstat(route.path, { cwd: side.rootKey }, signal)
+        const sideRoute = parseSshRoute(path)
+        if (sideRoute !== null) return this.remote.lstat(sideRoute.path, { cwd: side.rootKey }, signal)
       } else {
         return this.local.lstat(path, opts, signal)
       }
