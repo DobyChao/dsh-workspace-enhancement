@@ -304,11 +304,15 @@ const rootEntries = new Set(readdirSync(ROOT))
 const stray = FORBIDDEN_ROOT.filter(name => rootEntries.has(name))
 check('repository root has no stray artifacts', stray.length === 0, stray.join(', '))
 
-// ---- 12. backlog rows carry an id and a status -----------------------------
+// ---- 12. backlog rows carry an id, a status and exactly five columns --------
+// A literal `|` inside the note cell (it must be written `\|`) silently splits
+// the row into extra columns: the table renders wrong and every consumer that
+// reads `cells[4]` as the note truncates it without complaining.
 try {
   const backlog = read('docs/backlog.md')
-  const rows = backlog.split(/\r?\n/).filter(line => /^\|\s*`?[A-Z][\w-]*\d\s*\|/.test(line))
-  const bad = rows.filter(line => !/\|\s*(todo|doing|done|blocked|dropped|shipped)\s*\|/i.test(line))
+  const rows = backlog.split(/\r?\n/).filter(line => /^\|\s*`?[A-Z][A-Z]*(?:-[A-Za-z0-9]+)+\s*\|/.test(line))
+  const bad = rows.filter(line => !/\|\s*(todo|doing|done|blocked|dropped|shipped)\s*\|/i.test(line)
+    || line.split(/(?<!\\)\|/).length - 2 !== 5)
   check('docs/backlog.md rows carry a status', rows.length > 0 && bad.length === 0,
     `${rows.length} row(s), ${bad.length} malformed`)
 } catch (error) {
