@@ -69,7 +69,7 @@
 |---|---|---|
 | 静态闸门 | `npm run check:static` | ALL PASS（词典 zh=en=331 键、模板参数一致、peer 家族、提交信息格式） |
 | 类型 | `npm run typecheck` | 0 错误 |
-| 单测（沙箱内） | `npm run test:agent` | 267 用例：265 通过 + 2 例沙箱受限（`mixed-routing` 的 process-level spawn EPERM 与 `SetFileSecurityW` EACCES，AGENTS §4 已分类；`test:agent` 判 SANDBOX-LIMITED PASS，权威判定 CI `npm test`） |
+| 单测（沙箱内） | `npm run test:agent` | 267 例全绿（沙箱受限项随环境 1~2 例浮动：`mixed-routing` 的 process-level spawn EPERM 与 `SetFileSecurityW` EACCES，AGENTS §4 已分类；`test:agent` 判 SANDBOX-LIMITED PASS，权威判定 CI `npm test`；R22 实现轮 265+2、评审轮 266+1，同类） |
 | 构建 | `npm run build` | host + client 半完成；闸门无 lib 漂移 WARN |
 | 真 boot 哨兵 | `npm run build` 后 `node scripts/boot-smoke.mjs --no-channel` | SMOKE PASS：host 存活 / `GET /?token` 303 / `GET /` 200；（`--no-channel` 按任务白名单） |
 
