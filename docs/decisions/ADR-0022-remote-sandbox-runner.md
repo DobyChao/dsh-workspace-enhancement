@@ -51,6 +51,11 @@
    所以不能靠 stderr 匹配判定。探针 = `command -v bwrap` + `bwrap --version` + 用**只读 profile 包 `true`** 并
    要求 exit 0（经控制通道 `connection.exec`，仿 `resolveRemoteOs`/`createRemoteOsCache` 的按连接缓存）。
    探针不过 ⇒ `SANDBOX_UNAVAILABLE`，**拒绝执行**；绝不裸跑、绝不静默降级。
+   **exit 0 是唯一的成功信号**：非 0、垃圾输出、`exitCode === null` 一律判失败并带非空 detail。
+   **实现偏离（本轮记录）**：侦察建议把 profile 向量包成一个预引号字符串，实现改为**按 argv 词逐个拼**——
+   因为 runner 路径可能含空格；功能检查完全等价（真只读 profile 包 `true`、要求 exit 0），
+   且 runner 路径的三处出现都过 `quoteShellArg`（红线 6），裸词表是固定的 13 个 token（有 `;`/`&&`/内嵌引号
+   的注入用例钉住）。`remoteRunnerArgv` 的返回值**永远不得直接交给 shell**，必须在接缝的序列化处统一引用。
 4. **v1 范围**：只围 `spawn`（模型发起的命令）。**`spawnTerminal` 在 `remoteSandbox ≠ off` 时拒绝**并给出明确错误
    （交互终端 + `--dev` 下 `/dev/tty`、`--new-session` 语义未验证，宁可诚实地不给，也不开一个没围栏的终端）。
 5. **档位语义**：`off` = 今天逐字节相同；`read-only` = 只读 profile；`workspace-write` = 只读 + `--tmpfs /tmp` +
@@ -70,6 +75,12 @@
 
 - **漂移风险**：本地重写的 profile 向量与上游 `dsh-sandbox-local` 可能分叉 ⇒ 漂移测试在部署包存在时必须跑；
   上游改 profile 时 CI（`upstream.yml` 通道）会红在正确的地方。
+  **诚实标注该漂移测试的强度**：它是**正则匹配部署产物**（不 eval、不 import，沙箱内安全），
+  函数改名会立刻红，但一次「足够刁钻的重写」理论上可以绕过分支体正则——所以它是**哨兵**，不是证明；
+  上游真改语义时仍以 `upstream.yml` 通道 + 人工比对为准。
+  另：部署包两个候选路径都存在的机器上跑的是 lab 副本分支；两者都不存在时走**显式 skip**（用带
+  `{ skip: … }` 的选项对象而非 `.skip(`，以免静态闸门把文件当空测试），并另有一条无条件用例保证该文件
+  在 CI 上不是 no-op。
 - **可行性未知（决定 REQ-I9 能否成立）**：目标机上 `bwrap` 能否以**登录用户**通过功能探针
   （`kernel.unprivileged_userns_clone=0`、seccomp/AppArmor 挡 `CLONE_NEWUSER`、无 setuid 的 bwrap 都会失败）。
   这个「否」会让 REQ-I9 在该类主机上退化为 ADR-0020 路线 A（审批）+ 路线 C（低权用户）。必须在 lab 用真 Linux 远端
