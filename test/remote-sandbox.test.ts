@@ -57,23 +57,27 @@ const READ_ONLY_VECTOR = [
 const WORKSPACE = '/home/uuz/repos/demo'
 
 /**
- * The token list a shell would see after quote removal (single quotes only).
- * Handles the repo's quoting spelling `'\''` → `'"'"'`, where quote-removal
- * toggles in and out of quoting and produces exactly one argument.
+ * The token list a shell would see after quote removal (both quote styles).
+ * Handles the repo's quoting spelling `'\''` → `'"'"'`: the `"` segments are
+ * empty on removal, so the escaped quote survives as a literal character and
+ * the whole payload stays ONE argument.
  */
 function shellTokens(command: string): string[] {
   const tokens: string[] = []
   let current = ''
   let started = false
-  let quoted = false
-  for (let index = 0; index < command.length; index += 1) {
-    const char = command[index] as string
-    if (char === "'") {
-      quoted = !quoted
+  let quoted: "'" | '"' | null = null
+  for (const char of command) {
+    if (quoted === null && (char === "'" || char === '"')) {
+      quoted = char
       started = true
       continue
     }
-    if (!quoted && /\s/.test(char)) {
+    if (quoted !== null && char === quoted) {
+      quoted = null
+      continue
+    }
+    if (quoted === null && /\s/.test(char)) {
       if (started) tokens.push(current)
       current = ''
       started = false
@@ -248,37 +252,40 @@ test('remoteRunnerArgv: an empty original argv still produces a well-formed wrap
 
 /* -------------------------------------------------- 5) probe command */
 
-/**
- * Bare vocabulary of the probe: everything a shell executes outside quotes.
- * Only the runner path is ever quoted, so a payload cannot become bare text.
- */
-const PROBE_BARE_TOKENS = [
-  'command', '-v', '\u0000', '&&', '\u0000', '--version;',
-  'command', '-v', '\u0000', '>', '/dev/null', '&&', '\u0000',
-]
-
 test('buildRemoteProbeCommand: the version gate, the resolve gate, and the real profile around true', () => {
   const command = buildRemoteProbeCommand()
   assert.match(command, /^command -v 'bwrap' && 'bwrap' --version; command -v 'bwrap' > \/dev\/null && /)
   const [versionGate, resolveGate, functionalStep] = command.split(' && ')
   assert.equal(versionGate, "command -v 'bwrap'", '1) resolvable at all')
   assert.equal(resolveGate, "'bwrap' --version; command -v 'bwrap' > /dev/null", '2) version read, then re-resolve')
-  // 3) the functional check: the REAL read-only profile vector around `true`,
-  //    bound to argv[0] as one quoted word (so quote removal yields the exact
-  //    runner argv the fence would build).
-  assert.equal(functionalStep, quoteShellArg(remoteRunnerArgv(['true'], { mode: 'read-only' }, 'bwrap').join(' ')))
-  assert.deepEqual(shellTokens(functionalStep ?? ''), ['bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true'])
-  assert.deepEqual(
-    (functionalStep ?? '').slice(1, -1).split(' '),
-    ['bwrap', ...READ_ONLY_VECTOR, '--', 'true'],
-    'the profile tokens are literally present in the functional step',
+  // 3) the functional check — and the shape that matters: the step must be the
+  //    runner argv as SEPARATE shell words. Quoting the joined vector instead
+  //    yields ONE word, so a healthy host tries to exec a program literally
+  //    named `bwrap --ro-bind … -- true`, exits 127, and fail-closed turns that
+  //    into a fence that refuses every command on every host forever.
+  const expectedArgv = ['bwrap', ...READ_ONLY_VECTOR, '--', 'true']
+  assert.equal(expectedArgv.length, 12, 'the full vector incl. runner + terminator')
+  assert.deepEqual(shellTokens(functionalStep ?? ''), expectedArgv,
+    'quote removal must yield the runner argv word by word')
+  assert.equal(
+    (functionalStep ?? '').includes(quoteShellArg(expectedArgv.join(' '))),
+    false,
+    'never the joined vector wrapped in a single quote pair',
   )
 })
 
 test('buildRemoteProbeCommand: nothing is unquoted except the fixed probe vocabulary', () => {
   const command = buildRemoteProbeCommand()
-  assert.deepEqual(stripQuoted(command).split(/\s+/), PROBE_BARE_TOKENS,
-    'the bare vocabulary is fixed: only the runner path is ever quoted')
+  // The bare remainder is the fixed operator vocabulary only. Count NUL
+  // placeholders separately: the functional step quotes EVERY argv word (12 of
+  // them), so the number of quoted spans is now part of the contract rather
+  // than one opaque span.
+  const bare = stripQuoted(command).split(/\s+/).filter(token => token !== '' && token !== '\u0000')
+  assert.deepEqual(bare, ['command', '-v', '&&', '--version;', 'command', '-v', '>', '/dev/null', '&&'],
+    'the bare vocabulary is fixed: runner and profile words are never bare text')
+  const spans = stripQuoted(command).split('\u0000').length - 1
+  // 3 runner occurrences (resolve gate, version, re-resolve) + 12 argv words.
+  assert.equal(spans, 15, 'every runner occurrence and every argv word is quoted')
   assert.equal(command.includes('$('), false, 'no command substitution')
   assert.equal(command.includes('`'), false, 'no backtick substitution')
   assert.equal(/\$\{?[A-Za-z_]/.test(command), false, 'no variable expansion')
@@ -289,47 +296,40 @@ test('buildRemoteProbeCommand: nothing is unquoted except the fixed probe vocabu
 test('buildRemoteProbeCommand: a runner path with an embedded quote stays one inert argument', () => {
   const hostile = "/tmp/it's; touch /tmp/pwned && echo "
   const command = buildRemoteProbeCommand(hostile)
-  assert.equal(command.split(quoteShellArg(hostile)).length - 1, 3,
+  assert.equal(command.split(quoteShellArg(hostile)).length - 1, 4,
     'all three occurrences use the single-quoted spelling')
-  // The functional step is exactly the quoted wrap: the payload is argv[0] of
-  // the runner, and quote removal (asserted below) restores it as ONE argument.
-  // (`stripQuoted` is not used here: the `'"'"'` spelling deliberately breaks
-  // the raw path apart, which is precisely why the payload cannot escape.)
-  const functionalWord = quoteShellArg(
-    remoteRunnerArgv(['true'], { mode: 'read-only' }, hostile).join(' '),
-  )
-  assert.equal(command.endsWith(functionalWord), true, 'the functional step is the quoted wrap')
-  assert.equal(command.split(functionalWord).length - 1, 1, 'exactly one functional step')
-  assert.equal(functionalWord.slice(1, -1).replaceAll('\'"\'"\'', "'"),
-    `${hostile} --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true`)
+  // Quote removal is the contract: every occurrence must come back as ONE inert
+  // argument, and the functional step must come back as the runner argv.
+  const tokens = shellTokens(command)
+  assert.equal(tokens.filter(token => token === hostile).length, 4,
+    'the payload is four arguments, never shell syntax')
+  assert.deepEqual(tokens.slice(-(READ_ONLY_VECTOR.length + 3)), [hostile, ...READ_ONLY_VECTOR, '--', 'true'],
+    'the functional step is the runner argv word by word')
 })
 
 test('buildRemoteProbeCommand: a shell-metacharacter runner path is inert, not a second command', () => {
   const hostile = '/tmp/x; touch /tmp/pwned && echo '
   const command = buildRemoteProbeCommand(hostile)
-  assert.equal(command.split(quoteShellArg(hostile)).length - 1, 3, 'every occurrence is quoted')
-  assert.deepEqual(stripQuoted(command).split(/\s+/), PROBE_BARE_TOKENS,
-    'the payload leaves no trace in the bare shell text')
+  assert.equal(command.split(quoteShellArg(hostile)).length - 1, 4, 'every occurrence is quoted')
+  assert.deepEqual(
+    stripQuoted(command).split(/\s+/).filter(token => token !== '' && token !== '\u0000'),
+    ['command', '-v', '&&', '--version;', 'command', '-v', '>', '/dev/null', '&&'],
+    'the payload leaves no trace in the bare shell text',
+  )
   assert.equal(stripQuoted(command).includes('touch'), false)
   assert.equal(stripQuoted(command).includes('pwned'), false)
-  const functionalWord = quoteShellArg(
-    remoteRunnerArgv(['true'], { mode: 'read-only' }, hostile).join(' '),
-  )
-  assert.equal(command.endsWith(functionalWord), true)
-  assert.equal(functionalWord.slice(1, -1),
-    `${hostile} --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true`,
-    'quote removal restores the whole payload as one argument')
+  const tokens = shellTokens(command)
+  assert.equal(tokens.filter(token => token === hostile).length, 4,
+    'quote removal restores the whole payload as one argument each time')
+  assert.deepEqual(tokens.slice(-(READ_ONLY_VECTOR.length + 3)), [hostile, ...READ_ONLY_VECTOR, '--', 'true'])
 })
 
 test('buildRemoteProbeCommand: an explicit runner path is used consistently (same builder as the wrap)', () => {
   const command = buildRemoteProbeCommand('/opt/bwrap')
   assert.equal(command.includes("command -v '/opt/bwrap' && '/opt/bwrap' --version"), true)
-  const functionalWord = quoteShellArg(
-    remoteRunnerArgv(['true'], { mode: 'read-only' }, '/opt/bwrap').join(' '),
-  )
-  assert.equal(command.endsWith(functionalWord), true,
+  assert.deepEqual(shellTokens(command).slice(-(READ_ONLY_VECTOR.length + 3)),
+    ['/opt/bwrap', ...READ_ONLY_VECTOR, '--', 'true'],
     'probe text and runner argv share one builder, so they cannot drift apart')
-  assert.equal(functionalWord.slice(1, -1), '/opt/bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true')
 })
 /* ------------------------------------------------ 6) parseRemoteProbe */
 

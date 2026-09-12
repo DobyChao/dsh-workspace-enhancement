@@ -307,13 +307,24 @@ export const DEFAULT_REMOTE_RUNNER_PATH = 'bwrap'
  * and `command -v`/`--version`/`true` are fixed tokens. The `--` terminator
  * keeps the runner from reading `--ro-bind` as its own option.
  *
+ * **The functional step quotes each argv WORD SEPARATELY, never the joined
+ * vector.** Joining first and quoting the result hands the shell ONE word, so a
+ * perfectly healthy host tries to exec a program literally named
+ * `bwrap --ro-bind / / … -- true` and exits 127 — and because every non-zero
+ * exit reads as "runner unusable", fail-closed turns that into a fence that
+ * refuses every command on every host, forever. `test/remote-sandbox.test.ts`
+ * tokenizes this step back into the runner argv precisely so the two cannot
+ * drift apart again (self-reviewer catch, 2026-09-13).
+ *
  * @param runnerPath - remote runner program; defaults to
  *   {@link DEFAULT_REMOTE_RUNNER_PATH}.
  * @returns one POSIX shell command string requiring exit 0 for a usable fence.
  */
 export function buildRemoteProbeCommand(runnerPath: string = DEFAULT_REMOTE_RUNNER_PATH): string {
   const runner = quoteShellArg(runnerPath)
-  const functional = quoteShellArg(remoteRunnerArgv(['true'], { mode: 'read-only' }, runnerPath).join(' '))
+  const functional = remoteRunnerArgv(['true'], { mode: 'read-only' }, runnerPath)
+    .map(word => quoteShellArg(word))
+    .join(' ')
   return `command -v ${runner} && ${runner} --version; `
     + `command -v ${runner} > /dev/null && ${functional}`
 }
