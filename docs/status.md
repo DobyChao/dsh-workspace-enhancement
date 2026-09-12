@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-12 18:02 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-12 18:03 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `75153bc` |
-| HEAD 提交 | `fix(review): close the GLM-5.3 minors and record the probe catch in the ADR` (2026-09-13) |
-| 与远端 | 25 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `d458462` |
+| HEAD 提交 | `docs(backlog): close REQ-I11/SEC-5/REQ-I9 and register the fence-visibility follow-up` (2026-09-13) |
+| 与远端 | 26 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -22,7 +22,7 @@
 | 单测用例（静态计数） | 471 |
 | E2E 场景文件 | 8 |
 | ADR | 22 |
-| 轮次报告 | 26 |
+| 轮次报告 | 27 |
 
 ## 待办分布（docs/backlog.md）
 
