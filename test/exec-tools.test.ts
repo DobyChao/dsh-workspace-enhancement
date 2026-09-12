@@ -573,6 +573,39 @@ test('registerWin32Bash execute: a remote session runs bash -c through the mixed
   assert.equal(spawned2[0]?.cwd, join(remotePlaceholder('c1'), 'src'))
 })
 
+test('REQ-I11: the win32 bash seam carries the session gate (our own exec face)', async () => {
+  // The GLM-5.3 review found this face ungated while SECURITY.md named only the
+  // OFFICIAL tools as bypassable. It is ours, so it must refuse like sw_exec:
+  // the session works on c1 (implicit via the cwd route), and an explicit c2
+  // workdir must not reach a registered-but-unconnected machine.
+  const spawned: SubprocessSpawnSpec[] = []
+  const fake = fakeToolContext({ subprocess: { spawn: spec => { spawned.push(spec); return fakeHandle(spec) } } })
+  const store = {
+    listFor: (_sessionId: string): readonly string[] => [],
+    set: (_sessionId: string, _ids: readonly unknown[]): string[] => [],
+    connect: (_sessionId: string, _id: string): string[] => [],
+    disconnect: (_sessionId: string, _id: string): boolean => false,
+    retain: (_known: ReadonlySet<string>): number => 0,
+  }
+  registerWin32Bash(fake.ctx, fakeRegistry({ c1: fakeConnection(), c2: fakeConnection({ id: 'c2' }) }), {
+    platform: 'win32',
+    connections: () => store,
+  })
+  const face = {
+    signal: new AbortController().signal,
+    agent: { session: { header: { id: 's1', cwd: remotePlaceholder('c1') } } },
+  }
+  await assert.rejects(
+    () => fake.registered[0]?.execute?.({ command: 'uname -a', description: 'Show kernel', workdir: remotePlaceholder('c2') }, face),
+    /is not connected to this session/u,
+  )
+  assert.deepEqual(spawned, [], 'an unconnected machine must not spawn anything')
+
+  // The implicit main machine still works: no gate may break the normal path.
+  await fake.registered[0]?.execute?.({ command: 'uname -a', description: 'Show kernel' }, face)
+  assert.equal(spawned.length, 1)
+})
+
 /* ----------------------------------------------------------- 8) 输出渲染 */
 
 test('renderStreamBody: stderr section, truncation notice, and exit markers', () => {

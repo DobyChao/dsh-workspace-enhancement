@@ -1088,6 +1088,14 @@ export function registerWin32Bash(
     platform?: NodeJS.Platform
     enableRunInBackground?: boolean
     sides?: () => SessionSideWorkspaceStore | undefined
+    /**
+     * REQ-I11: the session connection store, so this tool applies the SAME gate
+     * `sw_exec` does. This is the plugin's OWN exec face: without the gate it
+     * would be the one exec surface a model could use to reach a registered but
+     * unconnected machine (the official `bash`/`pwsh` bypass is documented as
+     * structural; ours need not be).
+     */
+    connections?: () => SessionConnectionsFace | undefined
   } = {},
 ): void {
   if ((options.platform ?? process.platform) !== 'win32') return
@@ -1126,6 +1134,22 @@ export function registerWin32Bash(
         // no preference → en) — a design-rule unification, not a regression.
         // A no-settings composition (tests) therefore sees the EN wording.
         throw new Error(t('tool.bash.error.localSession'))
+      }
+      // REQ-I11 / ADR-0021 §2.5: OUR exec face carries the session gate too. The
+      // cwd decides the route (`resolveWin32BashWorkdir` keeps an explicit
+      // `ssh://` workdir verbatim), so an unconnected — or unknown — machine is
+      // refused here exactly like `sw_exec` refuses it. A composition without
+      // the store keeps the previous behaviour (`sw_exec` has the same rule).
+      const connectionStore = options.connections?.()
+      const route = remoteRouteFromCwd(cwd)
+      if (connectionStore !== undefined && route !== null) {
+        const connected = connectedMachinesOf(
+          sessionCwdOf(exec),
+          sessionIdOf({ ...(exec.agent !== undefined ? { scope: exec.agent as object } : {}) }),
+          sessionId => connectionStore.listFor(sessionId),
+          registry(),
+        )
+        requireConnectedServer(connected, route.connectionId, registry().listMachines().machines.map(machine => machine.id), t)
       }
       if (args.run_in_background === true) {
         if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))

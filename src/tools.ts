@@ -633,5 +633,8 @@ export function registerWorkspaceTools(
   // `sides`/`connections` are passed on so both tools can decide per session
   // (REQ-I6 ② prompt zero-injection + REQ-I11 server gate).
   registerSwExec(ctx, registry, { sides, connections })
-  registerWin32Bash(ctx, registry, { sides })
+  // REQ-I11: the win32 `bash` seam is OUR exec face, so it carries the session
+  // gate too (the GLM-5.3 review found it ungated while `SECURITY.md` named only
+  // the OFFICIAL tools as bypassable — ours need not be).
+  registerWin32Bash(ctx, registry, { sides, connections })
 }
