@@ -22,6 +22,27 @@ import { remoteRouteFromCwd } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 
 /**
+ * REQ-I11: the face of the per-session connected-machine store
+ * (`SessionMachineConnections`) that callers name. The mutators are listed so
+ * this type can declare the `sessionConnections` service lookup, but every
+ * prompt contribution is a read-only consumer by convention: only the
+ * `sw_connect` tool and the `session.conn.*` endpoints mutate the store, and
+ * both go through exactly these methods.
+ * Injected/absent services are passed as an accessor so a composition without
+ * the store degrades to "no session connections" instead of failing assembly.
+ */
+export interface SessionConnectionsFace {
+  /** The machine ids connected to one session, in connection order. */
+  listFor(sessionId: string): readonly string[]
+  /** REQ-I11 replace semantics: the whole set becomes `ids` (empty = clear). */
+  set(sessionId: string, machineIds: readonly unknown[]): string[]
+  /** Add one machine to the session (idempotent). */
+  connect(sessionId: string, machineId: string): string[]
+  /** Remove one machine from the session (absent id is a no-op `false`). */
+  disconnect(sessionId: string, machineId: string): boolean
+}
+
+/**
  * Minimal agent face read by the prompt probe: `dsh-agent-loop`'s
  * `ReactLoopAgent` (the per-session scope key) exposes `id` and `session`;
  * only these leaf fields are touched.
@@ -78,4 +99,44 @@ export function hasRemoteWorkspaceContext(
   const facts = sessionWorkspaceContextOf(context, store)
   if (facts.sides.length > 0) return true
   return facts.cwd !== undefined && remoteRouteFromCwd(facts.cwd) !== null
+}
+
+/**
+ * REQ-I11: the session id one assembly context belongs to, or `undefined` when
+ * the scope carrier does not expose one. Pure leaf read; a missing carrier is
+ * an honest "unknown session" rather than a throw (the callers that MUST have
+ * an id fail closed themselves).
+ */
+export function sessionIdOf(context: { readonly scope?: object }): string | undefined {
+  return (context.scope as PromptAgentFace | undefined)?.session?.header.id
+}
+
+/** REQ-I11: the connected-machine ids of one assembly context (empty when unknown). */
+export function connectedMachineIdsOf(
+  context: { readonly scope?: object },
+  store?: () => SessionConnectionsFace | undefined,
+): string[] {
+  const sessionId = sessionIdOf(context)
+  if (sessionId === undefined) return []
+  return [...(store?.()?.listFor(sessionId) ?? [])]
+}
+
+/**
+ * REQ-I11 (ADR-0021 §2.8): the session has a REMOTE fact worth prompting about
+ * — a remote cwd route, at least one side root, or at least one connected
+ * machine. This is the existence condition of BOTH the `sw-remote` section and
+ * the `tool:sw-exec` section, so a local session with zero connections still
+ * gets zero injection (REQ-I6's zero-injection rule, now including the
+ * connection axis).
+ * @param context - the assembly context of the session being assembled.
+ * @param store - the side-workspace store accessor (absent → no attachments).
+ * @param connections - the connected-machine store accessor (absent → none).
+ */
+export function hasRemoteSessionContext(
+  context: { readonly scope?: object },
+  store?: () => SessionSideWorkspaceStore | undefined,
+  connections?: () => SessionConnectionsFace | undefined,
+): boolean {
+  if (hasRemoteWorkspaceContext(context, store)) return true
+  return connectedMachineIdsOf(context, connections).length > 0
 }

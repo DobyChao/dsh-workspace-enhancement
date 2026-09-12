@@ -143,6 +143,11 @@ const en: Record<DswKey, string> = {
   'rpc.sideWsSessionEmpty': 'session id must be a non-empty string',
   'rpc.sideWsPathRemote': 'side workspace path must be an ssh://<id>/<absolute posix path>: {path}',
   'rpc.sideWsPathLocal': 'side workspace path must be an absolute local path: {path}',
+  // REQ-I11: session-connection store and session.conn.* RPC error surface.
+  'rpc.connStoreNotMounted': 'the session-connection store is not mounted (is dsw/web mounted?)',
+  'rpc.connUnknownMachine': 'unknown machine id(s): {ids} — known: {known}',
+  'rpc.connNoKnownMachines': '(no machines registered)',
+  'rpc.connMachineEmpty': 'a machine id must be a non-empty string',
   // registry.ts / transport.ts / session-workspaces.ts protocol/data
   // validation and routing errors (t15-r2: every host-triggerable surface is
   // keyed; see i18n-design.md §13-9, now removed)
@@ -267,7 +272,7 @@ const en: Record<DswKey, string> = {
   'side.error.path.remote': 'Enter a remote path (starting with /)',
   'side.error.path.local': 'Enter a local directory path',
   'side.card.label': 'Link workspace',
-  'side.card.title': 'Link workspace (side directory of this session)',
+  'side.card.title': 'Session workspaces',
   'side.close.label': 'Close',
   'side.loading': 'Loading…',
   'side.empty': 'No side directories linked. Side directories are extra roots this session can operate on directly.',
@@ -283,6 +288,15 @@ const en: Record<DswKey, string> = {
   'side.browse': 'Browse…',
   'side.draft.labelPlaceholder': 'display name (defaults to the directory name)',
   'side.mount': 'Mount',
+  // REQ-I11 (ADR-0021 §2.9): the session-workspace cockpit keys.
+  'side.conn.heading': 'Connected machines',
+  'side.conn.empty': 'No machines connected to this session',
+  'side.conn.connect': 'Connect',
+  'side.conn.disconnect': 'Disconnect',
+  'side.conn.busy': 'Working…',
+  'side.conn.hint': 'Once connected, the official file tools reach that machine through ssh://<id>/ paths, and sw_exec becomes available to this session.',
+  'side.main.heading': 'Main workspace',
+  'side.main.none': 'Local session — no remote main workspace',
 
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': 'Remote status',
@@ -315,21 +329,27 @@ const en: Record<DswKey, string> = {
   'tool.sw_status.outputs.workspace': 'Current remote workspace: {ws}',
   'tool.sw_status.outputs.workspaceNone': 'Current remote workspace: (none — call sw_pick_workspace to set one)',
   'tool.sw_status.outputs.connected': 'Connected: {yesno}',
+  // REQ-I11 (ADR-0021 §2.5): the session's own connected machines (id + user@host).
+  'tool.sw_status.outputs.connList': 'Machines connected to this session: {items}',
+  'tool.sw_status.outputs.connNone': 'Machines connected to this session: (none — call sw_connect first)',
   'tool.sw_status.outputs.hostKey': 'Host key: {trusted} (mode={mode})',
   'tool.sw_status.outputs.backend': 'Password backend: {backend}',
 
   /* ------------------------------------------------------- tool: sw_connect */
   'tool.sw_connect.description':
-    'Connect SSH to a remote host for remote workspace work. Provide host (required), user, optional password or privateKeyPath/port. Defaults to saving the machine to the registry and making it current (save=false keeps it as a temporary connection). Once connected, call sw_pick_workspace to pick the workspace directory this session should work in.',
-  'tool.sw_connect.param.host': 'Remote host IP or hostname',
-  'tool.sw_connect.param.username': 'SSH user (default root)',
-  'tool.sw_connect.param.port': 'SSH port (default 22)',
-  'tool.sw_connect.param.password': 'SSH password (prefer SSH key when possible)',
-  'tool.sw_connect.param.privateKeyPath': 'Absolute private-key path',
-  'tool.sw_connect.param.save': 'Save this machine to the registry and make it current (default true)',
-  'tool.sw_connect.output': 'Connected to {host} (id={id}).\n\npick a workspace with sw_pick_workspace (path=<abs>).',
-  'tool.sw_connect.error.hostRequired': 'sw_connect: host is required',
-  'tool.sw_connect.error.connectFailed': 'sw_connect: cannot connect to {host} — {detail}',
+    'Set which registered machines this session may connect to and run commands on. Every call REPLACES the whole set (it is not a union): `machines: []` disconnects everything. Machines must be ids of registered machines; an unknown id errors with the known list. Each requested machine is then pinged within a bounded budget: reachable ones are recorded as connected, unreachable ones are reported honestly and left out; when none is reachable the call fails and the existing connections stay unchanged.',
+  'tool.sw_connect.param.machines':
+    'Array of registered machine ids to connect. An empty array disconnects every machine from this session.',
+  'tool.sw_connect.output.cleared': 'Disconnected every machine from this session.',
+  'tool.sw_connect.output.heading': 'Machines connected to this session:',
+  'tool.sw_connect.output.reachable': '- {id} ({endpoint}): reachable, connected',
+  'tool.sw_connect.output.unreachable': '- {id}: unreachable — {detail} (not connected)',
+  'tool.sw_connect.error.noSession': 'sw_connect: cannot resolve this session id — refusing to change connection state',
+  'tool.sw_connect.error.storeMissing': 'sw_connect: the session-connection store is not mounted (is dsw/web mounted?)',
+  'tool.sw_connect.error.unknownMachine': 'sw_connect: unknown machine id(s): {ids} — known: {known}',
+  'tool.sw_connect.error.noKnownMachines': '(no machines registered — add one in the settings page first)',
+  'tool.sw_connect.error.allUnreachable': 'sw_connect: no requested machine was reachable, so this session\'s connections are unchanged.\n{details}',
+  'tool.sw_connect.error.noDetail': 'no failure detail',
 
   /* ---------------------------------------------------- tool: sw_pick_workspace */
   'tool.sw_pick_workspace.description':
@@ -342,11 +362,11 @@ const en: Record<DswKey, string> = {
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.description':
-    'Execute a command on a registered SSH server and return its stdout/stderr. The `server` id selects the machine (a registry id like c1, or the temporary id of sw_connect save:false); it defaults to the current session workspace machine, and a local session without a server errors. The target OS is probed once per connection and reported in the first line: POSIX runs `bash -c`, Windows runs `pwsh -Command`, unknown runs bash honestly. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.',
+    'Execute a command on a registered SSH server connected to this session and return its stdout/stderr. The `server` id selects the machine — it must be a registry id connected to this session (see the connection line of sw_status, or call sw_connect first); it defaults to the machine of this session\'s main workspace. The target OS is probed once per connection and reported in the first line: POSIX runs `bash -c`, Windows runs `pwsh -Command`, unknown runs bash honestly. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.',
   'tool.sw_exec.param.workdir':
     "Working directory on the target server. Defaults to that server's primary workspace; a relative path is resolved against the session workspace; `ssh://<id>/<path>` names a machine and directory explicitly.",
   'tool.sw_exec.param.server':
-    'Target server id: a registry machine id (c1, c2, …) or the temporary id of sw_connect save:false. Defaults to the current session workspace machine. Unknown ids error with the known list.',
+    'Target server id: a registry machine id (c1, c2, …) connected to this session. Defaults to the machine of this session\'s main workspace. A registered id that is not connected to this session errors with the connected ids; an unknown id errors with the known list.',
   'tool.sw_exec.output.background': 'started background job {jobId} on {server} ({endpoint})',
   'tool.sw_exec.output.header': 'server: {id} ({endpoint}) · OS: {os}',
   'tool.sw_exec.error.workdirEmpty': 'sw_exec: workdir must not be empty',
@@ -358,6 +378,10 @@ const en: Record<DswKey, string> = {
   'tool.sw_exec.error.noActive': 'sw_exec: no active server — call sw_connect first',
   'tool.sw_exec.error.spawnFailed': 'sw_exec: spawn failed: {detail}',
   'tool.sw_exec.error.serverRequired': 'sw_exec: server required for local sessions',
+  // REQ-I11 (ADR-0021 §2.5): the three execution-side session-gate refusals.
+  'tool.sw_exec.error.noSession': 'sw_exec: cannot resolve this session id — refusing to execute (fail closed)',
+  'tool.sw_exec.error.notConnectedNone': 'sw_exec: no machine is connected to this session — call sw_connect(machines: [...]) first',
+  'tool.sw_exec.error.notConnected': 'sw_exec: server "{id}" is not connected to this session (connected here: {ids})',
 
   /* ------------------------------------------------------------- tool: bash */
   'tool.bash.description':

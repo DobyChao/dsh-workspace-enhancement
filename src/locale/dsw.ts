@@ -153,6 +153,11 @@ export const zh = {
   'rpc.sideWsSessionEmpty': '会话 id 必须是非空字符串',
   'rpc.sideWsPathRemote': '副工作区路径必须是 ssh://<id>/<绝对 POSIX 路径>：{path}',
   'rpc.sideWsPathLocal': '副工作区路径必须是绝对本地路径：{path}',
+  // REQ-I11：会话连接存储与 session.conn.* RPC 的错误面
+  'rpc.connStoreNotMounted': '会话连接存储未挂载（是否已挂载 dsw/web？）',
+  'rpc.connUnknownMachine': '未知机器 id：{ids} — 已知：{known}',
+  'rpc.connNoKnownMachines': '（注册表中没有机器）',
+  'rpc.connMachineEmpty': '机器 id 必须是非空字符串',
   // registry.ts / transport.ts / session-workspaces.ts 的协议/数据校验与
   // 路由错误（t15-r2 拍板：host 可触发面全部键化，见 i18n-design.md §13-9 已移除）
   'rpc.hostEmpty': 'host 必须是非空字符串',
@@ -276,7 +281,7 @@ export const zh = {
   'side.error.path.remote': '请输入远程路径（/ 开头）',
   'side.error.path.local': '请输入本地目录路径',
   'side.card.label': '关联工作区',
-  'side.card.title': '关联工作区（本会话副目录）',
+  'side.card.title': '会话工作区',
   'side.close.label': '关闭',
   'side.loading': '加载中…',
   'side.empty': '未关联任何副目录。副目录是本会话可直接操作的附加根。',
@@ -292,6 +297,15 @@ export const zh = {
   'side.browse': '浏览…',
   'side.draft.labelPlaceholder': '显示名（默认目录名）',
   'side.mount': '挂载',
+  // REQ-I11（ADR-0021 §2.9）：面板 = 会话工作区驾驶舱——主工作区只读展示 + 已连接机器开关。
+  'side.conn.heading': '已连接的机器',
+  'side.conn.empty': '本会话未连接任何机器',
+  'side.conn.connect': '连接',
+  'side.conn.disconnect': '断开',
+  'side.conn.busy': '处理中…',
+  'side.conn.hint': '连接后，官方文件工具可用 ssh://<id>/ 路径直达该机器；本会话同时出现 sw_exec。',
+  'side.main.heading': '主工作区',
+  'side.main.none': '本地会话，无远程主工作区',
 
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': '远程状态',
@@ -324,21 +338,27 @@ export const zh = {
   'tool.sw_status.outputs.workspace': '当前远程工作区：{ws}',
   'tool.sw_status.outputs.workspaceNone': '当前远程工作区：（无——调用 sw_pick_workspace 设置）',
   'tool.sw_status.outputs.connected': '已连接：{yesno}',
+  // REQ-I11（ADR-0021 §2.5）：本会话已连接的机器（id + user@host），与注册表级事实并列。
+  'tool.sw_status.outputs.connList': '本会话已连接机器：{items}',
+  'tool.sw_status.outputs.connNone': '本会话已连接机器：（无——请先调用 sw_connect）',
   'tool.sw_status.outputs.hostKey': '主机指纹：{trusted}（模式={mode}）',
   'tool.sw_status.outputs.backend': '密码后端：{backend}',
 
   /* ------------------------------------------------------- tool: sw_connect */
   'tool.sw_connect.description':
-    '为远程工作区工作连接 SSH 到远程主机。需要提供 host，可选 user、password 或 privateKeyPath/port。默认把机器保存到注册表并设为当前机器（save=false 仅作临时连接）。连接后调用 sw_pick_workspace 选择本会话应使用的工作区目录。',
-  'tool.sw_connect.param.host': '远程主机 IP 或主机名',
-  'tool.sw_connect.param.username': 'SSH 用户（默认 root）',
-  'tool.sw_connect.param.port': 'SSH 端口（默认 22）',
-  'tool.sw_connect.param.password': 'SSH 密码（可能时优先使用 SSH 私钥）',
-  'tool.sw_connect.param.privateKeyPath': '私钥文件绝对路径',
-  'tool.sw_connect.param.save': '把机器保存到注册表并设为当前机器（默认 true）',
-  'tool.sw_connect.output': '已连接到 {host}（id={id}）。\n\n请用 sw_pick_workspace (path=<abs>) 选择工作区。',
-  'tool.sw_connect.error.hostRequired': 'sw_connect: 必须提供 host',
-  'tool.sw_connect.error.connectFailed': 'sw_connect: 无法连接 {host} — {detail}',
+    '设置本会话可以连接并在其上执行命令的已注册机器。每次调用都**替换**整个集合（不是并集）：`machines: []` 断开全部。机器必须是已注册机器的 id；未注册的 id 会报错并列出已知 id。随后对每台机器做一次有界 ping：可达者记录为已连接，不可达者如实报告但不加入集合；全部不可达时调用失败且不改动既有连接。',
+  'tool.sw_connect.param.machines':
+    '要连接的已注册机器 id 数组。空数组断开本会话的全部连接。',
+  'tool.sw_connect.output.cleared': '本会话已断开全部机器连接。',
+  'tool.sw_connect.output.heading': '本会话已连接机器：',
+  'tool.sw_connect.output.reachable': '- {id}（{endpoint}）：可达，已连接',
+  'tool.sw_connect.output.unreachable': '- {id}：不可达 — {detail}（未连接）',
+  'tool.sw_connect.error.noSession': 'sw_connect: 无法解析本会话 id——拒绝改动连接状态',
+  'tool.sw_connect.error.storeMissing': 'sw_connect: 会话连接存储未挂载（是否已挂载 dsw/web？）',
+  'tool.sw_connect.error.unknownMachine': 'sw_connect: 未知机器 id：{ids} — 已知：{known}',
+  'tool.sw_connect.error.noKnownMachines': '（注册表中没有机器——请先在设置页添加）',
+  'tool.sw_connect.error.allUnreachable': 'sw_connect: 没有一台机器可达，本会话连接保持不变。\n{details}',
+  'tool.sw_connect.error.noDetail': '无错误详情',
 
   /* ---------------------------------------------------- tool: sw_pick_workspace */
   'tool.sw_pick_workspace.description':
@@ -351,11 +371,11 @@ export const zh = {
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.description':
-    '在已注册的 SSH 服务器上执行命令并返回其 stdout/stderr。`server` id 选择机器（注册表 id 如 c1，或 sw_connect save:false 的临时 id）；缺省为当前会话工作区所在机器，没有服务器的本地会话会报错。目标 OS 每次连接探测一次并记录在第一行：POSIX 运行 `bash -c`，Windows 运行 `pwsh -Command`，unknown 时诚实使用 bash。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
+    '在本会话已连接的已注册 SSH 服务器上执行命令并返回其 stdout/stderr。`server` id 选择机器——必须是本会话已连接的注册表 id（见 sw_status 的连接行，或先用 sw_connect 连接）；缺省为本会话主工作区所在机器。目标 OS 每次连接探测一次并记录在第一行：POSIX 运行 `bash -c`，Windows 运行 `pwsh -Command`，unknown 时诚实使用 bash。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
   'tool.sw_exec.param.workdir':
     '目标服务器上的工作目录。缺省为该服务器主工作区；相对路径基于会话工作区解析；`ssh://<id>/<path>` 显式指定机器与目录。',
   'tool.sw_exec.param.server':
-    '目标服务器 id：注册表机器 id（c1、c2…）或 sw_connect save:false 的临时 id。缺省为当前会话工作区所在机器。未知 id 报错并列出已知 id。',
+    '目标服务器 id：本会话已连接的注册表机器 id（c1、c2…）。缺省为本会话主工作区所在机器。已注册但未连接到本会话的 id 会报错并列出已连接 id；未知 id 报错并列出已知 id。',
   'tool.sw_exec.output.background': '已在 {server}（{endpoint}）上启动后台任务 {jobId}',
   'tool.sw_exec.output.header': '服务器：{id}（{endpoint}）· 系统：{os}',
   'tool.sw_exec.error.workdirEmpty': 'sw_exec: workdir 不能为空',
@@ -367,6 +387,10 @@ export const zh = {
   'tool.sw_exec.error.unknownServer': 'sw_exec: 未知服务器 "{id}"',
   'tool.sw_exec.error.spawnFailed': 'sw_exec: 启动失败：{detail}',
   'tool.sw_exec.error.serverRequired': 'sw_exec: 本地会话必须提供 server',
+  // REQ-I11（ADR-0021 §2.5）：执行侧会话门的三条拒绝文案。
+  'tool.sw_exec.error.noSession': 'sw_exec: 无法解析本会话 id——已拒绝执行（fail closed）',
+  'tool.sw_exec.error.notConnectedNone': 'sw_exec: 本会话未连接任何机器——请先调用 sw_connect(machines: [...])',
+  'tool.sw_exec.error.notConnected': 'sw_exec: 服务器 "{id}" 未连接到本会话（本会话已连接：{ids}）',
 
   /* ------------------------------------------------------------- tool: bash */
   'tool.bash.description':

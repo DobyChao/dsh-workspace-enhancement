@@ -3,14 +3,15 @@
  * tool and the win32-host `bash` seam tool.
  *
  * - `sw_exec`: bash/pwsh-tool-aligned command execution ON A NAMED SERVER — a
- *   registry machine id (`c1`, …) or the temporary id of `sw_connect
- *   save:false` — with a `server` parameter plus an optional workdir. The
+ *   registry machine id (`c1`, …) that is CONNECTED TO THIS SESSION
+ *   (REQ-I11 / ADR-0021: the stored `sessionConnections` set ∪ the implicit
+ *   main machine) — with a `server` parameter plus an optional workdir. The
  *   target server's OS is probed once per connection (`uname -s`, falling
  *   back to `cmd /c ver`, then `unknown`) and selects the shell:
  *   `bash -c` (POSIX / unknown) or `pwsh -Command` (win32). Execution goes
  *   through the MIXED subprocess provider with an `ssh://<id>/<path>` cwd, so
- *   the side-workspace exec gate and the machine routing are the same ones
- *   every other spawn uses. Non-zero exits are reported, not errored.
+ *   the machine routing is the same one every other spawn uses. Non-zero exits
+ *   are reported, not errored.
  * - win32 bash: on a Windows host (no local bash, the official bash executor
  *   is not composed) a `bash` tool is registered that runs the session's
  *   REMOTE-Linux command through the same mixed provider; a local session gets
@@ -41,7 +42,8 @@ import { worldOfCwd } from './mixed.ts'
 import { lookup, type DswKey, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { modelPrompt } from './model-prompts.ts'
-import { hasRemoteWorkspaceContext } from './session-remote-context.ts'
+import { hasRemoteSessionContext, hasRemoteWorkspaceContext, sessionIdOf } from './session-remote-context.ts'
+import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
@@ -314,10 +316,12 @@ export function resolveSwExecCwd(
 /* ------------------------------------------------------------- server lookup */
 
 /**
- * Resolve the target server: a registry id, then the one live TEMPORARY
- * connection (`sw_connect save:false`), then the active/config fallback for
- * an omitted id. Unknown ids fail with the known-id list (S1: unknown server
- * error). v1 has no local server: the local world belongs to bash/pwsh.
+ * Resolve the target server: a registry id, then the active machine for an
+ * omitted id. Unknown ids fail with the known-id list (S1: unknown server
+ * error). Temporary ids are gone with `sw_connect save:false` (ADR-0021 §1/§5),
+ * and the per-session connection gate runs BEFORE this resolver — by the time
+ * it is called, the id is either connected or the implicit main machine.
+ * v1 has no local server: the local world belongs to bash/pwsh.
  */
 export function resolveSwExecServer(
   env: SwExecEnv,
@@ -339,6 +343,162 @@ export function resolveSwExecServer(
   throw new Error(
     tr('tool.sw_exec.error.unknownServer', { id: serverId })
     + (known.length > 0 ? ` — known: ${known.join(', ')}` : ''),
+  )
+}
+
+/* ------------------------------------------------------------- reachability */
+
+/**
+ * The registry slice a reachability probe needs: one live connection per
+ * registry id. `SshRegistry` satisfies it structurally (its `get` returns a
+ * live `SshConnection`), which keeps the probe testable without a registry.
+ */
+export interface ProbeRegistryFace {
+  get(id: string): { exec(command: string, opts?: { signal?: AbortSignal }): Promise<ExecOutcome> } | undefined
+}
+
+/** One machine's reachability outcome (plain data — no live objects). */
+export interface MachineProbeResult {
+  id: string
+  /** Whether `echo ok` came back with exit code 0 inside the budget. */
+  ok: boolean
+  latencyMs: number
+  /** Failure reason (model/user-visible); `''` when reachable. */
+  detail: string
+}
+
+/** Reachability budget of one machine (mirrors the registry's PROBE_TIMEOUT_MS). */
+export const MACHINE_PROBE_TIMEOUT_MS = 8_000
+
+/**
+ * Probe ONE registry machine with the `echo ok` contract every `sw_*`
+ * connectivity check uses, inside a hard budget. A failed command, a thrown
+ * error (dead/poisoned chain), an unknown id and a timeout are all reported as
+ * `ok: false` + detail — the caller decides whether that is fatal.
+ * @param registry - the registry slice (live connection lookup).
+ * @param id - registry machine id.
+ * @param budgetMs - probe budget (defaults to {@link MACHINE_PROBE_TIMEOUT_MS}).
+ */
+export async function probeMachine(
+  registry: ProbeRegistryFace,
+  id: string,
+  budgetMs: number = MACHINE_PROBE_TIMEOUT_MS,
+): Promise<MachineProbeResult> {
+  const started = Date.now()
+  let connection: ReturnType<ProbeRegistryFace['get']>
+  try {
+    connection = registry.get(id)
+  } catch (error) {
+    return { id, ok: false, latencyMs: 0, detail: error instanceof Error ? error.message : String(error) }
+  }
+  if (connection === undefined) {
+    return { id, ok: false, latencyMs: 0, detail: `unknown machine id "${id}"` }
+  }
+  try {
+    const outcome = await connection.exec('echo ok', { signal: AbortSignal.timeout(budgetMs) })
+    const latencyMs = Date.now() - started
+    if (outcome.exitCode === 0) return { id, ok: true, latencyMs, detail: '' }
+    return {
+      id,
+      ok: false,
+      latencyMs,
+      detail: (outcome.stderr || outcome.stdout || `exit ${String(outcome.exitCode)}`).trim(),
+    }
+  } catch (error) {
+    return { id, ok: false, latencyMs: Date.now() - started, detail: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** Probe several machines, preserving the requested order (sequential, bounded each). */
+export async function probeMachines(
+  registry: ProbeRegistryFace,
+  ids: readonly string[],
+  budgetMs: number = MACHINE_PROBE_TIMEOUT_MS,
+): Promise<MachineProbeResult[]> {
+  const results: MachineProbeResult[] = []
+  for (const id of ids) results.push(await probeMachine(registry, id, budgetMs))
+  return results
+}
+
+/* --------------------------------------------------------- session gate */
+
+/**
+ * The per-session connection facts `sw_exec` gates on (ADR-0021 §2.4/§2.5):
+ * the STORED connected set plus the implicit main machine the session's header
+ * cwd routes to. The implicit machine is a read-time union — it is never
+ * written back, so a remote session does not manufacture persisted state just
+ * by running a command.
+ */
+export interface ConnectedMachines {
+  /** The session id the gate ran for (`null` ⇒ unresolvable ⇒ fail closed). */
+  sessionId: string | null
+  /** Stored ∪ implicit, in that order, deduped. */
+  ids: string[]
+  /** The main-workspace machine id when the cwd routes remote. */
+  implicit: string | null
+}
+
+/**
+ * Merge the session's stored connections with the implicit main machine
+ * (ADR-0021 §2.4). Pure and synchronous: the cwd route comes from the header,
+ * the stored set from the `sessionConnections` service.
+ * @param sessionCwd - `session.header.cwd` (any route spelling), if any.
+ * @param sessionId - `session.header.id`, if the carrier exposes it.
+ * @param listFor - the store's `listFor` (absent ⇒ no stored connections).
+ * @param registry - the registry slice used to validate the implicit id.
+ */
+export function connectedMachinesOf(
+  sessionCwd: string | undefined,
+  sessionId: string | undefined,
+  listFor: ((sessionId: string) => readonly string[]) | undefined,
+  registry: ProbeRegistryFace,
+): ConnectedMachines {
+  const route = remoteRouteFromCwd(sessionCwd)
+  const implicit = route !== null && registry.get(route.connectionId) !== undefined ? route.connectionId : null
+  const stored = sessionId !== undefined ? [...(listFor?.(sessionId) ?? [])] : []
+  const ids: string[] = []
+  if (implicit !== null) ids.push(implicit)
+  for (const id of stored) {
+    if (!ids.includes(id)) ids.push(id)
+  }
+  return { sessionId: sessionId ?? null, ids, implicit }
+}
+
+/**
+ * REQ-I11 / ADR-0021 §2.5 — the `sw_exec` server gate. The tool stays GLOBALLY
+ * registered (ADR-0021 §3 rejects every scoped/preset alternative for lack of
+ * a per-session scope handle), so the refusal lives here:
+ *
+ * 1. an unresolvable session id → fail closed (A1 unknown #8: never fail open);
+ * 2. no connection at all → "call `sw_connect` first";
+ * 3. a KNOWN registry machine that is not connected to this session → the
+ *    connected ids are listed;
+ * 4. an id the registry does not know → the registry's own "unknown server"
+ *    error with the known-id list (unchanged wording).
+ *
+ * The caller has already resolved `requested` (explicit `server`, else the
+ * implicit main machine), so an untouched explicit id is checked by name.
+ * @param connected - the merged per-session facts.
+ * @param requested - the machine the call names, or `undefined` when it names none.
+ * @param registered - every registry machine id (the known-id list).
+ * @param tr - translator for the refusal messages (host language).
+ */
+export function requireConnectedServer(
+  connected: ConnectedMachines,
+  requested: string | undefined,
+  registered: readonly string[],
+  tr: TranslateFn = EN_T,
+): void {
+  if (connected.sessionId === null) throw new Error(tr('tool.sw_exec.error.noSession'))
+  if (connected.ids.length === 0) throw new Error(tr('tool.sw_exec.error.notConnectedNone'))
+  if (requested === undefined) return
+  if (connected.ids.includes(requested)) return
+  if (registered.includes(requested)) {
+    throw new Error(tr('tool.sw_exec.error.notConnected', { id: requested, ids: connected.ids.join(', ') }))
+  }
+  throw new Error(
+    tr('tool.sw_exec.error.unknownServer', { id: requested })
+    + (registered.length > 0 ? ` — known: ${registered.join(', ')}` : ''),
   )
 }
 
@@ -742,14 +902,21 @@ function jobsOf(ctx: Context, tr: TranslateFn = EN_T): BackgroundJobs {
  * @param registry - the machine registry accessor (server id lookup).
  * @param opts - `enableRunInBackground` mirrors the official bash flag
  *   (`?? true`); background requires `ctx.jobs` and errors honestly when absent.
- *   `sides` is the side-workspace store accessor: REQ-I6 ② uses it (with the
- *   session cwd route) to decide whether the model-facing section is injected
- *   at all — a local session without attachments gets zero prompt text.
+ *   `sides` is the side-workspace store accessor and `connections` the
+ *   connected-machine store accessor: together with the session cwd route they
+ *   decide (a) whether the model-facing section is injected at all
+ *   (REQ-I6 ② + REQ-I11: a local session with no attachments AND no connected
+ *   machine gets zero prompt text) and (b) which servers this session may
+ *   execute on (ADR-0021 §2.5).
  */
 export function registerSwExec(
   ctx: Context,
   registry: () => SshRegistry,
-  opts: { enableRunInBackground?: boolean; sides?: () => SessionSideWorkspaceStore | undefined } = {},
+  opts: {
+    enableRunInBackground?: boolean
+    sides?: () => SessionSideWorkspaceStore | undefined
+    connections?: () => SessionConnectionsFace | undefined
+  } = {},
 ): void {
   const backgroundEnabled = opts.enableRunInBackground ?? true
   const locale = hostLocaleOf(ctx)
@@ -790,11 +957,37 @@ export function registerSwExec(
       const env = swExecEnvOf(ctx, registry, t)
       const sessionCwd = sessionCwdOf(exec)
       const route = remoteRouteFromCwd(sessionCwd)
-      const serverId = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : route?.connectionId
+      // REQ-I11 / ADR-0021 §2.5: the session gate runs FIRST and fails closed.
+      // The store accessor is OPTIONAL only for compositions that never mount
+      // it (the tool then behaves as it did before REQ-I11).
+      const connections = opts.connections
+      let connected: ConnectedMachines | null = null
+      if (connections !== undefined) {
+        connected = connectedMachinesOf(
+          sessionCwd,
+          sessionIdOf({ ...(exec.agent !== undefined ? { scope: exec.agent as object } : {}) }),
+          sessionId => connections()?.listFor(sessionId) ?? [],
+          registry(),
+        )
+      }
+      const requested = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : undefined
+      const serverId = requested ?? route?.connectionId
+      if (connected !== null) {
+        requireConnectedServer(connected, requested, env.listMachines().machines.map(machine => machine.id), t)
+      }
       if (serverId === undefined) {
         throw new Error(t('tool.sw_exec.error.serverRequired'))
       }
       const workdir = normalizeSwExecWorkdir(args.workdir, route !== null ? { id: route.connectionId, path: route.path } : null, t)
+      // A `ssh://<other>/…` workdir names a machine of its own; it must be
+      // connected to this session too, or the gate would be bypassable by
+      // moving the machine id from `server` into `workdir`.
+      if (connected !== null && workdir !== undefined && workdir.startsWith('ssh://')) {
+        const workdirRoute = parseSshRoute(workdir)
+        if (workdirRoute !== null) {
+          requireConnectedServer(connected, workdirRoute.id, env.listMachines().machines.map(machine => machine.id), t)
+        }
+      }
       if (args.run_in_background === true) {
         if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))
         const jobs = jobsOf(ctx, t)
@@ -851,10 +1044,12 @@ export function registerSwExec(
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:sw-exec',
     order: 105,
-    // REQ-I6: model-facing, ENGLISH ONLY (ADR-0014) and injected only when the
-    // session is in the remote workspace world (remote cwd route or a side
-    // workspace) — a plain local session sees no sw_exec prompt text at all.
-    text: (context) => (hasRemoteWorkspaceContext(context, opts.sides) ? modelPrompt('sectionSwExec') : ''),
+    // REQ-I6 ② + REQ-I11 (ADR-0021 §2.8): model-facing, ENGLISH ONLY
+    // (ADR-0014), injected when the session is in the remote workspace world —
+    // a remote cwd route, a side workspace, or at least one connected machine.
+    // A plain local session with zero connections sees no sw_exec prompt text
+    // at all, even though the tool stays globally registered.
+    text: (context) => (hasRemoteSessionContext(context, opts.sides, opts.connections) ? modelPrompt('sectionSwExec') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:sw-exec system prompt section')
 }

@@ -35,14 +35,29 @@ export const MODEL_PROMPTS = {
   /** Side-workspace boundary note, tier-free since REQ-I7 (ADR-0019). */
   sideNote:
     'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default; to run a command on another server use `sw_exec(server, command)`.',
+  /**
+   * REQ-I11: heading of the per-session CONNECTED-MACHINE list (`sw-remote`
+   * section). The list is the session's coarse gate made visible: the store
+   * holds exactly the registry ids `sw_connect` (or the panel) switched on.
+   */
+  connectedHeading: '**Machines connected to this session (`sw_exec` targets)**:',
+  /** REQ-I11: one connected-machine line — id, endpoint, honest reachability. */
+  connectedItem: '- `{id}` — {endpoint}{note}',
+  /** REQ-I11: the note appended to a machine that did not answer its ping. */
+  connectedUnreachable: ' (was unreachable at connect time)',
   /** `sw_status` remote-toolbox report heading. */
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
   envMissing:
     'Hint: the remote is missing {missing} — install them on the remote (for reference only; not auto-installed): rg → sudo apt-get install ripgrep; pwsh → https://aka.ms/powershell',
-  /** `tool:sw-exec` section (order 105) — injected only in a remote-context session. */
+  /**
+   * `tool:sw-exec` section (order 105) — injected only in a remote-context
+   * session. REQ-I11 adds the session gate: `sw_exec` names a machine that is
+   * CONNECTED to this session (or the session's main-workspace machine), so the
+   * copy states the precondition instead of leaving the model to discover it.
+   */
   sectionSwExec:
-    "sw_exec executes a command on the specified server; workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
+    "sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
   /** `tool:bash` section (order 105, win32 hosts) — injected only in a remote-context session. */
   sectionWin32Bash:
     'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
