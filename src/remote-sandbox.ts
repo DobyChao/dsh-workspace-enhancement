@@ -187,6 +187,27 @@ export function resolveRemoteWorkspaceRoot(
   return candidates.find(isUsableRemoteWorkspaceRoot)
 }
 
+/**
+ * Resolve the runner path from a machine record: a usable absolute path, or the
+ * bare default. A non-absolute value cannot be honoured (the remote login shell
+ * would resolve it against a `PATH` the plugin does not control), so it falls
+ * back to `bwrap` — which the probe then either resolves or fails closed on.
+ *
+ * Note the shared shape guard: `..` segments are NOT rejected, because a
+ * workspace routinely reaches its root through them; the value is quoted when
+ * it reaches the shell and a wrong path fails the probe (never silently).
+ *
+ * @param raw - untrusted runner value (a machine-record field).
+ * @param fallback - the runner to assume; defaults to
+ *   {@link DEFAULT_REMOTE_RUNNER_PATH}.
+ */
+export function resolveRemoteRunnerPath(
+  raw: unknown,
+  fallback: string = DEFAULT_REMOTE_RUNNER_PATH,
+): string {
+  return isUsableRemoteWorkspaceRoot(raw) ? raw : fallback
+}
+
 /* ------------------------------------------------------------- argv stage */
 
 /**
@@ -490,12 +511,19 @@ export const REMOTE_SANDBOX_UNAVAILABLE = 'SANDBOX_UNAVAILABLE'
  * `src/locale/**`, which the wiring slice owns).
  */
 export const REMOTE_SANDBOX_MESSAGES = {
-  /** The upstream `SandboxUnavailableError` text, verbatim, with `{mode}`. */
+  /**
+   * The `{mode}` line, widened for the remote world: upstream
+   * `SandboxUnavailableError` names local backends (bubblewrap on PATH, a
+   * Landlock kernel, `sandbox-exec`, the Windows ACL runner), none of which is
+   * actionable advice when the missing fence is on the far side of an SSH
+   * connection. This module builds its own text; the wiring may instead pass
+   * the detail below to the upstream error class and let that one compose.
+   */
   unavailable:
-    'sandbox mode "{mode}" is requested but no sandbox backend is usable on this host; refusing to run the command unconfined.',
+    'sandbox mode "{mode}" is requested but no remote sandbox runner is usable on this host; refusing to run the command unconfined.',
   /** Probe failed ⇒ the fence never ran a command. `{detail}` is the stderr. */
   probeFailed:
-    'remote sandbox unavailable: the remote runner probe failed on this host; the command was not sent — {detail}',
+    'Runner failure: remote sandbox probe failed; no command text was sent — {detail}',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',

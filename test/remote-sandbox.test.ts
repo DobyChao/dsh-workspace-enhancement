@@ -39,6 +39,7 @@ import {
   remoteRunnerVersionOf,
   remoteSandboxFactsOf,
   remoteSandboxUnavailableError,
+  resolveRemoteRunnerPath,
   resolveRemoteWorkspaceRoot,
 } from '../src/remote-sandbox.ts'
 import { quoteShellArg } from '../src/ssh-core.ts'
@@ -198,6 +199,16 @@ test('resolveRemoteWorkspaceRoot: first usable candidate wins, else undefined', 
   assert.equal(resolveRemoteWorkspaceRoot(undefined, '/', WORKSPACE, '/other'), WORKSPACE)
   assert.equal(resolveRemoteWorkspaceRoot(), undefined)
   assert.equal(resolveRemoteWorkspaceRoot(undefined, 'relative', '/'), undefined)
+})
+
+test('resolveRemoteRunnerPath: only an absolute path is honoured, else the bare default', () => {
+  assert.equal(resolveRemoteRunnerPath('/usr/local/bin/bwrap'), '/usr/local/bin/bwrap')
+  assert.equal(resolveRemoteRunnerPath(undefined), 'bwrap')
+  assert.equal(resolveRemoteRunnerPath(''), 'bwrap')
+  assert.equal(resolveRemoteRunnerPath('bwrap'), 'bwrap', 'a bare name is the default, not a resolution')
+  assert.equal(resolveRemoteRunnerPath('bin/bwrap'), 'bwrap')
+  assert.equal(resolveRemoteRunnerPath(7), 'bwrap')
+  assert.equal(resolveRemoteRunnerPath(null, '/opt/bwrap'), '/opt/bwrap')
 })
 
 /* ------------------------------------------------- 4) runner argv shape */
@@ -519,7 +530,8 @@ test('remoteSandboxUnavailableError: carries the code and the mode, with and wit
   const detailed = remoteSandboxUnavailableError('workspace-write', "env: 'bwrap': No such file or directory")
   assert.equal(detailed.code, REMOTE_SANDBOX_UNAVAILABLE)
   assert.match(detailed.message, /sandbox mode "workspace-write"/)
-  assert.match(detailed.message, /the command was not sent/)
+  assert.match(detailed.message, /Runner failure: remote sandbox probe failed/)
+  assert.match(detailed.message, /no command text was sent/)
   assert.match(detailed.message, /env: 'bwrap': No such file or directory/)
 
   const emptyDetail = remoteSandboxUnavailableError('read-only', '')
