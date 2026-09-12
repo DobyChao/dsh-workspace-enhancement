@@ -309,7 +309,7 @@ export const zh = {
   'side.conn.connect': '连接',
   'side.conn.disconnect': '断开',
   'side.conn.busy': '处理中…',
-  'side.conn.hint': '连接后，官方文件工具可用 ssh://<id>/ 路径直达该机器；本会话同时出现 sw_exec。',
+  'side.conn.hint': '连接让本会话获得 sw_exec；官方文件工具经 ssh://<id>/ 路径直达该机器，与这个开关无关。',
   'side.main.heading': '主工作区',
   'side.main.none': '本地会话，无远程主工作区',
   'side.roots.heading': '副工作区',
@@ -331,7 +331,7 @@ export const zh = {
   'status.retryAction.recheck': '重新检测',
 
   /* ------------------------------------------------ tool: shared fragments */
-  'tool.common.noActive': '没有活动的机器——请先用 sw_connect 指定主机。',
+  'tool.common.noActive': '没有活动的机器——请先在设置页注册机器，再用 sw_connect 把它连到本会话。',
   'tool.common.backgroundSentence':
     '长时间运行命令请设置 `run_in_background: true`：调用会立即返回任务 id；用 `job_output` 读取输出、`job_kill` 停止。',
   'tool.common.backgroundUnavailable': '后台执行不可用；长时间运行的命令必须在超时内完成。',

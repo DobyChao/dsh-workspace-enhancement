@@ -300,7 +300,7 @@ const en: Record<DswKey, string> = {
   'side.conn.connect': 'Connect',
   'side.conn.disconnect': 'Disconnect',
   'side.conn.busy': 'Working…',
-  'side.conn.hint': 'Once connected, the official file tools reach that machine through ssh://<id>/ paths, and sw_exec becomes available to this session.',
+  'side.conn.hint': 'Connecting gives this session sw_exec; the official file tools reach any registered machine through ssh://<id>/ paths regardless of this switch.',
   'side.main.heading': 'Main workspace',
   'side.main.none': 'Local session — no remote main workspace',
   'side.roots.heading': 'Side workspaces',
@@ -322,7 +322,7 @@ const en: Record<DswKey, string> = {
   'status.retryAction.recheck': 'Re-check',
 
   /* ------------------------------------------------ tool: shared fragments */
-  'tool.common.noActive': 'No active machine — call sw_connect with a host to get started.',
+  'tool.common.noActive': 'No active machine — register one in settings, then connect it to this session with sw_connect.',
   'tool.common.backgroundSentence':
     'Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.',
   'tool.common.backgroundUnavailable': 'Background execution is not available; long-running commands must finish within the timeout.',

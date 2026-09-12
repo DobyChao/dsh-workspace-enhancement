@@ -54,8 +54,14 @@
    **exit 0 是唯一的成功信号**：非 0、垃圾输出、`exitCode === null` 一律判失败并带非空 detail。
    **实现偏离（本轮记录）**：侦察建议把 profile 向量包成一个预引号字符串，实现改为**按 argv 词逐个拼**——
    因为 runner 路径可能含空格；功能检查完全等价（真只读 profile 包 `true`、要求 exit 0），
-   且 runner 路径的三处出现都过 `quoteShellArg`（红线 6），裸词表是固定的 13 个 token（有 `;`/`&&`/内嵌引号
-   的注入用例钉住）。`remoteRunnerArgv` 的返回值**永远不得直接交给 shell**，必须在接缝的序列化处统一引用。
+   且 runner 路径的四次出现都过 `quoteShellArg`（红线 6；三次在探测门上、一次是功能步的 argv[0]），
+   裸词表是固定的 operator 词汇（有 `;`/`&&`/内嵌引号的注入用例钉住）。
+   `remoteRunnerArgv` 的返回值**永远不得直接交给 shell**，必须在接缝的序列化处统一引用。
+   **首版实现把这个方向做反了**（GLM-5.3 评审 blocker，2026-09-13）：它先把向量 `join(' ')` 再整体引号，
+   于是引号移除后只剩**一个词**——远端 shell 会去找一个名字里带空格的「程序」，在任何主机上都 exit 127；
+   而「非 0 = runner 不可用」的 fail-closed 会把这条错误变成**每台机器永远拒绝所有命令**。
+   测试当时还把错误形状钉住并配了「引号移除得到 runner argv」的错误注释，所以套件全绿。
+   现在测试把功能步**反向 token 化成 12 个 argv 词**并断言「拼接成串」的形态不存在——这才是会红的断言。
 4. **v1 范围**：只围 `spawn`（模型发起的命令）。**`spawnTerminal` 在 `remoteSandbox ≠ off` 时拒绝**并给出明确错误
    （交互终端 + `--dev` 下 `/dev/tty`、`--new-session` 语义未验证，宁可诚实地不给，也不开一个没围栏的终端）。
 5. **档位语义**：`off` = 今天逐字节相同；`read-only` = 只读 profile；`workspace-write` = 只读 + `--tmpfs /tmp` +

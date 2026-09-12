@@ -591,7 +591,7 @@ const COLLECT_STDIO = {
  * wraps it.
  * @param env - server lookup + spawner (the tool builds it from the registry
  *   and `ctx.subprocess`).
- * @param server - registry/temporary id; `undefined` → the active machine.
+ * @param server - registry machine id; `undefined` → the active machine.
  * @param command - the command text to execute (validated non-empty).
  * @param workdir - already-normalized: `ssh://` verbatim, a POSIX absolute
  *   path (interpreted on `server`), or `undefined` for the server's primary

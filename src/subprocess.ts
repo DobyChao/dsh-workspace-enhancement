@@ -59,8 +59,9 @@ function requireRepresentableGrace(graceMs: number): void {
  * — while `spawnTerminal` (async signature) awaits the gate up front. The gate
  * itself no-ops for machines without `remoteApproval` (default `'off'`), for
  * non-shell-shaped host-assembled argv, and for routes without a registry
- * machine (the aggregate `ctx.ssh` transport, `sw_connect save:false`
- * temporaries) — see ADR-0020 D1's honest non-coverage list.
+ * machine (the aggregate `ctx.ssh` transport) — see ADR-0020 D1's honest
+ * non-coverage list. Temporary (`sw_connect save:false`) ids no longer exist
+ * (ADR-0021 §1/§5).
  *
  * REQ-I9 (ADR-0022): a second optional dep, the remote sandbox `fence`, rides
  * the SAME async startup as a later stage. `spawn` hands it to the handle as

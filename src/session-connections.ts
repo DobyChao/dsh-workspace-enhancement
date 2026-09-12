@@ -194,7 +194,10 @@ export class SessionMachineConnections extends Service {
   /**
    * Drop references to machine ids the registry no longer knows (a deleted
    * machine must not stay "connected"). Returns the number of removed
-   * references. Called by the host at startup and after `machines.remove`.
+   * references. The channel calls this after `machines.remove`, which is the one
+   * place that knows an id is gone (there is no startup sweep: the store is
+   * registry-agnostic by construction, so a stale reference is pruned the first
+   * time a machine is removed rather than on load).
    */
   retain(known: ReadonlySet<string>): number {
     let removed = 0
