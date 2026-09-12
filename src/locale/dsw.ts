@@ -273,9 +273,7 @@ export const zh = {
   'side.card.title': '关联工作区（本会话副目录）',
   'side.close.label': '关闭',
   'side.loading': '加载中…',
-  'side.empty': '未关联任何副目录。副目录是模型可以直接读写的附加根，各有独立权限。',
-  'side.fs.label': 'fs 权限',
-  'side.exec.label': '执行权限',
+  'side.empty': '未关联任何副目录。副目录是本会话可直接操作的附加根。',
   'side.rename.title': '编辑名称',
   'side.rename.button': '改名',
   'side.remove.title': '移除',
@@ -292,12 +290,6 @@ export const zh = {
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': '远程状态',
   'header.remote.title': '当前会话的远程连接：{machine}（点击重新检测）',
-
-  /* ------------------------------------------------------------ permission */
-  'permission.rw': '读写',
-  'permission.r': '只读',
-  'permission.execOn': '可执行',
-  'permission.execOff': '禁执行',
 
   /* ------------------------------------------------------------ status.tsx */
   'status.rpc.failed': 'dsw rpc 失败',

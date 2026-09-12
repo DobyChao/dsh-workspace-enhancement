@@ -46,8 +46,8 @@ import type { SshFileSystemEngine } from './filesystem.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
 
 /**
- * R5: the side-workspace face the mixed providers gate against — the store's
- * `match(path)` (longest owning root) plus the permission leaves only.
+ * R5 → REQ-I7: the side-workspace face the mixed filesystem provider routes
+ * against — the store's `match(path)` (longest owning root).
  */
 export interface SideWorkspaceFace {
   match(path: string): SideWorkspaceItem | undefined
@@ -60,37 +60,6 @@ function sideWorkspaceOf(
 ): SideWorkspaceItem | undefined {
   if (sides === undefined || typeof path !== 'string' || path === '') return undefined
   return sides()?.match(path)
-}
-
-/** R5 T3: the fs write gate — a `fs: 'r'` side workspace rejects every write. */
-function assertSideWriteAllowed(
-  sides: (() => SideWorkspaceFace | undefined) | undefined,
-  targetKey: string,
-  displayPath: string,
-): void {
-  const side = sideWorkspaceOf(sides, targetKey)
-  if (side !== undefined && side.fs !== 'rw') {
-    throw new FsError(
-      `cannot write "${displayPath}": the side workspace "${side.label}" is read-only (fs: r). Adjust its permission or use a writable workspace.`,
-      'FS_PERMISSION_DENIED',
-    )
-  }
-}
-
-/** R5 T4: the exec gate — an `exec: 'off'` side workspace rejects spawns in its world. */
-function assertSideExecAllowed(
-  sides: (() => SideWorkspaceFace | undefined) | undefined,
-  cwd: string | undefined,
-  argv0: string | undefined,
-): void {
-  const viaCwd = cwd !== undefined ? sideWorkspaceOf(sides, cwd) : undefined
-  const viaProgram = argv0 !== undefined && argv0.length > 0 ? sideWorkspaceOf(sides, argv0) : undefined
-  const side = viaCwd ?? viaProgram
-  if (side !== undefined && side.exec === 'off') {
-    throw new Error(
-      `dsw: execution is disabled for the side workspace "${side.label}" (exec: off). Use a workspace with exec enabled or ask the user to adjust the permission.`,
-    )
-  }
 }
 
 /** The two execution worlds a mixed provider can route one call to. */
@@ -157,12 +126,15 @@ export function worldOfTargetKey(targetKey: string): ExecutionWorld {
  * `resolveExecutable` is inherently world-less (no cwd parameter) and stays
  * LOCAL — the in-process consumers are host diagnostic tools; the bash/pwsh
  * executors never call it (they spawn `bash`/`pwsh` directly).
+ *
+ * REQ-I7 (ADR-0019): the per-side-workspace exec gate was RETIRED with the
+ * permission model — the facade consults no side-workspace state; routing is
+ * purely world-of-cwd.
  */
 export class MixedSubprocessRuntime implements SubprocessBranch {
   constructor(
     private readonly local: SubprocessBranch,
     private readonly remote: SshSubprocessEngine,
-    private readonly sides?: () => SideWorkspaceFace | undefined,
   ) {}
 
   /** @inheritdoc — local world (see class doc: resolveExecutable is world-less). */
@@ -172,7 +144,6 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
 
   /** @inheritdoc */
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
-    assertSideExecAllowed(this.sides, spec.cwd, spec.argv[0])
     if (worldOfCwd(spec.cwd) === 'remote') {
       return this.remote.spawn({ ...spec, argv: remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined) })
     }
@@ -181,7 +152,6 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
 
   /** @inheritdoc */
   async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
-    assertSideExecAllowed(this.sides, spec.cwd, spec.argv[0])
     return worldOfCwd(spec.cwd) === 'remote' ? this.remote.spawnTerminal(spec) : this.local.spawnTerminal(spec)
   }
 }
@@ -397,10 +367,8 @@ export class MixedFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsWriteOutcome> {
-    // Async method: the gate rejection must be a PROMISE rejection, never a
-    // synchronous throw — the seam contract is promise-returning and callers
-    // may await it without a synchronous guard.
-    assertSideWriteAllowed(this.sides, String(target.targetKey), target.displayPath)
+    // REQ-I7 (ADR-0019): no write gate — a side root is a declaration, and a
+    // write under it routes purely by target key.
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.writeText(target, content, expected, signal)
       : this.local.writeText(target, content, expected, signal, sandboxPolicy)
@@ -414,7 +382,6 @@ export class MixedFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
-    assertSideWriteAllowed(this.sides, String(target.targetKey), target.displayPath)
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.editText(target, edit, expected, signal)
       : this.local.editText(target, edit, expected, signal, sandboxPolicy)

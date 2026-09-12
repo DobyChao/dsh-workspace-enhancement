@@ -76,22 +76,14 @@ export const COPY = {
     en: 'Link workspace (side directory of this session)',
   },
   'side.empty': {
-    zh: '未关联任何副目录。副目录是模型可以直接读写的附加根，各有独立权限。',
-    en: 'No side directories linked. Side directories are extra roots the model can read and write directly, each with its own permissions.',
+    zh: '未关联任何副目录。副目录是本会话可直接操作的附加根。',
+    en: 'No side directories linked. Side directories are extra roots this session can operate on directly.',
   },
   'side.kind.local': { zh: '本机目录', en: 'local directory' },
   'side.kind.remote': { zh: '远程目录', en: 'remote directory' },
   'side.close.label': { zh: '关闭', en: 'Close' },
   'side.browse': { zh: '浏览…', en: 'Browse…' },
   'side.mount': { zh: '挂载', en: 'Mount' },
-  'side.fs.label': { zh: 'fs 权限', en: 'fs permission' },
-  'side.exec.label': { zh: '执行权限', en: 'execution permission' },
-
-  /* ------------------------------------------------------ permission */
-  'permission.rw': { zh: '读写', en: 'read-write' },
-  'permission.r': { zh: '只读', en: 'read-only' },
-  'permission.execOn': { zh: '可执行', en: 'executable' },
-  'permission.execOff': { zh: '禁执行', en: 'not executable' },
 
   /* ---------------------------------------------------------- status */
   'status.unknown': { zh: '未检测', en: 'not detected' },

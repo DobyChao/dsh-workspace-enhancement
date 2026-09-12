@@ -79,10 +79,12 @@ function forceRemoteSandboxMode(ctx: Context): void {
  * @param ctx - the aggregate row's context.
  */
 export function installMixedProviders(ctx: Context): void {
-  // R5: the session-attached side-workspace store. Registered as a cordis
-  // service ('sideWorkspaces') so the web endpoints and the prompt section
-  // resolve the same instance; the mixed providers gate against it lazily
-  // (a missing store means no side workspaces configured — plain R4 behavior).
+  // R5 → REQ-I7: the session-attached side-workspace store. Registered as a
+  // cordis service ('sideWorkspaces') so the web endpoints and the prompt
+  // section resolve the same instance; the mixed filesystem provider routes
+  // against it lazily (a missing store means no side workspaces configured —
+  // plain R4 behavior). The subprocess facade no longer consults it: the
+  // per-root exec gate was retired with the permission model (ADR-0019).
   const sides = (): SideWorkspaceFace | undefined => {
     const value = ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined
     return value
@@ -93,7 +95,7 @@ export function installMixedProviders(ctx: Context): void {
   // constructed immediately (the deployment default for local executions).
   const localSubprocess = new LocalSubprocessRuntime(ctx)
   const sshSubprocess = new SshSubprocessEngine(ctx)
-  ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess, sides))
+  ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
     const sshFs = new SshFileSystemEngine(owner)

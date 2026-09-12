@@ -35,8 +35,10 @@ test.describe('E2E-05 副工作区面板', () => {
     await expect(panel.getByRole('button', { name: anyLang('side.kind.remote') })).toBeVisible()
     await expect(panel.getByRole('button', { name: anyLang('side.browse') })).toBeVisible()
     await expect(panel.getByRole('button', { name: anyLang('side.mount') })).toBeVisible()
-    await expect(panel.getByRole('combobox', { name: anyLang('side.fs.label') }).first()).toBeVisible()
-    await expect(panel.getByRole('combobox', { name: anyLang('side.exec.label') }).first()).toBeVisible()
+    // REQ-I7: the two permission dropdowns were retired with the tier model.
+    // In the default local mode the panel renders NO <select> at all (the
+    // machine picker only appears after switching to the remote kind).
+    await expect(panel.locator('select')).toHaveCount(0)
     // A brand-new session has no side directories: the empty state must show.
     await expect(panel.getByText(anyLang('side.empty')).first()).toBeVisible({ timeout: 20_000 })
     await app.shot('E2E-05-panel-open')

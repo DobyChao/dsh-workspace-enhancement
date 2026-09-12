@@ -104,15 +104,11 @@ export function renderRemotePrompt(fact: RemotePromptFact): string {
   })
 }
 
-/** The permission fact one side workspace renders as (English, model-facing). */
+/** The fact one side workspace renders as (English, model-facing). */
 export interface SideWorkspacePromptFact {
   label: string
   /** Display root: `ssh://<id>/<path>` for remote, absolute local path otherwise. */
   rootKey: string
-  /** `read-only` | `read-write` */
-  fs: string
-  /** `off` | `on` */
-  exec: string
 }
 
 /** Pure prompt projection of one side workspace (leaf fields only). */
@@ -120,23 +116,21 @@ export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspaceP
   return {
     label: item.label,
     rootKey: item.rootKey,
-    fs: modelPrompt(item.fs === 'r' ? 'sideFsReadOnly' : 'sideFsReadWrite'),
-    exec: modelPrompt(item.exec === 'off' ? 'sideExecOff' : 'sideExecOn'),
   }
 }
 
 /**
- * R5: render the attached side-workspace list for the per-session prompt.
- * Empty list → `''` (zero noise for sessions without attachments). The closing
- * sentence states the enforcement boundary honestly: the exec gate covers the
- * workspace world (spawn cwd / program path), not path text inside a command.
+ * R5 → REQ-I7: render the attached side-workspace list for the per-session
+ * prompt. Empty list → `''` (zero noise for sessions without attachments).
+ * Since REQ-I7 (ADR-0019) a side root is a thin declaration — the line shows
+ * label + root only, no permission marks.
  * ENGLISH ONLY (ADR-0014).
  */
 export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
   if (items.length === 0) return ''
   const lines = items.map(item => {
     const fact = sideWorkspacePromptFact(item)
-    return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey, fs: fact.fs, exec: fact.exec })
+    return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey })
   })
   return `${modelPrompt('sideHeading')}\n${lines.join('\n')}\n${modelPrompt('sideNote')}`
 }
@@ -414,7 +408,7 @@ export function registerWorkspaceTools(ctx: Context, registry: () => SshRegistry
    * mint），agent 暴露 `session.header`（叶子字段：cwd + id）。因此：
    * - 本地会话无副工作区：远程事实为空、副列表为空 → ''，零注入。
    * - 远程会话（cwd = `ssh://<id>/…` 或占位树）：按 route 找机器渲染强调提示。
-   * - 含副工作区（session.header.id → store.listFor）：追加副目录清单与权限标记。
+   * - 含副工作区（session.header.id → store.listFor）：追加副目录清单（REQ-I7：薄声明，无权限标记）。
    * - 不选方案 A（session/created 里为会话 createScope + 注册 scoped section）：
    *   注册需要持有一份带该 scope 标签的 ctx——agent 的 scoped ctx 对宿主行不可见；
    *   用同一 key 自行 createScope 会让两个 fiber 共存、section 生命周期无法跟随

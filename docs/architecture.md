@@ -12,7 +12,7 @@
 把 DSH 生态里散落的「工作区」能力（远程 SSH 工作、目录选择、机器/连接管理）收进**一个**插件包：
 `ctx.subprocess` / `ctx.fs` 的远程 provider 让框架里**所有**消费这两条接缝的工具（bash、文件读写、
 PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册表 + `ssh://<id>/<path>` 路由决定「在哪台机、
-哪个目录」；会话可以再挂若干**副工作区**并逐目录设权限（`drafts/CONTEXT.md` §1、§3.1、`drafts/r5-design.md` §1）。
+哪个目录」；会话可以再挂若干**副工作区**（薄声明清单：挂/卸 + label + 远程根路由，ADR-0019）。
 
 ## 2. 核心原则
 
@@ -104,7 +104,7 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
 | `src/registry.ts` | 机器注册表服务 `ctx.sshRegistry`：持久化、CRUD、TOFU、keychain、`~/.ssh/config` 解析、连接状态/探测/重连 | `SshRegistry`、`loadMachinesState`、`normalizeMachine`、`parseSshRoute`、`deriveConnectionState` |
 | `src/hostkey.ts` | TOFU 主机指纹：模式、指纹计算、known_hosts 存取、`%DSH_HOME%` 路径 | `HostKeyMode`、`HostKeyStore`、`HostKeyGuard`、`keyFingerprint`、`dshHome`、`remoteWorkspacesRoot`、`defaultKnownHostsFile`、`defaultSecretsDir` |
 | `src/credential.ts` | OS 钥匙串密码存取（DPAPI / security / secret-tool，best-effort 回退明文） | `platformBackend`、`saveSecret`、`getSecret`、`deleteSecret` |
-| `src/mixed.ts` | 混合 provider 门面（`ctx.subprocess`/`ctx.fs` 唯一实现）+ 路径路由 + 逐副工作区权限门 | `MixedSubprocessRuntime`、`MixedFileSystem`、`worldOfCwd`、`worldOfTargetKey`、`remoteArgvOf` |
+| `src/mixed.ts` | 混合 provider 门面（`ctx.subprocess`/`ctx.fs` 唯一实现）+ 路径路由 + 副根路由（resolve/lstat 先看副根；权限门已随 ADR-0019 退役） | `MixedSubprocessRuntime`、`MixedFileSystem`、`worldOfCwd`、`worldOfTargetKey`、`remoteArgvOf` |
 | `src/session-workspaces.ts` | 副工作区状态服务 `ctx.sideWorkspaces`：roots/sessions 双映射、最长前缀匹配、CRUD | `SessionSideWorkspaceStore`、`sideWorkspaceOf`、`normalizeSideRootKey`、`loadSideWorkspaces` |
 | `src/web.ts` | 浏览器通道的宿主半：`/api/dsw/*` 精确 Fetch 路由注册与端点派发 | `apply`、`Config`、`WebChannelConfig`、`CHANNEL_ENDPOINTS`、`inject` |
 | `src/web-channel.ts` | 通道线协议单一来源（两半共用）：路径、命名空间、信封校验与 Fetch 适配器 | `API_CHANNEL`、`CHANNEL_NAMESPACE`、`channelPathOf`、`channelEndpointOf`、`channelRouteOf`、`isAlreadyRegistered` |
@@ -160,7 +160,7 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
   - `worldOfTargetKey(targetKey)`：`ssh://` → `remote`，否则 `local`。
   - `remoteArgvOf(argv)`：Windows 绝对 argv[0]（`C:\…`、`\\…`）改写为裸命令名并去掉 `.exe`；其余原样。
 - `MixedFileSystem.resolve` / `lstat` **先看副工作区路径**（绝对路径落在远程副根上时，即使会话 cwd 是本地也走该机器），
-  再看 cwd 世界；`stat` / 读类 / `listDir` 按 targetKey 路由；`writeText` / `editText` 先过 fs 写门（§5.5）。
+  再看 cwd 世界；`stat` / 读类 / `listDir` / 写类按 targetKey 路由（副根只是声明，无门，ADR-0019）。
   `sandboxMode` 继承本地委托（诚实上报部署默认），per-call `sandboxPolicy` 只传给本地委托（远端写入不可能被本地沙箱围栏）。
 - `resolveExecutable` 恒走本地（接缝无 cwd 参数，调用方是宿主诊断工具；bash/pwsh 执行器不调用它）。
 - 兜底：混合安装抛错时回退到纯 SSH 挂载（`SshSubprocessRuntime` + `SshFileSystem`），并 `logger.warn`。
@@ -202,24 +202,28 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
   `credentialBackend` 是逐机器字段，UI 对加密回退态有诚实提示。
 - 错误脱敏由 `connection.ts` 的 `redactValues` / `redactSpecMessage` 承担；凭据永不进日志、不进 git。
 
-### 5.5 副工作区与逐工作区权限门（`session-workspaces.ts`）
+### 5.5 副工作区：薄声明清单 + 远程根路由（`session-workspaces.ts`）
 
-- 实体 `SideWorkspaceItem`：`id` / `kind: 'local' | 'remote'` / `path`（本地绝对路径，或 `ssh://<machineId>/<posix>`）/
-  `label` / `fs: 'r' | 'rw'` / `exec: 'on' | 'off'`。
+> 权限模型（`fs: r|rw` × `exec: on|off` 两道门）已随 REQ-I7 整体退役（ADR-0019）；
+> 本节描述退役后的现状。
+
+- 实体 `SideWorkspaceItem`：`id` / `kind: 'local' | 'remote'` / `rootKey`（本地绝对路径，或
+  `ssh://<machineId>/<posix>`）/ `label`。副根只是**声明**——「本会话把这个目录声明为可直接操作的附加根」，
+  无任何权限语义；加载既有状态文件时，记录上的旧 `fs`/`exec` 字段被忽略（不报错、不迁移）。
 - 状态文件 `<dsh home>/dsw-session-workspaces.json`，两个映射：
-  - `roots`：rootKey → 记录，**一个根一份记录**，因此一个目录的权限是全局的（两个会话挂同一目录共享 fs/exec 档位）；
+  - `roots`：rootKey → 记录（**一个根一份记录**，两个会话挂同一目录共享同一条声明）；
   - `sessions`：sessionId → 有序 rootKey 列表（展示与提示顺序）。
 - 匹配 `sideWorkspaceOf` / store 的 `match(path)` 做**最长前缀匹配**（跨 `local` / `ssh://` 家族，含分隔符边界、
-  win32 大小写与正斜杠归一）。
-- 两道门都在门面内：
-  - **fs 写门**：`writeText` / `editText` 的 targetKey 命中 `fs:'r'` 根 → 抛 `FsError(FS_PERMISSION_DENIED)`
-    （异步方法，抛的是 promise rejection）；
-  - **exec 门**：`spawn` / `spawnTerminal` 只看 `spec.cwd` 与 `spec.argv[0]`，命中 `exec:'off'` 根 → 抛
-    `dsw: execution is disabled for the side workspace "…" (exec: off) …`。
-- 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（`fs` / `exec` 标记；无副工作区 = 零注入）；
-  文案是 model-facing 英文常量（`src/model-prompts.ts`，ADR-0014）。
-- RPC：`session.ws.list` / `add` / `update` / `remove`（远程机器先校验存在再落盘）。
-- 语义与边界：只读/禁执行是**启动层**强制，命令文本有意不扫描；已知绕过见 §7 与 ADR-0012。
+  win32 大小写与正斜杠归一、realpath 规范化）——它是**路由索引**：`MixedFileSystem.resolve` / `lstat`
+  先看副根（绝对路径落在远程副根上时，即使会话 cwd 是本地也走该机器）；spawn 面已不消费它
+  （按 cwd 世界路由）。
+- 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（每行 label + rootKey，无档位标记；
+  无副工作区 = 零注入）；文案是 model-facing 英文常量（`src/model-prompts.ts`，ADR-0014）。
+- RPC：`session.ws.list` / `add` / `update(label)` / `remove`（远程机器先校验存在再落盘；
+  add/update 只消费 `id`/`kind`/`path`/`label`，payload 校验是宽松白名单——旧客户端仍发
+  `fs`/`exec` 等未知字段时被忽略、请求照常受理）。
+- 真正的隔离手段回归两层：每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
+  远程命令围栏走 `AUDIT-6`/`REQ-I9` 线。
 
 ### 5.6 浏览器通道 `/api/dsw/*`（`web.ts` + `web-channel.ts`）
 
@@ -260,7 +264,8 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
   - **`sw_exec`**：在**指定服务器**上执行命令。`server` 接受注册表机器 id 或 `sw_connect save:false` 的临时 id，
     缺省 = 会话主工作区机器，未知 id 报错并列出已知 id；目标 OS 每连接探测一次
     （`uname -s` → `cmd /c ver` → `unknown`，进程内 Map 缓存），POSIX/unknown 用 `bash -c`、win32 用 `pwsh -Command`；
-    spawn 经混合 provider（cwd = `ssh://<server>/<workdir 或机器工作区>`），因此机器路由与副工作区 exec 门原样生效；
+    spawn 经混合 provider（cwd = `ssh://<server>/<workdir 或机器工作区>`），机器路由原样生效
+    （副工作区 exec 门已随 ADR-0019 退役）；
     非 0 退出**报告而非报错**；`run_in_background` 走可选服务 `ctx.jobs`（缺服务明确报错）；不做 escalation；
     v1 不接受本地 server。
   - **win32 宿主 `bash` 接缝**：仅 `process.platform === 'win32'` 注册（POSIX 宿主有官方 `bash`，重名注册会失败）；
@@ -312,27 +317,26 @@ PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册
    `sw_status` 有三行自检，缺 pwsh/rg 时工具诚实返回 127。
 2. **SSH 协议固有**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`，前台进程组不可见；
    退出码/信号以 SSH channel close 为准。
-3. **exec 门是启动层强制**：只看 `spec.cwd` 与 `spec.argv[0]`；命令文本有意不扫描
-   （扫描不可靠，且 fs 只读是文件工具级的门）。
-4. **副工作区 `fs:'r' + exec:'on'` 可被绕过**（2026-08-26 用户实测 + 2026-09-02 lab 审计）：
-   主工作区命令用**绝对路径**写只读副根（`exec:on`/`off` 都拦不住）、`workdir` 相对写、只读根内文件可被**删除**
-   （无完整性保护）；`workspace-write` 档位下 runtime 层也没有进程围栏。补强方案尚未拍板 → ADR-0012。
-   门禁在其声明范围内（文件工具写、exec 门含嵌套路径/PTY/大小写归一）8/8 符合文档行为，无实现级 bug。
-5. **远程会话 composer 预设显示 Custom**（已拍板仅记录）：远程会话只被写入 `sandbox/mode=danger-full-access`，
+3. **副工作区无权限语义（ADR-0019，用户 2026-09-12 拍板）**：副根是薄声明清单，不设 fs/exec 档位。
+   背景：远程会话内同机任意绝对路径本就可达（`SshFileSystemEngine.resolve` 以 cwd 连接为 base），
+   副根对同机目录只剩限权作用，而旧权限门是 advisory 且有已知绕过（主工作区命令可用绝对路径写删「只读」副根）。
+   真正的隔离手段：每会话 `sandbox/mode`（本地）与操作者信任边界；远程命令围栏见 `AUDIT-6`/`REQ-I9`。
+   旧状态文件里的 `fs`/`exec` 字段加载时忽略（不迁移）。
+4. **远程会话 composer 预设显示 Custom**（已拍板仅记录）：远程会话只被写入 `sandbox/mode=danger-full-access`，
    审批旋钮仍是 `ask`，组合不匹配任何预设整组 → 解析为 `custom`；候选方案 A/B/C 见 `drafts/CONTEXT.md` §7。
-6. **官方工作区注册表看不见远程工作区**：占位目录方案下 remote 会话的 cwd 是本地占位路径；镜像已砍，
+5. **官方工作区注册表看不见远程工作区**：占位目录方案下 remote 会话的 cwd 是本地占位路径；镜像已砍，
    没有「真实本地副本」这条绕开路径。
-7. **会话栏副工作区徽标延后**：v1 只有标题栏「工作区」按钮 + 面板，不做焦点指示。
-8. **双机同名裸 POSIX 路径归因 machine-agnostic**：`ssh://` 拼写精确，裸 POSIX 路径不带机器信息
+6. **会话栏副工作区徽标延后**：v1 只有标题栏「工作区」按钮 + 面板，不做焦点指示。
+7. **双机同名裸 POSIX 路径归因 machine-agnostic**：`ssh://` 拼写精确，裸 POSIX 路径不带机器信息
    （fs 侧遗留项；`sw_exec` 因 `server` 显式而无歧义）。
-9. **i18n 不一致窗口**：无持久化偏好 + 中文浏览器时，客户端 UI 是 zh、宿主模型面是 en
+8. **i18n 不一致窗口**：无持久化偏好 + 中文浏览器时，客户端 UI 是 zh、宿主模型面是 en
    （框架 `FALLBACK_LOCALE = 'en'` 语义；在设置页 Language 选一次即收敛为三面一致）。
-10. **面板终端保持本地**：用户可见的侧栏终端由 dsh-better-sidebar 提供（直连 node-pty，不经 `ctx.subprocess` 接缝）；
+9. **面板终端保持本地**：用户可见的侧栏终端由 dsh-better-sidebar 提供（直连 node-pty，不经 `ctx.subprocess` 接缝）；
     本项目插件保持独立，不 monkey-patch 第三方内部实现；远程终端的可用路径是模型终端工具
     （`dsh-bash-terminal` 经 `ctx.subprocess.spawnTerminal` 已远程）。
-11. **UI 一致性（已记录，不急着改）**：flow 表单与设置页表单曾字段不一致，R2 已用共享 `MachineForm` 收敛；
+10. **UI 一致性（已记录，不急着改）**：flow 表单与设置页表单曾字段不一致，R2 已用共享 `MachineForm` 收敛；
     认证 tabs 无「SSH Agent」第三档（`drafts/ui-merge-design.md` §6.1 决定 R2 不做）。
-12. **上游漂移**：两份合并分析基于下载快照（dsh-ssh main 0.3.0-pre、dsh-remote 0.8.7），复核时以上游最新代码为准；
+11. **上游漂移**：两份合并分析基于下载快照（dsh-ssh main 0.3.0-pre、dsh-remote 0.8.7），复核时以上游最新代码为准；
     历史快照中 `dsh-ssh` main 曾存在不能过 typecheck 的文件，因此二开采用「按文件摘录 + 自行重构」而非整库照搬。
 
 ## 8. 来源

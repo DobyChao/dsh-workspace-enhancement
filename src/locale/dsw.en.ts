@@ -264,9 +264,7 @@ const en: Record<DswKey, string> = {
   'side.card.title': 'Link workspace (side directory of this session)',
   'side.close.label': 'Close',
   'side.loading': 'Loading…',
-  'side.empty': 'No side directories linked. Side directories are extra roots the model can read and write directly, each with its own permissions.',
-  'side.fs.label': 'fs permission',
-  'side.exec.label': 'execution permission',
+  'side.empty': 'No side directories linked. Side directories are extra roots this session can operate on directly.',
   'side.rename.title': 'Edit name',
   'side.rename.button': 'Rename',
   'side.remove.title': 'Remove',
@@ -283,12 +281,6 @@ const en: Record<DswKey, string> = {
   /* ----------------------------------------------- remote-status-entry.tsx */
   'header.remote.label': 'Remote status',
   'header.remote.title': 'Remote connection of this session: {machine} (click to re-check)',
-
-  /* ------------------------------------------------------------ permission */
-  'permission.rw': 'read-write',
-  'permission.r': 'read-only',
-  'permission.execOn': 'executable',
-  'permission.execOff': 'not executable',
 
   /* ------------------------------------------------------------ status.tsx */
   'status.rpc.failed': 'dsw rpc failed',

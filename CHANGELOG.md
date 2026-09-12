@@ -4,7 +4,8 @@
 
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (未发布)
 
-0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场**。
+0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场** +
+**副工作区权限档位退役（REQ-I7）**。
 
 ### 修复
 
@@ -14,6 +15,7 @@
 
 ### 变更（**破坏性**）
 
+- **副工作区权限模型退役，副根降级为薄声明清单（REQ-I7，ADR-0019，用户 2026-09-12 拍板）**：`SideWorkspaceItem` 收缩为 `id/kind/rootKey/label`（删 `fs`/`exec` 字段；加载既有 `dsw-session-workspaces.json` 时忽略旧字段，不报错、不迁移）；删 `mixed.ts` 的 fs 写门与 exec 门（`writeText`/`editText`/`spawn`/`spawnTerminal` 不再因副根档位拒绝；副根路由分支与最长前缀匹配原样保留）；`session.ws.add`/`session.ws.update` RPC 参数收窄（校验是宽松白名单：仍带 `fs`/`exec` 的旧客户端请求照常受理、未知字段被静默忽略——破坏性在旧客户端发来的档位不再产生任何限权效果）；面板删两个权限下拉（只剩挂/卸 + 显示名）；提示词清单行去掉权限标记、边界注改为无档位表述；词典删 6 键（zh/en 仍严格相等）。`SEC-1`/`SEC-2` 随之 dropped（失去对象），`ADR-0012` 作废。动机：远程主工作区成熟后，远程会话内同机任意绝对路径本就可达，副根对同机目录只剩限权作用，而权限门是 advisory 且有已知绕过。
 - **放弃 0.1.2 家族支持（`UPSTREAM-4`，所有者 2026-09-11 拍板）**：peer 13 项 + dev 21 项全部收窄为 `^0.1.5-rc.1`；`upstream.yml` 删除 `legacy`（0.1.2-rc.1）通道，哨兵只剩 `next` / `alpha`；`scripts/boot-smoke.mjs` 的 `--channel-warn`「已知破坏」降级口删除，每通道都强断言。
 - **浏览器通道路径变更**：`/dsw/<endpoint>` → `/api/dsw/<endpoint>`（`docs/architecture.md` §5.6）。**与已发布的 0.1.3 客户端半不兼容**；升级宿主必须一并升级本插件。
 

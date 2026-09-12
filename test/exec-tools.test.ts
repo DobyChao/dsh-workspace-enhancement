@@ -404,11 +404,11 @@ test('swExecCore: unknown server errors with the known list; a spawn rejection p
     /unknown server "nope" — known: c1/,
   )
   const gated = fakeEnv({ c1: fakeConnection() }, {
-    spawn: () => { throw new Error('dsw: execution is disabled for the side workspace "x" (exec: off).') },
+    spawn: () => { throw new Error('dsw: spawn rejected by the runtime') },
   })
   await assert.rejects(
     () => swExecCore(gated, 'c1', 'ls', undefined, undefined, undefined, createRemoteOsCache()),
-    /exec: off/,
+    /spawn rejected/,
   )
 })
 

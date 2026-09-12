@@ -1,6 +1,6 @@
 /**
- * R5-T1 单测：副工作区状态层 —— 根键规范化、前缀匹配（最长/边界/家族）、
- * 持久化 CRUD 幂等、损坏文件降级、权限字段默认与更新。
+ * R5-T1 → REQ-I7 单测：副工作区状态层 —— 根键规范化、前缀匹配（最长/边界/家族）、
+ * 持久化 CRUD 幂等、损坏文件降级、旧权限字段（fs/exec）加载时忽略。
  * @module test/session-workspaces
  */
 
@@ -53,7 +53,7 @@ test('sideRootKeyOf: round-trips both families; rejects malformed keys', () => {
 /* ------------------------------------------------- 2) 前缀匹配（最长/边界） */
 
 function item(over: Partial<SideWorkspaceItem>): SideWorkspaceItem {
-  return { id: 'sw-1', kind: 'local', rootKey: '', label: 'x', fs: 'rw', exec: 'on', ...over }
+  return { id: 'sw-1', kind: 'local', rootKey: '', label: 'x', ...over }
 }
 
 /**
@@ -129,16 +129,16 @@ test('loadSideWorkspaces: missing file reads empty; corrupt file warns and reads
   assert.ok(warned.includes('cannot read side-workspace state'))
 })
 
-test('normalizeSideWorkspaceRecord: valid records pass; bad kinds/defaults resolve honestly', () => {
+test('normalizeSideWorkspaceRecord: valid records pass; legacy fs/exec fields are ignored (REQ-I7)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
   const local = localKey(dir, 'proj')
+  // A pre-REQ-I7 state file carries fs/exec on every root record — loading it
+  // must neither error nor migrate; the fields are simply dropped.
   assert.deepEqual(normalizeSideWorkspaceRecord({ id: 'a', kind: 'local', rootKey: local, label: '  P  ', fs: 'r', exec: 'off' as const }), {
-    id: 'a', kind: 'local', rootKey: local, label: 'P', fs: 'r', exec: 'off',
+    id: 'a', kind: 'local', rootKey: local, label: 'P',
   })
   const def = normalizeSideWorkspaceRecord({ id: 'b', kind: 'local', rootKey: local })!
   assert.equal(def.label, basenameLabel('local', local))
-  assert.equal(def.fs, 'rw')
-  assert.equal(def.exec, 'on')
   assert.equal(normalizeSideWorkspaceRecord({ id: 'c', kind: 'remote', rootKey: local }), null) // kind/key mismatch
   assert.equal(normalizeSideWorkspaceRecord({ kind: 'local', rootKey: local }), null) // missing id
 })
@@ -153,16 +153,13 @@ test('SessionSideWorkspaceStore: attach/list/detach/update/persist roundtrip', (
 
   const first = store.attach('session-1', { id: 'sw-a', kind: 'local', path: local, label: 'P' })
   assert.equal(first.rootKey, local)
-  assert.equal(first.fs, 'rw')
-  assert.equal(first.exec, 'on')
-  const second = store.attach('session-1', { id: 'sw-b', kind: 'remote', path: remote, fs: 'r' })
+  const second = store.attach('session-1', { id: 'sw-b', kind: 'remote', path: remote })
   assert.equal(second.kind, 'remote')
   assert.deepEqual(store.listFor('session-1').map(entry => entry.id), ['sw-a', 'sw-b'])
 
   // Same rootKey: idempotent attach moves it to the END and applies the patch.
-  const updated = store.attach('session-1', { id: 'sw-a', kind: 'local', path: local, fs: 'r' })
-  assert.equal(updated.fs, 'r')
-  assert.equal(updated.label, 'P') // omitted label keeps the stored one
+  const updated = store.attach('session-1', { id: 'sw-a', kind: 'local', path: local, label: 'P1' })
+  assert.equal(updated.label, 'P1')
   assert.deepEqual(store.listFor('session-1').map(entry => entry.id), ['sw-b', 'sw-a'])
 
   // match() sees the canonical records.
@@ -170,13 +167,10 @@ test('SessionSideWorkspaceStore: attach/list/detach/update/persist roundtrip', (
   assert.equal(store.match('ssh://c1/srv/work/deep')?.id, 'sw-b')
   assert.equal(store.match('ssh://c1/other'), undefined)
 
-  // update() patches permissions; detach() removes the account and drops the
+  // update() patches the label; detach() removes the account and drops the
   // orphaned root record.
-  assert.equal(store.update(local, { fs: 'rw', exec: 'off', label: 'P2' }), true)
-  assert.equal(store.match(local)?.fs, 'rw')
-  assert.equal(store.match(local)?.exec, 'off')
-  assert.equal(store.update(local, { fs: 'r' }), true)
-  assert.equal(store.match(local)?.fs, 'r')
+  assert.equal(store.update(local, { label: 'P2' }), true)
+  assert.equal(store.match(local)?.label, 'P2')
   assert.equal(store.detach('session-1', local), true)
   assert.equal(store.match(local), undefined) // last ref dropped → root gone
   assert.equal(store.match('ssh://c1/srv/work')?.id, 'sw-b') // still referenced → kept
@@ -184,7 +178,7 @@ test('SessionSideWorkspaceStore: attach/list/detach/update/persist roundtrip', (
   // Persistence: a fresh store on the same file sees the surviving state.
   const revived = new SessionSideWorkspaceStore(new Context(), { file })
   assert.deepEqual(revived.listFor('session-1').map(entry => entry.id), ['sw-b'])
-  assert.equal(revived.match('ssh://c1/srv/work/deep')?.fs, 'r')
+  assert.equal(revived.match('ssh://c1/srv/work/deep')?.id, 'sw-b')
   const onDisk = JSON.parse(readFileSync(file, 'utf8')) as { sessions: Record<string, string[]> }
   assert.deepEqual(onDisk.sessions['session-1'], ['ssh://c1/srv/work'])
 })
@@ -232,11 +226,12 @@ test('t2-fix: separator-ending root keys (ssh://c1/ and the drive root) match th
   }
 })
 
-test('t2-fix: a junction/symlink spelling of a side root still matches (gate holds)', () => {
+test('t2-fix: a junction/symlink spelling of a side root still matches (routing holds)', () => {
   // A lexical root key used to miss the fs layer's realpath-shaped target keys
   // whenever the two spellings differed — a junction, a subst drive, or a win32
-  // 8.3 short name (a CI runner's %TEMP%) was enough to silently disable the
-  // read-only gate. Both sides must canonicalize onto one key.
+  // 8.3 short name (a CI runner's %TEMP%) was enough to silently break the
+  // root match (and with it every routing decision on that root). Both sides
+  // must canonicalize onto one key.
   const real = mkdtempSync(join(tmpdir(), 'dsw-link-real-'))
   const holder = mkdtempSync(join(tmpdir(), 'dsw-link-holder-'))
   const link = join(holder, 'j')
@@ -251,7 +246,7 @@ test('t2-fix: a junction/symlink spelling of a side root still matches (gate hol
   assert.ok(viaLink !== null && viaReal !== null)
   assert.equal(viaLink, viaReal, 'both spellings must canonicalize onto one root key')
 
-  const roots = new Map<string, SideWorkspaceItem>([[viaLink, item({ rootKey: viaLink, fs: 'r' })]])
+  const roots = new Map<string, SideWorkspaceItem>([[viaLink, item({ rootKey: viaLink })]])
   assert.equal(sideWorkspaceOf(roots, join(real, 'file.txt'))?.rootKey, viaLink)
   assert.equal(sideWorkspaceOf(roots, join(link, 'file.txt'))?.rootKey, viaLink)
   assert.equal(sideWorkspaceOf(roots, join(real, '..', 'elsewhere.txt')), undefined)
@@ -291,6 +286,8 @@ test('t2-fix: loadSideWorkspaces re-canonicalizes references and drops emptied a
   const dir = mkdtempSync(join(tmpdir(), 'dsw-sw-'))
   const file = join(dir, 'state.json')
   const degenerate = 'ssh://c1//srv//work/'
+  // The record deliberately still carries pre-REQ-I7 fs/exec fields: loading
+  // must ignore them (they are dropped from the in-memory record).
   writeFileSync(file, JSON.stringify({
     roots: {
       [degenerate]: { id: 'sw-a', kind: 'remote', rootKey: degenerate, label: 'work', fs: 'r', exec: 'off' },
@@ -303,6 +300,7 @@ test('t2-fix: loadSideWorkspaces re-canonicalizes references and drops emptied a
   }), 'utf8')
   const state = loadSideWorkspaces(file, () => {})
   assert.deepEqual([...state.roots.keys()], ['ssh://c1/srv/work'])
+  assert.deepEqual(state.roots.get('ssh://c1/srv/work'), { id: 'sw-a', kind: 'remote', rootKey: 'ssh://c1/srv/work', label: 'work' })
   assert.deepEqual(state.sessions.get('s1'), ['ssh://c1/srv/work'])
   assert.equal(state.sessions.has('gone'), false)
   assert.deepEqual(state.sessions.get('padded'), ['ssh://c1/srv/work'])
@@ -313,7 +311,7 @@ test('t2-fix: attach/listFor/detach treat padded session ids consistently', () =
   const store = new SessionSideWorkspaceStore(new Context(), { file: join(dir, 's.json') })
   const local = localKey(dir, 'proj')
   store.attach('  sess-1  ', { id: 'sw-a', kind: 'local', path: local })
-  store.attach('  sess-1  ', { id: 'sw-b', kind: 'remote', path: 'ssh://c1/x', fs: 'r' })
+  store.attach('  sess-1  ', { id: 'sw-b', kind: 'remote', path: 'ssh://c1/x' })
   assert.deepEqual(store.listFor('sess-1').map(entry => entry.id), ['sw-a', 'sw-b'])
   assert.deepEqual(store.listFor('  sess-1  ').map(entry => entry.id), ['sw-a', 'sw-b'])
   assert.equal(store.detach('sess-1', local), true)

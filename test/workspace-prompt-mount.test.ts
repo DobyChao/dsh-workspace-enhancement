@@ -67,7 +67,7 @@ function textOf(section: CapturedSection, context: { scope?: object }): string {
 }
 
 function sideItem(): SideWorkspaceItem {
-  return { id: 'sw-1', kind: 'local', rootKey: join(sshRoutesRoot(), '..', 'side'), label: 'side', fs: 'rw', exec: 'on' }
+  return { id: 'sw-1', kind: 'local', rootKey: join(sshRoutesRoot(), '..', 'side'), label: 'side' }
 }
 
 function sideStore(): () => SessionSideWorkspaceStore {
