@@ -24,7 +24,9 @@ import type {
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { quoteShellArg } from './ssh-core.ts'
 import { resolveSshCwd } from './transport.ts'
-import type { SshTransport } from './transport.ts'
+import type { SshCwdRoute, SshTransport } from './transport.ts'
+import { createRemoteSpawnGate } from './remote-approval-gate.ts'
+import type { RemoteSpawnGate } from './remote-approval-gate.ts'
 import { SshSubprocessHandle } from './process.ts'
 import { spawnSshTerminal } from './terminal.ts'
 import type { SshTerminalHandle } from './terminal.ts'
@@ -44,6 +46,15 @@ function requireRepresentableGrace(graceMs: number): void {
  * The SSH execution half of the subprocess capability (no service
  * registration): routes every call over the registry connection named by the
  * working directory.
+ *
+ * AUDIT-6 (ADR-0020): when a `gate` is supplied, every remote spawn passes it
+ * BEFORE any SSH activity. `spawn` keeps its synchronous seam contract — the
+ * question rides the handle's async startup (`SshSubprocessHandle` preflight)
+ * — while `spawnTerminal` (async signature) awaits the gate up front. The gate
+ * itself no-ops for machines without `remoteApproval` (default `'off'`), for
+ * non-shell-shaped host-assembled argv, and for routes without a registry
+ * machine (the aggregate `ctx.ssh` transport, `sw_connect save:false`
+ * temporaries) — see ADR-0020 D1's honest non-coverage list.
  */
 export class SshSubprocessEngine {
   private readonly live = new Set<SshSubprocessHandle>()
@@ -51,10 +62,27 @@ export class SshSubprocessEngine {
   private readonly spillDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-ssh-'))
   private disposing = false
 
-  constructor(private readonly ctx: Context) {
+  constructor(
+    private readonly ctx: Context,
+    private readonly gate?: RemoteSpawnGate,
+  ) {
     ctx.effect(() => async () => {
       await this.dispose()
     }, 'ssh subprocess teardown')
+  }
+
+  /**
+   * Ask the AUDIT-6 approval gate for one route. Pure pass-through: the gate
+   * decides coverage (machine mode, shell shape) and throws on denial.
+   */
+  private async runGate(
+    argv: readonly (string | undefined)[],
+    route: SshCwdRoute,
+    signal: AbortSignal | undefined,
+    terminal: boolean,
+  ): Promise<void> {
+    if (this.gate === undefined) return
+    await this.gate({ argv, connectionId: route.connectionId, ...(signal !== undefined ? { signal } : {}), ...(terminal ? { terminal: true } : {}) })
   }
 
   /**
@@ -138,7 +166,10 @@ export class SshSubprocessEngine {
       throw new Error(`aborted before spawn: ${String(spec.signal.reason)}`)
     }
     const route = resolveSshCwd(this.ctx, spec.cwd)
-    const handle = new SshSubprocessHandle(route.transport, route.cwd, spec, this.spillDir)
+    const preflight = this.gate === undefined
+      ? undefined
+      : () => this.runGate(spec.argv, route, spec.signal, false)
+    const handle = new SshSubprocessHandle(route.transport, route.cwd, spec, this.spillDir, preflight)
     this.live.add(handle)
     const release = async (): Promise<void> => {
       await handle.waitForExit()
@@ -158,6 +189,9 @@ export class SshSubprocessEngine {
     requireRepresentableGrace(spec.graceMs)
     spec.signal?.throwIfAborted()
     const route = resolveSshCwd(this.ctx, spec.cwd)
+    // AUDIT-6: an interactive terminal is itself an arbitrary-command entry —
+    // gated regardless of shell shape whenever the machine is (ADR-0020 D1).
+    await this.runGate(spec.argv, route, spec.signal, true)
     const terminal = await spawnSshTerminal(route.transport, route.cwd, spec)
     if (this.disposing) {
       await terminal.terminate()
@@ -177,6 +211,14 @@ export class SshSubprocessEngine {
  * Standalone SSH command manager registered as `ctx.subprocess` — the
  * pure-SSH deployment form (also what the mixed provider's remote branch is
  * built from).
+ *
+ * AUDIT-6 (ADR-0020): an explicit `gate` wins (the aggregate row passes its
+ * own); when a subpath deployment mounts this class bare, the constructor
+ * attaches the SAME remote approval gate built from its own context — so every
+ * deployment form fences gated machines' remote shell commands uniformly. The
+ * AI auto-grant answerer is an aggregate-row feature (`plugin.ts` apply); a
+ * bare subpath deployment asks and falls through to the deployment's human
+ * answerer (fail closed), it just never auto-grants.
  */
 export class SshSubprocessRuntime extends SubprocessRuntime {
   static inject = ['ssh']
@@ -184,9 +226,9 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
   private readonly engine: SshSubprocessEngine
 
   /** Create the SSH subprocess service and bind its disposal policy. */
-  constructor(ctx: Context) {
+  constructor(ctx: Context, gate?: RemoteSpawnGate) {
     super(ctx)
-    this.engine = new SshSubprocessEngine(ctx)
+    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx))
   }
 
   /** @inheritdoc */

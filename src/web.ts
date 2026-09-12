@@ -151,7 +151,8 @@ function isConnectionInput(value: unknown): value is ConnectionInput {
 const isHostKeyMode = (value: unknown): value is HostKeyMode =>
   value === 'accept-new' || value === 'verify' || value === 'off'
 
-/** Machine add payload (legacy connection input + dsh-remote machine fields). */function isMachineInput(value: unknown): value is MachineInput {
+/** Machine add payload (legacy connection input + dsh-remote machine fields). */
+function isMachineInput(value: unknown): value is MachineInput {
   if (!isConnectionInput(value)) return false
   if (!isRecord(value)) return false
   if (value.id !== undefined && !isString(value.id)) return false
@@ -161,6 +162,8 @@ const isHostKeyMode = (value: unknown): value is HostKeyMode =>
   if (value.credentialBackend !== undefined
     && value.credentialBackend !== 'plain' && value.credentialBackend !== 'keychain'
     && value.credentialBackend !== 'windows' && value.credentialBackend !== 'secret') return false
+  if (value.remoteApproval !== undefined
+    && value.remoteApproval !== 'off' && value.remoteApproval !== 'human' && value.remoteApproval !== 'ai') return false
   return true
 }
 

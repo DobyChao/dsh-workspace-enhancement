@@ -24,6 +24,7 @@ import type { JumpConfig } from './runtime.ts'
 import { HostKeyGuard, HostKeyStore, defaultKnownHostsFile } from './hostkey.ts'
 import type { HostKeyMode } from './hostkey.ts'
 import type { CredentialBackend } from './credential.ts'
+import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 
 /** A registry entry as persisted in the state file (machine record). */
 export interface SshConnectionSpec {
@@ -89,6 +90,15 @@ export interface SshConnectionSpec {
   lastProbeAt?: string
   /** Round-trip milliseconds of the last successful status probe. */
   lastProbeLatencyMs?: number | null
+  /**
+   * AUDIT-6 (ADR-0020 D2): per-machine remote-command approval gate —
+   * `'off'` (default, absent on pre-AUDIT-6 records ⇒ zero migration),
+   * `'human'` (ask a human before every gated remote command), `'ai'`
+   * (whitelisted read-only commands auto-granted, everything else to the
+   * human). One field drives BOTH the asker (the seam gate) and the answerer
+   * (the AI auto-grant filter) — one source of truth.
+   */
+  remoteApproval?: RemoteApprovalMode
 }
 
 /** Connection-level host-key policy resolved from a spec + global default. */
