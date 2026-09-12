@@ -37,7 +37,7 @@ import { SshRegistry } from '../src/registry.ts'
 import { sshRoutePlaceholder } from '../src/transport.ts'
 import type { SshTransport } from '../src/transport.ts'
 import type { ExecOutcome } from '../src/ssh-core.ts'
-import { RemoteGateError } from '../src/remote-approval-gate.ts'
+import { RemoteGateError, createRemoteSpawnGate } from '../src/remote-approval-gate.ts'
 import type { RemoteGateInput, RemoteSpawnGate } from '../src/remote-approval-gate.ts'
 import {
   REMOTE_SANDBOX_MESSAGES,
@@ -762,6 +762,129 @@ test('SshSubprocessRuntime: the optional fence dep rides through to the engine',
   // the "the fence did not break the plain path" pin.
   const handle = runtime.spawn({ ...spawnSpec(COMMAND_ARGV), cwd: '/srv/work' })
   await assert.rejects(() => handle.done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+})
+
+/* -------- 9b) the documented SUBPATH row: no deps ⇒ still fenced (context) */
+
+/**
+ * The mount shape of the documented subpath row
+ * (`dsh-workspace-enhancement/subprocess`): the engine is constructed with an
+ * (optional) gate argument ONLY — no fence dep, no terminal guard. The registry
+ * IS mounted (a deployment composing providers individually still runs the ssh
+ * row that owns it), so the machine view resolves and the live connection is
+ * the probe transport.
+ *
+ * `ctx.ssh` is a sentinel: reaching it proves the startup sequence got past the
+ * gate AND past the fence. `probes` records the control-channel round-trips the
+ * context-derived fence performed; `spawnCommands` records any command that
+ * actually reached the wire.
+ */
+function subpathHarness(mode: RemoteSandboxMode, probeExit = 0): {
+  ctx: Context
+  probes: string[]
+  otherCommands: string[]
+} {
+  const machines = [mode === 'off' ? machine() : machine({ remoteSandbox: mode })]
+  const probes: string[] = []
+  const otherCommands: string[] = []
+  const connection = {
+    endpoint: 'root@srv.example',
+    cwd: '/srv/work',
+    getClient: () => { throw new Error('TRANSPORT-REACHED: getClient') },
+    getSftp: () => { throw new Error('TRANSPORT-REACHED: getSftp') },
+    getRemoteEnvironment: () => { throw new Error('TRANSPORT-REACHED: getRemoteEnvironment') },
+    exec: async (command: string) => {
+      // The fence's probe is the plugin constant; anything else on this channel
+      // would be a command that should never have been sent.
+      if (command.startsWith('command -v ')) probes.push(command)
+      else otherCommands.push(command)
+      if (probeExit === 0) return { exitCode: 0, signal: null, stdout: 'bubblewrap 0.8.0', stderr: '' }
+      return { exitCode: probeExit, signal: null, stdout: '', stderr: "env: 'bwrap': No such file or directory" }
+    },
+    resolveRemoteCwd: () => '/srv/work',
+  }
+  const ctx = new Context()
+  ctx.provide('ssh', sentinelTransport())
+  ctx.provide('sshRegistry', {
+    get: (id: string) => (id === 'c1' ? connection : undefined),
+    listMachines: () => ({ machines }),
+  })
+  return { ctx, probes, otherCommands }
+}
+
+test('subpath row (no fence dep): a fenced machine IS probed and fenced', async () => {
+  const { ctx, probes } = subpathHarness('read-only')
+  // The exact construction the subpath row uses: no fence dep at all.
+  const engine = new SshSubprocessEngine(ctx)
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(() => handle.done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+  assert.equal(probes.length, 1, 'the context-derived fence ran the PROBE')
+  assert.match(probes[0] as string, /command -v 'bwrap'/, 'the probe is the plugin constant')
+  assert.ok(!(probes[0] as string).includes('echo hi'), 'the user command was never sent')
+})
+
+test('subpath row (no fence dep): an unusable runner fails closed (nothing executes)', async () => {
+  const { ctx, probes, otherCommands } = subpathHarness('read-only', 127)
+  const engine = new SshSubprocessEngine(ctx)
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(
+    () => handle.done,
+    (error: unknown) => {
+      assert.ok(error instanceof RemoteSandboxError)
+      assert.equal((error as RemoteSandboxError).code, REMOTE_SANDBOX_UNAVAILABLE)
+      return true
+    },
+  )
+  assert.equal(probes.length, 1, 'the probe ran and failed')
+  assert.deepEqual(otherCommands, [], 'and no other command reached the channel')
+})
+
+test('subpath row (no fence dep): an off machine ships the bare argv and probes NOTHING', async () => {
+  const { ctx, probes } = subpathHarness('off')
+  const engine = new SshSubprocessEngine(ctx)
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(() => handle.done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+  assert.deepEqual(probes, [], 'off ⇒ zero probe round-trips, even with the context-derived fence')
+})
+
+test('subpath row (no fence dep): a fenced terminal is REFUSED by the context-derived guard', async () => {
+  const { ctx } = subpathHarness('read-only')
+  const engine = new SshSubprocessEngine(ctx)
+  await assert.rejects(
+    () => engine.spawnTerminal(terminalSpec(['bash'])),
+    (error: unknown) => {
+      assert.ok(error instanceof RemoteSandboxError)
+      assert.equal((error as RemoteSandboxError).code, REMOTE_SANDBOX_UNAVAILABLE)
+      assert.match(error.message, /refuses to open an interactive terminal/)
+      return true
+    },
+  )
+})
+
+test('subpath row (no fence dep): an off machine keeps its terminal path (no new refusal)', async () => {
+  const { ctx } = subpathHarness('off')
+  const engine = new SshSubprocessEngine(ctx)
+  await assert.rejects(
+    () => engine.spawnTerminal(terminalSpec(['bash'])),
+    (error: unknown) => {
+      assert.ok(!(error instanceof RemoteSandboxError), 'the derived guard must not refuse an off machine')
+      assert.match(String(error), /TRANSPORT-REACHED/, 'the terminal path proceeded to the transport')
+      return true
+    },
+  )
+})
+
+test('subpath row (no fence dep): the SshSubprocessRuntime form (gate-only constructor) is fenced too', async () => {
+  const { ctx, probes } = subpathHarness('read-only')
+  // The runtime's default gate asks the platform approval service; allow once so
+  // the assertion lands on the FENCE (reaching `getRemoteEnvironment` proves
+  // both stages ran).
+  ctx.provide('approval', { request: async () => 'allowed-once' })
+  ctx.provide('agents', { currentInitiator: () => ({ id: 'sess-1' }) })
+  const runtime = new SshSubprocessRuntime(ctx, createRemoteSpawnGate(ctx))
+  const handle = runtime.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(() => handle.done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+  assert.equal(probes.length, 1, 'no fence dep was passed — the engine derived one from ctx')
 })
 
 test('engine spawn: the gate denial still wins over the fence (order is gate → fence)', async () => {
