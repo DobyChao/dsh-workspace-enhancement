@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-12 16:20 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-12 16:59 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `chore/backlog-tidy` / `e33f78e` |
-| HEAD 提交 | `docs(backlog): register REQ-I10 tool sunset and SEC-5 sw_connect credential review (#15)` (2026-09-12) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `chore/backlog-tidy` / `24a74f2` |
+| HEAD 提交 | `chore(backlog): re-partition rows by status and fix board row counting` (2026-09-13) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,8 +28,8 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 15 |
-| `doing` | 0 |
+| `todo` | 12 |
+| `doing` | 3 |
 | `blocked` | 7 |
 | `done` | 32 |
 | `shipped` | 5 |
