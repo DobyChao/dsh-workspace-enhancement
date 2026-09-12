@@ -18,6 +18,7 @@ import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf, localizeTool } from './locale/host.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { sessionWorkspaceContextOf } from './session-remote-context.ts'
+import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import type { SshRegistry, MachineInput } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -42,6 +43,8 @@ export interface PromptMachineFace {
   username: string
   host: string
   workspace?: string
+  /** AUDIT-6 gate mode of the routed machine (absent ⇒ treat as `'off'`). */
+  remoteApproval?: RemoteApprovalMode
 }
 
 /**
@@ -140,6 +143,10 @@ export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): strin
  * (only when the cwd routes remote) plus the R5 side-workspace list (only when
  * attachments exist). Pure and synchronous; an empty result means zero
  * injection. ENGLISH ONLY (ADR-0014).
+ *
+ * AUDIT-6 (ADR-0020 D6): a remote-main-workspace session additionally always
+ * carries the `remoteNoSandbox` honesty sentence, plus the `remoteGateActive`
+ * expectation sentence exactly when the routed machine's approval gate is on.
  */
 export function composeWorkspacePrompt(
   cwd: string | undefined,
@@ -148,9 +155,17 @@ export function composeWorkspacePrompt(
   dshBase?: string,
 ): string {
   const fact = remotePromptFact(cwd, machine, dshBase)
-  const remote = fact !== null ? renderRemotePrompt(fact) : ''
+  const parts: string[] = []
+  if (fact !== null) {
+    parts.push(renderRemotePrompt(fact))
+    parts.push(modelPrompt('remoteNoSandbox'))
+    if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
+      parts.push(modelPrompt('remoteGateActive'))
+    }
+  }
   const side = renderSideWorkspaces(sides)
-  return [remote, side].filter(part => part !== '').join('\n\n')
+  if (side !== '') parts.push(side)
+  return parts.join('\n\n')
 }
 
 /** The remote toolbox the R4 remote world needs (bash/pwsh for terminals, rg for glob/searches). */

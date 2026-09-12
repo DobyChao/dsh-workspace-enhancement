@@ -64,12 +64,16 @@ export class SshSubprocessHandle implements SubprocessHandle {
    * @param cwd - resolved absolute remote working directory.
    * @param spec - fully resolved subprocess request.
    * @param spillDir - local spill directory for collect-mode streams.
+   * @param preflight - optional AUDIT-6 approval gate, awaited at the HEAD of
+   * the async startup (connection and command text are resolved, nothing has
+   * reached SSH yet); a rejection fails `done` without touching the network.
    */
   constructor(
     private readonly runtime: SshTransport,
     private readonly cwd: string,
     private readonly spec: SubprocessSpawnSpec,
     private readonly spillDir: string,
+    private readonly preflight?: () => Promise<void>,
   ) {
     const outMode = spec.stdio.stdout
     const errMode = spec.stdio.stderr
@@ -151,6 +155,9 @@ export class SshSubprocessHandle implements SubprocessHandle {
   private async run(): Promise<SubprocessOutcome> {
     let channel: ClientChannel
     try {
+      // AUDIT-6 (ADR-0020 D1): the approval question precedes every remote
+      // byte — even the connection/environment read waits for the decision.
+      if (this.preflight !== undefined) await this.preflight()
       const command = await buildCommand(this.runtime, this.cwd, this.spec)
       const client = await this.runtime.getClient()
       channel = await new Promise<ClientChannel>((resolve, reject) => {

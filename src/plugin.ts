@@ -36,6 +36,7 @@ import { SshFileSystemEngine } from './filesystem.ts'
 import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { remoteRouteFromCwd } from './transport.ts'
+import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
@@ -93,8 +94,11 @@ export function installMixedProviders(ctx: Context): void {
 
   // Subprocess: the local runtime has no service dependencies, so it can be
   // constructed immediately (the deployment default for local executions).
+  // AUDIT-6 (ADR-0020): the remote branch carries the approval gate —
+  // optional services (`approval`/`agents`) resolve by name at ask time, so
+  // the gate composes in any deployment and no-ops for ungated machines.
   const localSubprocess = new LocalSubprocessRuntime(ctx)
-  const sshSubprocess = new SshSubprocessEngine(ctx)
+  const sshSubprocess = new SshSubprocessEngine(ctx, createRemoteSpawnGate(ctx))
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
@@ -127,6 +131,11 @@ export function installMixedProviders(ctx: Context): void {
 export function apply(ctx: Context, config: Config): void {
   ctx.plugin(SshRuntime, config)
   forceRemoteSandboxMode(ctx)
+  // AUDIT-6 (ADR-0020 D4): the AI answerer — a prepend `approval/request`
+  // waterfall listener that auto-grants only whitelisted commands on
+  // `remoteApproval: 'ai'` machines and delegates everything else (including
+  // its own failures) to the human answerer. Effect-bound ⇒ reversible.
+  registerRemoteApprovalAnswerer(ctx)
   // The mixed providers need the local provider classes (dependencies, so
   // always resolvable); if installation fails anyway, fall back to the
   // pure-SSH mounting so the row never fails harder than before.
@@ -134,7 +143,7 @@ export function apply(ctx: Context, config: Config): void {
     installMixedProviders(ctx)
   } catch (error) {
     ctx.logger.warn(`dsw: mixed provider install failed, falling back to pure-SSH providers: ${String(error)}`)
-    ctx.plugin(SshSubprocessRuntime)
+    ctx.plugin(SshSubprocessRuntime, createRemoteSpawnGate(ctx))
     ctx.plugin(SshFileSystem)
   }
 }

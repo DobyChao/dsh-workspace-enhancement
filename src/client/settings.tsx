@@ -17,6 +17,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
+import type { RemoteApprovalMode } from './machine-payload.ts'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
 
 /** The `/dsw` RPC face injected by the client plugin. */
@@ -45,6 +46,8 @@ interface MachineView {
   jumpHosts: string[]
   hostKeyMode?: 'accept-new' | 'verify' | 'off'
   credentialBackend: string
+  /** AUDIT-6 approval-gate mode (wire rows always carry it; default 'off'). */
+  remoteApproval: RemoteApprovalMode
   /** Encryption was requested but the OS backend failed (plaintext fallback). */
   encryptFallback?: boolean
   recentWorkspaces?: string[]
@@ -67,6 +70,7 @@ function asMachineView(value: unknown): MachineView | null {
     passwordSet: value.passwordSet === true,
     jumpHosts: Array.isArray(value.jumpHosts) ? value.jumpHosts.map(String) : [],
     credentialBackend: typeof value.credentialBackend === 'string' ? value.credentialBackend : 'plain',
+    remoteApproval: value.remoteApproval === 'human' || value.remoteApproval === 'ai' ? value.remoteApproval : 'off',
   }
   if (typeof value.cwd === 'string') machine.cwd = value.cwd
   if (typeof value.workspace === 'string') machine.workspace = value.workspace
@@ -95,6 +99,7 @@ function editInitialOf(machine: MachineView): MachineFormInitial {
     workspace: machine.workspace ?? machine.cwd ?? '',
     hostKeyMode: machine.hostKeyMode ?? '',
     encryptPassword: machine.credentialBackend !== '' && machine.credentialBackend !== 'plain',
+    remoteApproval: machine.remoteApproval ?? 'off',
     auth: machine.auth === 'password'
       || machine.passwordSet === true
       || (machine.credentialBackend !== '' && machine.credentialBackend !== 'plain')
@@ -235,6 +240,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                     <code style={{ fontSize: 12, opacity: 0.8 }}>{machine.username}@{machine.host}:{machine.port}</code>
                     {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
                     {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
+                    {machine.remoteApproval !== 'off' ? <span style={{ fontSize: 12, opacity: 0.85 }}> {t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span> : ''}
                     {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>

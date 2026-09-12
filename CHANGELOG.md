@@ -5,7 +5,11 @@
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (未发布)
 
 0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场** +
-**副工作区权限档位退役（REQ-I7）**。
+**副工作区权限档位退役（REQ-I7）** + **远程会话审批门（AUDIT-6）**。
+
+### 新增
+
+- **远程命令审批门 + AI answerer + 诚实化文案（AUDIT-6，ADR-0020，用户 2026-09-12 拍板）**：混合 subprocess 接缝的远程分支上单一审批门——`bash -c`/`pwsh -Command` 形状的 spawn（含官方 bash/pwsh、`sw_exec`、win32 bash、后台任务，argv 以 `remoteArgvOf` 改写后的最终形态判定）与 `spawnTerminal`（交互 shell 本身即任意命令入口）在**任何 SSH 活动之前**经 `ctx.approval.request` 问询；`agent` 取 `ctx.agents.currentInitiator()`（仅路由/归因，非授权），`reason` 携带 `[dsw-remote-gate] machine=<id> target=<user>@<host> cmd=<预览>` 标记（ask 不带参数，reason 是预览唯一通道）。逐机器 `remoteApproval: 'off' | 'human' | 'ai'`（machines.json，**默认 `'off'` 零迁移**）同时驱动 asker（是否拦）与 answerer（是否自动放权）；`'ai'` 模式下一个 `prepend` 注册的 `approval/request` waterfall 监听器（`ctx.effect` 挂载、全量 try/catch、异常一律 `next()` 委派人类）只对可评审只读白名单（`pwd`/`whoami`/`uname`/`ls`/`cat`/`head`/`tail`/`wc`/`echo`/`git status|log|diff|show`/`node -v`/`rg --version` 等，独立常量表）自动放行。降级全 fail-closed 且文案两两可区分（无 approval 服务 / 无 agent / `rejected`（含 `never` 策略确定性拒绝）/ `cancelled` / `unavailable` / `request()` 抛错）。配套：`sw-remote` 提示段恒注入「远端执行不受本地沙箱限制」诚实句 + 门开启机器注入「勿原样重试被拒命令」预期句（`remoteNoSandbox`/`remoteGateActive` 英文常量，ADR-0014）；设置页机器表单高级区「远程命令审批」下拉（zh/en 词典键）与机器行「🛡 审批」徽标；README/SECURITY 边界句与 D1 不覆盖清单（SFTP 写路径、固定探针、临时连接——结构性答案是 REQ-I9）；UAT 脚本 `docs/uat/R22-audit6-remote-approval-gate.md`。已知实现偏离：`@deepseek-ai/dsh-user-approval` 未落 devDependency（沙箱禁 install、lockfile 无该条目，加列会令 `npm ci` 失步）——契约以本地结构化最小面镜像 + `ctx.get('approval')` 字符串名消费（与上游 0.1.5-rc.1/rc.2 d.ts 核对一致），见 R22 报告。
 
 ### 修复
 

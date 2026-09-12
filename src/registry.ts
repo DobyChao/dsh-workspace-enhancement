@@ -30,6 +30,8 @@ import type { HostKeyMode, KnownHostEntry } from './hostkey.ts'
 import { deleteSecret, getSecret, platformBackend, saveSecret } from './credential.ts'
 import type { CredentialBackend } from './credential.ts'
 import type { JumpConfig } from './runtime.ts'
+import { normalizeRemoteApproval } from './remote-approval-gate.ts'
+import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import type { TranslateFn } from './locale/index.ts'
 
@@ -174,6 +176,8 @@ export interface MachineInput {
   hostKeyMode?: HostKeyMode
   strictHostKeyChecking?: boolean
   knownHosts?: string[]
+  /** AUDIT-6 per-machine approval gate mode (omitted ⇒ keep stored value). */
+  remoteApproval?: RemoteApprovalMode
 }
 
 /** Secret-free machine view returned by `machines.*` endpoints and `status`. */
@@ -190,6 +194,11 @@ export interface MachineView {
   jumpHosts: string[]
   hostKeyMode?: HostKeyMode
   credentialBackend: CredentialBackend
+  /**
+   * AUDIT-6 effective approval-gate mode (ADR-0020 D2) — always present in
+   * views, normalized to `'off'` for records that predate the field.
+   */
+  remoteApproval: RemoteApprovalMode
   /** Encryption was requested but fell back to plaintext (UI warning marker). */
   encryptFallback?: boolean
   lastConnectedAt?: string | null
@@ -435,6 +444,9 @@ export function normalizeMachine(raw: unknown): SshConnectionSpec | null {
   if (typeof record.credentialBackend === 'string' && record.credentialBackend !== '') {
     machine.credentialBackend = record.credentialBackend as CredentialBackend
   }
+  // AUDIT-6: absent/invalid ⇒ 'off' (zero migration for pre-AUDIT-6 records).
+  const remoteApproval = normalizeRemoteApproval(record.remoteApproval)
+  if (remoteApproval !== 'off') machine.remoteApproval = remoteApproval
   if (record.encryptFallback === true) machine.encryptFallback = true
   if (Array.isArray(record.jump)) {
     machine.jump = record.jump.map(normalizeJump).filter((hop): hop is JumpConfig => hop !== null)
@@ -1420,6 +1432,7 @@ export class SshRegistry extends Service {
       jumpHosts: this.jumpHostsOf(spec),
       ...(spec.hostKeyMode !== undefined ? { hostKeyMode: spec.hostKeyMode } : {}),
       credentialBackend: backend,
+      remoteApproval: normalizeRemoteApproval(spec.remoteApproval),
       ...(spec.encryptFallback === true ? { encryptFallback: true } : {}),
       ...(spec.recentWorkspaces !== undefined && spec.recentWorkspaces.length > 0 ? { recentWorkspaces: spec.recentWorkspaces } : {}),
     }
@@ -1456,6 +1469,7 @@ export class SshRegistry extends Service {
     hostKeyMode?: HostKeyMode
     strictHostKeyChecking?: boolean
     knownHosts?: string[]
+    remoteApproval?: RemoteApprovalMode
   }): void {
     // P2-④ wire contract: an OMITTED field keeps the stored value (a
     // saveMachine update starts from a full prev copy); an EXPLICIT empty
@@ -1500,6 +1514,14 @@ export class SshRegistry extends Service {
     if (input.hostKeyMode !== undefined) spec.hostKeyMode = input.hostKeyMode
     if (input.strictHostKeyChecking !== undefined) spec.strictHostKeyChecking = input.strictHostKeyChecking
     if (input.knownHosts !== undefined && input.knownHosts.length > 0) spec.knownHosts = input.knownHosts
+    // AUDIT-6: omitted keeps the stored mode (upsert semantics); an explicit
+    // invalid value would have been rejected by the payload guard — normalize
+    // defensively anyway so the stored record can only hold a valid mode.
+    if (input.remoteApproval !== undefined) {
+      const mode = normalizeRemoteApproval(input.remoteApproval)
+      if (mode === 'off') delete spec.remoteApproval
+      else spec.remoteApproval = mode
+    }
   }
 }
 
