@@ -38,7 +38,7 @@ import { sshRoutePlaceholder } from '../src/transport.ts'
 import type { SshTransport } from '../src/transport.ts'
 import type { ExecOutcome } from '../src/ssh-core.ts'
 import { RemoteGateError } from '../src/remote-approval-gate.ts'
-import type { RemoteSpawnGate } from '../src/remote-approval-gate.ts'
+import type { RemoteGateInput, RemoteSpawnGate } from '../src/remote-approval-gate.ts'
 import {
   REMOTE_SANDBOX_MESSAGES,
   REMOTE_SANDBOX_UNAVAILABLE,
@@ -50,11 +50,13 @@ import {
 } from '../src/remote-sandbox.ts'
 import type { RemoteProbeVerdict, RemoteSandboxMode } from '../src/remote-sandbox.ts'
 import {
+  composeFencedGate,
   createRemoteSandboxFence,
   createRemoteSandboxTerminalGuard,
   effectiveModeOf,
   fenceWorkspaceRootOf,
   probeRunner,
+  refuseFencedCommands,
   remoteSandboxDepsOf,
   remoteSandboxUnavailable,
   terminalRefusalOf,
@@ -246,8 +248,7 @@ function fakeFence(options: {
   const connection = probeConnection(outcome(0, 'bubblewrap 0.8.0'))
   return {
     probes,
-    fence: createRemoteSandboxFence(new Context(), {
-      deps: fenceDeps({ machines: [machine({ remoteSandbox: options.mode ?? 'read-only' })], connection }),
+    fence: createRemoteSandboxFence(new Context(), {      deps: fenceDeps({ machines: [machine({ remoteSandbox: options.mode ?? 'read-only' })], connection }),
       probe: async () => { probes.push(probes.length + 1); return (options.probe ?? (async () => okVerdict()))() },
     }),
   }
@@ -638,7 +639,115 @@ test('sandboxBadgeOf: off renders nothing, the two active modes render the local
   assert.match(lookup('en', 'settings.machines.sandboxBadge', { mode: 'read-only' }), /read-only/)
 })
 
-/* --------------------------------- 8) engine seam wiring (no live SSH) */
+/* ------------------------- 9) the degraded (install-failure) composition */
+
+/**
+ * `plugin.ts`'s install-failure fallback:
+ * `ctx.plugin(SshSubprocessRuntime, composeFencedGate(createRemoteSpawnGate(ctx),
+ * refuseFencedCommands(remoteSandboxDepsOf(ctx))))`. The runtime takes ONE
+ * non-context argument, so both arms (spawn refusal + terminal refusal) ride
+ * the gate closure. The refusal fence never probes — it has no probe deps.
+ */
+function fallbackEngine(
+  mode: RemoteSandboxMode,
+  baseGate?: RemoteSpawnGate,
+): { engine: SshSubprocessEngine; gateCalls: string[][]; transport: ReturnType<typeof recordingTransport> } {
+  // 'off' is registered by OMITTING the field, exactly like every pre-REQ-I9
+  // machine record (the registry never persists 'off').
+  const machines = [mode === 'off' ? machine() : machine({ remoteSandbox: mode })]
+  const gateCalls: string[][] = []
+  const transport = recordingTransport()
+  const ctx = new Context()
+  ctx.provide('ssh', transport)
+  ctx.provide('sshRegistry', {
+    get: (id: string) => (id === 'c1' ? transport : undefined),
+    listMachines: () => ({ machines }),
+  })
+  const gate = baseGate ?? (async (input: RemoteGateInput) => { gateCalls.push([...input.argv]) })
+  const engine = new SshSubprocessEngine(ctx, composeFencedGate(gate, refuseFencedCommands(remoteSandboxDepsOf(ctx))))
+  return { engine, gateCalls, transport }
+}
+
+test('fallback composition: a fenced machine CANNOT run unwrapped (no connection is ever made)', async () => {
+  const { engine, transport } = fallbackEngine('read-only')
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(
+    () => handle.done,
+    (error: unknown) => {
+      assert.ok(error instanceof RemoteSandboxError, 'the refusal is the sandbox refusal, not a transport error')
+      assert.equal((error as RemoteSandboxError).code, REMOTE_SANDBOX_UNAVAILABLE)
+      assert.ok(error.message.includes('refusing to run the command unconfined'))
+      assert.match(error.message, /cannot run the remote runner probe/)
+      return true
+    },
+  )
+  assert.deepEqual(transport.commands, [], 'the user command never became a string, let alone a channel')
+  assert.deepEqual(transport.channels, [])
+})
+
+test('fallback composition: workspace-write is refused too (both active modes)', async () => {
+  const { engine, transport } = fallbackEngine('workspace-write')
+  await assert.rejects(() => engine.spawn(spawnSpec(COMMAND_ARGV)).done, RemoteSandboxError)
+  assert.deepEqual(transport.commands, [])
+})
+
+test('fallback composition: a fenced machine cannot open an unfenced terminal either', async () => {
+  const { engine, transport } = fallbackEngine('read-only')
+  await assert.rejects(
+    () => engine.spawnTerminal(terminalSpec(['bash'])),
+    (error: unknown) => {
+      assert.ok(error instanceof RemoteSandboxError)
+      assert.equal((error as RemoteSandboxError).code, REMOTE_SANDBOX_UNAVAILABLE)
+      assert.match(error.message, /refuses to open an interactive terminal/)
+      return true
+    },
+  )
+  assert.deepEqual(transport.commands, [], 'no PTY was opened')
+})
+
+test('fallback composition: an off machine behaves exactly as today', async () => {
+  const { engine, gateCalls } = fallbackEngine('off')
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  const finished = await handle.done
+  assert.equal(finished.exitCode, 0, 'the spawn proceeded')
+  assert.equal(gateCalls.length, 1, 'the approval gate still ran')
+})
+
+test('fallback composition: the approval gate still precedes the refusal (and its denial wins)', async () => {
+  const order: string[] = []
+  const gate: RemoteSpawnGate = async () => {
+    order.push('gate')
+    throw new RemoteGateError('denied by the gate')
+  }
+  const { engine, transport } = fallbackEngine('read-only', gate)
+  const handle = engine.spawn(spawnSpec(COMMAND_ARGV))
+  await assert.rejects(() => handle.done, /denied by the gate/)
+  assert.deepEqual(order, ['gate'], 'the fence never ran after a gate denial')
+  assert.deepEqual(transport.commands, [])
+})
+
+test('fallback composition: an aggregate-transport route (no connection id) is not refused', async () => {
+  const { engine, transport } = fallbackEngine('read-only')
+  // A LOCAL-absolute cwd resolves to `ctx.ssh`, which carries no connection id:
+  // no machine record can be named, so nothing is fenced — today's behaviour.
+  const handle = engine.spawn({ ...spawnSpec(COMMAND_ARGV), cwd: '/srv/work' })
+  const finished = await handle.done
+  assert.equal(finished.exitCode, 0)
+  assert.equal(transport.commands.length, 1)
+  assert.ok(!(transport.commands[0] as string).includes('bwrap'), 'no runner was introduced')
+})
+
+test('composeFencedGate: a wrapping (probe-backed) fence is REJECTED — it would silently discard the wrap', () => {
+  // The composition cannot receive the per-spawn cwd, and it discards the argv
+  // the fence returns, so composing a wrapping fence here would report "fenced"
+  // while the unwrapped command ran. The guard turns that into a loud error.
+  const gate: RemoteSpawnGate = async () => {}
+  assert.throws(
+    () => composeFencedGate(gate, fakeFence({ mode: 'read-only' }).fence),
+    /requires a configuration-deciding fence/,
+  )
+  assert.doesNotThrow(() => composeFencedGate(gate, refuseFencedCommands({ machine: () => undefined })))
+})
 
 test('SshSubprocessRuntime: the optional fence dep rides through to the engine', async () => {
   const ctx = new Context()

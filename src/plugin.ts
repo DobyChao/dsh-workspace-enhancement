@@ -37,7 +37,13 @@ import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
-import { createRemoteSandboxFence, createRemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
+import {
+  composeFencedGate,
+  createRemoteSandboxFence,
+  createRemoteSandboxTerminalGuard,
+  refuseFencedCommands,
+  remoteSandboxDepsOf,
+} from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
@@ -164,16 +170,17 @@ export function apply(ctx: Context, config: Config): void {
     installMixedProviders(ctx)
   } catch (error) {
     ctx.logger.warn(`dsw: mixed provider install failed, falling back to pure-SSH providers: ${String(error)}`)
-    // The fallback keeps the pre-REQ-I9 call shape (gate only). Deliberate and
-    // recorded: `ctx.plugin` only accepts ONE non-context argument, so the
-    // fence cannot ride along without changing the subpath row's constructor
-    // contract for every deployment. This path only exists after a mixed
-    // install failure and it runs on the aggregate `ctx.ssh` transport, which
-    // carries no `ssh://` connection id — i.e. it would read `'off'` anyway. A
-    // machine with `remoteSandbox` set therefore runs UNFENCED until the mixed
-    // install works: the operator sees the failure in the log, and the mixed
-    // path is the shipping one.
-    ctx.plugin(SshSubprocessRuntime, createRemoteSpawnGate(ctx))
+    // REQ-I9 fail-closed on the degraded path (ADR-0022 §2.3): this composition
+    // gets the REFUSING fence — it cannot run the remote runner probe, so it
+    // never runs a fenced machine. `ctx.plugin` accepts one non-context
+    // argument, and a fenced machine must not run unwrapped here, so the fence
+    // rides the gate closure: approval first, fence decision second (the
+    // fence's only effect is the refusal — the engine's `resolveArgv` stays
+    // undefined, so nothing is double-wrapped). `remoteSandbox: 'off'` machines
+    // and routes without a connection id keep today's behaviour byte for byte.
+    const refusalFence = refuseFencedCommands(remoteSandboxDepsOf(ctx))
+    const gate = composeFencedGate(createRemoteSpawnGate(ctx), refusalFence)
+    ctx.plugin(SshSubprocessRuntime, gate)
     ctx.plugin(SshFileSystem)
   }
 }

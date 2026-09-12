@@ -47,12 +47,12 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { RemoteSpawnGate } from './remote-approval-gate.ts'
 import {
   DEFAULT_REMOTE_RUNNER_PATH,
   REMOTE_SANDBOX_MESSAGES,
   RemoteSandboxError,
-  buildRemoteProbeCommand,
-  createRemoteSandboxCache,
+  buildRemoteProbeCommand,  createRemoteSandboxCache,
   isRemoteSandboxEnabled,
   normalizeRemoteSandbox,
   parseRemoteProbe,
@@ -128,10 +128,19 @@ export interface RemoteSandboxDeps {
 export interface RemoteSandboxFenceInput {
   /** Registry connection id of the route; `undefined` ⇒ no machine ⇒ no fence. */
   connectionId: string | undefined
-  /** The remote working directory of this spawn (the `--bind` root candidate). */
-  cwd: string
-  /** The final remote argv, BEFORE any wrapping. */
-  argv: readonly string[]
+  /**
+   * The remote working directory of this spawn (the `--bind` root candidate).
+   * Optional because a degraded composition that only arms the refusal
+   * ({@link composeFencedGate} on the install-failure fallback) may have the
+   * argv but not the route's cwd; `workspace-write` then falls back to the
+   * machine's configured directory, or refuses.
+   */
+  cwd?: string
+  /**
+   * The final remote argv, BEFORE any wrapping. Optional for the same reason:
+   * the refusal arm never inspects it.
+   */
+  argv?: readonly string[]
   /** Cancellation lifetime of the spawn. */
   signal?: AbortSignal
 }
@@ -196,6 +205,137 @@ export function terminalRefusalOf(
   const mode = effectiveModeOf(deps, connectionId, fallbackMode)
   if (!isRemoteSandboxEnabled(mode)) return undefined
   return REMOTE_SANDBOX_MESSAGES.terminalUnsupported.replace('{mode}', mode)
+}
+
+/* ------------------------------------------------- degraded-composition arms */
+
+/**
+ * REQ-I9 fail-closed for a composition that cannot receive the fence as its own
+ * dep (`plugin.ts`'s install-failure fallback, ADR-0022 §2.3): the fence runs as
+ * the **second half of the gate closure**, so the mount path that only takes one
+ * non-context argument still arms it.
+ *
+ * Semantics are exactly the seam's own ladder, in the seam's own order:
+ *  1. the gate decides (`allowed-once` or nothing gets past it),
+ *  2. the fence decides the route or **throws** (fail closed),
+ *  3. the argv the fence returns is discarded on purpose — the fence here is
+ *     {@link refuseFencedCommands}, whose only effect is the refusal, and the
+ *     fallback engine's `resolveArgv` stays `undefined`, so the command that
+ *     eventually serializes is the ORIGINAL argv (no double wrapping). A fence
+ *     that actually WRAPS is rejected by the guard below, because composing one
+ *     here would silently discard the wrap.
+ *
+ * The order is not negotiable: fencing before the approval decision would mean
+ * probing a host on behalf of a command that may never be approved.
+ *
+ * @param gate - the approval gate of that composition.
+ * @param fence - a configuration-deciding fence ({@link refuseFencedCommands}).
+ * @throws {Error} when `fence` is a wrapping (probe-backed) fence — see above.
+ */
+export function composeFencedGate(
+  gate: RemoteSpawnGate,
+  fence: RemoteSandboxFence,
+): RemoteSpawnGate {
+  // Landmine guard: this composition DISCARDS the argv the fence resolves, so a
+  // wrapping fence would report "fenced" while the unwrapped command ran — the
+  // exact lie ADR-0022 exists to prevent. Only a configuration-deciding fence
+  // (whose purpose is refusal) may be composed here.
+  if (!isConfigDecidingFence(fence)) {
+    throw new Error('dsw: composeFencedGate requires a configuration-deciding fence; mount a wrapping fence as the seam\'s own dep instead')
+  }
+  return async (input) => {
+    await gate(input)
+    // `terminal: true` (ADR-0022 §2.4): a fenced route must not open a PTY at
+    // all. The refusal must fire HERE when the armed fence can decide it from
+    // configuration (the marker), because the seam's own terminal guard is a
+    // separate dep this composition cannot receive; a probe-backed fence is not
+    // marked, so no probe is ever run for a terminal request.
+    if (input.terminal === true) {
+      const refusal = (fence as MarkedFence).terminalRefusal?.(input.connectionId)
+      if (refusal !== undefined) throw new RemoteSandboxError(refusal)
+      return
+    }
+    // No `cwd`: the approval input carries the argv only, and the fence input's
+    // `cwd` is the per-spawn remote directory. For the refusal arm that is
+    // irrelevant (it throws before any profile is built); a probe-backed fence
+    // must therefore be mounted as the seam's own dep, where the resolved route
+    // supplies the real cwd.
+    await fence({
+      connectionId: input.connectionId,
+      argv: input.argv.filter((value: string | undefined): value is string => value !== undefined),
+      ...(input.signal !== undefined ? { signal: input.signal } : {}),
+    })
+  }
+}
+
+/**
+ * Marker one fence variant carries so {@link composeFencedGate} knows it can
+ * answer **both** an argv request and a terminal request from configuration
+ * alone. {@link refuseFencedCommands} carries it; a probe-backed fence does
+ * NOT, because it cannot answer for a PTY (ADR-0022 §2.4 refuses fenced
+ * terminals rather than probing them).
+ */
+const CONFIG_DECIDING_FENCE = Symbol('dsw.config-deciding-sandbox-fence')
+
+type MarkedFence = RemoteSandboxFence & {
+  [CONFIG_DECIDING_FENCE]?: true
+  /**
+   * The optional terminal arm of a configuration-deciding fence: the refusal
+   * message for one route, or `undefined` when a terminal may open as before.
+   * Set by {@link refuseFencedCommands}; absent on a probe-backed fence.
+   */
+  terminalRefusal?(connectionId: string | undefined): string | undefined
+}
+
+/** Whether one fence decides from configuration alone (spawn AND terminal). */
+export function isConfigDecidingFence(fence: RemoteSandboxFence): boolean {
+  return (fence as MarkedFence)[CONFIG_DECIDING_FENCE] === true
+}
+
+/**
+ * A fence that proves nothing and therefore never WRAPS a fenced-route command
+ * — it refuses it. This is the fail-closed arm for a composition that cannot
+ * run the remote runner probe (the install-failure fallback: the machine view
+ * may be strictly narrower than a live connection), and it is a plain
+ * configuration read, so it is synchronous, offline and unspoofable by a
+ * hostile remote host.
+ *
+ * It reads the machine view it is given, which keeps the two required
+ * behaviours apart:
+ *  - a machine whose `remoteSandbox` is not `'off'` ⇒ throw
+ *    `SANDBOX_UNAVAILABLE` (the operator asked for a fence; it cannot be proven
+ *    here, so the command must not run);
+ *  - an `'off'` machine — and every pre-REQ-I9 record — ⇒ identity argv, i.e.
+ *    today's byte-for-byte behaviour.
+ *
+ * The fallback composition passes {@link remoteSandboxDepsOf} (the same machine
+ * view the shipping path uses), so "off" is decided by the same rule in both
+ * compositions. When that view cannot reach the registry at all, a route with a
+ * connection id still exists (the `ssh://` resolution reached the registry
+ * first) and the unknown machine reads as `'off'`-by-fallback — the honest
+ * limit of a composition that has no other registry face.
+ *
+ * @param deps - at minimum the machine view the mode is read from.
+ * @param fallbackMode - mode used when the route names no registry machine.
+ */
+export function refuseFencedCommands(
+  deps: Pick<RemoteSandboxDeps, 'machine'> & Partial<Pick<RemoteSandboxDeps, 'unavailable'>>,
+  fallbackMode: RemoteSandboxMode = 'off',
+): RemoteSandboxFence {
+  const unavailable = deps.unavailable ?? remoteSandboxUnavailable
+  const fence: MarkedFence = async (input) => {
+    const mode = effectiveModeOf(deps, input.connectionId, fallbackMode)
+    if (!isRemoteSandboxEnabled(mode)) return input.argv ?? []
+    throw unavailable(
+      mode === 'workspace-write' ? 'workspace-write' : 'read-only',
+      'this composition cannot run the remote runner probe, so the requested fence cannot be proven; refusing to run the command unconfined.',
+    )
+  }
+  fence[CONFIG_DECIDING_FENCE] = true
+  // The terminal arm reads the SAME configuration rule, so a fenced machine is
+  // refused before any PTY opens and an 'off' machine is untouched.
+  fence.terminalRefusal = (connectionId: string | undefined) => terminalRefusalOf(deps, connectionId, fallbackMode)
+  return fence
 }
 
 /* ------------------------------------------------------ mode resolution */
@@ -343,7 +483,7 @@ function wrapOf(
     // Fail closed — never degrade to `read-only` behind the operator's back.
     throw deps.unavailable(mode, REMOTE_SANDBOX_MESSAGES.workspaceRootRequired)
   }
-  return remoteRunnerArgv(input.argv, {
+  return remoteRunnerArgv(input.argv ?? [], {
     mode,
     ...(mode === 'workspace-write' && root !== undefined ? { workspaceRoot: root } : {}),
   }, runnerPath)
@@ -402,7 +542,7 @@ export function createRemoteSandboxFence(
   return async (input: RemoteSandboxFenceInput): Promise<readonly string[]> => {
     const mode = effectiveModeOf(deps, input.connectionId, fallbackMode)
     // 'off' — and every record predating the field: identity argv, zero probes.
-    if (!isRemoteSandboxEnabled(mode)) return input.argv
+    if (!isRemoteSandboxEnabled(mode)) return input.argv ?? []
     // `isRemoteSandboxEnabled` is a plain boolean, so TypeScript cannot narrow
     // the union through it; re-derive the tightened type from the already
     // checked value instead of casting.
