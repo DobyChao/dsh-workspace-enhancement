@@ -308,6 +308,126 @@
   min-width: 0;
 }
 
+/* ---------- cockpit sections (REQ-I11) ---------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Section separator: a rule plus breathing room, so the three sections read as
+   one cockpit rather than one flat list. */
+.divided {
+  border-top: 1px solid var(--dswsw-line);
+  padding-top: 10px;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dswsw-fg-muted);
+}
+
+/* The one-line honest note under the connected-machines heading (rendered once). */
+.hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--dswsw-fg-subtle);
+}
+
+/* The main workspace is READ-ONLY — the dashed border says so before the copy. */
+.mainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--dswsw-border);
+  border-radius: 7px;
+  background: var(--dswsw-surface-inset);
+}
+
+.mainRow .itemLabel {
+  max-width: 140px;
+}
+
+.mainPath {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 11px;
+  color: var(--dswsw-fg-muted);
+}
+
+.rowHost {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dswsw-fg-subtle);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* The connect/disconnect toggle: a pill, filled while the machine is on. */
+.toggle {
+  flex: none;
+  padding: 3px 12px;
+  border: 1px solid var(--dswsw-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dswsw-fg-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toggle:hover:not(:disabled) {
+  background: var(--dswsw-surface-3);
+  border-color: var(--dswsw-border-strong);
+  color: var(--dswsw-fg);
+}
+
+.toggleOn {
+  border-color: var(--dswsw-accent);
+  background: var(--dswsw-accent-soft);
+  color: var(--dswsw-fg);
+}
+
+.toggleOn:hover:not(:disabled) {
+  border-color: var(--dswsw-accent);
+  background: color-mix(in srgb, var(--dswsw-accent) 22%, var(--dswsw-surface));
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The implicit main machine: connected because the session cwd routes there,
+   so it carries a label instead of a toggle it could not honour. */
+.badge {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px dashed var(--dswsw-border-strong);
+  border-radius: 999px;
+  color: var(--dswsw-fg-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* ---------- shared controls ---------- */
 
 .input {
