@@ -46,6 +46,23 @@ export const MODEL_PROMPTS = {
   /** `tool:bash` section (order 105, win32 hosts) — injected only in a remote-context session. */
   sectionWin32Bash:
     'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
+  /**
+   * AUDIT-6 route-D honesty sentence (`sw-remote` section): injected in EVERY
+   * remote-main-workspace session. Remote commands are not confined by the
+   * local sandbox — `forceRemoteSandboxMode` pinning remote sessions to
+   * full access is same-world contract behavior, stated to the model as-is
+   * (ADR-0020 D6).
+   */
+  remoteNoSandbox:
+    'Remote execution is not confined by the local sandbox: commands run with the remote OS account\'s permissions only.',
+  /**
+   * AUDIT-6 gate-expectation sentence (`sw-remote` section): injected only
+   * when the session's main-workspace machine has `remoteApproval !== 'off'`.
+   * Manages the model's expectation of denials so a rejected command is not
+   * retried unchanged (ADR-0020 D6).
+   */
+  remoteGateActive:
+    'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */
