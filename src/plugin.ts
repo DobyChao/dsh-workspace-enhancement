@@ -171,13 +171,21 @@ export function apply(ctx: Context, config: Config): void {
   } catch (error) {
     ctx.logger.warn(`dsw: mixed provider install failed, falling back to pure-SSH providers: ${String(error)}`)
     // REQ-I9 fail-closed on the degraded path (ADR-0022 §2.3): this composition
-    // gets the REFUSING fence — it cannot run the remote runner probe, so it
-    // never runs a fenced machine. `ctx.plugin` accepts one non-context
-    // argument, and a fenced machine must not run unwrapped here, so the fence
-    // rides the gate closure: approval first, fence decision second (the
-    // fence's only effect is the refusal — the engine's `resolveArgv` stays
-    // undefined, so nothing is double-wrapped). `remoteSandbox: 'off'` machines
-    // and routes without a connection id keep today's behaviour byte for byte.
+    // gets the REFUSING fence. It rides the gate closure because `ctx.plugin`
+    // accepts one non-context argument: approval first, fence decision second,
+    // and the fence's only effect is the refusal (the engine's `resolveArgv`
+    // stays undefined, so nothing is double-wrapped). It reads the SAME machine
+    // view the shipping path reads, so a machine whose `remoteSandbox` is not
+    // `'off'` is refused while `'off'` machines and routes without a connection
+    // id keep today's behaviour byte for byte.
+    //
+    // Window note, stated precisely: while `sshRegistry` is not yet mounted an
+    // id cannot be resolved, so this fence (and the engine's context-derived
+    // one) reads that machine as `'off'`. The window is still closed, but by
+    // INABILITY rather than by this refusal — resolving any remote route goes
+    // through the registry (`resolveSshCwd` throws for an unknown connection),
+    // so no remote command can run in it. Do not restate this as "the fence
+    // refuses every ssh:// route": it refuses fenced machines, and nothing else.
     const refusalFence = refuseFencedCommands(remoteSandboxDepsOf(ctx))
     const gate = composeFencedGate(createRemoteSpawnGate(ctx), refusalFence)
     ctx.plugin(SshSubprocessRuntime, gate)

@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-12 16:59 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-12 17:43 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,18 +10,18 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `chore/backlog-tidy` / `24a74f2` |
-| HEAD 提交 | `chore(backlog): re-partition rows by status and fix board row counting` (2026-09-13) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `2df9dbe` |
+| HEAD 提交 | `feat(session): prune a deleted machine from every session connection` (2026-09-13) |
+| 与远端 | 21 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 28 |
-| 单测用例（静态计数） | 313 |
+| 单测文件 | 34 |
+| 单测用例（静态计数） | 470 |
 | E2E 场景文件 | 8 |
-| ADR | 20 |
+| ADR | 22 |
 | 轮次报告 | 26 |
 
 ## 待办分布（docs/backlog.md）
