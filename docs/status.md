@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-11 12:33 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-12 02:21 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,37 +10,35 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `master` / `69c721f` |
-| HEAD 提交 | `fix(web): mount the browser channel on the shared /api transport (#11)` (2026-09-11) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `feat/audit-6-remote-approval-gate` / `143186b` |
+| HEAD 提交 | `docs(audit-6): finalize ADR-0020 scope and record the honest boundaries` (2026-09-12) |
+| 与远端 | 8 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
 | 单测文件 | 28 |
-| 单测用例（静态计数） | 302 |
+| 单测用例（静态计数） | 313 |
 | E2E 场景文件 | 8 |
-| ADR | 18 |
-| 轮次报告 | 22 |
+| ADR | 20 |
+| 轮次报告 | 25 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 11 |
+| `todo` | 12 |
 | `doing` | 0 |
-| `blocked` | 7 |
-| `done` | 28 |
+| `blocked` | 5 |
+| `done` | 31 |
 | `shipped` | 5 |
-| `dropped` | 5 |
+| `dropped` | 7 |
 
 ## 被挡住 / 待拍板
 
 - UX-1 — 远程会话 composer 权限预设显示 `Custom`
-- SEC-1 — 副工作区 `fs:只读 + exec:开` 可被 `workdir` 命令绕成
 - INFRA-8 — AgentTeams 标准 profile 注册
-- SEC-2 — 主 workdir 命令可写/删只读副工作区（命令面无围栏）
 - SEC-3 — full 沙箱风险确认门按 preset id 判定，`remote-full` 等价 full 却无二次确认
 - UX-2 — 副工作区面板「浏览」输入框去留
 - BUG-1 — 用户截图「设置页顶部空白边框条」lab 未复现
