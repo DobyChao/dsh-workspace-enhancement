@@ -56,6 +56,13 @@ read/write/edit/glob/grep + `ssh://<id>/` **注册表级**路由；该路由是*
 7. **门控层级如实声明**：连接集合是**可见性/暴露门控**，不是强制围栏；强制层只有两处——
    ADR-0020 的 **spawn 审批门**（只覆盖经 spawn 的命令）与 ADR-0022 的**远端围栏**（同样只围 spawn），
    以及远端 OS 权限（低权用户/容器）。fs 写面**仍不在任何围栏内**（SFTP 走宿主进程）。
+   **exec 面同样不是强制门**（本轮实测取证）：官方 `bash`/`pwsh` 工具把模型给的 `workdir` 原样当 `spec.cwd`
+   透传（`dsh-tool-bash/lib/index.js`：`...args.workdir !== void 0 ? { cwd: args.workdir } : {}`，
+   `resolveWorkdir` 只把**相对**路径接到会话 cwd），而混合门面按 `worldOfCwd(spec.cwd)` 路由 ⇒
+   **零连接的本地会话只要传 `workdir: "ssh://c1/srv"` 就能在已注册机器上执行命令**，粗门拦不住。
+   这是**结构性**的、不是疏漏：`SubprocessSpawnSpec` 不携带会话身份，门面在 spawn 时无从判别是哪个会话，
+   所以门只能做在工具层（用户 2026-09-12 拍板「会话门控只做在工具层与提示层」正是这个原因）。
+   命令级仍有 AUDIT-6 审批门兜底（该路径 argv 仍是 shell 形状，`isRemoteShellShape()` 判定成立）。
 8. **提示：用「运行时上下文快照」做中插，而不是往头部 prompt 塞。** 侦察结论（磁盘权威源
    `dsh-system-prompt/lib/types/index.d.ts`）：`SystemPrompt` 只暴露 `section()` / `context()` /
    `suppressRuntimeContext()`，**没有**「会话中途插一条 system 消息」的 API；会话面里 `system/message`
