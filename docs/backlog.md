@@ -13,6 +13,12 @@
 > **分区**：§1 `doing` · §2 `todo`（按优先级）· §3 `blocked` · §4 `done`/`shipped`（追溯用）
 > · §5 `dropped` · §6 AgentTeams 子项。**一行只属于一个分区**——状态变了就换分区，别在原地改状态。
 > **备注里的字面 `|` 必须写成 `\|`**（否则整行被切成多余列，表格与生成物一起坏掉；闸门会拦）。
+>
+> **R23 收口（2026-09-13）**：REQ-I11（吸收 SEC-5）与 REQ-I9 代码完成，已由 **GLM-5.3 评审到 `pass`**
+> （首轮 1 blocker + 3 major 全修，复审逐条确认）。剩余全部是**真机项**：
+> `docs/uat/R23-req-i11-session-connections.md`（15 步）与 `docs/uat/R23-req-i9-remote-runner.md`
+> （11 步 + G1–G3）。**G1（远端 bwrap 能否以 SSH 登录用户通过只读功能探针）为否时，REQ-I9 在该主机类退化为
+> 「审批门 + 低权用户」**。AUDIT-6 的 e2e/UAT 尾巴按用户拍板延后到本轮之后统一审视。代码只落本地分支、未推 PR。
 
 ## 1. 当前进行中（doing）
 
@@ -36,7 +42,7 @@
 | REQ-A5 | 顺手清理（旧 `dsh-ssh-routes/` 占位树、`$DSH_HOME` 归档盘点） | todo | P3 | 确认无引用后人工清理 |
 | AUDIT-4 | 远程状态入口：判定与渲染判定分离（一份被测、一份决定渲染） | todo | P3 | t5 评审（verdict=pass）的非阻断观察 ①：`showsRemoteStatus`（`src/client/remote-status.ts`）在 `src/**` **零调用者**，真正决定渲染的是 `remote-status-entry.tsx` 的 `connId === undefined → null` ⇒ **同一判定两份实现、只有一份被测**。**症状级证据**：`test/remote-status.test.ts:90` 那条用例**自称** `the render decision is remote-only (local sessions show nothing)`，实际钉的却是零调用者的 `showsRemoteStatus`（名不副实）。**修法（不必重设计）**：新增唯一决策函数 `remoteCellOf(facts): { connId } \| null` 放纯 `.ts`，`showsRemoteStatus` 退化为其薄包装，视图改为 `const cell = remoteCellOf(facts); if (cell === null) return null` 并消费 `cell.connId`；**重指 + 改名**：把 `test/remote-status.test.ts:90` 那条**改指 `remoteCellOf`**（名字随之变真）——**只改名不改目标等于护栏仍缺**。**验收**：`npm run test:agent` 覆盖**真正决定渲染**的那条分支。**排期**：本轮不修（只登记）；**下一轮单独开任务 + 评审**，不并入徽标修复任务（两者触碰同一片客户端文件区，混 diff 难切分）。设计细节见 `ADR-0017` §7.6 |
 | REQ-I8 | Spike：`ctx.sessionPersistence` 拼「fork + 换 cwd」（norepo→挂工作区可行性） | todo | P3 | 用户 2026-09-12「先记着」。背景（2026-09-12 磁盘权威源核实）：客户端 `sessions.fork` 不带 cwd（宿主实现 `commands.js` 写死 `meta.cwd = source.header.cwd`）；宿主 `ctx.sessionPersistence`（`dsh-session-persistence`，公开 Cordis 服务）可 `create(任意 header{cwd 可选/parentSession/isSeeded/agentPreset}, {inheritedEventCount})` + write handle append 源事件前缀，拼出「带历史 + 新 cwd（含无 cwd）」会话，无需上游改动。**spike 三件事**：① raw 会话是否自动出现在 sidebar 列表；② 点击能否正常 resume（preset 恢复策略）；③ 标题/投影是否重建；必要时补 `ctx.workspaceRegistry` 的 `attachSession`。**产出**：ADR——可行 ⇒ 后继「工作区生命周期」（norepo 开局/带历史切换，面板复用）；不可行 ⇒ 退路径 A（fork 留档 + 新会话）。**风险**：绕过命令层校验（ownership fence 等），上游演进有语义漂移风险。**验收**：lab 内跑通或证伪，结论落 ADR |
-| REQ-I12 | 远端围栏的可见面收尾（sidebar 徽标接 live feed + `sw_status` 报围栏结论与拒写标记） | todo | P3 | 来源：GLM-5.3 评审 nit 10 + 接线片自报偏离 ①③。现状：`remoteSandboxFactsOf` / `isRemoteDenialText` / 边界文案**零调用者**（围栏能拒绝、但模型看不到「为什么」）；sidebar 的 `row-badges` DOM 未接实时 feed（设置页机器列表已按纯投影显示徽标）。**范围**：① `sw_status` 增一行围栏档位 + 探针结论（v1 内存缓存即可）；② 远程 spawn 结果按 `sandboxDenialMarker` 合成 `[sandbox: file access denied under <mode> mode]`（`@deepseek-ai/dsh-sandbox` 已是 peer+dev 依赖，可直接用）；③ 徽标接 `conn.status` 视图（需动 `src/client/status.tsx`）。**验收**：`sw_status` 如实报告围栏状态；被围栏拒绝的远程命令回显该标记；徽标随机器档位变化。**不阻塞**：这些是可见性打磨，围栏的 fail-closed 语义已由 R23 落地 |
+| REQ-I12 | 远端围栏的可见面收尾（sidebar 徽标接 live feed + `sw_status` 报围栏结论与拒写标记） | todo | P3 | 来源：GLM-5.3 评审 nit 10 + 接线片自报偏离 ①③。现状：`remoteSandboxFactsOf` / `isRemoteDenialText` / 边界文案**零调用者**（围栏能拒绝、但模型看不到「为什么」）；sidebar 的 `row-badges` DOM 未接实时 feed（设置页机器列表已按纯投影显示徽标）。**范围**：① `sw_status` 增一行围栏档位 + 探针结论（v1 内存缓存即可）；② 远程 spawn 结果按 `sandboxDenialMarker` 合成 `[sandbox: file access denied under <mode> mode]`（`@deepseek-ai/dsh-sandbox` 已是 peer+dev 依赖，可直接用）；③ 徽标接 `conn.status` 视图（需动 `src/client/status.tsx`）。**验收**：`sw_status` 如实报告围栏状态；被围栏拒绝的远程命令回显该标记；徽标随机器档位变化。**不阻塞**：这些是可见性打磨，围栏的 fail-closed 语义已由 R23 落地。**复审新增 nit（非阻塞）**：win32 `bash` 的拒绝复用了 `tool.sw_exec.error.*` 键，于是模型读到「sw_exec: …」而它调用的其实是 `bash`——内容诚实但工具名张冠李戴，改成专用键或共享无前缀键即可 |
 | REQ-I5 | 远期：vscode-server 式「把部分 DSH 能力部署到远端」 | todo | P4 | 愿景备忘，未排期 |
 
 ## 3. 被挡住 / 待拍板（blocked）

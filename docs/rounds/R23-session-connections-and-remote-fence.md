@@ -44,7 +44,8 @@
 4. **major** — **我们自己的 win32 `bash` 接缝未设门**，而 SECURITY.md 只把绕过归给**官方**工具 ⇒ 已补 `requireConnectedServer`（`87a09f1`，含「拒绝时不得 spawn」「隐式主机器仍可跑」两条断言）。
 5. 5 条 minor/nit：`side.conn.hint` 暗示连接决定 fs 可达（实为注册表级）、`tool.common.noActive` 仍写「call sw_connect with a host」（已不可能）、两处临时 id 旧注释、`retain` 声称的启动清理不存在、死导出。**已全部修**（`75153bc`）；死导出登记为 `REQ-I12`。
 
-**复审**：见 `.tmp/review/GLM-5.3-recheck.md`（结论填在 `docs/backlog.md` 的 R23 收口段与提交信息里）。
+**复审**：`.tmp/review/GLM-5.3-recheck.md` —— **`VERDICT: pass`**。逐条确认：blocker 已修（12 词 token 化 + 「拼接成串」负向断言，revert 会触发三道独立 tripwire）、ADR 与代码一致且记录了失败模式、win32 门找不到绕过（相位/拼写/相对 workdir/隐式主机器/`off` 机器全部走查）、四条 minor 文案均已成真。**未修但已处置**：minor #9（`remove→retain` 仅有源码正则守卫——被调用的 dispatch 闭包不可导出，且属既有做法，低于修订门槛）、nit #10（死导出 → 登记 `REQ-I12`）。**复审新增 nit**：win32 `bash` 的拒绝复用了 `sw_exec` 的错误键，工具名张冠李戴（内容诚实、处置相同），已并入 `REQ-I12`。
+复审在沙箱内自跑闸门：`check:static` ALL PASS、`typecheck` 干净、`test:agent` 420/419/1（那 1 例是 `spawn EPERM`，运行器自判 `SANDBOX-LIMITED PASS`）⇒ **零真实失败**。
 
 ## 5. 证据
 
