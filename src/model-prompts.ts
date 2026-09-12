@@ -78,6 +78,18 @@ export const MODEL_PROMPTS = {
    */
   remoteGateActive:
     'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
+  /**
+   * REQ-I9 fence sentence (`sw-remote` section): injected only when the routed
+   * machine has `remoteSandbox !== 'off'`. Stated to the model for the same
+   * reason as the approval sentence — a refusal must be understood rather than
+   * retried — and because the fence is the one place a remote command can fail
+   * for a reason the model cannot see on the remote host. It deliberately keeps
+   * the fs/SFTP boundary explicit: the fence covers commands only (ADR-0022 §2.7).
+   */
+  remoteFenced:
+    'Additionally, this machine runs commands inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the remote runner, and if that runner is missing or unusable the command FAILS (`SANDBOX_UNAVAILABLE`) instead of running unfenced. The fence covers commands only — the file tools are not confined by it.',
+  /** REQ-I9: the per-machine note appended to a connected machine that is fenced. */
+  connectedFenced: ' (commands fenced: {mode})',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */

@@ -21,6 +21,7 @@ import { modelPrompt } from './model-prompts.ts'
 import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from './session-remote-context.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
+import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -47,6 +48,8 @@ export interface PromptMachineFace {
   workspace?: string
   /** AUDIT-6 gate mode of the routed machine (absent ⇒ treat as `'off'`). */
   remoteApproval?: RemoteApprovalMode
+  /** REQ-I9 fence mode of the machine (absent ⇒ treat as `'off'`). */
+  remoteSandbox?: RemoteSandboxMode
 }
 
 /**
@@ -149,13 +152,17 @@ export interface ConnectedMachineFact {
   id: string
   endpoint: string
   reachable?: boolean | null
+  /** REQ-I9: the machine's fence mode when it is not `off` (absent ⇒ no fence). */
+  sandbox?: RemoteSandboxMode
 }
 
 /** Pure prompt projection of one connected registry machine. */
 export function connectedMachineFact(id: string, machine: PromptMachineFace | undefined): ConnectedMachineFact {
+  const sandbox = machine?.remoteSandbox
   return {
     id,
     endpoint: machine !== undefined ? `${machine.username}@${machine.host}` : `conn-${id}`,
+    ...(sandbox !== undefined && sandbox !== 'off' ? { sandbox } : {}),
   }
 }
 
@@ -171,7 +178,7 @@ export function renderConnectedMachines(facts: readonly ConnectedMachineFact[]):
   const lines = facts.map(fact => modelPrompt('connectedItem', {
     id: fact.id,
     endpoint: fact.endpoint,
-    note: fact.reachable === false ? modelPrompt('connectedUnreachable') : '',
+    note: `${fact.reachable === false ? modelPrompt('connectedUnreachable') : ''}${fact.sandbox !== undefined ? modelPrompt('connectedFenced', { mode: fact.sandbox }) : ''}`,
   }))
   return `${modelPrompt('connectedHeading')}\n${lines.join('\n')}`
 }
@@ -244,6 +251,9 @@ export function composeWorkspacePrompt(
     parts.push(modelPrompt('remoteNoSandbox'))
     if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
       parts.push(modelPrompt('remoteGateActive'))
+    }
+    if (machine?.remoteSandbox !== undefined && machine.remoteSandbox !== 'off') {
+      parts.push(modelPrompt('remoteFenced', { mode: machine.remoteSandbox }))
     }
   }
   const side = renderSideWorkspaces(sides)
