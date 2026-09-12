@@ -180,6 +180,17 @@ test('CHANNEL_ENDPOINTS stays in lockstep with the dispatch switch', () => {
   assert.equal(new Set(listed).size, listed.length, 'no duplicate endpoints')
 })
 
+test('machines.remove prunes the deleted machine from every session connection', () => {
+  const web = source('src/web.ts')
+  const block = /case 'machines\.remove': \{([\s\S]*?)\n {8}\}/u.exec(web)
+  assert.notEqual(block, null, 'the machines.remove case must stay in src/web.ts')
+  assert.match(
+    block?.[1] ?? '',
+    /connStore\(\)\.retain\(/u,
+    'deleting a machine must prune it from the session connection store — the store holds id references only, so the registry is the one place that knows the id is gone (ADR-0021 §2.3)',
+  )
+})
+
 test('no half hard-codes the channel path any more', () => {
   const client = source('src/client/index.ts')
   assert.equal(/rpc\.call\('\/dsw'/u.test(client), false, 'the client must call through ../web-channel.ts')

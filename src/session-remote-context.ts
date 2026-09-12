@@ -40,6 +40,13 @@ export interface SessionConnectionsFace {
   connect(sessionId: string, machineId: string): string[]
   /** Remove one machine from the session (absent id is a no-op `false`). */
   disconnect(sessionId: string, machineId: string): boolean
+  /**
+   * Drop references to machine ids the registry no longer knows and report how
+   * many were removed. The store keeps id references only, so the registry is
+   * the only place that can know an id is gone: the channel calls this after
+   * `machines.remove` (ADR-0021 §2.3).
+   */
+  retain(known: ReadonlySet<string>): number
 }
 
 /**

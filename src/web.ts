@@ -487,6 +487,10 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
             // route to a dead registry id on the next session resume.
             void rm(sshRoutePlaceholder(input.id.trim(), '/'), { recursive: true, force: true })
               .catch(() => undefined)
+            // REQ-I11 (ADR-0021 §2.3): a deleted machine must not stay "connected"
+            // to any session. The store keeps id references only, so pruning them
+            // here is the one place that can know the id is gone.
+            connStore().retain(new Set(registry().listMachines().machines.map(machine => machine.id)))
           }
           return { ok: true, value: { ok: true, removed, ...registry().listMachines() } }
         }
