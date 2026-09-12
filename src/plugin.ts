@@ -37,6 +37,7 @@ import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
+import { createRemoteSandboxFence, createRemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
@@ -57,6 +58,15 @@ const LOCAL_FS_CONFIG = { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 102
  * danger-full-access`（寄存器顺序在本 bundle 之后，append 成为最后事件，
  * fold 生效）；用户之后在 UI 里主动切换的模式仍是最后事件，按其决定（诚实：
  * 窄模式 + 远程 = 本地 runner 不可用 → 明确失败，绝不静默本地）。
+ *
+ * REQ-I9 边界（ADR-0022 §2.1/D1）：这个 pin 正是「本地 runner 绝不进入远端命令
+ * 行」的保证——它让 `dsh-bash-sandbox` 走 `danger-full-access` 快路径，所以
+ * 远端命令行里永远只有一个 runner（即本插件自己包的 bwrap），不会出现
+ * 「本地 bwrap/landlock argv 被发到远端」（I9-10）。由此推出：**远端围栏档位
+ * 不能来自 `ctx.sandboxPolicy`**（那个 resolver 对远程会话一律报
+ * `danger-full-access`），它必须是本插件自己的逐机器轴 `remoteSandbox`
+ * （`src/registry.ts`），由 `src/remote-sandbox-fence.ts` 在
+ * `SshSubprocessHandle` 的 argv 阶段消费。
  * @param ctx - the aggregate row's context.
  */
 function forceRemoteSandboxMode(ctx: Context): void {
@@ -98,7 +108,18 @@ export function installMixedProviders(ctx: Context): void {
   // optional services (`approval`/`agents`) resolve by name at ask time, so
   // the gate composes in any deployment and no-ops for ungated machines.
   const localSubprocess = new LocalSubprocessRuntime(ctx)
-  const sshSubprocess = new SshSubprocessEngine(ctx, createRemoteSpawnGate(ctx))
+  // REQ-I9 (ADR-0022): the remote sandbox fence is built here and passed to the
+  // remote branch only. Its per-spawn ladder (mode → identity for `'off'`,
+  // functional probe for a fenced mode, throw on any unproven case) lives in
+  // `remote-sandbox-fence.ts`; the seam applies it AFTER the approval gate and
+  // BEFORE serialization so the gate keeps seeing the user's original argv.
+  const fence = createRemoteSandboxFence(ctx)
+  const sshSubprocess = new SshSubprocessEngine(
+    ctx,
+    createRemoteSpawnGate(ctx),
+    fence,
+    createRemoteSandboxTerminalGuard(ctx),
+  )
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
@@ -143,6 +164,15 @@ export function apply(ctx: Context, config: Config): void {
     installMixedProviders(ctx)
   } catch (error) {
     ctx.logger.warn(`dsw: mixed provider install failed, falling back to pure-SSH providers: ${String(error)}`)
+    // The fallback keeps the pre-REQ-I9 call shape (gate only). Deliberate and
+    // recorded: `ctx.plugin` only accepts ONE non-context argument, so the
+    // fence cannot ride along without changing the subpath row's constructor
+    // contract for every deployment. This path only exists after a mixed
+    // install failure and it runs on the aggregate `ctx.ssh` transport, which
+    // carries no `ssh://` connection id — i.e. it would read `'off'` anyway. A
+    // machine with `remoteSandbox` set therefore runs UNFENCED until the mixed
+    // install works: the operator sees the failure in the log, and the mixed
+    // path is the shipping one.
     ctx.plugin(SshSubprocessRuntime, createRemoteSpawnGate(ctx))
     ctx.plugin(SshFileSystem)
   }

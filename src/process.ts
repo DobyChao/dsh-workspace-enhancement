@@ -31,16 +31,28 @@ function normalizeSignal(signal: string | null | undefined): NodeJS.Signals | nu
  * the environment with the scrubbed remote base plus explicit entries and exec
  * the argv. `env -i` prevents credential-shaped remote names from leaking into
  * the child; the scrubbed base restores PATH and HOME.
+ *
+ * `argv` is passed in rather than read from `spec.argv` because the startup
+ * sequence may have replaced it (REQ-I9: the remote sandbox fence wraps the
+ * argv AFTER the approval preflight) — this function stays the one and only
+ * serializer, so every token still passes through {@link quoteShellArg} here
+ * and nowhere else (AGENTS.md §5.6).
  * @param ssh - connection owner backing this execution world.
  * @param cwd - resolved absolute remote working directory.
  * @param spec - fully resolved subprocess request.
+ * @param argv - the argv to execute (the spec's own, or the fenced one).
  * @returns the remote command text.
  */
-async function buildCommand(ssh: SshTransport, cwd: string, spec: SubprocessSpawnSpec): Promise<string> {
+async function buildCommand(
+  ssh: SshTransport,
+  cwd: string,
+  spec: SubprocessSpawnSpec,
+  argv: readonly string[],
+): Promise<string> {
   const remote = await readRemoteEnvironment(ssh)
   const environment = serializeEnvironment(scrubRemoteEnvironment(remote), spec.env)
-  const argv = spec.argv.map(quoteShellArg).join(' ')
-  return `cd -- ${quoteShellArg(cwd)} && exec env -i -- ${environment} ${argv}`
+  const serialized = argv.map(quoteShellArg).join(' ')
+  return `cd -- ${quoteShellArg(cwd)} && exec env -i -- ${environment} ${serialized}`
 }
 
 /** SSH-backed subprocess handle. The channel does not expose a remote pid, so `pid` is `-1`. */
@@ -67,6 +79,13 @@ export class SshSubprocessHandle implements SubprocessHandle {
    * @param preflight - optional AUDIT-6 approval gate, awaited at the HEAD of
    * the async startup (connection and command text are resolved, nothing has
    * reached SSH yet); a rejection fails `done` without touching the network.
+   * @param resolveArgv - optional second startup stage (REQ-I9 / ADR-0022 §2.2):
+   * awaited AFTER `preflight` and BEFORE the command serialization, it returns
+   * the argv to actually execute. Defaults to identity, so an unmodified
+   * deployment behaves exactly as before. The fence lives here — and nowhere
+   * upstream of the gate — because the approval gate must keep inspecting the
+   * UNWRAPPED argv (a `bwrap` `argv[0]` would stop `isRemoteShellShape()`
+   * matching and silently disarm AUDIT-6 for every remote command).
    */
   constructor(
     private readonly runtime: SshTransport,
@@ -74,6 +93,7 @@ export class SshSubprocessHandle implements SubprocessHandle {
     private readonly spec: SubprocessSpawnSpec,
     private readonly spillDir: string,
     private readonly preflight?: () => Promise<void>,
+    private readonly resolveArgv?: (argv: readonly string[]) => Promise<readonly string[]>,
   ) {
     const outMode = spec.stdio.stdout
     const errMode = spec.stdio.stderr
@@ -158,7 +178,13 @@ export class SshSubprocessHandle implements SubprocessHandle {
       // AUDIT-6 (ADR-0020 D1): the approval question precedes every remote
       // byte — even the connection/environment read waits for the decision.
       if (this.preflight !== undefined) await this.preflight()
-      const command = await buildCommand(this.runtime, this.cwd, this.spec)
+      // REQ-I9 (ADR-0022 §2.2): the fence is the SECOND stage — after the gate
+      // decided on the user's original argv, before anything is serialized or
+      // sent. It may perform network I/O (the runner probe) and fails closed.
+      const argv = this.resolveArgv === undefined
+        ? this.spec.argv
+        : await this.resolveArgv(this.spec.argv)
+      const command = await buildCommand(this.runtime, this.cwd, this.spec, argv)
       const client = await this.runtime.getClient()
       channel = await new Promise<ClientChannel>((resolve, reject) => {
         client.exec(command, { pty: false }, (error, stream) => {

@@ -54,6 +54,11 @@ import type { ConnStatusView } from './status.tsx'
 // export name is unchanged for every existing consumer.
 export { routeIdOf }
 
+// REQ-I9 (ADR-0022 D1): the fence badge projection lives in `sandbox-badge.ts`
+// for the SAME reason (the row-badges module is not sandbox-test-loadable);
+// re-exported here so the badge surface keeps one import point.
+export { sandboxBadgeOf } from './sandbox-badge.ts'
+
 /**
  * The ONE row status-marker key: `data-dsw-conn-id` is the idempotence guard
  * (a row already marked for a connection is skipped) AND the paintConn match

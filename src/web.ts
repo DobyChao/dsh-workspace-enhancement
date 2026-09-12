@@ -166,6 +166,12 @@ function isMachineInput(value: unknown): value is MachineInput {
     && value.credentialBackend !== 'windows' && value.credentialBackend !== 'secret') return false
   if (value.remoteApproval !== undefined
     && value.remoteApproval !== 'off' && value.remoteApproval !== 'human' && value.remoteApproval !== 'ai') return false
+  // REQ-I9 (ADR-0022 D1): the per-machine remote sandbox fence mode. Same
+  // closed whitelist treatment as `remoteApproval` — an unknown spelling is a
+  // bad request, never a silently-coerced `'off'` (a typo that disabled the
+  // fence must not look like a successful save).
+  if (value.remoteSandbox !== undefined
+    && value.remoteSandbox !== 'off' && value.remoteSandbox !== 'read-only' && value.remoteSandbox !== 'workspace-write') return false
   return true
 }
 

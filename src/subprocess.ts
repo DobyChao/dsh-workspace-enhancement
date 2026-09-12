@@ -27,6 +27,9 @@ import { resolveSshCwd } from './transport.ts'
 import type { SshCwdRoute, SshTransport } from './transport.ts'
 import { createRemoteSpawnGate } from './remote-approval-gate.ts'
 import type { RemoteSpawnGate } from './remote-approval-gate.ts'
+import { RemoteSandboxError } from './remote-sandbox.ts'
+import { remoteSandboxDepsOf, terminalRefusalOf } from './remote-sandbox-fence.ts'
+import type { RemoteSandboxFence, RemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
 import { SshSubprocessHandle } from './process.ts'
 import { spawnSshTerminal } from './terminal.ts'
 import type { SshTerminalHandle } from './terminal.ts'
@@ -55,6 +58,13 @@ function requireRepresentableGrace(graceMs: number): void {
  * non-shell-shaped host-assembled argv, and for routes without a registry
  * machine (the aggregate `ctx.ssh` transport, `sw_connect save:false`
  * temporaries) — see ADR-0020 D1's honest non-coverage list.
+ *
+ * REQ-I9 (ADR-0022): a second optional dep, the remote sandbox `fence`, rides
+ * the SAME async startup as a later stage. `spawn` hands it to the handle as
+ * `resolveArgv` while `runGate` keeps the **unwrapped** argv — the approval card
+ * must preview the command the user actually wrote (ADR-0022 §2.2). A fence
+ * that cannot prove the remote runner is usable throws, and the command is
+ * never serialized, let alone sent (fail closed).
  */
 export class SshSubprocessEngine {
   private readonly live = new Set<SshSubprocessHandle>()
@@ -65,6 +75,8 @@ export class SshSubprocessEngine {
   constructor(
     private readonly ctx: Context,
     private readonly gate?: RemoteSpawnGate,
+    private readonly fence?: RemoteSandboxFence,
+    private readonly terminalGuard?: RemoteSandboxTerminalGuard,
   ) {
     ctx.effect(() => async () => {
       await this.dispose()
@@ -83,6 +95,20 @@ export class SshSubprocessEngine {
   ): Promise<void> {
     if (this.gate === undefined) return
     await this.gate({ argv, connectionId: route.connectionId, ...(signal !== undefined ? { signal } : {}), ...(terminal ? { terminal: true } : {}) })
+  }
+
+  /**
+   * The REQ-I9 terminal-refusal decision for one route: the message to raise,
+   * or `undefined` when the route is unfenced. An explicitly injected guard
+   * wins (tests, and any deployment that owns its own registry face); the
+   * default reads the machine's `remoteSandbox` through the registry's
+   * secret-free views, exactly like the gate. No fence dep at all ⇒ no
+   * refusal, i.e. today's behaviour byte for byte.
+   */
+  private terminalRefusal(connectionId: string | undefined): string | undefined {
+    if (this.terminalGuard !== undefined) return this.terminalGuard(connectionId, 'off')
+    if (this.fence === undefined) return undefined
+    return terminalRefusalOf(remoteSandboxDepsOf(this.ctx), connectionId)
   }
 
   /**
@@ -169,7 +195,18 @@ export class SshSubprocessEngine {
     const preflight = this.gate === undefined
       ? undefined
       : () => this.runGate(spec.argv, route, spec.signal, false)
-    const handle = new SshSubprocessHandle(route.transport, route.cwd, spec, this.spillDir, preflight)
+    // The gate above keeps `spec.argv` (unwrapped) on purpose; the fence is the
+    // later stage that turns that same argv into the executed one.
+    const fence = this.fence
+    const resolveArgv = fence === undefined
+      ? undefined
+      : (argv: readonly string[]) => fence({
+        connectionId: route.connectionId,
+        cwd: route.cwd,
+        argv,
+        ...(spec.signal !== undefined ? { signal: spec.signal } : {}),
+      })
+    const handle = new SshSubprocessHandle(route.transport, route.cwd, spec, this.spillDir, preflight, resolveArgv)
     this.live.add(handle)
     const release = async (): Promise<void> => {
       await handle.waitForExit()
@@ -192,6 +229,12 @@ export class SshSubprocessEngine {
     // AUDIT-6: an interactive terminal is itself an arbitrary-command entry —
     // gated regardless of shell shape whenever the machine is (ADR-0020 D1).
     await this.runGate(spec.argv, route, spec.signal, true)
+    // REQ-I9 (ADR-0022 §2.4): v1 REFUSES a fenced interactive terminal instead
+    // of opening an unfenced one (`/dev/tty` under `--dev /dev` without
+    // `--new-session` is unverified — recon A3 §Q2 caveat 3). The decision is a
+    // configuration read with no probe, so it is reached before `spawnSshTerminal`.
+    const refusal = this.terminalRefusal(route.connectionId)
+    if (refusal !== undefined) throw new RemoteSandboxError(refusal)
     const terminal = await spawnSshTerminal(route.transport, route.cwd, spec)
     if (this.disposing) {
       await terminal.terminate()
@@ -219,6 +262,10 @@ export class SshSubprocessEngine {
  * AI auto-grant answerer is an aggregate-row feature (`plugin.ts` apply); a
  * bare subpath deployment asks and falls through to the deployment's human
  * answerer (fail closed), it just never auto-grants.
+ *
+ * REQ-I9 (ADR-0022): the `fence` / `terminalGuard` deps are optional and
+ * default to `undefined` — a bare subpath mount keeps today's byte-for-byte
+ * behaviour (no wrap, no probe). The aggregate row passes both.
  */
 export class SshSubprocessRuntime extends SubprocessRuntime {
   static inject = ['ssh']
@@ -226,9 +273,14 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
   private readonly engine: SshSubprocessEngine
 
   /** Create the SSH subprocess service and bind its disposal policy. */
-  constructor(ctx: Context, gate?: RemoteSpawnGate) {
+  constructor(
+    ctx: Context,
+    gate?: RemoteSpawnGate,
+    fence?: RemoteSandboxFence,
+    terminalGuard?: RemoteSandboxTerminalGuard,
+  ) {
     super(ctx)
-    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx))
+    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, terminalGuard)
   }
 
   /** @inheritdoc */
