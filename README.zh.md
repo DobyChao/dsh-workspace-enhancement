@@ -16,6 +16,7 @@
 | 机器设置页 | 机器增删改 / 测试 / 设当前 / 忘指纹；OS 钥匙串存密码；TOFU 主机指纹（默认 accept-new） |
 | 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话自动注入远程/副工作区上下文 |
 | 跨服务器执行 | `sw_exec(server, command)` 在**指定服务器**上执行命令（注册表 id（`c1`…）或临时连接 id（`sw_connect save:false`）；缺省=当前会话机器）；目标 OS 每次连接探测一次并上报（POSIX 跑 `bash -c`，win32 跑 `pwsh -Command`）；win32 宿主另注册 `bash` 工具供远程 Linux 工作区使用 |
+| 远程命令审批门 | 可选的逐机器审批门（AUDIT-6 / ADR-0020，**默认关闭**）：每条 shell 形状的远程命令与每个远程终端在执行前经平台审批服务问询——`human` 每条都问人，`ai` 对只读白名单（`pwd`、`ls`、`git status` 等）自动放行、其余问人；每次问询/决定对自动落入会话审计日志 |
 | 模型工具 | `sw_status`、`sw_connect`（`save:false`=临时）、`sw_pick_workspace`、`sw_exec`（跨服务器执行） |
 | 运行时国际化 | 客户端 UI 文案、每会话远程认知提示、`sw_*` 工具描述/错误与协议/数据校验/路由错误全部跟随设置页 **Language** 选项（zh/en）；UI 默认跟随浏览器语言（中文浏览器保持中文）。仅 `bad-request:` 协议层诊断（机器可解析契约）保留英文 |
 
@@ -37,10 +38,11 @@ flowchart LR
 **设计要点**（实现机制，非用户功能）：
 
 - **注册表与路由**：`remote-workspaces/machines.json` 是单一事实源；`ssh://<id>/<path>`（以及本地 `dsw-routes` 占位树）把每个操作路由到对应机器；能识别 `~/.ssh/config` 别名。
-- **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据。
+- **安全**：TOFU 主机指纹（`accept-new` / `verify` / `off`）；按机器存 OS 钥匙串（DPAPI / security / secret-tool）；错误消息里脱敏凭据。远程命令以**远端 OS 账户权限**执行——本地沙箱对远端不适用；可按机器开启审批门（默认关闭，ADR-0020）。
 - **副工作区 = 薄声明清单**（ADR-0019）：副根只声明「本会话可直接操作该目录」（挂/卸 + 显示名），不再有 fs/exec 权限档位——远程会话内同机任意绝对路径本就可达，逐根限权挡不住 shell。远程副根仍参与路由（绝对路径落在远程副根上时，即使会话 cwd 是本地也走该机器）；真正的隔离手段是每会话 `sandbox/mode`（本地）与操作者信任边界。
 - **`sw_exec` 语义**：命令永远在**指定服务器**上执行——`server` 接受注册表 id 或临时连接 id（`sw_connect save:false`），缺省=当前会话机器（本地会话无 server 报错）。目标 OS 每次连接探测一次（`uname -s` → `cmd /c ver` → `unknown`）并在输出首行上报；POSIX/unknown 跑 `bash -c`，win32 跑 `pwsh -Command`。spawn 走同一混合 provider：机器路由原样生效。`run_in_background` 与官方 bash 工具一致（即时返回 job id、无 timeout；依赖 `ctx.jobs`，缺服务明确报错）；不提供 `sandbox_permissions`/escalation（部署策略专属）。
 - **win32 `bash` 接缝**：win32 宿主上由本插件补注册 `bash` 工具（官方 bash 执行器未组合、名字可用）——远程 Linux 会话真跑远端 `bash -c`，本地 Windows 会话明确报错而非静默降级；POSIX 宿主不注册（官方 `bash` 工具持有该名字）。
+- **远程命令审批门（ADR-0020，AUDIT-6）**：一道门放在混合 subprocess 接缝的远程分支——`bash -c` / `pwsh -Command` 形状的 spawn 与远程终端在任何 SSH 活动之前先问 `ctx.approval`（machines.json 逐机器 `remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`，升级零行为变化）。`'ai'` 模式下一个 prepend waterfall answerer 只对一份可评审的只读白名单自动放行——其余一切、以及分类器自身的任何异常，都交给人类 answerer（fail closed：`never` 策略与无 answerer 都是确定性拒绝）。诚实边界：SFTP **写路径不设门**（写脚本 + `bash script.sh` 可绕过形状门——结构性答案是排期中的远端沙箱 runner，REQ-I9）；插件自有的固定探针与 `sw_connect save:false` 临时连接不设门；本地会话不受影响。UX-1 的 `remote-full` 权限预设片段正典位置在 [ADR-0015](./docs/decisions/ADR-0015-remote-composer-permission-preset.md)（需在 `cordis.patch.yml` 手工应用）。
 
 ## 安装
 
