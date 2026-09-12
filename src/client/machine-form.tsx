@@ -26,7 +26,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
 import { zhBaseline } from './status.tsx'
 import { machinePayload } from './machine-payload.ts'
-import type { MachineFormState } from './machine-payload.ts'
+import type { MachineFormState, RemoteApprovalMode } from './machine-payload.ts'
 
 /** One manual or resolved ProxyJump hop. */
 export interface JumpInput {
@@ -68,6 +68,8 @@ export interface MachineFormInitial {
   passphrase?: string
   workspace?: string
   hostKeyMode?: '' | 'accept-new' | 'verify' | 'off'
+  /** AUDIT-6 approval-gate mode (edit prefills the stored value). */
+  remoteApproval?: RemoteApprovalMode
   encryptPassword?: boolean
   jumpText?: string
   /** Preferred auth tab ('password' when the machine records password auth). */
@@ -344,6 +346,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
     workspace: initial?.workspace ?? '',
     hostKeyMode: initial?.hostKeyMode ?? '',
     encryptPassword: initial?.encryptPassword ?? false,
+    remoteApproval: initial?.remoteApproval ?? 'off',
   })
   const [form, setForm] = useState<MachineFormState>(initialState)
   // F3: an edit of a password/keychain machine (recorded via `auth`, or a
@@ -357,7 +360,8 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
   const [advanced, setAdvanced] = useState(
     (initial?.hostKeyMode !== undefined && initial.hostKeyMode !== '')
     || (initial?.jumpText !== undefined && initial.jumpText !== '')
-    || initial?.encryptPassword === true,
+    || initial?.encryptPassword === true
+    || (initial?.remoteApproval !== undefined && initial.remoteApproval !== 'off'),
   )
   const [revealed, setRevealed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -802,6 +806,23 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
                 <option value="verify">{t('form.hostKey.verify')}</option>
                 <option value="off">{t('form.hostKey.off')}</option>
               </select>
+            </div>
+            {/* AUDIT-6 (ADR-0020 D2): per-machine remote-command approval gate. */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.remoteApproval')}</span>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
+                <select
+                  style={{ ...inputStyle, maxWidth: 260 }}
+                  value={form.remoteApproval}
+                  disabled={busy}
+                  onChange={event => { setForm(prev => ({ ...prev, remoteApproval: event.target.value as MachineFormState['remoteApproval'] })) }}
+                >
+                  <option value="off">{t('form.remoteApproval.off')}</option>
+                  <option value="human">{t('form.remoteApproval.human')}</option>
+                  <option value="ai">{t('form.remoteApproval.ai')}</option>
+                </select>
+                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.remoteApproval.hint')}</span>
+              </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.jump')}</span>

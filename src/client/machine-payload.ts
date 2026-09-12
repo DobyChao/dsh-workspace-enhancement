@@ -5,6 +5,10 @@
  * @module dsh-workspace-enhancement/client/machine-payload
  */
 
+import type { RemoteApprovalMode } from '../remote-approval-gate.ts'
+
+export type { RemoteApprovalMode }
+
 /** One ProxyJump hop as the shared MachineForm assembles it. */
 export interface PayloadJump {
   host: string
@@ -25,12 +29,15 @@ export interface MachineFormState {
   workspace: string
   hostKeyMode: '' | 'accept-new' | 'verify' | 'off'
   encryptPassword: boolean
+  /** AUDIT-6 approval-gate mode — a select, so the value is always explicit. */
+  remoteApproval: RemoteApprovalMode
 }
 
 /** Cleared form state. */
 export const EMPTY_MACHINE_FORM: MachineFormState = {
   id: '', name: '', host: '', port: '22', username: 'root', password: '',
   privateKeyPath: '', passphrase: '', workspace: '', hostKeyMode: '', encryptPassword: false,
+  remoteApproval: 'off',
 }
 
 /**
@@ -79,6 +86,9 @@ export function machinePayload(
     ...(form.passphrase !== '' ? { passphrase: form.passphrase } : {}),
     workspace: form.workspace.trim(),
     ...(form.hostKeyMode !== '' ? { hostKeyMode: form.hostKeyMode } : {}),
+    // AUDIT-6: the select always holds an explicit mode (no "unset" state —
+    // `'off'` IS the default), so the payload always carries the field.
+    remoteApproval: form.remoteApproval,
     encryptPassword: form.encryptPassword,
     ...(form.password !== '' && !form.encryptPassword ? { credentialBackend: 'plain' } : {}),
     ...(jump !== undefined
