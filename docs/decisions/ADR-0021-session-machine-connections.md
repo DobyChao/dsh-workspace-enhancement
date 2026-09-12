@@ -53,10 +53,20 @@ read/write/edit/glob/grep + `ssh://<id>/` **注册表级**路由；该路由是*
 7. **门控层级如实声明**：连接集合是**可见性/暴露门控**，不是强制围栏；强制层只有两处——
    ADR-0020 的 **spawn 审批门**（只覆盖经 spawn 的命令）与 ADR-0022 的**远端围栏**（同样只围 spawn），
    以及远端 OS 权限（低权用户/容器）。fs 写面**仍不在任何围栏内**（SFTP 走宿主进程）。
-8. **提示**：本会话的「已连接机器」清单随 `sw-remote` section 按 assembly 重算（现有机制，
-   `text(context)` 每轮求值）；`tool:sw-exec` 段的存在性由「本会话有远程事实（遥控 cwd / 副根 / 已连接机器）」决定，
-   本地零连接会话**零注入**（补完 REQ-I6 零注入的工具侧）。真正的「会话中间插一条系统注记」只在侦察 A2
-   证明存在安全 API 时采用，否则如实记录语义：**变更自下一次 assembly 生效**。
+8. **提示：用「运行时上下文快照」做中插，而不是往头部 prompt 塞。** 侦察结论（磁盘权威源
+   `dsh-system-prompt/lib/types/index.d.ts`）：`SystemPrompt` 只暴露 `section()` / `context()` /
+   `suppressRuntimeContext()`，**没有**「会话中途插一条 system 消息」的 API；会话面里 `system/message`
+   就是系统提示本身那个节点（surface node 0），不是历史中插口。但 `context()` 的文档写得很明确——
+   *「Dynamic model context materialized as a **durable user-role snapshot**」*，且 `AssembleContext.scope`
+   与 section 同源（同样能按会话作用域求值）⇒ **这就是「中插」的正典机制**（宿主自己也用它承载运行时事实，
+   `suppressRuntimeContext` 就是给它准备的静音口）。因此：
+   - **易变状态**（本会话已连接机器清单 + 副根清单）走 `ctx.systemPrompt.context({ name: 'dsw-session-workspace',
+     order, text })`：每次 assembly 求值、以**耐久 user-role 快照**形式进入对话，模型在会话中途就能看到状态变化；
+   - **稳定框架**（远程强调 + `remoteNoSandbox` + `remoteGateActive`）留在 `section('sw-remote', order 90)`；
+   - 两者在「无远程事实」时都必须贡献空串 ⇒ 本地零连接会话**零注入**（补完 REQ-I6 零注入的工具侧）；
+   - `tool:sw-exec` 段的存在性同样由「本会话有远程事实（远程 cwd / 副根 / 已连接机器）」决定。
+   **诚实标注**：快照的投递与耐久语义是**读类型定义得出**的，未经真机确认 ⇒ `R23` 验收脚本必须至少一步
+   证明「连接动作后，模型在**同一会话的后续回合**里确实看得到机器清单」（而不是只在头部 prompt 里）。
 9. **面板 = 会话工作区驾驶舱**：主工作区（只读展示）+ 副根声明 + **已连接机器开关**；开关与 `sw_connect`
    写同一 store，UI 与模型不会各说一套。
 10. **与 ADR-0020 的分层**：连接 = **粗门（可见性）**，审批 = **细门（每次远程命令的人审 / AI 放权）**。
