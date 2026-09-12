@@ -2,7 +2,9 @@
 
 - 状态: accepted（方向用户 2026-09-12 拍板：D+A 合并一轮、B 拆出 REQ-I9、要求「AI 审查自动放权」；本 ADR 定稿七项设计决策）
 - 日期: 2026-09-12
-- 范围: **本轮只做设计定稿，不含实现代码**。实现轮廓见 §3（供实施轮直接开工）
+- 范围: 设计定稿（本 ADR）+ **实施轮 R22 已落地**（`feat/audit-6-remote-approval-gate`；实现轮廓见 §3，
+  实施偏差与证据见 `docs/rounds/R22-audit6-remote-approval-gate.md`：devDependency 偏离（结构化最小面
+  替代）、白名单终稿、元字符守卫补 `\n`）
 - 关联: `ADR-0019`（REQ-I7 权限档位退役——本 ADR 是其「远程命令围栏见 AUDIT-6/REQ-I9」承诺的前半）；
   `ADR-0015`（UX-1 `remote-full` 预设片段的正典位置，本 ADR 引用不复制）；
   `ADR-0014`（model-facing 文案英文常量）；`docs/backlog.md` AUDIT-6 / REQ-I9 / UX-1 / SEC-3 行；
