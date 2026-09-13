@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-12 18:08 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-13 03:37 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `9b27ac4` |
-| HEAD 提交 | `docs(rounds): write the R23 report` (2026-09-13) |
-| 与远端 | 27 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `8c98cf4` |
+| HEAD 提交 | `docs: record the GLM-5.3 pass verdict and the two dispositioned nits` (2026-09-13) |
+| 与远端 | 28 ahead / 0 behind origin/master |
 
 ## 质量
 
