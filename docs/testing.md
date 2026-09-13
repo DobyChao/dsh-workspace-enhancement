@@ -81,6 +81,8 @@ dsh --profile <scratch> --dump-config   # 检查 bundle 行、patch 行、工具
 ## 6. 已知环境要求
 
 - 远端主机需装 `pwsh`（PowerShell 工具）与 `ripgrep`（glob）；终端（bash）开箱即用。
+  REQ-I9 之后围栏还需要 `bwrap`。**这三项目前是分项安装，方向是收敛为一个核心**（`ADR-0023`）：
+  核心落地后测试的远端前置只剩「部署一个核心」，本节随之改写。
 - 本机 Playwright 浏览器二进制在 `%LOCALAPPDATA%\ms-playwright`；`@playwright/test` 是 devDependency。
 - Node ≥ 22.8（`--experimental-test-isolation` 与内置 TS transform 的最低要求）。
 

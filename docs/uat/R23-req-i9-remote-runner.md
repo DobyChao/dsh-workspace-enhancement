@@ -82,7 +82,11 @@
 ## 5. 备注
 
 - **未测即未知**：信号传递（`channel.signal` 在非 PTY exec 上历史上是 no-op）、sshd 孤儿进程（bug 396）、`--die-with-parent` 的实际行为、bwrap 的 exit-signal 传递——本轮不要求，但若观察到 `Ctrl-C`/超时杀不掉远端命令，请记入 FEEDBACK（属于 ADR-0022 §3 已声明的风险）。
-- **围栏只覆盖经 spawn 的命令**；fs 写面（SFTP）不在围栏内（步骤 9），强围栏要么靠远端 OS 权限，要么等 `REQ-I5` 的远端工具核心。
+- **围栏只覆盖经 spawn 的命令**；fs 写面（SFTP）不在围栏内（步骤 9），强围栏要么靠远端 OS 权限，要么等
+  `REQ-I5` 的远端核心提供 fs 服务。
+- **本脚本的前置（在远端手工装 `bwrap`）是过渡路径**：`ADR-0023` 已拍板把 `pwsh` / `ripgrep` / `bwrap` 三项
+  收敛为**一个核心**，由插件负责上传/校验/升级。核心落地后，G1/G2 将由核心自身的 runner 满足（自带静态 bwrap，
+  或不依赖 userns 的实现），本脚本的「装 bwrap」步骤随之删除；**在此之前不得把「已围栏」当成产品承诺**。
 - 验收后请清理：恢复远端 bwrap、删除 `/tmp/i9-*` 与工作区测试文件、把机器的 `remoteSandbox` 复位为 `off`，并确认 50599 已停止。
 
 来源：`docs/uat/README.md`；`docs/decisions/ADR-0022-remote-sandbox-runner.md`；`.tmp/recon/A3-remote-runner.md`
