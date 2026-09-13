@@ -2,7 +2,7 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
-## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (未发布)
+## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-13)
 
 0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场** +
 **副工作区权限档位退役（REQ-I7）** + **远程会话审批门（AUDIT-6）** +

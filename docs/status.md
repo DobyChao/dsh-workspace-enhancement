@@ -1,18 +1,18 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-13 06:30 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-13 07:00 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.1.3` |
+| package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `chore/INFRA-13-docs-map` / `326b94f` |
-| HEAD 提交 | `docs(rounds): renumber this round to R24 — R23 was already taken` (2026-09-13) |
-| 与远端 | 31 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/PUB-4-v0.1.4` / `277f1d9` |
+| HEAD 提交 | `feat(session): add session machine connections and remote spawn fence (#16)` (2026-09-13) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -22,14 +22,14 @@
 | 单测用例（静态计数） | 471 |
 | E2E 场景文件 | 8 |
 | ADR | 23 |
-| 轮次报告 | 27 |
+| 轮次报告 | 28 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 13 |
-| `doing` | 0 |
+| `doing` | 1 |
 | `blocked` | 7 |
 | `done` | 36 |
 | `shipped` | 5 |
