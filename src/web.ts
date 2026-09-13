@@ -25,7 +25,7 @@ import type { HostKeyMode } from './hostkey.ts'
 import { registerWorkspaceTools } from './tools.ts'
 import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
-import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
+import { listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, remoteHome as sharedRemoteHome } from './listing.ts'
 import { SessionMachineConnections, normalizeMachineIds } from './session-connections.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
 import { normalizeSideRootKey, remoteSideRootKey } from './session-workspaces.ts'
@@ -33,6 +33,11 @@ import type { SessionConnectionsFace } from './session-remote-context.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { channelRouteOf, isAlreadyRegistered } from './web-channel.ts'
 import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel.ts'
+import { ensureCoreHub } from './core-hub.ts'
+import type { CoreHub } from './core-hub.ts'
+import { deployCore, coreStatusViaExec } from './core-deploy.ts'
+import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
+import type { SshTransport } from './transport.ts'
 
 /** Channel config. */
 export interface WebChannelConfig extends RegistryConfig {
@@ -292,6 +297,8 @@ export const CHANNEL_ENDPOINTS = [
   'session.conn.connect',
   'session.conn.disconnect',
   'session.conn.set',
+  'core.deploy',
+  'core.status',
 ] as const
 
 /**
@@ -343,6 +350,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
    * to "no session connections" instead of failing assembly.
    */
   void new SessionMachineConnections(ctx)
+  const hub = (): CoreHub => ensureCoreHub(ctx)
   /** R5: a remote side workspace must name a registered machine. */
   const requireRemoteMachine = (rootKey: string): void => {
     const route = parseSshRoute(rootKey)
@@ -384,20 +392,26 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     return sharedRemoteHome(requireConnection(id), signal)
   }
 
-  /** List one remote level over the connection's shared SFTP channel. */
+  /** List one remote level: core RPC when fenced, SFTP when `off`. */
   const listRemote = async (id: string, target: string | undefined, signal?: AbortSignal): Promise<WireListing> => {
     const connection = requireConnection(id)
     const resolvedTarget = target ?? await sharedRemoteHome(connection, signal)
     if (!posix.isAbsolute(resolvedTarget)) {
       throw new Error(`dsw: ${t('rpc.cannotList', { target: resolvedTarget })}`)
     }
+    const home = await sharedRemoteHome(connection, signal)
+    const mode = hub().modeOf(id)
+    if (isRemoteSandboxEnabled(mode)) {
+      const client = await hub().require(id, { signal, cwd: resolvedTarget })
+      return listRemoteLevelViaCore(client, resolvedTarget, maxEntries, { signal, home })
+    }
     return listRemoteLevel(connection, resolvedTarget, maxEntries, {
       signal,
-      home: await sharedRemoteHome(connection, signal),
+      home,
     })
   }
 
-  /** Create one child directory on the remote host (SFTP mkdir, non-recursive). */
+  /** Create one child directory: core RPC when fenced, SFTP when `off`. */
   const createRemoteDirectory = async (id: string, path: string, name: string, signal?: AbortSignal): Promise<string> => {
     if (!posix.isAbsolute(path)) throw new Error(`dsw: ${t('rpc.cannotCreate', { path: JSON.stringify(path) })}`)
     if (name.trim() === '' || name === '.' || name === '..' || /[/\\]/.test(name)) {
@@ -405,6 +419,18 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     }
     const target = posix.join(path, name)
     const connection = requireConnection(id)
+    const mode = hub().modeOf(id)
+    if (isRemoteSandboxEnabled(mode)) {
+      const client = await hub().require(id, { signal, cwd: path })
+      try {
+        await mkdirRemoteViaCore(client, path, name, signal)
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error)
+        if (/EEXIST|exists/i.test(text)) throw new Error(`dsw: ${t('rpc.alreadyExists', { target })}`)
+        throw error
+      }
+      return target
+    }
     const sftp = await connection.getSftp(signal)
     const existing = await new Promise<Stats | undefined>((resolvePromise) => {
       sftp.lstat(target, (error, value) => { resolvePromise(error === undefined ? value : undefined) })
@@ -670,6 +696,23 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const ids = requireRegisteredMachines(input.ids)
           connStore().set(input.sessionId.trim(), ids)
           return { ok: true, value: connItems(input.sessionId.trim()) }
+        }
+        case 'core.status': {
+          const input = requirePayload(payload, isIdPayload, 'core.status')
+          const id = input.id.trim()
+          requireConnection(id)
+          const live = await hub().status(id, signal)
+          if (live.ok) return { ok: true, value: live }
+          const via = await coreStatusViaExec(requireConnection(id) as unknown as SshTransport, signal)
+          return { ok: true, value: { ...via, sandbox: hub().modeOf(id) } }
+        }
+        case 'core.deploy': {
+          const input = requirePayload(payload, isIdPayload, 'core.deploy')
+          const id = input.id.trim()
+          const connection = requireConnection(id)
+          const view = await deployCore(connection as unknown as SshTransport, { signal })
+          hub().close(id)
+          return { ok: true, value: view }
         }
         default:
           throw new Error(`bad-request: unknown endpoint ${JSON.stringify(endpoint)}`)

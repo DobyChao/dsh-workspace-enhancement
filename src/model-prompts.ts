@@ -49,7 +49,11 @@ export const MODEL_PROMPTS = {
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
   envMissing:
-    'Hint: the remote is missing {missing} — install them on the remote (for reference only; not auto-installed): rg → sudo apt-get install ripgrep; pwsh → https://aka.ms/powershell',
+    'Hint: the remote is missing {missing}. Interactive terminals still need bash or pwsh on the host. Search/glob on a fenced machine uses the bundled rg inside the core — deploy the core from Settings (core.deploy); do not apt-get install ripgrep for that path.',
+  envCore:
+    'Remote environment:\n  core: {version} ({arch})\n  caps: {caps}',
+  envCoreMissing:
+    'Remote environment:\n  core: not installed ({detail})\n  Deploy the fenced core from Settings (core.deploy) before using a fenced machine.',
   /**
    * `tool:sw-exec` section (order 105) — injected only in a remote-context
    * session. REQ-I11 adds the session gate: `sw_exec` names a machine that is
@@ -79,17 +83,15 @@ export const MODEL_PROMPTS = {
   remoteGateActive:
     'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
   /**
-   * REQ-I9 fence sentence (`sw-remote` section): injected only when the routed
-   * machine has `remoteSandbox !== 'off'`. Stated to the model for the same
-   * reason as the approval sentence — a refusal must be understood rather than
-   * retried — and because the fence is the one place a remote command can fail
-   * for a reason the model cannot see on the remote host. It deliberately keeps
-   * the fs/SFTP boundary explicit: the fence covers commands only (ADR-0022 §2.7).
+   * REQ-I5 fence sentence (`sw-remote` section): injected only when the routed
+   * machine has `remoteSandbox !== 'off'`. Commands AND file tools share one
+   * jailed core; a missing core fails closed (`SANDBOX_UNAVAILABLE`) instead of
+   * falling back to SFTP.
    */
   remoteFenced:
-    'Additionally, this machine runs commands inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the remote runner, and if that runner is missing or unusable the command FAILS (`SANDBOX_UNAVAILABLE`) instead of running unfenced. The fence covers commands only — the file tools are not confined by it.',
+    'Additionally, this machine runs commands and file tools inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the core, and if that core is missing or unusable both file tools and commands FAIL (`SANDBOX_UNAVAILABLE`) instead of running unfenced. Interactive terminals stay refused while the fence is on.',
   /** REQ-I9: the per-machine note appended to a connected machine that is fenced. */
-  connectedFenced: ' (commands fenced: {mode})',
+  connectedFenced: ' (commands and file tools fenced: {mode})',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */

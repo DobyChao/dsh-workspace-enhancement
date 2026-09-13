@@ -28,20 +28,16 @@
  * ## Where this sits relative to the approval gate (ADR-0022 §2.2)
  *
  * The gate and the fence are two different questions asked at two different
- * stages of `SshSubprocessHandle.run()`: the gate ("may this run?") sees the
- * **unwrapped** argv first, the fence ("what exactly runs?") resolves it
- * afterwards. Wrapping earlier — in `MixedSubprocessRuntime.spawn` — would make
- * `bwrap` the `argv[0]` the gate inspects, `isRemoteShellShape()` would stop
- * matching, and AUDIT-6 would silently stop covering every remote command
- * (recon A3 §Q3). `test/remote-sandbox-wiring.test.ts` pins both halves.
+ * stages of spawn: the gate ("may this run?") sees the **unwrapped** argv
+ * first; the fence then either (REQ-I5) ensures a core session is alive and
+ * returns the same argv, or (legacy tests without a hub) wraps it as
+ * `bwrap … -- argv`. Wrapping earlier would make `bwrap` the gate's `argv[0]`.
  *
- * ## The two honest boundaries (ADR-0022 §2.7)
+ * ## Honest boundaries after REQ-I5
  *
- * The fence covers **spawned commands only**: the fs/SFTP write face travels the
- * host-side channel and bwrap cannot confine it, and interactive terminals are
- * refused rather than opened unfenced ({@link createRemoteSandboxTerminalGuard},
- * ADR-0022 §2.4). Both facts are carried to the UI by the settings hint and to
- * the model by {@link REMOTE_SANDBOX_MESSAGES}.
+ * With a live core hub, fenced machines confine **spawn and file tools** in
+ * the same jail. Interactive terminals are still refused (ADR-0022 §2.4).
+ * `remoteSandbox: off` keeps today's SFTP + bare exec.
  *
  * @module dsh-workspace-enhancement/remote-sandbox-fence
  */
@@ -58,7 +54,6 @@ import {
   parseRemoteProbe,
   remoteRunnerArgv,
   remoteSandboxUnavailableError,
-  resolveRemoteRunnerPath,
   resolveRemoteWorkspaceRoot,
 } from './remote-sandbox.ts'
 import type {
@@ -68,6 +63,7 @@ import type {
   RemoteSandboxMode,
 } from './remote-sandbox.ts'
 import type { ExecOutcome } from './ssh-core.ts'
+import type { CoreHub } from './core-hub.ts'
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -83,16 +79,14 @@ export interface RemoteSandboxConnectionFace {
 /**
  * The registry slice the fence reads. Deliberately narrower than
  * {@link module:dsh-workspace-enhancement/remote-approval-gate}'s machine face:
- * the fence needs the mode, the configured runner (absent in v1 — the machine
- * record has no such field yet, so it stays optional) and the two configured
- * remote directory spellings used as workspace-root fallbacks.
+ * the fence needs the mode and the two configured remote directory spellings
+ * used as workspace-root fallbacks. The runner path is no longer a machine
+ * field (REQ-I12 ④ / REQ-I5: bundled bwrap inside the core).
  */
 export interface RemoteSandboxMachineFace {
   readonly id: string
   /** Raw stored mode; `undefined` on every pre-REQ-I9 record ⇒ `'off'`. */
   readonly remoteSandbox?: RemoteSandboxMode
-  /** Optional per-machine runner path (`bwrap` when absent or non-absolute). */
-  readonly remoteSandboxRunner?: string
   /** Configured default remote directory (dsh-remote canonical spelling). */
   readonly workspace?: string
   /** Configured default remote directory (legacy spelling). */
@@ -511,12 +505,15 @@ export function createRemoteSandboxFence(
     probe?: RemoteSandboxProbe
     deps?: RemoteSandboxDeps
     fallbackMode?: RemoteSandboxMode
+    /** REQ-I5: when present, fenced machines ensure a core session instead of wrapping argv. */
+    hub?: CoreHub
   } = {},
 ): RemoteSandboxFence {
   const deps = options.deps ?? remoteSandboxDepsOf(ctx)
   const cache = options.cache ?? createRemoteSandboxCache()
   const probe = options.probe ?? probeRunner
   const fallbackMode = normalizeRemoteSandbox(options.fallbackMode)
+  const hub = options.hub
   /**
    * In-flight deduplication: N spawns racing on a cold cache must produce ONE
    * probe round-trip, not N. Keyed by connection identity like the cache, and
@@ -558,7 +555,14 @@ export function createRemoteSandboxFence(
     if (machine === undefined || connection === undefined) {
       throw deps.unavailable(confinement, `machine ${JSON.stringify(input.connectionId)} is not usable as a registry connection`)
     }
-    const runnerPath = resolveRemoteRunnerPath(machine.remoteSandboxRunner)
+    if (hub !== undefined) {
+      await hub.require(input.connectionId, {
+        ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+        ...(input.signal !== undefined ? { signal: input.signal } : {}),
+      })
+      return input.argv ?? []
+    }
+    const runnerPath = DEFAULT_REMOTE_RUNNER_PATH
     await probeOnce(connection, runnerPath, confinement, input.signal)
     return wrapOf(deps, input, machine, confinement, runnerPath)
   }

@@ -60,12 +60,12 @@
   这是**结构性**的：`SubprocessSpawnSpec` 不携带会话身份，门面在 spawn 时无从判别会话，所以门只能
   做在工具层（用户 2026-09-12 拍板「门控只做在工具层与提示层」）。命令级仍有审批门兜底（该路径
   argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与 `REQ-I9` 的远端围栏
-  （`remoteSandbox ≠ off` 时，且同样只围经 spawn 的命令，SFTP 写面仍不在内）。
+  （`remoteSandbox ≠ off` 时命令**与文件工具**同进核心 jail；`off` 仍走 SFTP）。
 - SSH 固有：远端 pid / 前台进程组不可见。
-- 远端需装 `pwsh` / `ripgrep`，缺失时工具诚实报 127，不静默降级；`REQ-I9` 的围栏另需 `bwrap`
-  （缺失即 `SANDBOX_UNAVAILABLE`，**绝不裸跑**）。远程 `ctx.fs` 今天走 SFTP，围栏包不住写面
-  （UAT I9-9）。**方向**：部署**一个可校验核心**（`ADR-0023` / `REQ-I5`）——围栏执行与远端读写
-  进同一产物；落地前不得宣称「已围栏」。供应链（二进制来源、签名、校验和）是新信任根。
+- 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进核心 tarball，由设置页 `core.deploy`
+  上传。核心缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
+  `read-only` 下官方 `write` 工作区外失败且文件不存在）。`off` / 非 linux-x86_64 仍是 SFTP +
+  裸 exec。交互终端在围栏档仍拒绝。供应链（二进制来源、签名、校验和）是新信任根。
 
 如果你发现**上面之外的**绕过路径，请按下面的方式报告。
 

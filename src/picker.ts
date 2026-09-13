@@ -44,8 +44,12 @@ import type {
   DirectoryPickerBrowseCapability,
   DirectoryPickerCapability,
 } from '@deepseek-ai/dsh-host-directory-picker'
-import { ancestryCrumbs, asError, boundedInsert, listRemoteLevel, raceAbort, remoteHome } from './listing.ts'
+import { ancestryCrumbs, asError, boundedInsert, listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, raceAbort, remoteHome } from './listing.ts'
 import type { SshRuntime } from './runtime.ts'
+import { coreHubOf, ensureCoreHub } from './core-hub.ts'
+import type { CoreHub } from './core-hub.ts'
+import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
+import type { SshRegistry } from './registry.ts'
 
 /** Configuration for the directory-picker browse backend. */
 export interface Config {
@@ -172,6 +176,21 @@ export class SshDirectoryPicker extends DirectoryPicker {
     return this.remoteHomePromise
   }
 
+  /**
+   * Core session when the active machine is fenced. Missing hub on a fenced
+   * machine must not fall back to SFTP (ADR-0024). Unfenced / no registry
+   * returns undefined so the existing SFTP walk stays byte-identical.
+   */
+  private hubIfFenced(): CoreHub | undefined {
+    const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
+    if (registry === undefined) return undefined
+    const id = registry.getActive()?.spec.id
+    if (id === undefined) return undefined
+    const machine = registry.listMachines().machines.find(entry => entry.id === id)
+    if (machine === undefined || !isRemoteSandboxEnabled(machine.remoteSandbox)) return undefined
+    return coreHubOf(this.ctx) ?? ensureCoreHub(this.ctx)
+  }
+
   /** The browse interaction capability (stable for the service lifetime). */
   override capability(): DirectoryPickerCapability {
     return this.browseCapability
@@ -234,9 +253,17 @@ export class SshDirectoryPicker extends DirectoryPicker {
   /** List one remote level through the shared {@link listRemoteLevel} walk. */
   private async listRemote(target: string, signal?: AbortSignal): Promise<DirectoryListing> {
     try {
+      const home = await this.resolveRemoteHome(signal)
+      const hub = this.hubIfFenced()
+      const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
+      const id = registry?.getActive()?.spec.id
+      if (hub !== undefined && id !== undefined) {
+        const client = await hub.require(id, { signal, cwd: target })
+        return await listRemoteLevelViaCore(client, target, this.config.maxEntries, { signal, home })
+      }
       return await listRemoteLevel(this.ctx.ssh, target, this.config.maxEntries, {
         signal,
-        home: await this.resolveRemoteHome(signal),
+        home,
       })
     } catch (error) {
       signal?.throwIfAborted()
@@ -303,6 +330,20 @@ export class SshDirectoryPicker extends DirectoryPicker {
       throw new DirectoryPickerError('directory-create-failed', path, `cannot create under "${path}": not a fully qualified parent path`)
     }
     const target = posix.join(path, name)
+    const hub = this.hubIfFenced()
+    const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
+    const id = registry?.getActive()?.spec.id
+    if (hub !== undefined && id !== undefined) {
+      try {
+        const client = await hub.require(id, { cwd: path })
+        await mkdirRemoteViaCore(client, path, name)
+        return target
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error)
+        if (/EEXIST|exists/i.test(text)) throw new DirectoryPickerError('directory-exists', target, `${target} already exists`)
+        throw new DirectoryPickerError('directory-create-failed', target, `cannot create ${target}: ${messageOf(error)}`)
+      }
+    }
     const sftp = await this.ctx.ssh.getSftp()
     try {
       const existing = await new Promise<Stats | undefined>((resolvePromise) => {

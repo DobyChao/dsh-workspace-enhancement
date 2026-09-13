@@ -45,6 +45,8 @@ import {
   remoteSandboxDepsOf,
 } from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
+import { ensureCoreHub } from './core-hub.ts'
+import { CoreRoutingFileSystem } from './core-fs.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -114,22 +116,22 @@ export function installMixedProviders(ctx: Context): void {
   // optional services (`approval`/`agents`) resolve by name at ask time, so
   // the gate composes in any deployment and no-ops for ungated machines.
   const localSubprocess = new LocalSubprocessRuntime(ctx)
-  // REQ-I9 (ADR-0022): the remote sandbox fence is built here and passed to the
-  // remote branch only. Its per-spawn ladder (mode → identity for `'off'`,
-  // functional probe for a fenced mode, throw on any unproven case) lives in
-  // `remote-sandbox-fence.ts`; the seam applies it AFTER the approval gate and
-  // BEFORE serialization so the gate keeps seeing the user's original argv.
-  const fence = createRemoteSandboxFence(ctx)
+  // REQ-I5: one core hub per process. The fence's job on a fenced machine is
+  // to ensure that session is alive and return the original argv; the engine
+  // then `spawn.start`s over RPC. Approval still sees unwrapped argv.
+  const hub = ensureCoreHub(ctx)
+  const fence = createRemoteSandboxFence(ctx, { hub })
   const sshSubprocess = new SshSubprocessEngine(
     ctx,
     createRemoteSpawnGate(ctx),
     fence,
     createRemoteSandboxTerminalGuard(ctx),
+    hub,
   )
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
-    const sshFs = new SshFileSystemEngine(owner)
+    const sshFs = new CoreRoutingFileSystem(owner, new SshFileSystemEngine(owner), hub)
     owner.set('fs', new MixedFileSystem(localFs, sshFs, sides))
   }
 
@@ -163,6 +165,7 @@ export function apply(ctx: Context, config: Config): void {
   // `remoteApproval: 'ai'` machines and delegates everything else (including
   // its own failures) to the human answerer. Effect-bound ⇒ reversible.
   registerRemoteApprovalAnswerer(ctx)
+  ensureCoreHub(ctx)
   // The mixed providers need the local provider classes (dependencies, so
   // always resolvable); if installation fails anyway, fall back to the
   // pure-SSH mounting so the row never fails harder than before.

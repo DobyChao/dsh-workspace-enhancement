@@ -42,7 +42,6 @@ import type {
 import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
-import type { SshFileSystemEngine } from './filesystem.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
 
 /**
@@ -225,7 +224,7 @@ export type FileSystemBranch = {
 export class MixedFileSystem implements FileSystemBranch {
   constructor(
     private readonly local: FileSystemBranch,
-    private readonly remote: SshFileSystemEngine,
+    private readonly remote: FileSystemBranch,
     private readonly sides?: () => SideWorkspaceFace | undefined,
   ) {}
 
@@ -359,7 +358,14 @@ export class MixedFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
   ): Promise<Uint8Array> {
     if (worldOfTargetKey(String(target.targetKey)) === 'remote') {
-      return this.remote.readByteRange(target, range, signal)
+      const reader = this.remote.readByteRange
+      if (reader === undefined) {
+        throw new FsError(
+          `cannot read "${target.displayPath}": the remote filesystem backend does not support windowed reads`,
+          'FS_IO_ERROR',
+        )
+      }
+      return reader.call(this.remote, target, range, signal)
     }
     const reader = this.local.readByteRange
     if (reader === undefined) {

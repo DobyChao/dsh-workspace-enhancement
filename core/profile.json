@@ -1,0 +1,12 @@
+{
+  "readOnly": [
+    "--ro-bind", "/", "/",
+    "--dev", "/dev",
+    "--unshare-pid",
+    "--proc", "/proc",
+    "--die-with-parent"
+  ],
+  "workspaceWriteExtra": [
+    "--tmpfs", "/tmp"
+  ]
+}

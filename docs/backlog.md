@@ -16,17 +16,17 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | PUB-4 | 发布 0.1.4 | doing | P1 | 版本已 bump。tag `v0.1.4` 排队 `release.yml`；真正的 `npm publish` 等所有者在 Actions 的 `npm-publish` environment 点 Approve |
+| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + 线协议 `ADR-0024`。Go 核心 + 成帧 RPC；围栏档远程 fs/spawn/browse 改走核心；`off` 仍 SFTP。验收 ADR-0023 §4。④ `remoteSandboxRunner` 随本线删除 |
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | todo | P1 | **主线。** 范围只认 `ADR-0023`（2026-09-13 补拍：读写纳入核心，不再后置）。一个可校验产物；远程 `ctx.fs` 在围栏档改走核心 RPC（不再 SFTP）；spawn 由核心在同一 jail 里起；打包 `rg`。v1 = Linux。退路 = 审批门 + 低权用户，且 fs 与 spawn 一齐拒绝。验收在 ADR §4 |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后决定见 `ADR-0005` |
 | REQ-I10 | 日落 `sw_pick_workspace` | todo | P2 | 删工具 + 8 个词典键；`sw_connect`/`sw_status` 文案改诚实（工作区由添加流/设置页管理）；短 ADR 取代 `ADR-0001` 的四工具终态。验收：`src/` 无该符号（docs 历史除外）+ `check:static`/`typecheck`/`test:agent`/`build`/`boot-smoke --no-channel` |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | todo | P2 | 修法：兄弟扫描 → 分组容器内**后代**扫描。证据与精确补丁 [`rounds/R17-rc2-badge-verification.md`](./rounds/R17-rc2-badge-verification.md) 第一部分 §6。不要跟「文案停在未检测」搞混（那是已修的 F2）。两代共有，非 rc.2 回归。不要和 `AUDIT-4` 混在同一 PR |
-| REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | todo | P3 | 围栏语义已落地（`REQ-I9`）。剩余：① `sw_status` 报档位/探针；② 拒写回显 `sandboxDenialMarker`；③ 徽标接 live `conn.status`；④ **死配置**：围栏读 `machine.remoteSandboxRunner`，注册表从未存过 → 恒为 PATH 上的裸 `bwrap`。④ 必须接进注册表或删掉，不能留着装可配。win32 `bash` 拒绝文案不要套 `sw_exec` 前缀 |
+| REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | todo | P3 | 围栏语义已落地（`REQ-I9` + `REQ-I5`）。④ 死字段已随 I5 停止读取。剩余：① `sw_status` 报档位/探针；② 拒写回显 `sandboxDenialMarker`；③ 徽标接 live `conn.status`。win32 `bash` 拒绝文案不要套 `sw_exec` 前缀 |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 收尾补显式 `process.exit`；清理只删 `dsh-boot-smoke-*` 子目录、勿删父 temp。证据 R20/R22。验收：SMOKE PASS 后 5s 内自行退出、码 0 |
 | AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 防 BUG-2 那种「基类新增具现方法、门面纯对象漏方法」。证据 [`rounds/R14-BUG-2-contract-audit.md`](./rounds/R14-BUG-2-contract-audit.md) O2。验收：门面 `instanceof` 基类 + `check` 绿 |
 | AUDIT-2 | 把 `resolveExecutable`「恒本地」写成 ADR | todo | P3 | 文档项。`architecture.md` §4 已点到；还差 ADR 一句话。证据 R14 审计 O1。当前无运行时影响 |

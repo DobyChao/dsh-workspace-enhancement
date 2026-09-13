@@ -22,10 +22,13 @@ import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from '.
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import type { RemoteSandboxMode } from './remote-sandbox.ts'
+import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
 import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
+import { coreHubOf } from './core-hub.ts'
+import type { CoreHub, CoreStatusView } from './core-hub.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -319,6 +322,18 @@ export function renderRemoteEnvProbe(probe: RemoteEnvProbe): string {
   return lines.join('\n')
 }
 
+/** Render a fenced machine's core hello/status for `sw_status`. */
+export function renderCoreEnv(view: CoreStatusView): string {
+  if (view.ok === true && view.version !== undefined) {
+    return modelPrompt('envCore', {
+      version: view.version,
+      arch: view.arch ?? 'unknown',
+      caps: (view.caps ?? []).join(', ') || 'none',
+    })
+  }
+  return modelPrompt('envCoreMissing', { detail: view.detail ?? 'core not installed' })
+}
+
 /** Ping result: the render text plus a structured ok/detail pair for composition. */
 interface PingResult {
   ok: boolean
@@ -348,9 +363,18 @@ async function pingActive(registry: SshRegistry, tr: TranslateFn): Promise<PingR
 }
 
 /** Probe the remote toolbox (bash/pwsh/rg) with the same bounded budget. */
-async function remoteEnvLine(registry: SshRegistry): Promise<string> {
+async function remoteEnvLine(registry: SshRegistry, hub?: CoreHub): Promise<string> {
   const active = registry.getActive()
   if (active === null) return ''
+  const id = active.spec.id
+  const mode = hub?.modeOf(id) ?? 'off'
+  if (isRemoteSandboxEnabled(mode) && hub !== undefined) {
+    try {
+      return renderCoreEnv(await hub.status(id, AbortSignal.timeout(8_000)))
+    } catch {
+      return renderCoreEnv({ ok: false, detail: 'core status failed' })
+    }
+  }
   try {
     const outcome = await active.connection.exec(remoteEnvProbeCommand(), { signal: AbortSignal.timeout(8_000) })
     if (outcome.exitCode !== 0) return ''
@@ -464,7 +488,7 @@ export function registerWorkspaceTools(
           t('tool.sw_status.outputs.backend', { backend: status.backend }),
         ]
         lines.push((await pingActive(instance, t)).text)
-        lines.push(await remoteEnvLine(instance))
+        lines.push(await remoteEnvLine(instance, coreHubOf(ctx)))
         return { text: lines.join('\n') }
       },
     }), locale, { descriptionKey: 'tool.sw_status.description', buildParams: () => ({}) }),

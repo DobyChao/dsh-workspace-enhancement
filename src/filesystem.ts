@@ -171,6 +171,14 @@ export class SshFileSystemEngine {
     return this.pathOf(target)
   }
 
+  /**
+   * BUG-2: the remote world does not share the harness host filesystem, so an
+   * absolute host path never maps onto an SSH target.
+   */
+  processPathFromHostPath(_hostPath: string): string | undefined {
+    return undefined
+  }
+
   fileUrl(target: FsTarget): string {
     const path = this.processPath(target)
     if (!posix.isAbsolute(path)) throw new Error(`fs-ssh: expected an absolute process path: ${JSON.stringify(path)}`)
@@ -641,6 +649,10 @@ export class SshFileSystem extends FileSystem {
 
   processPath(target: FsTarget): string {
     return this.engine.processPath(target)
+  }
+
+  override processPathFromHostPath(hostPath: string): string | undefined {
+    return this.engine.processPathFromHostPath(hostPath)
   }
 
   fileUrl(target: FsTarget): string {

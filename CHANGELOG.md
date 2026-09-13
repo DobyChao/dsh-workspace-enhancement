@@ -2,6 +2,21 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
+## [0.2.0](https://github.com/DobyChao/dsh-workspace-enhancement) (unreleased)
+
+远端一个核心（`REQ-I5` / ADR-0023 / ADR-0024）。**不随本提交发版**；`package.json` 仍为 0.1.4。
+
+### 新增
+
+- **Go `dsh-core` + 成帧 JSON RPC**：围栏档远程 `ctx.fs` / spawn / browse 改走核心；进程自 re-exec 捆绑 bwrap；`off` 仍 SFTP + 裸 exec。未知方法 `UNIMPLEMENTED`；`hello.caps` 为演进舱口。
+- **设置页部署**：通道 `core.deploy` / `core.status`；首次上传允许 SFTP；**不**在模型调用时偷偷安装。v1 只认 linux x86_64。
+- UAT：`docs/uat/R26-req-i5-remote-core.md`（对偶 I9-1/2/3，**反转 I9-9**）。
+
+### 变更
+
+- 围栏提示与 `envMissing` 不再声称「文件工具不在围栏内」，也不再教 `apt-get install ripgrep`。
+- 死字段 `remoteSandboxRunner` 不再读取（REQ-I12 ④）。
+
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-13)
 
 0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场** +

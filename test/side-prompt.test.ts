@@ -106,11 +106,11 @@ test('composeWorkspacePrompt: REQ-I9 — the fence sentence appears exactly when
   const off = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'off' }, [])
   assert.ok(!off.includes('remote sandbox fence'))
   const readOnly = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'read-only' }, [])
-  assert.ok(readOnly.includes('runs commands inside a remote sandbox fence (`read-only`)'))
+  assert.ok(readOnly.includes('runs commands and file tools inside a remote sandbox fence (`read-only`)'))
   // A refusal must be understandable rather than retried: name the failure mode.
   assert.ok(readOnly.includes('SANDBOX_UNAVAILABLE'))
-  // ADR-0022 §2.7: the fence covers spawned commands only — the copy must say so.
-  assert.ok(readOnly.includes('the file tools are not confined by it'))
+  assert.ok(readOnly.includes('file tools'))
+  assert.ok(!readOnly.includes('the file tools are not confined by it'))
   const write = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'workspace-write' }, [])
   assert.ok(write.includes('`workspace-write`'))
   // Absent field (pre-REQ-I9 machine view shape) reads as off — no sentence.
@@ -124,7 +124,7 @@ test('renderConnectedMachines: a fenced connected machine is announced with its 
     connectedMachineFact('c2', { username: 'u', host: 'h2' }),
   ]
   const text = renderConnectedMachines(facts)
-  assert.ok(text.includes('(commands fenced: workspace-write)'), 'the fenced machine carries its mode')
+  assert.ok(text.includes('(commands and file tools fenced: workspace-write)'), 'the fenced machine carries its mode')
   assert.ok(!text.includes('h2 — '), 'an unfenced machine carries no fence note')
   assert.equal(text.split('\n').length, 3, 'heading + one row per machine')
 })

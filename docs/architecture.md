@@ -52,7 +52,7 @@
 
 ## 3. 模块地图
 
-`src/` 现 **53** 个文件：宿主 30、客户端 19、词典 4。下表按职责分组，不堆导出清单。
+`src/` 现 **61** 个文件：宿主 37、客户端 20、词典 4。下表按职责分组，不堆导出清单。
 
 ### 3.1 宿主
 
@@ -60,10 +60,11 @@
 |---|---|---|
 | 入口 | `index.ts` `plugin.ts` `css-modules.d.ts` | 公共 API、聚合行、混合 provider 安装 |
 | SSH 世界 | `runtime.ts` `ssh-core.ts` `connection.ts` `transport.ts` `subprocess.ts` `process.ts` `terminal.ts` `output.ts` `environment.ts` `filesystem.ts` `listing.ts` `picker.ts` | 跳板链、exec/SFTP/PTY、环境、目录遍历、`ssh://<id>/<path>` 路由 |
+| 远端核心 | `core-protocol.ts` `core-client.ts` `core-fake.ts` `core-hub.ts` `core-fs.ts` `core-process.ts` `core-deploy.ts` | 成帧 RPC、会话缓存、围栏档 fs/spawn、设置页部署 |
 | 注册表与密钥 | `registry.ts` `hostkey.ts` `credential.ts` | machines.json、TOFU、OS 钥匙串、`~/.ssh/config` |
 | 混合门面 | `mixed.ts` | `ctx.subprocess` / `ctx.fs` 的唯一实现：按 cwd / targetKey 路由 |
 | 会话状态 | `session-workspaces.ts` `session-connections.ts` `session-remote-context.ts` | 副根清单、本会话已连接机器、提示注入判定 |
-| 远程策略 | `remote-approval-gate.ts` `remote-sandbox.ts` `remote-sandbox-fence.ts` | 审批门纯逻辑；远端 bwrap 围栏与 fail-closed 探针 |
+| 远程策略 | `remote-approval-gate.ts` `remote-sandbox.ts` `remote-sandbox-fence.ts` | 审批门纯逻辑；档位与 profile 向量；围栏改为拉起核心 |
 | 通道与工具 | `web.ts` `web-channel.ts` `tools.ts` `exec-tools.ts` `model-prompts.ts` | `/api/dsw/*`、`sw_*`、win32 `bash`、model-facing 英文常量 |
 
 ### 3.2 客户端
@@ -72,7 +73,7 @@
 |---|---|---|
 | 入口 | `index.ts` | 词典、槽位、行徽标层 |
 | 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` | 连接侧栏 + 目录浏览；本机目录走 `uiWorkspace` |
-| 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` | 共享表单、payload 纯函数、设置页 |
+| 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、核心状态文案 |
 | 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
 | 状态与徽标 | `status.tsx` `row-badges.ts` `sandbox-badge.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、围栏档位、会话头远程状态 |
 | 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
@@ -92,11 +93,10 @@
 | 会话连接门 | `sw_connect` 只接受**已注册**机器 id（`machines: string[]`），决定本会话看见哪些远程工具与提示。凭据永不进模型参数面。这是可见性门，不是强制门。 | `session-connections.ts` [ADR-0021](./decisions/ADR-0021-session-machine-connections.md) |
 | 副工作区 | 薄声明清单：挂/卸 + label + 远程根路由。无 fs/exec 档位。 | `session-workspaces.ts` [ADR-0019](./decisions/ADR-0019-side-workspace-permission-retirement.md) |
 | 审批门 | 混合 subprocess 远程分支上的可选门（`remoteApproval: off\|human\|ai`，默认 `off`）。拦 shell 形状的 spawn 与远程终端；SFTP 写路径不设门。 | `remote-approval-gate.ts` [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
-| 远端围栏 | 远端 bwrap 兼容 runner，`remoteSandbox: off\|read-only\|workspace-write`，fail-closed。缺 runner 或探针失败即拒绝执行。**SFTP 写面此刻不在围栏内**（ADR-0022 §2.7）；收口是核心（ADR-0023）。 | `remote-sandbox.ts` `remote-sandbox-fence.ts` [ADR-0022](./decisions/ADR-0022-remote-sandbox-runner.md) |
-| 浏览器通道 | 官方共享 `/api` 上的精确 Fetch 路由 `/api/dsw/<endpoint>`（`connection.fetch.register`）。端点清单以 `web.ts` 的 `CHANNEL_ENDPOINTS` 为准，含 `session.ws.*` 与 `session.conn.*`。 | `web.ts` `web-channel.ts` [ADR-0018](./decisions/ADR-0018-browser-channel-on-shared-api.md) |
+| 远端围栏 | `remoteSandbox: off\|read-only\|workspace-write`。围栏档走 Go 核心成帧 RPC（自 jail）；核心不可用则 fs 与 spawn 一起 `SANDBOX_UNAVAILABLE`，不退回 SFTP。`off` 仍是今天的 SFTP + 裸 exec。交互终端在围栏档拒绝。 | `core-*.ts` `core/` `remote-sandbox.ts` `remote-sandbox-fence.ts` [ADR-0022](./decisions/ADR-0022-remote-sandbox-runner.md) [ADR-0023](./decisions/ADR-0023-one-remote-core.md) [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) |
+| 浏览器通道 | 官方共享 `/api` 上的精确 Fetch 路由 `/api/dsw/<endpoint>`（`connection.fetch.register`）。端点清单以 `web.ts` 的 `CHANNEL_ENDPOINTS` 为准，含 `session.ws.*`、`session.conn.*`、`core.deploy` / `core.status`。 | `web.ts` `web-channel.ts` [ADR-0018](./decisions/ADR-0018-browser-channel-on-shared-api.md) |
 | `sw_*` 工具 | `sw_status` / `sw_connect` / `sw_pick_workspace`（日落见 backlog `REQ-I10`）/ `sw_exec`；win32 宿主另注册 `bash`。提示按会话事实按需注入，纯本地零噪音。 | `tools.ts` `exec-tools.ts` `model-prompts.ts` [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
 | i18n | 人类面走 `dsw` 词典（设置页 Language）；model-facing 文案是英文常量，不进 i18n。 | `src/locale/` [ADR-0010](./decisions/ADR-0010-runtime-i18n-dsw-namespace.md) [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
-| 方向（未落地） | 远端部署**一个核心**：围栏执行 + 远端读写（`ctx.fs` 不再走 SFTP）+ 打包 `rg`。落地前不得宣称「已围栏」。 | [ADR-0023](./decisions/ADR-0023-one-remote-core.md) |
 
 ## 5. 已知边界
 
@@ -105,7 +105,7 @@
 1. **远程执行不受本地沙箱限制**——远程会话钉 `danger-full-access` 是 same-world 契约；可选审批门不覆盖 SFTP 写路径（ADR-0020）。
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
 3. **副根无权限语义**（ADR-0019）。真正隔离是本地 `sandbox/mode`、审批门、远端围栏、操作者信任边界。
-4. **远端前置（核心落地前）**：`pwsh`、`ripgrep`、围栏用的 `bwrap` 仍是分项安装；远程 `ctx.fs` 仍走 SFTP。核心落地后前置只剩「部署一个核心」（ADR-0023）。
+4. **远端前置**：围栏档要先从设置页部署核心（`core.deploy`，linux x86_64）；`off` / Windows 远端 / 非 amd64 仍走 SFTP + 审批门，健康面写「无围栏核心」。交互终端仍需远端 `bash`/`pwsh`。
 5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。正式 ADR 化仍是 `AUDIT-2`。
 7. **远程会话 composer 常显示 `Custom`**：preset 表缺 `{danger-full-access, ask}` 这一组（ADR-0015，UX-1 blocked）。

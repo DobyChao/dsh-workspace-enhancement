@@ -45,6 +45,15 @@ echo "TEST_EXIT=$TEST_EXIT"
 echo "== npm run build"
 npm run build | tail -3
 
+if command -v go >/dev/null 2>&1; then
+  echo "== go test (core)"
+  (cd core && go test ./...)
+  echo "== go build linux/amd64"
+  (cd core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/dsh-core .)
+else
+  echo "== go not installed; skip core tests"
+fi
+
 echo "== pack smoke"
 node scripts/pack-smoke.mjs | tail -3
 

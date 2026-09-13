@@ -269,6 +269,55 @@ export function execChannel(client: Client, text: string, opts?: { signal?: Abor
   })
 }
 
+/**
+ * Open a long-lived remote exec whose stdout is NOT collected into a string.
+ * The framed core RPC (REQ-I5) lives on this duplex; {@link execChannel}
+ * would swallow the protocol bytes.
+ */
+export function startExec(
+  client: Client,
+  text: string,
+  opts?: { signal?: AbortSignal | undefined },
+): Promise<ClientChannel> {
+  return new Promise<ClientChannel>((resolve, reject) => {
+    let settled = false
+    let channel: ClientChannel | undefined
+    const onAbort = (): void => { channel?.close() }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      opts?.signal?.removeEventListener('abort', onAbort)
+      reject(error)
+    }
+    client.exec(text, { pty: false }, (error, stream) => {
+      if (error !== undefined) {
+        fail(error)
+        return
+      }
+      channel = stream
+      stream.on('close', () => { opts?.signal?.removeEventListener('abort', onAbort) })
+      if (settled) {
+        stream.close()
+        return
+      }
+      if (opts?.signal?.aborted === true) {
+        stream.close()
+        const reason = opts.signal.reason
+        fail(reason instanceof Error ? reason : new Error('aborted'))
+        return
+      }
+      settled = true
+      resolve(stream)
+    })
+    if (opts?.signal?.aborted === true) {
+      const reason = opts.signal.reason
+      fail(reason instanceof Error ? reason : new Error('aborted'))
+      return
+    }
+    opts?.signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 /** Parse the NUL-delimited name/value stream produced by a remote `env -0`. */
 export function parseRemoteEnvironment(stdout: string): Record<string, string> {
   const environment: Record<string, string> = {}
