@@ -15,6 +15,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| PUB-4 | 发布 0.1.4 | doing | P1 | 版本已 bump。tag `v0.1.4` 排队 `release.yml`；真正的 `npm publish` 等所有者在 Actions 的 `npm-publish` environment 点 Approve |
 
 ## 2. 已排期（todo，按优先级）
 
