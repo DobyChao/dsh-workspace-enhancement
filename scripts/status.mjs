@@ -85,7 +85,10 @@ const STATUSES = ['todo', 'doing', 'blocked', 'done', 'shipped', 'dropped']
 const counts = Object.fromEntries(STATUSES.map(status => [status, 0]))
 const blockedRows = []
 for (const line of backlog.split(/\r?\n/)) {
-  const match = line.match(/^\|\s*`?([A-Z][\w-]*\d)\s*\|(.*)$/)
+  // The id is `<FAMILY>-<suffix>`; the suffix is NOT always numeric (`REQ-DEP`,
+  // `INFRA-8a`), so matching `\d` at the end silently dropped three real rows
+  // from every count and from the blocked list. Require the hyphen instead.
+  const match = line.match(/^\|\s*`?([A-Z][A-Z]*(?:-[A-Za-z0-9]+)+)\s*\|(.*)$/)
   if (!match) continue
   const status = STATUSES.find(candidate => new RegExp(`\\|\\s*${candidate}\\s*\\|`).test(line))
   if (!status) continue

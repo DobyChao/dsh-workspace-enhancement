@@ -32,6 +32,8 @@ import type { CredentialBackend } from './credential.ts'
 import type { JumpConfig } from './runtime.ts'
 import { normalizeRemoteApproval } from './remote-approval-gate.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
+import { normalizeRemoteSandbox } from './remote-sandbox.ts'
+import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import type { TranslateFn } from './locale/index.ts'
 
@@ -178,6 +180,11 @@ export interface MachineInput {
   knownHosts?: string[]
   /** AUDIT-6 per-machine approval gate mode (omitted ⇒ keep stored value). */
   remoteApproval?: RemoteApprovalMode
+  /**
+   * REQ-I9 per-machine remote sandbox fence mode (omitted ⇒ keep stored
+   * value). `'off'` is the default and is never persisted.
+   */
+  remoteSandbox?: RemoteSandboxMode
 }
 
 /** Secret-free machine view returned by `machines.*` endpoints and `status`. */
@@ -199,6 +206,11 @@ export interface MachineView {
    * views, normalized to `'off'` for records that predate the field.
    */
   remoteApproval: RemoteApprovalMode
+  /**
+   * REQ-I9 effective remote sandbox fence mode (ADR-0022 D1) — always present
+   * in views, normalized to `'off'` for records that predate the field.
+   */
+  remoteSandbox: RemoteSandboxMode
   /** Encryption was requested but fell back to plaintext (UI warning marker). */
   encryptFallback?: boolean
   lastConnectedAt?: string | null
@@ -216,6 +228,12 @@ export interface WorkspaceStatus {
   /** Effective remote workspace of the active machine (`workspace` wins). */
   workspace: string
   currentId: string | null
+  /**
+   * Where the active machine comes from. `'ephemeral'` is retained as a
+   * wire-vocabulary member for older clients only: it became unreachable when
+   * temporary connections were retired (REQ-I11 / ADR-0021 §5), so the registry
+   * now only ever reports `'machine' | 'config' | 'none'`.
+   */
   activeSource: 'machine' | 'ephemeral' | 'config' | 'none'
   /** Effective host-key mode of the active machine (or the global default). */
   hostKeyMode: HostKeyMode
@@ -447,6 +465,14 @@ export function normalizeMachine(raw: unknown): SshConnectionSpec | null {
   // AUDIT-6: absent/invalid ⇒ 'off' (zero migration for pre-AUDIT-6 records).
   const remoteApproval = normalizeRemoteApproval(record.remoteApproval)
   if (remoteApproval !== 'off') machine.remoteApproval = remoteApproval
+  // REQ-I9 (ADR-0022 D1): the same zero-migration rule for the fence axis —
+  // absent/invalid ⇒ 'off', and 'off' is never written back, so machines.json
+  // keeps its exact shape until an operator opts a machine in. NOTE: this field
+  // is carried by a cast because `SshConnectionSpec` (`src/connection.ts`) is
+  // outside this slice's file ownership; the registry pins the round-trip in
+  // `test/remote-sandbox-wiring.test.ts` so the cast cannot drift silently.
+  const remoteSandbox = normalizeRemoteSandbox(record.remoteSandbox)
+  if (remoteSandbox !== 'off') (machine as unknown as Record<string, unknown>).remoteSandbox = remoteSandbox
   if (record.encryptFallback === true) machine.encryptFallback = true
   if (Array.isArray(record.jump)) {
     machine.jump = record.jump.map(normalizeJump).filter((hop): hop is JumpConfig => hop !== null)
@@ -679,7 +705,6 @@ export class SshRegistry extends Service {
   private readonly live = new Map<string, SshConnection>()
   private readonly probeCache = new Map<string, { at: number; view: ConnectionStatusView; specRef: SshConnectionSpec }>()
   private readonly statusTtlMs: number
-  private temporary: { spec: SshConnectionSpec; connection: SshConnection } | null = null
   private configConnection: SshConnection | null = null
   private currentId: string | null = null
   private nextId = 1
@@ -917,7 +942,6 @@ export class SshRegistry extends Service {
       const first = [...this.specs.values()][0]
       this.currentId = first?.id ?? null
     }
-    if (this.temporary?.spec.id === id) this.temporary = null
     void this.persist()
     return true
   }
@@ -926,7 +950,6 @@ export class SshRegistry extends Service {
   setCurrent(id: string): boolean {
     if (!this.specs.has(id)) return false
     this.currentId = id
-    this.temporary = null
     void this.persist()
     return true
   }
@@ -1035,9 +1058,13 @@ export class SshRegistry extends Service {
     return hosts
   }
 
-  /** The active machine: ephemeral tool connection → current → config default. */
+  /**
+   * The active machine: the current registry entry → the cordis.yml config
+   * default. Temporary connections were retired with `sw_connect save:false`
+   * (ADR-0021 §1/§5): the machine universe is the user registry, so there is no
+   * third, non-persisted source of an active machine any more.
+   */
   activeSpec(): SshConnectionSpec | null {
-    if (this.temporary !== null) return this.temporary.spec
     if (this.currentId !== null) {
       const spec = this.specs.get(this.currentId)
       if (spec !== undefined) return spec
@@ -1049,7 +1076,6 @@ export class SshRegistry extends Service {
   getActive(): { spec: SshConnectionSpec; connection: SshConnection } | null {
     const spec = this.activeSpec()
     if (spec === null) return null
-    if (this.temporary !== null && this.temporary.spec.id === spec.id) return this.temporary
     const registered = this.specs.get(spec.id)
     if (registered !== undefined) {
       const connection = this.get(spec.id)
@@ -1060,38 +1086,15 @@ export class SshRegistry extends Service {
   }
 
   /**
-   * Connect a temporary machine (sw_connect `save: false`): it becomes the
-   * active machine until {@link setCurrent} or a later saved connect.
-   */
-  connectTemporary(input: MachineInput): { id: string; connection: SshConnection } {
-    const host = input.host.trim()
-    const username = (input.username ?? '').trim() || 'root'
-    if (host === '') throw new Error(this.t('tool.sw_connect.error.hostRequired'))
-    const port = input.port ?? 22
-    const id = `tmp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-    const spec: SshConnectionSpec = {
-      id,
-      label: (input.label ?? input.name ?? '').trim() || `${username}@${host}`,
-      host,
-      port,
-      username,
-      ...(input.cwd !== undefined && input.cwd !== '' ? { cwd: input.cwd } : {}),
-      ...(input.workspace !== undefined && input.workspace !== '' ? { workspace: input.workspace } : {}),
-      ...(input.privateKeyPath !== undefined && input.privateKeyPath !== '' ? { privateKeyPath: input.privateKeyPath } : {}),
-      ...(input.passphrase !== undefined && input.passphrase !== '' ? { passphrase: input.passphrase } : {}),
-      ...(input.agent !== undefined && input.agent !== '' ? { agent: input.agent } : {}),
-      ...(input.password !== undefined && input.password !== '' ? { password: input.password } : {}),
-      ...(input.hostKeyMode !== undefined ? { hostKeyMode: input.hostKeyMode } : {}),
-    }
-    const connection = this.buildConnection(spec)
-    this.temporary = { spec, connection }
-    return { id, connection }
-  }
-
-  /**
    * Upsert the tool-connect machine dsh-remote style: match by
    * host+username+port; update the existing record or create a new one, make
    * it current, and persist.
+   *
+   * NOTE (REQ-I11): the `sw_connect` tool no longer calls this — the model
+   * cannot add machines to the user registry (ADR-0021 §2.1). It stays as public
+   * registry API for callers that legitimately create a machine record (the
+   * settings page / add-workspace flow go through `machines.add`, which this
+   * mirrors).
    */
   async connectUpsert(input: MachineInput): Promise<{ id: string; view: MachineView }> {
     const host = input.host.trim()
@@ -1108,7 +1111,6 @@ export class SshRegistry extends Service {
     })
     const id = match?.id ?? view.id
     this.currentId = id
-    this.temporary = null
     void this.persist()
     return { id, view }
   }
@@ -1119,7 +1121,6 @@ export class SshRegistry extends Service {
     if (active === null) return
     active.workspace = path
     active.recentWorkspaces = [path, ...(active.recentWorkspaces ?? []).filter(entry => entry !== path)].slice(0, 8)
-    if (this.temporary !== null && this.temporary.spec.id === active.id) return
     if (this.specs.has(active.id)) void this.persist()
   }
 
@@ -1146,7 +1147,7 @@ export class SshRegistry extends Service {
   /** Pure status snapshot (no network; ping is the tools' job). */
   status(): WorkspaceStatus {
     const active = this.activeSpec()
-    const source = this.temporary !== null ? 'ephemeral' : this.currentId !== null && active !== null && this.specs.has(active.id) ? 'machine' : (active !== null ? 'config' : 'none')
+    const source = this.currentId !== null && active !== null && this.specs.has(active.id) ? 'machine' : (active !== null ? 'config' : 'none')
     const mode = active?.hostKeyMode ?? this.defaultHostKeyMode
     const entry = active !== null ? this.hostKeyStore.get(active.host, active.port) : undefined
     const connection = active !== null ? this.lookupConnection(active) : undefined
@@ -1249,7 +1250,6 @@ export class SshRegistry extends Service {
 
   /** Look up the cached live connection for one spec (never creates one). */
   private lookupConnection(spec: SshConnectionSpec): SshConnection | undefined {
-    if (this.temporary !== null && this.temporary.spec.id === spec.id) return this.temporary.connection
     if (spec.id === '') return this.configConnection ?? undefined
     return this.live.get(spec.id)
   }
@@ -1433,6 +1433,7 @@ export class SshRegistry extends Service {
       ...(spec.hostKeyMode !== undefined ? { hostKeyMode: spec.hostKeyMode } : {}),
       credentialBackend: backend,
       remoteApproval: normalizeRemoteApproval(spec.remoteApproval),
+      remoteSandbox: normalizeRemoteSandbox((spec as unknown as Record<string, unknown>).remoteSandbox),
       ...(spec.encryptFallback === true ? { encryptFallback: true } : {}),
       ...(spec.recentWorkspaces !== undefined && spec.recentWorkspaces.length > 0 ? { recentWorkspaces: spec.recentWorkspaces } : {}),
     }
@@ -1470,6 +1471,7 @@ export class SshRegistry extends Service {
     strictHostKeyChecking?: boolean
     knownHosts?: string[]
     remoteApproval?: RemoteApprovalMode
+    remoteSandbox?: RemoteSandboxMode
   }): void {
     // P2-④ wire contract: an OMITTED field keeps the stored value (a
     // saveMachine update starts from a full prev copy); an EXPLICIT empty
@@ -1521,6 +1523,15 @@ export class SshRegistry extends Service {
       const mode = normalizeRemoteApproval(input.remoteApproval)
       if (mode === 'off') delete spec.remoteApproval
       else spec.remoteApproval = mode
+    }
+    // REQ-I9: identical upsert semantics for the fence axis. `'off'` is
+    // DELETED rather than stored, so a machine that never enables the fence —
+    // and every record written before this field existed — keeps machines.json
+    // byte-identical (zero migration, ADR-0022 §2.1).
+    if (input.remoteSandbox !== undefined) {
+      const mode = normalizeRemoteSandbox(input.remoteSandbox)
+      if (mode === 'off') delete (spec as unknown as Record<string, unknown>).remoteSandbox
+      else (spec as unknown as Record<string, unknown>).remoteSandbox = mode
     }
   }
 }

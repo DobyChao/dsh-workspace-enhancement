@@ -17,8 +17,9 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
-import type { RemoteApprovalMode } from './machine-payload.ts'
+import type { RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
+import { sandboxBadgeOf } from './row-badges.ts'
 
 /** The `/dsw` RPC face injected by the client plugin. */
 export interface SettingsInjected {
@@ -48,6 +49,8 @@ interface MachineView {
   credentialBackend: string
   /** AUDIT-6 approval-gate mode (wire rows always carry it; default 'off'). */
   remoteApproval: RemoteApprovalMode
+  /** REQ-I9 remote sandbox fence mode (wire rows carry it; default 'off'). */
+  remoteSandbox: RemoteSandboxMode
   /** Encryption was requested but the OS backend failed (plaintext fallback). */
   encryptFallback?: boolean
   recentWorkspaces?: string[]
@@ -71,6 +74,7 @@ function asMachineView(value: unknown): MachineView | null {
     jumpHosts: Array.isArray(value.jumpHosts) ? value.jumpHosts.map(String) : [],
     credentialBackend: typeof value.credentialBackend === 'string' ? value.credentialBackend : 'plain',
     remoteApproval: value.remoteApproval === 'human' || value.remoteApproval === 'ai' ? value.remoteApproval : 'off',
+    remoteSandbox: value.remoteSandbox === 'read-only' || value.remoteSandbox === 'workspace-write' ? value.remoteSandbox : 'off',
   }
   if (typeof value.cwd === 'string') machine.cwd = value.cwd
   if (typeof value.workspace === 'string') machine.workspace = value.workspace
@@ -100,6 +104,7 @@ function editInitialOf(machine: MachineView): MachineFormInitial {
     hostKeyMode: machine.hostKeyMode ?? '',
     encryptPassword: machine.credentialBackend !== '' && machine.credentialBackend !== 'plain',
     remoteApproval: machine.remoteApproval ?? 'off',
+    remoteSandbox: machine.remoteSandbox ?? 'off',
     auth: machine.auth === 'password'
       || machine.passwordSet === true
       || (machine.credentialBackend !== '' && machine.credentialBackend !== 'plain')
@@ -241,6 +246,11 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                     {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
                     {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
                     {machine.remoteApproval !== 'off' ? <span style={{ fontSize: 12, opacity: 0.85 }}> {t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span> : ''}
+                    {/* REQ-I9: the fence badge — empty for 'off'/absent, so an
+                        upgraded settings page renders exactly as before. */}
+                    {sandboxBadgeOf(machine.remoteSandbox, t) !== ''
+                      ? <span style={{ fontSize: 12, opacity: 0.85 }}> {sandboxBadgeOf(machine.remoteSandbox, t)}</span>
+                      : ''}
                     {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>

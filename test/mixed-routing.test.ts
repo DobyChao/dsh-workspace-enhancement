@@ -379,3 +379,49 @@ test('MixedFileSystem: local cwd reads/writes/lists through the real local backe
   const entries = await mixed.listDir(dirTarget)
   assert.ok(entries.some(entry => entry.name === 'smoke.txt'), 'listDir must observe the written file')
 })
+
+/* --------------------------------- 5) REQ-I11 注册表级路由（无副根也要过远程） */
+
+/**
+ * REQ-I11 (ADR-0021): routing is registry-level. An `ssh://<id>/<path>` path —
+ * or its local placeholder spelling — names the remote world by itself, from a
+ * LOCAL session cwd and with NO side workspace declared. The session's
+ * connected machines are enforced at the tool layer, not here: this face is a
+ * visibility gate, never a fence, and that is exactly what this test pins.
+ */
+test('REQ-I11: a remote spelling routes remote with no side store and a local cwd', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never) // no `sides` accessor at all
+
+  await mixed.resolve('ssh://c2/etc/hosts', { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls, ['resolve:remote:/etc/hosts'], 'the ssh:// path decides alone')
+  assert.deepEqual(local.calls, [], 'the local cwd must not win over an explicit remote spelling')
+
+  await mixed.lstat('ssh://c2/etc/hosts', { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
+  assert.deepEqual(local.calls, [])
+
+  // The local placeholder tree (`<dsh home>/dsw-routes/<id>/…`) is the second
+  // accepted spelling of the same route.
+  await mixed.resolve(join(sshRoutesRoot(), 'c1', 'srv', 'work'), { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls.slice(2), ['resolve:remote:/srv/work'])
+  assert.deepEqual(local.calls, [])
+})
+
+/** The looseness is bounded: ordinary local paths never become remote. */
+test('REQ-I11: an ordinary absolute/relative path on a local cwd still routes local', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+
+  await mixed.resolve(join(LOCAL_CWD, 'proj', 'file.txt'), { cwd: LOCAL_CWD })
+  await mixed.resolve('./file.txt', { cwd: LOCAL_CWD })
+  await mixed.lstat('proj/file.txt', { cwd: LOCAL_CWD })
+  assert.deepEqual(local.calls, [
+    `resolve:local:${join(LOCAL_CWD, 'proj', 'file.txt')}`,
+    'resolve:local:./file.txt',
+    'lstat:local',
+  ])
+  assert.deepEqual(remote.calls, [])
+})

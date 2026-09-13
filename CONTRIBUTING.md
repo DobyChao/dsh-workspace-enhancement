@@ -5,19 +5,9 @@
 
 ## 1. 真相源
 
-| 想知道 | 看这里 |
-|---|---|
-| 现在能做什么 / 有哪些待办 | `docs/backlog.md`（**唯一待办真相源**） |
-| 当前版本、提交、待办分布 | `docs/status.md`（由 `npm run status` 生成） |
-| 架构、模块、机制 | `docs/architecture.md` |
-| 为什么这么做 | `docs/decisions/ADR-*.md` |
-| 每轮做了什么、怎么验的 | `docs/rounds/` |
-| 测试怎么跑、沙箱限制 | `docs/testing.md` |
-| 上游兼容与支持窗口 | `docs/compatibility.md` |
-| 用户验收怎么走 | `docs/uat/` |
-| 公开进度 | `docs/ROADMAP.md`（结果性摘要，不另立待办） |
+完整地图见 [`docs/README.md`](./docs/README.md)（想知道什么 → 看哪份 → 不要写在哪）。
 
-`drafts/` 是本地草稿（不入库、可能含机器专属数据），**只作素材**：结论一旦拍板就搬进上面这些文件。
+`drafts/` 是本地草稿（不入库、可能含机器专属数据），**只作素材**：结论一旦拍板就搬进地图点名的那些文件。
 
 ## 2. 一轮的完整流程（短分支 + PR）
 

@@ -388,7 +388,7 @@ export interface RemoteApprovalDeps {
   approval(): RemoteApprovalServiceFace | undefined
   /** The initiating agent of this async chain, or `undefined`. */
   initiator(): RemoteApprovalAgentFace | undefined
-  /** The gated machine view, or `undefined` for unknown/temporary targets. */
+  /** The gated machine view, or `undefined` for an unknown target. */
   machine(id: string): RemoteApprovalMachineFace | undefined
   /** Optional diagnostic sink (classifier exceptions; never blocks). */
   warn?(text: string): void

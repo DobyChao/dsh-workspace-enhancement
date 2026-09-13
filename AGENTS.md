@@ -15,20 +15,19 @@
 
 ## 2. 真相源（**不要另建第二份**）
 
+完整地图（想知道什么 → 看哪份 → **不要写在哪**）见 `docs/README.md`。代理开机用的短表：
+
 | 想知道 | 看 |
 |---|---|
 | 待办 / 需求 / 状态 | `docs/backlog.md`（唯一待办真相源；改状态改这里） |
 | 当前版本、提交、待办分布 | `docs/status.md`（`npm run status` 生成，**禁止手改**） |
-| 架构、模块、机制 | `docs/architecture.md` |
-| 为什么这么做 | `docs/decisions/ADR-*.md`（一决策一文件） |
-| 每轮做了什么、怎么验的 | `docs/rounds/` |
-| 测试怎么跑、沙箱限制 | `docs/testing.md` |
-| 上游兼容与支持窗口 | `docs/compatibility.md` |
-| 用户验收 | `docs/uat/` |
-| 公开进度 | `docs/ROADMAP.md` |
+| 现状怎么跑 | `docs/architecture.md` |
+| 为什么这么做 | `docs/decisions/`（索引 `docs/decisions/README.md`） |
+| 某一轮做了什么 | `docs/rounds/`（**档案，不是现状**） |
+| 测试 / 兼容 / 验收 | `docs/testing.md` · `docs/compatibility.md` · `docs/uat/` |
 
 `drafts/`、`.agent-teams/`、`.workbuddy/`、`.tmp/` 是**本地素材**（不入库、可能含机器专属数据）。
-任何结论一旦拍板，必须搬进上面这些文件——否则下一个 clone 的人看不到。
+任何结论一旦拍板，必须搬进 `docs/README.md` 点名的那些文件——否则下一个 clone 的人看不到。
 
 ## 3. 命令（直接跑，不要猜）
 
@@ -42,7 +41,7 @@
 | `npm run build` | `tsc` + `tsdown` | 代理 / CI |
 | `npm run e2e` | Playwright 黑盒（lab 50599） | 本地 shell / CI |
 | `npm run status` | 重新生成 `docs/status.md` | 任何人 |
-| `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5.7） | 代理 / CI |
+| `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5 红线 7） | 代理 / CI |
 | `node scripts/boot-smoke.mjs [--no-channel]` | **真 boot 哨兵**：临时 `DSH_HOME` → 起宿主 → 断言进程存活 / `GET /` 200 / `POST /api/dsw/connections.list` 200 + `result.ok=true`（`upstream.yml` 每条通道都跑，**强断言**；见 §4） | 代理 / CI |
 | `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例 | 本地 shell |
 
@@ -108,7 +107,7 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    example / source）。它是**生成产物**（文件头 `do not edit by hand`），只读引用、不可修改。
    **不要手写解析脚本**：直接 `npm run slots -- --list|--key|--diff <bundle.js…>`（§3）。
    **行号不是契约**：只认 `key`/字段名与符号名；引用行号必须注明它属于哪份 bundle，
-   不同快照的行号**不可互换**。详见 `docs/architecture.md` §8.1 与 `ADR-0017` §1.1。
+   不同快照的行号**不可互换**。详见 `docs/architecture.md` §6 与 `ADR-0017` §1.1。
 
 ## 6. 写插件代码 / 改 Cordis 组合前的固定动作
 
@@ -164,13 +163,5 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 
 1. `npm run status` —— 看版本、HEAD、待办分布、被挡住的项。
 2. `docs/backlog.md` §1/§3 —— 当前在做什么、什么被挡住。
-3. `docs/status.md` 的「质量门」表 —— 你能跑哪些命令。
+3. `docs/README.md` —— 文档地图（现状 / 决策 / 档案各看哪）。
 4. `docs/compatibility.md` —— 别在错误的上游家族上开工。
-
-**当前即刻事项**（2026-09-11 更新）：① **`UPSTREAM-3` 三条全部落地**（F1 启动崩溃 / F2 通道 405 / F3 哨兵缺口），
-通道改挂**官方共享 `/api` 的精确 Fetch 路由**（`ADR-0018`），`0.1.5` 家族**已可宣称运行时支持**（真机实证
-`POST /api/dsw/connections.list → 200, result.ok=true`）；② **`UPSTREAM-4`：0.1.2 家族退场**——peer/dev 收窄为
-`^0.1.5-rc.1`，`upstream.yml` 只剩 `next`/`alpha` 两条通道，`--channel-warn` 降级口已删；
-③ 下一轮候选：`AUDIT-5`（会话子行徽标，两代共有；`AUDIT-4` 是它的邻居）与 `AUDIT-4`（判定分离），
-两者都已登记待排期；④ 发布 `0.1.4` 由所有者决定（含本轮的通道换轨，**与已发布的 0.1.3 客户端半不兼容**——
-但 3080 已不装本插件，故无线上影响）。

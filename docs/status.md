@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-12 02:21 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-13 06:30 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,38 +10,40 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `feat/audit-6-remote-approval-gate` / `143186b` |
-| HEAD 提交 | `docs(audit-6): finalize ADR-0020 scope and record the honest boundaries` (2026-09-12) |
-| 与远端 | 8 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/INFRA-13-docs-map` / `326b94f` |
+| HEAD 提交 | `docs(rounds): renumber this round to R24 — R23 was already taken` (2026-09-13) |
+| 与远端 | 31 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 28 |
-| 单测用例（静态计数） | 313 |
+| 单测文件 | 34 |
+| 单测用例（静态计数） | 471 |
 | E2E 场景文件 | 8 |
-| ADR | 20 |
-| 轮次报告 | 25 |
+| ADR | 23 |
+| 轮次报告 | 27 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
+| `todo` | 13 |
 | `doing` | 0 |
-| `blocked` | 5 |
-| `done` | 31 |
+| `blocked` | 7 |
+| `done` | 36 |
 | `shipped` | 5 |
 | `dropped` | 7 |
 
 ## 被挡住 / 待拍板
 
-- UX-1 — 远程会话 composer 权限预设显示 `Custom`
+- SEC-3 — `remote-full` 无二次确认
 - INFRA-8 — AgentTeams 标准 profile 注册
-- SEC-3 — full 沙箱风险确认门按 preset id 判定，`remote-full` 等价 full 却无二次确认
+- UX-1 — 远程会话 composer 显示 `Custom`
 - UX-2 — 副工作区面板「浏览」输入框去留
-- BUG-1 — 用户截图「设置页顶部空白边框条」lab 未复现
+- BUG-1 — 设置页顶部空白边框条
+- INFRA-8a — `dsw-round` profile
+- INFRA-8b — `dsw-spike` profile
 
 ## 质量门
 

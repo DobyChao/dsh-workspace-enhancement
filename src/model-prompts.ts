@@ -35,14 +35,29 @@ export const MODEL_PROMPTS = {
   /** Side-workspace boundary note, tier-free since REQ-I7 (ADR-0019). */
   sideNote:
     'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default; to run a command on another server use `sw_exec(server, command)`.',
+  /**
+   * REQ-I11: heading of the per-session CONNECTED-MACHINE list (`sw-remote`
+   * section). The list is the session's coarse gate made visible: the store
+   * holds exactly the registry ids `sw_connect` (or the panel) switched on.
+   */
+  connectedHeading: '**Machines connected to this session (`sw_exec` targets)**:',
+  /** REQ-I11: one connected-machine line — id, endpoint, honest reachability. */
+  connectedItem: '- `{id}` — {endpoint}{note}',
+  /** REQ-I11: the note appended to a machine that did not answer its ping. */
+  connectedUnreachable: ' (was unreachable at connect time)',
   /** `sw_status` remote-toolbox report heading. */
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
   envMissing:
     'Hint: the remote is missing {missing} — install them on the remote (for reference only; not auto-installed): rg → sudo apt-get install ripgrep; pwsh → https://aka.ms/powershell',
-  /** `tool:sw-exec` section (order 105) — injected only in a remote-context session. */
+  /**
+   * `tool:sw-exec` section (order 105) — injected only in a remote-context
+   * session. REQ-I11 adds the session gate: `sw_exec` names a machine that is
+   * CONNECTED to this session (or the session's main-workspace machine), so the
+   * copy states the precondition instead of leaving the model to discover it.
+   */
   sectionSwExec:
-    "sw_exec executes a command on the specified server; workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
+    "sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
   /** `tool:bash` section (order 105, win32 hosts) — injected only in a remote-context session. */
   sectionWin32Bash:
     'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
@@ -63,6 +78,18 @@ export const MODEL_PROMPTS = {
    */
   remoteGateActive:
     'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
+  /**
+   * REQ-I9 fence sentence (`sw-remote` section): injected only when the routed
+   * machine has `remoteSandbox !== 'off'`. Stated to the model for the same
+   * reason as the approval sentence — a refusal must be understood rather than
+   * retried — and because the fence is the one place a remote command can fail
+   * for a reason the model cannot see on the remote host. It deliberately keeps
+   * the fs/SFTP boundary explicit: the fence covers commands only (ADR-0022 §2.7).
+   */
+  remoteFenced:
+    'Additionally, this machine runs commands inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the remote runner, and if that runner is missing or unusable the command FAILS (`SANDBOX_UNAVAILABLE`) instead of running unfenced. The fence covers commands only — the file tools are not confined by it.',
+  /** REQ-I9: the per-machine note appended to a connected machine that is fenced. */
+  connectedFenced: ' (commands fenced: {mode})',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */

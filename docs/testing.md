@@ -1,7 +1,7 @@
 # 测试与验证策略
 
-> 本文是测试面的唯一说明。命令清单在 `AGENTS.md`，待办在 `docs/backlog.md`，
-> 每轮真实验收记录在 `docs/rounds/`，用户验收脚本在 `docs/uat/`。
+> 本文是测试面的唯一说明。文档地图见 `docs/README.md`。命令清单在 `AGENTS.md`，待办在 `docs/backlog.md`，
+> 每轮真实验收记录在 `docs/rounds/`（档案），用户验收脚本在 `docs/uat/`。
 
 ## 1. 五层验证金字塔
 
@@ -81,6 +81,8 @@ dsh --profile <scratch> --dump-config   # 检查 bundle 行、patch 行、工具
 ## 6. 已知环境要求
 
 - 远端主机需装 `pwsh`（PowerShell 工具）与 `ripgrep`（glob）；终端（bash）开箱即用。
+  REQ-I9 之后围栏还需要 `bwrap`。**这三项目前是分项安装。方向是部署一个核心**（`ADR-0023`）：
+  围栏执行 + 远端读写（fs 不再走 SFTP）+ 打包 `rg`。核心落地后测试的远端前置只剩「部署一个核心」。
 - 本机 Playwright 浏览器二进制在 `%LOCALAPPDATA%\ms-playwright`；`@playwright/test` 是 devDependency。
 - Node ≥ 22.8（`--experimental-test-isolation` 与内置 TS transform 的最低要求）。
 

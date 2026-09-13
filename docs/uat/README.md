@@ -1,7 +1,8 @@
 # 用户验收（UAT）流程
 
 > 本目录是**入库的用户验收文档**：UAT 在交付流程中的位置、lab 实例怎么用、证据怎么留、反馈怎么回填。
-> 轮次事实档案见 [docs/rounds/](../rounds/README.md)；面向用户的进度概览见 [docs/ROADMAP.md](../ROADMAP.md)。
+> 轮次事实档案见 [docs/rounds/](../rounds/README.md)；现状见 [docs/architecture.md](../architecture.md)；
+> 文档地图见 [docs/README.md](../README.md)。
 
 ## 1. UAT 在流程中的位置
 
@@ -27,7 +28,7 @@ UAT 是这条链上的**最后一道人工闸门**：
 - 每个轮次（或每批相关修复）在 `docs/uat/` 下新增一份 `R*.md` 脚本，模板见 [TEMPLATE.md](./TEMPLATE.md)。
 - 已有真实示例：[R6-i18n.md](./R6-i18n.md)（R6 运行时国际化轮）。
 - 反馈一律用 [FEEDBACK.md](./FEEDBACK.md) 的模板回填；结论回写到该轮 `docs/rounds/R*.md` 的
-  **遗留**段与 `drafts/CONTEXT.md` §7（风险与开放问题）。
+  **遗留**段与 `docs/backlog.md`。
 - 严重度 `blocker` 的反馈**阻塞发布**：修复 + 重跑脚本 + 重新签字后才继续。
 
 ## 2. lab 实例怎么用
@@ -55,7 +56,7 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | **绝不碰 3080** | 3080 是真实运行实例；脚本对 `-Port 3080` 直接抛错。UAT 只在 50599 上做 |
 | **隔离 `DSH_HOME`** | 脚本把 `DSH_HOME` 设为 lab 根 `$LAB_HOME`（形如 `<user-home>\.dsh-lab`），所有 profile / 状态写入都落在该目录 |
 | **真实数据只读** | 真实 `%DSH_HOME%` 只作只读参考，脚本显式声明不写入、不复制 |
-| **不用真凭据** | 示例连接使用占位值；lab 若需模型凭据，只读复制一份到 lab（见 `drafts/CONTEXT.md` §6.1） |
+| **不用真凭据** | 示例连接使用占位值；lab 若需模型凭据，只读复制一份到 lab，不要把真凭据写进仓库或 UAT 脚本 |
 | **组合一致** | lab 的组合（`dsh --profile web --dump-config`）应与真实 profile 同构，验收结论才可外推 |
 
 地址：`http://127.0.0.1:50599/`（**文档中回环地址统一写作占位地址**，端口 50599 为 lab 专用）。
@@ -81,7 +82,7 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 1. 复制 [FEEDBACK.md](./FEEDBACK.md) 的模板，逐项填写（环境指纹 / 现象 / 复现步骤 / 期望 / 实际 /
    严重度 / 证据 / 是否阻塞发布）。
 2. 在对应的 `docs/uat/R*.md` 判定表里标「不通过」并链接该反馈。
-3. 结论回写：`docs/rounds/R*.md` 的 **遗留**段 + `drafts/CONTEXT.md` §7。
+3. 结论回写：`docs/rounds/R*.md` 的 **遗留**段 + `docs/backlog.md`。
 4. 严重度 `blocker` → 阻塞发布；修复后**重跑同一份脚本**并重新签字。
 5. 若问题无法在 lab 复现（例如仅真实实例出现的布局/加载态问题），在反馈中如实注明
    「lab 未复现」，并给出真实实例上的复现条件。
@@ -92,10 +93,13 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 |---|---|
 | [README.md](./README.md) | 本文件：UAT 流程说明 |
 | [TEMPLATE.md](./TEMPLATE.md) | UAT 脚本骨架（可直接复制） |
-| [R6-i18n.md](./R6-i18n.md) | 真实示例：R6 运行时国际化轮验收脚本 |
-| [R13-req-i6.md](./R13-req-i6.md) | 真实示例：R13 系统提示词英文化 / 按需注入 |
-| [R15-local-directory-pane.md](./R15-local-directory-pane.md) | 真实示例：R15 `BUG-3` 本机目录面 |
-| [R17-rc2-official-slot-entry.md](./R17-rc2-official-slot-entry.md) | 真实示例：R17 官方槽（header 工具区「远程状态」）+ 徽标/目录回归 |
+| [R6-i18n.md](./R6-i18n.md) | R6 运行时国际化 |
+| [R13-req-i6.md](./R13-req-i6.md) | R13 系统提示词英文化 / 按需注入 |
+| [R15-local-directory-pane.md](./R15-local-directory-pane.md) | R15 `BUG-3` 本机目录面 |
+| [R17-rc2-official-slot-entry.md](./R17-rc2-official-slot-entry.md) | R17 官方槽（header「远程状态」）+ 徽标/目录回归 |
+| [R22-audit6-remote-approval-gate.md](./R22-audit6-remote-approval-gate.md) | R22 远程命令审批门（AUDIT-6） |
+| [R24-req-i11-session-connections.md](./R24-req-i11-session-connections.md) | R24 会话级机器连接（REQ-I11，15 步） |
+| [R24-req-i9-remote-runner.md](./R24-req-i9-remote-runner.md) | R24 远端沙箱围栏（REQ-I9，11 步 + G1–G3） |
 | [FEEDBACK.md](./FEEDBACK.md) | 用户反馈模板 |
 
-来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`drafts/CONTEXT.md` §0/§6.1；`docs/ROADMAP.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）
+来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`docs/README.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）

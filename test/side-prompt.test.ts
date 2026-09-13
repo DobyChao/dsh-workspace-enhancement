@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { composeWorkspacePrompt, renderSideWorkspaces, sideWorkspacePromptFact } from '../src/tools.ts'
+import { composeWorkspacePrompt, connectedMachineFact, renderConnectedMachines, renderSideWorkspaces, sideWorkspacePromptFact } from '../src/tools.ts'
 import type { SideWorkspaceItem } from '../src/session-workspaces.ts'
 
 const LOCAL_ROOT = resolve(tmpdir(), 'dsw-prompt', 'local-proj')
@@ -99,6 +99,34 @@ test('composeWorkspacePrompt: AUDIT-6 — the gate expectation sentence appears 
   // Absent field (pre-AUDIT-6 machine view shape) reads as off — no sentence.
   const absent = composeWorkspacePrompt('ssh://c1/srv/work', base, [])
   assert.ok(!absent.includes('approval decision before they run'))
+})
+
+test('composeWorkspacePrompt: REQ-I9 — the fence sentence appears exactly when the machine fence is on', () => {
+  const base = { username: 'uuz', host: '127.0.0.1' }
+  const off = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'off' }, [])
+  assert.ok(!off.includes('remote sandbox fence'))
+  const readOnly = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'read-only' }, [])
+  assert.ok(readOnly.includes('runs commands inside a remote sandbox fence (`read-only`)'))
+  // A refusal must be understandable rather than retried: name the failure mode.
+  assert.ok(readOnly.includes('SANDBOX_UNAVAILABLE'))
+  // ADR-0022 §2.7: the fence covers spawned commands only — the copy must say so.
+  assert.ok(readOnly.includes('the file tools are not confined by it'))
+  const write = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'workspace-write' }, [])
+  assert.ok(write.includes('`workspace-write`'))
+  // Absent field (pre-REQ-I9 machine view shape) reads as off — no sentence.
+  const absent = composeWorkspacePrompt('ssh://c1/srv/work', base, [])
+  assert.ok(!absent.includes('remote sandbox fence'))
+})
+
+test('renderConnectedMachines: a fenced connected machine is announced with its mode', () => {
+  const facts = [
+    connectedMachineFact('c1', { username: 'u', host: 'h1', remoteSandbox: 'workspace-write' }),
+    connectedMachineFact('c2', { username: 'u', host: 'h2' }),
+  ]
+  const text = renderConnectedMachines(facts)
+  assert.ok(text.includes('(commands fenced: workspace-write)'), 'the fenced machine carries its mode')
+  assert.ok(!text.includes('h2 — '), 'an unfenced machine carries no fence note')
+  assert.equal(text.split('\n').length, 3, 'heading + one row per machine')
 })
 
 test('composeWorkspacePrompt: remote cwd with sides renders ALL parts', () => {

@@ -26,8 +26,10 @@ import { registerWorkspaceTools } from './tools.ts'
 import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import { listRemoteLevel, remoteHome as sharedRemoteHome } from './listing.ts'
+import { SessionMachineConnections, normalizeMachineIds } from './session-connections.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
 import { normalizeSideRootKey, remoteSideRootKey } from './session-workspaces.ts'
+import type { SessionConnectionsFace } from './session-remote-context.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { channelRouteOf, isAlreadyRegistered } from './web-channel.ts'
 import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel.ts'
@@ -164,6 +166,12 @@ function isMachineInput(value: unknown): value is MachineInput {
     && value.credentialBackend !== 'windows' && value.credentialBackend !== 'secret') return false
   if (value.remoteApproval !== undefined
     && value.remoteApproval !== 'off' && value.remoteApproval !== 'human' && value.remoteApproval !== 'ai') return false
+  // REQ-I9 (ADR-0022 D1): the per-machine remote sandbox fence mode. Same
+  // closed whitelist treatment as `remoteApproval` — an unknown spelling is a
+  // bad request, never a silently-coerced `'off'` (a typo that disabled the
+  // fence must not look like a successful save).
+  if (value.remoteSandbox !== undefined
+    && value.remoteSandbox !== 'off' && value.remoteSandbox !== 'read-only' && value.remoteSandbox !== 'workspace-write') return false
   return true
 }
 
@@ -192,6 +200,26 @@ function isSideWorkspaceAddPayload(value: unknown): value is SideWorkspaceInput 
     if (value[key] !== undefined && !isString(value[key])) return false
   }
   return true
+}
+
+/** REQ-I11 `session.conn.*` payload: `{ sessionId, id }` (one machine). */
+function isSessionConnIdPayload(value: unknown): value is { sessionId: string; id: string } {
+  return isRecord(value)
+    && isString(value.sessionId) && value.sessionId.trim() !== ''
+    && isString(value.id) && value.id.trim() !== ''
+}
+
+/** REQ-I11 `session.conn.list` payload: `{ sessionId }`. */
+function isSessionConnListPayload(value: unknown): value is { sessionId: string } {
+  return isRecord(value) && isString(value.sessionId) && value.sessionId.trim() !== ''
+}
+
+/** REQ-I11 `session.conn.set` payload: `{ sessionId, ids: string[] }` (replace form). */
+function isSessionConnSetPayload(value: unknown): value is { sessionId: string; ids: string[] } {
+  if (!isRecord(value)) return false
+  if (!isString(value.sessionId) || value.sessionId.trim() === '') return false
+  if (!Array.isArray(value.ids)) return false
+  return value.ids.every(entry => isString(entry))
 }
 
 /** Side-workspace detach/update payload: `{ sessionId, rootKey }` / `{ rootKey, ...patch }`. */
@@ -260,6 +288,10 @@ export const CHANNEL_ENDPOINTS = [
   'session.ws.add',
   'session.ws.update',
   'session.ws.remove',
+  'session.conn.list',
+  'session.conn.connect',
+  'session.conn.disconnect',
+  'session.conn.set',
 ] as const
 
 /**
@@ -302,6 +334,15 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     if (value === undefined) throw new Error(`dsw: ${t('rpc.sideStoreNotMounted')}`)
     return value
   }
+  /**
+   * REQ-I11: the per-session connected-machine store. Constructed HERE (this row
+   * owns the tools AND the channel, so tool and panel write one instance) right
+   * next to the workspace tools; it self-registers as the `sessionConnections`
+   * cordis service. The accessor is optional-service style (`ctx.get(..., false)`)
+   * like `sideWorkspaces`, so a composition that never mounts this row degrades
+   * to "no session connections" instead of failing assembly.
+   */
+  void new SessionMachineConnections(ctx)
   /** R5: a remote side workspace must name a registered machine. */
   const requireRemoteMachine = (rootKey: string): void => {
     const route = parseSshRoute(rootKey)
@@ -312,6 +353,31 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
       throw new Error(`dsw: ${t('rpc.unknownMachine', { id: route.id })}`)
     }
   }
+  /**
+   * REQ-I11: the connected-machine store the `session.conn.*` endpoints write —
+   * the SAME service the `sw_connect` tool and the prompt contributions read, so
+   * the panel toggle and the model can never disagree (ADR-0021 §0/§2.9).
+   */
+  const connStore = (): SessionConnectionsFace => {
+    const value = ctx.get('sessionConnections', false) as SessionConnectionsFace | undefined
+    if (value === undefined) throw new Error(`dsw: ${t('rpc.connStoreNotMounted')}`)
+    return value
+  }
+  /** REQ-I11: every named machine must be in the registry (the machine universe). */
+  const requireRegisteredMachines = (ids: readonly string[]): string[] => {
+    const normalized = normalizeMachineIds(ids)
+    const known = registry().listMachines().machines.map(machine => machine.id)
+    const unknown = normalized.filter(id => !known.includes(id))
+    if (unknown.length > 0) {
+      throw new Error(`dsw: ${t('rpc.connUnknownMachine', {
+        ids: unknown.join(', '),
+        known: known.length > 0 ? known.join(', ') : t('rpc.connNoKnownMachines'),
+      })}`)
+    }
+    return normalized
+  }
+  /** The `{ items }` shape the client half reads (ids only, never endpoints). */
+  const connItems = (sessionId: string): { items: string[] } => ({ items: [...connStore().listFor(sessionId)] })
 
   /** The remote home directory: the login environment's HOME, else the spec cwd. */
   const remoteHome = async (id: string, signal?: AbortSignal): Promise<string> => {
@@ -421,6 +487,10 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
             // route to a dead registry id on the next session resume.
             void rm(sshRoutePlaceholder(input.id.trim(), '/'), { recursive: true, force: true })
               .catch(() => undefined)
+            // REQ-I11 (ADR-0021 §2.3): a deleted machine must not stay "connected"
+            // to any session. The store keeps id references only, so pruning them
+            // here is the one place that can know the id is gone.
+            connStore().retain(new Set(registry().listMachines().machines.map(machine => machine.id)))
           }
           return { ok: true, value: { ok: true, removed, ...registry().listMachines() } }
         }
@@ -569,6 +639,38 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           }
           return { ok: true, value: { removed: sides().detach(input.sessionId, input.rootKey) } }
         }
+        case 'session.conn.list': {
+          // REQ-I11: the session's CONNECTED machine ids — `{ items: string[] }`
+          // exactly; the client panel is written against this shape.
+          const input = requirePayload(payload, isSessionConnListPayload, 'session.conn.list')
+          return { ok: true, value: connItems(input.sessionId.trim()) }
+        }
+        case 'session.conn.connect': {
+          // One panel toggle ON. It writes the store directly (no ping): the
+          // store is the single session truth, and the client already has
+          // `conn.probe` for connectivity display. Machine ids are validated
+          // against the registry — the same universe `sw_connect` accepts.
+          const input = requirePayload(payload, isSessionConnIdPayload, 'session.conn.connect')
+          const [id] = requireRegisteredMachines([input.id])
+          if (id === undefined) throw new Error(`dsw: ${t('rpc.connMachineEmpty')}`)
+          connStore().connect(input.sessionId.trim(), id)
+          return { ok: true, value: connItems(input.sessionId.trim()) }
+        }
+        case 'session.conn.disconnect': {
+          const input = requirePayload(payload, isSessionConnIdPayload, 'session.conn.disconnect')
+          const [id] = requireRegisteredMachines([input.id])
+          if (id === undefined) throw new Error(`dsw: ${t('rpc.connMachineEmpty')}`)
+          connStore().disconnect(input.sessionId.trim(), id)
+          return { ok: true, value: connItems(input.sessionId.trim()) }
+        }
+        case 'session.conn.set': {
+          // The replace form (same semantics as `sw_connect(machines: …)`),
+          // including `ids: []` = disconnect everything.
+          const input = requirePayload(payload, isSessionConnSetPayload, 'session.conn.set')
+          const ids = requireRegisteredMachines(input.ids)
+          connStore().set(input.sessionId.trim(), ids)
+          return { ok: true, value: connItems(input.sessionId.trim()) }
+        }
         default:
           throw new Error(`bad-request: unknown endpoint ${JSON.stringify(endpoint)}`)
       }
@@ -607,5 +709,10 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
       }
     }, `dsw: ${route.path}`)
   }
-  registerWorkspaceTools(ctx, registry, () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined)
+  registerWorkspaceTools(
+    ctx,
+    registry,
+    () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined,
+    () => ctx.get('sessionConnections', false) as SessionConnectionsFace | undefined,
+  )
 }

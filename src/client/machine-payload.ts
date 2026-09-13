@@ -6,8 +6,10 @@
  */
 
 import type { RemoteApprovalMode } from '../remote-approval-gate.ts'
+import type { RemoteSandboxMode } from '../remote-sandbox.ts'
 
 export type { RemoteApprovalMode }
+export type { RemoteSandboxMode }
 
 /** One ProxyJump hop as the shared MachineForm assembles it. */
 export interface PayloadJump {
@@ -31,6 +33,8 @@ export interface MachineFormState {
   encryptPassword: boolean
   /** AUDIT-6 approval-gate mode — a select, so the value is always explicit. */
   remoteApproval: RemoteApprovalMode
+  /** REQ-I9 remote sandbox fence mode — a select, always explicit (`'off'` = default). */
+  remoteSandbox: RemoteSandboxMode
 }
 
 /** Cleared form state. */
@@ -38,6 +42,7 @@ export const EMPTY_MACHINE_FORM: MachineFormState = {
   id: '', name: '', host: '', port: '22', username: 'root', password: '',
   privateKeyPath: '', passphrase: '', workspace: '', hostKeyMode: '', encryptPassword: false,
   remoteApproval: 'off',
+  remoteSandbox: 'off',
 }
 
 /**
@@ -89,6 +94,9 @@ export function machinePayload(
     // AUDIT-6: the select always holds an explicit mode (no "unset" state —
     // `'off'` IS the default), so the payload always carries the field.
     remoteApproval: form.remoteApproval,
+    // REQ-I9 (ADR-0022 D1): same rule for the fence select. The host drops
+    // `'off'` before persisting, so machines.json shape is unchanged.
+    remoteSandbox: form.remoteSandbox,
     encryptPassword: form.encryptPassword,
     ...(form.password !== '' && !form.encryptPassword ? { credentialBackend: 'plain' } : {}),
     ...(jump !== undefined

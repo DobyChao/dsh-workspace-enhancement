@@ -37,6 +37,13 @@ import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
+import {
+  composeFencedGate,
+  createRemoteSandboxFence,
+  createRemoteSandboxTerminalGuard,
+  refuseFencedCommands,
+  remoteSandboxDepsOf,
+} from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 
 /**
@@ -57,6 +64,15 @@ const LOCAL_FS_CONFIG = { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 102
  * danger-full-access`（寄存器顺序在本 bundle 之后，append 成为最后事件，
  * fold 生效）；用户之后在 UI 里主动切换的模式仍是最后事件，按其决定（诚实：
  * 窄模式 + 远程 = 本地 runner 不可用 → 明确失败，绝不静默本地）。
+ *
+ * REQ-I9 边界（ADR-0022 §2.1/D1）：这个 pin 正是「本地 runner 绝不进入远端命令
+ * 行」的保证——它让 `dsh-bash-sandbox` 走 `danger-full-access` 快路径，所以
+ * 远端命令行里永远只有一个 runner（即本插件自己包的 bwrap），不会出现
+ * 「本地 bwrap/landlock argv 被发到远端」（I9-10）。由此推出：**远端围栏档位
+ * 不能来自 `ctx.sandboxPolicy`**（那个 resolver 对远程会话一律报
+ * `danger-full-access`），它必须是本插件自己的逐机器轴 `remoteSandbox`
+ * （`src/registry.ts`），由 `src/remote-sandbox-fence.ts` 在
+ * `SshSubprocessHandle` 的 argv 阶段消费。
  * @param ctx - the aggregate row's context.
  */
 function forceRemoteSandboxMode(ctx: Context): void {
@@ -98,7 +114,18 @@ export function installMixedProviders(ctx: Context): void {
   // optional services (`approval`/`agents`) resolve by name at ask time, so
   // the gate composes in any deployment and no-ops for ungated machines.
   const localSubprocess = new LocalSubprocessRuntime(ctx)
-  const sshSubprocess = new SshSubprocessEngine(ctx, createRemoteSpawnGate(ctx))
+  // REQ-I9 (ADR-0022): the remote sandbox fence is built here and passed to the
+  // remote branch only. Its per-spawn ladder (mode → identity for `'off'`,
+  // functional probe for a fenced mode, throw on any unproven case) lives in
+  // `remote-sandbox-fence.ts`; the seam applies it AFTER the approval gate and
+  // BEFORE serialization so the gate keeps seeing the user's original argv.
+  const fence = createRemoteSandboxFence(ctx)
+  const sshSubprocess = new SshSubprocessEngine(
+    ctx,
+    createRemoteSpawnGate(ctx),
+    fence,
+    createRemoteSandboxTerminalGuard(ctx),
+  )
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
@@ -143,7 +170,25 @@ export function apply(ctx: Context, config: Config): void {
     installMixedProviders(ctx)
   } catch (error) {
     ctx.logger.warn(`dsw: mixed provider install failed, falling back to pure-SSH providers: ${String(error)}`)
-    ctx.plugin(SshSubprocessRuntime, createRemoteSpawnGate(ctx))
+    // REQ-I9 fail-closed on the degraded path (ADR-0022 §2.3): this composition
+    // gets the REFUSING fence. It rides the gate closure because `ctx.plugin`
+    // accepts one non-context argument: approval first, fence decision second,
+    // and the fence's only effect is the refusal (the engine's `resolveArgv`
+    // stays undefined, so nothing is double-wrapped). It reads the SAME machine
+    // view the shipping path reads, so a machine whose `remoteSandbox` is not
+    // `'off'` is refused while `'off'` machines and routes without a connection
+    // id keep today's behaviour byte for byte.
+    //
+    // Window note, stated precisely: while `sshRegistry` is not yet mounted an
+    // id cannot be resolved, so this fence (and the engine's context-derived
+    // one) reads that machine as `'off'`. The window is still closed, but by
+    // INABILITY rather than by this refusal — resolving any remote route goes
+    // through the registry (`resolveSshCwd` throws for an unknown connection),
+    // so no remote command can run in it. Do not restate this as "the fence
+    // refuses every ssh:// route": it refuses fenced machines, and nothing else.
+    const refusalFence = refuseFencedCommands(remoteSandboxDepsOf(ctx))
+    const gate = composeFencedGate(createRemoteSpawnGate(ctx), refusalFence)
+    ctx.plugin(SshSubprocessRuntime, gate)
     ctx.plugin(SshFileSystem)
   }
 }
