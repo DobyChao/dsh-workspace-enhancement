@@ -1,4 +1,4 @@
-# R23 — 会话级机器连接（REQ-I11，吸收 SEC-5）+ 远端沙箱围栏（REQ-I9）
+# R24 — 会话级机器连接（REQ-I11，吸收 SEC-5）+ 远端沙箱围栏（REQ-I9）
 
 - **日期**：2026-09-13
 - **分支**：`feat/REQ-I11-machine-connect`（栈在 `chore/backlog-tidy` 之上；**只落本地，未推 PR**——用户「不急交」）
@@ -65,7 +65,7 @@
 
 ## 7. 未完成 / 待用户（真机项，缺一不可）
 
-1. `docs/uat/R23-req-i11-session-connections.md`（15 步）：连接/断开随动、**第 14 步验证「中插」真的在会话中途生效**、第 15 步**断言** exec 粗门可经官方 `bash` + `ssh://` workdir 绕过（预期行为，需确认文档已如实写明）。
-2. `docs/uat/R23-req-i9-remote-runner.md`（11 步 + G1–G3 门）：**G1 远端 bwrap 能否以 SSH 登录用户通过只读功能探针**（为否则本项在该主机类不成立，退化为审批门 + 低权用户）、G2 `--bind` 对 symlink/bind/NFS 工作区、I9-5（移除 bwrap 后必须证明命令**从未执行**）、I9-9（断言 fs/SFTP 洞仍存在，不粉饰）。
+1. `docs/uat/R24-req-i11-session-connections.md`（15 步）：连接/断开随动、**第 14 步验证「中插」真的在会话中途生效**、第 15 步**断言** exec 粗门可经官方 `bash` + `ssh://` workdir 绕过（预期行为，需确认文档已如实写明）。
+2. `docs/uat/R24-req-i9-remote-runner.md`（11 步 + G1–G3 门）：**G1 远端 bwrap 能否以 SSH 登录用户通过只读功能探针**（为否则本项在该主机类不成立，退化为审批门 + 低权用户）、G2 `--bind` 对 symlink/bind/NFS 工作区、I9-5（移除 bwrap 后必须证明命令**从未执行**）、I9-9（断言 fs/SFTP 洞仍存在，不粉饰）。
 3. **AUDIT-6 的尾巴**（e2e + 其 UAT）按用户拍板**延后到本轮之后统一审视**——它仍未完成，且 `e2e/` 对审批门零覆盖。
 4. 未推 PR：按用户「不急交」，分支与 `chore/backlog-tidy` 都留在本地。

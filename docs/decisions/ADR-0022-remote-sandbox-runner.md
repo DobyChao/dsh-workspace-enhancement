@@ -5,7 +5,7 @@
 - 范围: `src/remote-sandbox.ts`（新：纯逻辑）、`src/process.ts`（`SshSubprocessHandle` 启动序列加 argv 阶段）、
   `src/subprocess.ts`（可选围栏依赖）、`src/plugin.ts`（构建并注入围栏）、`src/registry.ts` / `src/web.ts` /
   `src/client/machine-form.tsx`（逐机器 `remoteSandbox`）、`src/locale/`、`src/exec-tools.ts`（可选：拒写标记）、
-  `docs/uat/R23-req-i9-remote-runner.md`
+  `docs/uat/R24-req-i9-remote-runner.md`
 - 关联: 实现 **REQ-I9**；与 **ADR-0020**（审批门）分层——审批是「要不要跑」，围栏是「跑起来也出不去」；
   收窄 **ADR-0021 §2.7** 的边界（执行面获得真围栏，fs 面仍没有）；上游沙箱栈事实见
   `docs/rounds/` 与本 ADR §1（`dsh-sandbox` 的 same-world 契约：远端 executor 应替换接缝，而非加后端）
@@ -100,7 +100,7 @@
 ## 4. 验收
 
 以 lab（`C:\Users\Admin\.dsh-lab`，端口 50599，一台真 Linux 远端）为准，落
-`docs/uat/R23-req-i9-remote-runner.md`；实现侧先跑 `check:static` / `typecheck` / `test:agent` / `build` /
+`docs/uat/R24-req-i9-remote-runner.md`；实现侧先跑 `check:static` / `typecheck` / `test:agent` / `build` /
 `boot-smoke --no-channel`。关键场景（完整表在侦察报告 `.tmp/recon/A3-remote-runner.md` §Q5）：
 
 | # | 断言 |

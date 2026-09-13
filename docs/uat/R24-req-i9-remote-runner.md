@@ -1,4 +1,4 @@
-# R23 — REQ-I9 远端沙箱围栏（bwrap over SSH）真机验收
+# R24 — REQ-I9 远端沙箱围栏（bwrap over SSH）真机验收
 
 > 设计与边界见 [`ADR-0022`](../decisions/ADR-0022-remote-sandbox-runner.md)；侦察证据见 `.tmp/recon/A3-remote-runner.md`。
 > **本脚本会故意破坏/恢复远端状态**（移除 bwrap、越界写文件），只在 lab 的**一次性 Linux 测试机**上执行。
@@ -7,10 +7,10 @@
 
 | 项 | 值 |
 |---|---|
-| 轮次 / 主题 | R23 — 远端沙箱围栏（`remoteSandbox` 逐机器档位） |
+| 轮次 / 主题 | R24 — 远端沙箱围栏（`remoteSandbox` 逐机器档位） |
 | 验收对象 | 远程 world 的 `spawn` 被 bwrap 围栏包住，且 fail-closed（runner 不可用即拒绝执行） |
 | 需求 / 缺陷 ID | REQ-I9（关联 ADR-0022、ADR-0020、REQ-I5） |
-| 脚本作者 / 日期 | 代理（编排轮 R23）/ 2026-09-13 |
+| 脚本作者 / 日期 | 代理（编排轮 R24）/ 2026-09-13 |
 | 预期耗时 | 40–60 分钟（含远端准备与恢复） |
 
 ## 1. 前置条件

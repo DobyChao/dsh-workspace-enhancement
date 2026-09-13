@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-13 03:58 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-13 04:09 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `37ca70f` |
-| HEAD 提交 | `docs(backlog): record the dead runner-path field found while answering a status question` (2026-09-13) |
-| 与远端 | 29 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `7f284ab` |
+| HEAD 提交 | `docs: adopt the one-remote-core direction (ADR-0023) everywhere it was scattered` (2026-09-13) |
+| 与远端 | 30 ahead / 0 behind origin/master |
 
 ## 质量
 

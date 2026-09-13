@@ -28,8 +28,8 @@
 
 近期顺序（不另立待办表，以 backlog 为准）：
 
-1. **真机验收**（由仓库所有者执行，缺一不可）：`docs/uat/R23-req-i11-session-connections.md`（15 步）、
-   `docs/uat/R23-req-i9-remote-runner.md`（11 步 + G1–G3 可行性门）；
+1. **真机验收**（由仓库所有者执行，缺一不可）：`docs/uat/R24-req-i11-session-connections.md`（15 步）、
+   `docs/uat/R24-req-i9-remote-runner.md`（11 步 + G1–G3 可行性门）；
 2. `REQ-I12` 围栏可见面收尾（`sw_status` 报围栏结论、拒写标记、徽标接实时 feed、死字段 `remoteSandboxRunner` 处置）；
 3. `AUDIT-6` 的 e2e / UAT 尾巴（按用户拍板延后到 REQ-I9 之后统一审视）；
 4. `REQ-I5` 开工前的两个前置决定：核心产物的**供应链**（来源/签名/校验和）与**架构覆盖**（x86_64 / aarch64）。
@@ -53,10 +53,10 @@
 | R17/R19 | rc.2 槽位重排侦察 / 0.1.5 家族运行时兼容（F1 启动崩溃 + F2 通道 405 + F3 哨兵） | ✅ |
 | R20 | 副工作区简化：权限档位退役（REQ-I7，`ADR-0019`） | ✅ |
 | R21/R22 | 远程命令审批门 + AI 自动放权（AUDIT-6，`ADR-0020`） | ✅ 真机尾巴待做 |
-| R23 | 会话级机器连接与远程工具门控（REQ-I11，吸收 SEC-5）+ 远端沙箱围栏（REQ-I9） | ✅ 代码完成，真机待验 |
+| R24 | 会话级机器连接与远程工具门控（REQ-I11，吸收 SEC-5）+ 远端沙箱围栏（REQ-I9） | ✅ 代码完成，真机待验 |
 
-> R23 的评审由 **GLM-5.3** 完成（首轮 `needs_revision`：1 blocker + 3 major，全部修复后复审 `pass`）。
-> 完整事实见 [`rounds/R23-session-connections-and-remote-fence.md`](./rounds/R23-session-connections-and-remote-fence.md)。
+> R24 的评审由 **GLM-5.3** 完成（首轮 `needs_revision`：1 blocker + 3 major，全部修复后复审 `pass`）。
+> 完整事实见 [`rounds/R24-session-connections-and-remote-fence.md`](./rounds/R24-session-connections-and-remote-fence.md)。
 
 每轮的完整事实记录（目标、任务 DAG、验证、遗留）见 [`rounds/`](./rounds/)。
 

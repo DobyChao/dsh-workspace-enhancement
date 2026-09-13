@@ -75,7 +75,7 @@ read/write/edit/glob/grep + `ssh://<id>/` **注册表级**路由；该路由是*
    - **稳定框架**（远程强调 + `remoteNoSandbox` + `remoteGateActive`）留在 `section('sw-remote', order 90)`；
    - 两者在「无远程事实」时都必须贡献空串 ⇒ 本地零连接会话**零注入**（补完 REQ-I6 零注入的工具侧）；
    - `tool:sw-exec` 段的存在性同样由「本会话有远程事实（远程 cwd / 副根 / 已连接机器）」决定。
-   **诚实标注**：快照的投递与耐久语义是**读类型定义得出**的，未经真机确认 ⇒ `R23` 验收脚本必须至少一步
+   **诚实标注**：快照的投递与耐久语义是**读类型定义得出**的，未经真机确认 ⇒ `R24` 验收脚本必须至少一步
    证明「连接动作后，模型在**同一会话的后续回合**里确实看得到机器清单」（而不是只在头部 prompt 里）。
 9. **面板 = 会话工作区驾驶舱**：主工作区（只读展示）+ 副根声明 + **已连接机器开关**；开关与 `sw_connect`
    写同一 store，UI 与模型不会各说一套。**两条入口的校验强度有意不同**：工具调用先 ping（模型驱动，
@@ -118,4 +118,4 @@ read/write/edit/glob/grep + `ssh://<id>/` **注册表级**路由；该路由是*
 5. **提示**：本地零连接 = `sw-remote` 与 `tool:sw-exec` 两段零注入；连接后下一次 assembly 出现机器清单。
 6. **红线 1**：`src/` 与词典中不再存在 `password` 作为 `sw_connect` 参数；`SECURITY.md` 有对应条目。
 7. 闸门：`check:static` / `typecheck` / `test:agent` / `build` / `boot-smoke --no-channel` 全绿；
-   真机验收落在 lab（50599）+ `docs/uat/R23-req-i11-session-connections.md`（需用户执行）。
+   真机验收落在 lab（50599）+ `docs/uat/R24-req-i11-session-connections.md`（需用户执行）。
