@@ -62,4 +62,4 @@ profile 由 `@nanmicoder/dsh-agent-teams` 读取，配置位于宿主组合中�
 ## 5. 与状态的关系
 
 - 这两个 profile 本身是待办 `INFRA-8a` / `INFRA-8b`，状态在 `docs/backlog.md`；
-- 每次用它跑完一轮，在 `docs/rounds/` 记录实际 DAG 与偏差——**profile 是要迭代的，不是一次写死**。
+- 每次用它跑完一轮，在 `docs/rounds/` 记录实际 DAG 与偏差（档案，不是现状）——**profile 是要迭代的，不是一次写死**。

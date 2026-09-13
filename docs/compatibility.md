@@ -44,7 +44,7 @@
 |---|---|---|---|
 | L1 静态 | 所有 peer 必须声明**同一个**范围（可以是 `||` 联合）；dev 必须是该范围里的一个备选；peer 范围必须带 `-rc.`；宿主包不得进 `dependencies`；**联合范围里每个家族都必须在 `upstream.yml` 里被点名** | `scripts/check.mjs` #6 | 每次 `npm run check` |
 | L2 升级 | Renovate 把 `@deepseek-ai/*` 分组为一个 PR（peer 与 dev 同步升级），禁止自动合并 | `renovate.json` | 每周 |
-| L3 哨兵 | **三通道**探测：`next` / `alpha` / `legacy` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门；任一红则自动开/更新 issue | `.github/workflows/upstream.yml` | 每周一（三条）+ 每周四（alpha）+ 手动 |
+| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue | `.github/workflows/upstream.yml` | 每周一 + 每周四（alpha）+ 手动 |
 | L4 运行时 | 能力探测而非版本假设：可选服务 `ctx.get()` 判空、特性探测、双键回退、首用 fail-loud | `src/**`（见下） | 运行期 |
 
 L3 的判读：它红不代表要立刻改代码，而是**代表"上游已经变了，你需要看一眼"**——

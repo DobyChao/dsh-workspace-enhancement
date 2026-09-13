@@ -15,7 +15,7 @@
 给「远程 world 的 spawn」加一层**逐机器的、fail-closed 的 bwrap 围栏**：`SshSubprocessHandle` 在
 **approval preflight 之后、命令序列化之前**多一个 argv 阶段，把原始命令包成
 `<runner> <bwrap profile args> -- <original argv>`。围栏不可用 ⇒ 抛 `SANDBOX_UNAVAILABLE`，**命令一个字节都不发**。
-默认 `off`（零迁移、与今天逐字节相同）。**fs/SFTP 写面不在围栏内**（bwrap 只围进程）。
+默认 `off`（零迁移、与今天逐字节相同）。**fs/SFTP 写面不在围栏内**（bwrap 只围进程；收口见 `ADR-0023`）。
 
 ## 1. 上游事实（侦察 A3，磁盘权威源 `…\dsh\…\@deepseek-ai\*`，0.1.5-rc.2）
 
@@ -70,7 +70,7 @@
    探针结论可在 `sw_status` 里如实报告（v1 允许仅内存缓存）。
 7. **如实记录两条边界**（文档与提示词都要写）：
    ① **fs 写面（SFTP）不在围栏内**——它走宿主进程的 SFTP 通道，不经远端进程，bwrap 围不住；远端写面的强制层
-   只有远端 OS 权限（低权用户/容器）或未来的远端 fs 服务（REQ-I5 完全体）；
+   只有远端 OS 权限（低权用户/容器）或未来由核心接管的远端 fs RPC（REQ-I5 / `ADR-0023`：读写纳入核心后，此边界消失）；
    ② 围栏只覆盖**经 spawn 的命令**，同 ADR-0021 §2.7。
 8. **与审批门的关系**：审批门保持现状（未包装 argv、逐机器三态）；围栏是它**之后**的第二道。两者都能拒绝，
    互不替代：`remoteApproval` 决定「要不要跑」，`remoteSandbox` 决定「跑起来能不能越界」。

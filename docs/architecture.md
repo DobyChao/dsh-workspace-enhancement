@@ -1,409 +1,116 @@
-# dsh-workspace-enhancement 架构文档
+# dsh-workspace-enhancement 架构
 
-> 面向接手者（新 agent / 新贡献者）。本文只陈述来源里已有的事实，来源见 §8；
-> 来源未明确的点一律标注「（来源未明确）」，不做推测。
-> 工作规则见仓库根 `AGENTS.md`；当前状态见 `docs/status.md`；待办真相源见 `docs/backlog.md`；
-> 路线图见 `docs/ROADMAP.md`。
-> 公开文档中的主机/用户/指纹/路径一律为占位符：`user@host`、`%DSH_HOME%`、`$HOME`、`<repo>`、
-> `<fingerprint>`；本机回环地址（lab 端口 50599）非敏感，按原样书写。
+> **本文只陈述当前系统。** 为什么见 [`decisions/`](./decisions/)；某一轮怎么走到这见 [`rounds/`](./rounds/)（档案）；待办见 [`backlog.md`](./backlog.md)；规则见根目录 `AGENTS.md`。
+> 公开文档中的主机/用户/指纹/路径一律为占位符：`user@host`、`%DSH_HOME%`、`$HOME`、`<repo>`、`<fingerprint>`。lab 回环地址（端口 50599）非敏感，按原样书写。
 
-## 1. 一句话定位
+## 1. 定位与原则
 
-把 DSH 生态里散落的「工作区」能力（远程 SSH 工作、目录选择、机器/连接管理）收进**一个**插件包：
-`ctx.subprocess` / `ctx.fs` 的远程 provider 让框架里**所有**消费这两条接缝的工具（bash、文件读写、
-PTY 终端、LSP、子代理进程）**零改动**地跑在远端；多机注册表 + `ssh://<id>/<path>` 路由决定「在哪台机、
-哪个目录」；会话可以再挂若干**副工作区**（薄声明清单：挂/卸 + label + 远程根路由，ADR-0019）。
+把 DSH 生态里散落的「工作区」能力（远程 SSH、目录选择、机器/连接管理）收进**一个**插件包。
+`ctx.subprocess` / `ctx.fs` 的远程 provider 让框架里所有消费这两条接缝的工具零改动地跑在远端。
 
-## 2. 核心原则
+**本地大脑、远程手脚、一层配置：**
 
-**「本地大脑、远程手脚、一层配置」**（`drafts/CONTEXT.md` §1）：
+1. 一个包承载本地 + 远程（SSH）、选择/浏览、连接与机器管理（镜像/同步与审计日志明确不做，见 ADR-0003 / ADR-0004）。
+2. 引擎走 DSH 能力接缝（`subprocess` / `fs` / `directoryPicker` / `tools` / `systemPrompt` / 浏览器通道 / `locale`），不另造平行工具。
+3. 面向模型与 UI 的接口保持窄：一组 `sw_*` 工具、一套注册表、按会话注入的提示。
 
-1. 一个包承载工作区全部职能：本地 + 远程（SSH）、选择/浏览、连接与机器管理（镜像/同步与审计已明确不做，
-   见 ADR-0003 / ADR-0004）；
-2. **引擎走 DSH 的能力接缝** —— `ctx.subprocess` / `ctx.fs` / 目录选择器（`ctx.directoryPicker`）/ 工具注册
-   （`ctx.tools`）/ 系统提示（`ctx.systemPrompt`）/ RPC 通道（`ctx.connection.rpc`）/ 国际化（`ctx.locale`）。
-   官方与社区工具不用改一行就能工作在所选工作区上，而不是各插件再造一套平行工具；
-3. 面向模型与 UI 的接口保持窄而稳：一个系统提示 section、一组精简工具（`sw_*`）、一套配置。
+工程约束：Node ≥ 22.8、ESM only、TS + `tsc` + `tsdown`。宿主已提供的 `@deepseek-ai/dsh-*` 一律 `peerDependencies`（当前范围 `^0.1.5-rc.1`），`dependencies` 只留 `ssh2`（ADR-0009）：Cordis 服务身份是模块级 Symbol，自装副本会遮蔽宿主单例。
 
-工程约束（`AGENTS.md` §2）：Node >= 22、ESM only、TS + `tsc` + `tsdown`；宿主插件对象永远是纯 JavaScript；
-宿主已提供的共享包只进 `peerDependencies`（见 §6）。
+## 2. 运行形态
 
-## 3. 运行形态
-
-### 3.1 宿主半与客户端半的边界
-
-| 面 | 源 | 构建 | 产物 | 加载方式 |
-|---|---|---|---|---|
-| 宿主（Node） | `src/*.ts`（除 `src/client/`） | `tsc` | `lib/**` | 插件加载器导入 `lib/index.js` |
-| 客户端（浏览器） | `src/client/**`（TSX） | `tsc` → `tsdown` | `lib/client/index.js` → **单文件** `lib/client.js` | `window.__ModuleLoader__.load({ id, factory })` |
-| 共享词典 | `src/locale/` | 两条链各取一次 | 宿主编到 `lib/locale/`（**不进** `exports` 表）；客户端被 tsdown 内联 | 两侧 import 同一批源文件 |
-
-- `package.json` 的 `exports` 表：`.` 入口 + 六条子路径（`./ssh`、`./subprocess`、`./fs`、`./picker`、`./web`、`./client`）
-  + `./package.json`。
-- `tsdown.config.ts`（客户端构建）：平台模块（react / react-dom / `@deepseek-ai/cordis` /
-  `dsh-client-ui-slots` / `dsh-client-web-react` / `dsh-client-ui-primitives` / `dsh-client-ui-attachment` /
-  `dsh-client-schema-form` / `dsh-client-runtime/client`）从加载器模块表解析，**其余全部内联**；
-  「bundle purity gate」把任何非平台模块的 `@deepseek-ai/*` **值**导入当作构建错误
-  （跨插件协作只能走 Cordis 服务；类型导入被擦除）；CSS Modules 由 lightningcss 编译成自注入 `<style>`。
-
-### 3.2 挂载：`cordis.patch.yml`
-
-`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`，该 patch 分两组动作（关掉三行默认 provider + 插入三行本插件行）：
-
-| 行 | 动作 | 说明 |
-|---|---|---|
-| `directory-picker`（`@deepseek-ai/dsh-host-directory-picker-auto`） | `disabled: true` | 默认选择器关闭，添加工作区流程由本插件接管 |
-| `subprocess`（`@deepseek-ai/dsh-subprocess-local`） | `disabled: true` | 本地 provider 行让位给混合 provider |
-| `fs-sandbox`（`@deepseek-ai/dsh-fs-sandbox`） | `disabled: true` | 同上 |
-| `ssh-remote`（`dsh-workspace-enhancement`） | insert | 聚合行：挂 `ctx.ssh`，并把 `ctx.subprocess` / `ctx.fs` 换成混合门面；config 是一组占位连接参数（懒连接，真实连接来自 UI 里创建并持久化的注册表条目） |
-| `directory-picker-ssh`（`dsh-workspace-enhancement/picker`） | insert | `maxEntries: 1000` 的目录 browse 后端 |
-| `ssh-web-channel`（`dsh-workspace-enhancement/web`） | insert | 注册表 + `/api/dsw/*` 浏览器通道 |
-
-- 注释与源码都强调：profile 自身的 `cordis.patch.yml` 与 `--patch` 覆盖在本层之后生效，部署可以改写或关掉任意行；
-  sandbox 策略行与沙箱化 shell 执行器保持启用，它们消费的是混合 `ctx.subprocess`（`src/plugin.ts` 文件头）。
-- 聚合行等价于三条子路径行（`/ssh` + `/subprocess` + `/fs`），**但混合接线只在聚合行发生**；
-  子路径行保留纯 SSH 形态，供逐个组合 provider 的部署使用。
-
-### 3.3 客户端 slot 注入
-
-`src/client/index.ts` 的 `inject = ['slots', 'workspaces', 'sessions', 'locale']`，`apply()` 依次注册：
-
-| 槽位 | id / order | 组件 | 作用 |
+| 面 | 源 | 构建 | 产物 |
 |---|---|---|---|
-| `conversation.hero.workspace.directoryFlow` + `sidebar.workspaces.directoryFlow` | — | `SshWorkspaceFlow` | 添加工作区目录流（`slots.inject` 事务式注册两个洞） |
-| `settings.section` | `dsh-workspace-enhancement` / order 40 | `RemoteWorkspaceSettingsPage` | 设置页「远程工作区」机器管理 |
-| `conversation.session.header.actions` | `dsh-workspace-enhancement-side` / order 25 | `SideWorkspacesAction` | 会话标题栏「工作区」按钮与副工作区面板 |
+| 宿主（Node） | `src/*.ts`（除 `src/client/`） | `tsc` | `lib/**`，入口 `lib/index.js` |
+| 客户端（浏览器） | `src/client/**` | `tsc` → `tsdown` | 单文件 `lib/client.js` |
+| 共享词典 | `src/locale/` | 两侧各取一次 | 宿主编到 `lib/locale/`（不进 `exports`）；客户端被 tsdown 内联 |
 
-- 每个注册都带 `locale: 'dsw'`（拿到类型化 `t`）与 `inject`（`listLocalDirectory` / `createLocalDirectory` /
-  `rpc('/api', 'dsw/…')`）；列表标签用 label thunk（`() => t('settings.label')`）读时求值。
-- 会话栏**行级**徽标没有官方槽位，由 `installRowBadges`（`src/client/row-badges.ts`）用 DOM 增辉层 +
-  MutationObserver 注入，随 `ctx.effect` 回收（上游 PR 提案已撤销，见 ADR-0011）。
+`package.json` `exports`：`.` + `./ssh` / `./subprocess` / `./fs` / `./picker` / `./web` / `./client`。tsdown 把平台模块（react、cordis、官方 UI 包）留在加载器模块表，其余内联；非平台 `@deepseek-ai/*` **值**导入是构建错误。
 
-## 4. 模块地图
+### 2.1 `cordis.patch.yml`
 
-`src/` 共 42 个文件：顶层 25、`src/client/` 13、`src/locale/` 4。
-
-### 4.1 宿主（顶层 25）
-
-| 模块 | 职责 | 关键导出 |
-|---|---|---|
-| `src/index.ts` | 包入口：重导出宿主公共 API | `apply`、`SshRuntime`、`SshSubprocessRuntime`、`SshFileSystem`、`SshDirectoryPicker`、`SshRegistry`、`SshConnection`、`HostKeyStore`、`saveSecret`/`getSecret`/`deleteSecret`、`parseSshTargetKey`、`resolveSshCwd` |
-| `src/plugin.ts` | 聚合行插件：挂 `ctx.ssh`、安装混合 provider、远程会话沙箱模式适配 | `apply`、`installMixedProviders` |
-| `src/runtime.ts` | `ctx.ssh` 服务：一个 SSH 执行世界的所有权（认证/保活/主机校验/跳板） | `SshRuntime`、`Config`、`JumpConfig`、`quoteShellArg`、`wrapCwd` |
-| `src/ssh-core.ts` | 共享连接机制：跳板链打开、exec 通道、远端环境缓存、SFTP 缓存、shell 引号 | `SshSession`、`openChain`、`execChannel`、`toConnectConfig`、`resolvePrivateKey`、`hostVerifierFor` |
-| `src/connection.ts` | 注册表拥有的单连接：spec → 跳板链、主机校验策略解析、错误脱敏 | `SshConnection`、`SshConnectionSpec`、`resolveHostKeyPolicy`、`redactSpecMessage` |
-| `src/transport.ts` | 执行世界传输 + `ssh://<id>/<path>` 路由与本地占位目录 | `SshTransport`、`sshTargetKey`、`parseSshTargetKey`、`sshRoutePlaceholder`、`remoteRouteFromCwd`、`resolveSshCwd`、`resolveSshTargetKey` |
-| `src/subprocess.ts` | `ctx.subprocess` 远程 provider（进程接缝） | `SshSubprocessEngine`、`SshSubprocessRuntime` |
-| `src/process.ts` | 一个异步启动的 SSH 命令在进程接缝上的投影 | `SshSubprocessHandle` |
-| `src/terminal.ts` | SSH PTY 分配与终端句柄 | `spawnSshTerminal`、`SshTerminalHandle` |
-| `src/output.ts` | 远程输出流的有界收集 + 私有（0700）spill 文件 | `SshOutputCollector` |
-| `src/environment.ts` | 远端登录环境读取与 scrub（剔 `DSH_*` / 凭据形变量） | `readRemoteEnvironment`、`scrubRemoteEnvironment`、`serializeEnvironment` |
-| `src/filesystem.ts` | `ctx.fs` 远程 provider（SFTP；原子写、写意图/版本） | `SshFileSystemEngine`、`SshFileSystem`、`isOwnStagingDirectory`、`overwritePublicationCommand` |
-| `src/listing.ts` | 远程目录单层遍历（picker 与通道 `browse` 端点共用） | `listRemoteLevel`、`remoteHome`、`ancestryCrumbs`、`asError`、`raceAbort` |
-| `src/picker.ts` | `ctx.directoryPicker` browse 后端（本机/远程统一；win32 双根） | `SshDirectoryPicker`、`Config` |
-| `src/registry.ts` | 机器注册表服务 `ctx.sshRegistry`：持久化、CRUD、TOFU、keychain、`~/.ssh/config` 解析、连接状态/探测/重连 | `SshRegistry`、`loadMachinesState`、`normalizeMachine`、`parseSshRoute`、`deriveConnectionState` |
-| `src/hostkey.ts` | TOFU 主机指纹：模式、指纹计算、known_hosts 存取、`%DSH_HOME%` 路径 | `HostKeyMode`、`HostKeyStore`、`HostKeyGuard`、`keyFingerprint`、`dshHome`、`remoteWorkspacesRoot`、`defaultKnownHostsFile`、`defaultSecretsDir` |
-| `src/credential.ts` | OS 钥匙串密码存取（DPAPI / security / secret-tool，best-effort 回退明文） | `platformBackend`、`saveSecret`、`getSecret`、`deleteSecret` |
-| `src/mixed.ts` | 混合 provider 门面（`ctx.subprocess`/`ctx.fs` 唯一实现）+ 路径路由 + 副根路由（resolve/lstat 先看副根；权限门已随 ADR-0019 退役） | `MixedSubprocessRuntime`、`MixedFileSystem`、`worldOfCwd`、`worldOfTargetKey`、`remoteArgvOf` |
-| `src/session-workspaces.ts` | 副工作区状态服务 `ctx.sideWorkspaces`：roots/sessions 双映射、最长前缀匹配、CRUD | `SessionSideWorkspaceStore`、`sideWorkspaceOf`、`normalizeSideRootKey`、`loadSideWorkspaces` |
-| `src/web.ts` | 浏览器通道的宿主半：`/api/dsw/*` 精确 Fetch 路由注册与端点派发 | `apply`、`Config`、`WebChannelConfig`、`CHANNEL_ENDPOINTS`、`inject` |
-| `src/web-channel.ts` | 通道线协议单一来源（两半共用）：路径、命名空间、信封校验与 Fetch 适配器 | `API_CHANNEL`、`CHANNEL_NAMESPACE`、`channelPathOf`、`channelEndpointOf`、`channelRouteOf`、`isAlreadyRegistered` |
-| `src/tools.ts` | 3 个 `sw_*` 管理工具 + 每会话远程认知提示 section | `registerWorkspaceTools`、`renderRemotePrompt`、`renderSideWorkspaces`、`composeWorkspacePrompt`、`renderRemoteEnvProbe` |
-| `src/model-prompts.ts` | **model-facing 英文文案常量**（系统提示段 + 远端工具箱提示），刻意不入 i18n（ADR-0014） | `MODEL_PROMPTS`、`modelPrompt`、`ModelPromptKey` |
-| `src/session-remote-context.ts` | 每会话工作区事实（cwd / sessionId / 副工作区）与「是否远程世界」判定，供三条提示 section 共用 | `sessionWorkspaceContextOf`、`hasRemoteWorkspaceContext`、`PromptAgentFace` |
-| `src/exec-tools.ts` | `sw_exec`（跨服务器执行）+ win32 宿主 `bash` 接缝 | `registerSwExec`、`registerWin32Bash`、`swExecCore`、`resolveRemoteOs`、`buildShellArgv`、`renderSwExecForeground` |
-| `src/css-modules.d.ts` | CSS Modules 类型声明（构建期内联） | 无运行时导出 |
-
-### 4.2 客户端（`src/client/` 13）
-
-| 模块 | 职责 | 关键导出 |
-|---|---|---|
-| `index.ts` | 客户端入口：注册词典、4 个槽位、安装行徽标层 | `apply`、`inject` |
-| `flow.tsx` | 添加工作区目录流（连接侧栏 + 目录浏览，VS Code Remote Explorer 式） | `SshWorkspaceFlow`、`FlowProps`（含 `suppressSessionRoute` / `initialConnectionId` / `pickOnly`） |
-| `form.tsx` | flow 的连接表单外壳（模态框 + 共享 MachineForm） | `ConnectionForm`、`ConnectionDraft` |
-| `machine-form.tsx` | 共享机器/连接表单（设置页与 flow 字段并集，`mode` 只决定提交动作） | `MachineForm`、`parseJumpText`、`jumpChainOf`、`formatResolvedSummary`、`createActionGate` |
-| `machine-payload.ts` | 机器表单 payload 纯函数（keychain ↔ 明文切换规则可单测） | `machinePayload`、`EMPTY_MACHINE_FORM` |
-| `settings.tsx` | 设置页「远程工作区」机器列表与表单 | `RemoteWorkspaceSettingsPage`、`savedBanner` |
-| `side-workspaces.tsx` | 会话标题栏「工作区」按钮 + 副工作区面板（复用 flow 浏览） | `SideWorkspacesAction`、`SideWorkspacesPanel` |
-| `status.tsx` | 连接状态 UI：wire 契约、TTL 状态中心、三态徽标与重连 | `createStatusCenter`、`useConnStatus`、`ConnStatusBadge`、`CONN_STATE_LABEL_KEY` |
-| `row-badges.ts` | 会话栏行级徽标 DOM 增辉层（无官方行级槽位时的兼容层） | `installRowBadges`、`badgeTextsOf`、`routeIdOf`、`isOwnBadgeMutation` |
-| `icons.tsx` | 内联 SVG 图标集（零依赖，currentColor） | 18 个图标组件 |
-| `ui.ts` | 客户端 UI 工具：类名拼接、对话框无障碍（Esc 栈 / 焦点陷阱） | `cx`、`useDialogA11y` |
-| `flow.module.css` | flow 主题样式（token 锚点 `--dshssh-*`，深浅色 + 窄屏） | 无导出（CSS Modules 类映射） |
-| `side-workspaces.module.css` | 副工作区面板样式（token 锚点 `--dswsw-*`，与 flow 同构） | 无导出 |
-
-> 注：两份样式表的 token 锚点前缀不一致（`--dshssh-*` 是历史命名、`--dswsw-*` 是 R5 新表），
-> 两者都走「宿主自定义属性 → 泛型变量 → 静态回退」+ `color-mix` 双声明 + `prefers-color-scheme: light` 覆盖；
-> 前缀未统一的理由**来源未明确**。
-
-### 4.3 词典（`src/locale/` 4）
-
-| 模块 | 职责 | 关键导出 |
-|---|---|---|
-| `dsw.ts` | zh 词典 = 键集真源；`LocaleNamespaceMap` 增强声明 | `zh`、`DswKey` |
-| `dsw.en.ts` | en 词典，声明为 `Record<DswKey, string>`（缺/多键即编译错） | `en` |
-| `index.ts` | 词典出口 + 纯 `lookup` + 客户端注册原语 | `zh`、`en`、`lookup`、`registerDswLocale`、`LocaleId` |
-| `host.ts` | 宿主语言解析与工具本地化 helper | `hostLocaleOf`、`localeOf`、`localizeTool` |
-
-## 5. 关键机制
-
-### 5.1 混合 provider 与路径路由（`src/mixed.ts`）
-
-- **动机**：Cordis 同名服务只能注册一次，所以聚合行成为 `ctx.subprocess` / `ctx.fs` 的**唯一实现**，
-  官方工具（`tool-bash` / `tool-pwsh` / `tool-fs`）保持原样绑定服务名，路由发生在服务内部（`drafts/CONTEXT.md` §6.2 R4）。
-- `installMixedProviders(ctx)`：本地实现类在**本 fiber** 构造（`LocalSubprocessRuntime`；存在 `sandboxPolicy`
-  服务时在 `ctx.inject(['sandboxPolicy'])` 子纤维内构造 `SandboxedFileSystem`，否则 `LocalFileSystem`），
-  再 `ctx.set('subprocess'|'fs', 门面)`；provide + set 同步完成，消费者纤维不会在两步之间醒来。
-- 路由判定（纯函数，可单测）：
-  - `worldOfCwd(cwd)`：命中 `ssh://`、`dsw-routes` 占位树或旧 `dsh-ssh-routes` 树 → `remote`；
-    win32 宿主上裸 POSIX 绝对路径（`/…` 且非 `//…`）→ `remote`；其余（含 **cwd 缺失**）→ `local`。
-  - `worldOfTargetKey(targetKey)`：`ssh://` → `remote`，否则 `local`。
-  - `remoteArgvOf(argv)`：Windows 绝对 argv[0]（`C:\…`、`\\…`）改写为裸命令名并去掉 `.exe`；其余原样。
-- `MixedFileSystem.resolve` / `lstat` **先看副工作区路径**（绝对路径落在远程副根上时，即使会话 cwd 是本地也走该机器），
-  再看 cwd 世界；`stat` / 读类 / `listDir` / 写类按 targetKey 路由（副根只是声明，无门，ADR-0019）。
-  `sandboxMode` 继承本地委托（诚实上报部署默认），per-call `sandboxPolicy` 只传给本地委托（远端写入不可能被本地沙箱围栏）。
-- `resolveExecutable` 恒走本地（接缝无 cwd 参数，调用方是宿主诊断工具；bash/pwsh 执行器不调用它）。
-- 兜底：混合安装抛错时回退到纯 SSH 挂载（`SshSubprocessRuntime` + `SshFileSystem`），并 `logger.warn`。
-- 远程会话执行适配：`forceRemoteSandboxMode` 监听 `session/created`，cwd 是远程路由时写入
-  `sandbox/mode = danger-full-access`（避免沙箱化 shell 执行器把命令包进不存在的本地 runner）。
-
-### 5.2 机器注册表与 `ssh://<id>/<path>` 路由（`registry.ts` / `transport.ts`）
-
-- `ctx.sshRegistry`（`SshRegistry extends Service`）是**唯一真相**：UI 的 `connections.*` 端点、`ssh://` 路由、
-  fs/subprocess provider 全部经它解析，每个条目共享一条活连接。
-- 持久化 `<dsh home>/remote-workspaces/machines.json`（`{ list, currentId }`，沿用 dsh-remote 的路径与形状）；
-  首次迁移：machines.json 缺失或空表且旧 `dsh-ssh-connections.json` 存在时逐条导入（**保留 id**，使
-  `ssh://c1/…` 继续有效），旧文件改名 `dsh-ssh-connections.json.bak`；非空 machines.json 永不被覆盖，
-  损坏文件保持原样并告警。
-- 路由：`ssh://<id>/<path>`；同时识别本地占位目录 `<dsh home>/dsw-routes/<id>/<path>`（旧 `dsh-ssh-routes/` 树
-  继续为活会话路由）——因为宿主 session 服务会对本地目录硬 `mkdir`，客户端只能拿占位路径过 `sessions.create`；
-  两种拼写最终落到同一注册表连接。
-- `~/.ssh/config`：手写 parser（Host / HostName / User / Port / IdentityFile / ProxyJump，通配块匹配，
-  递归跳板深度 ≤ 8），`listConfigHosts()` 只列精确别名，`resolveSshConfig(host)` 给出含跳板链的生效配置。
-- 连接状态面：`statusOf` / `probe` / `reconnect`（探测超时 `PROBE_TIMEOUT_MS` = 8s，状态 TTL
-  `DEFAULT_STATUS_TTL_MS` = 5s，`deriveConnectionState` 派生三态）；凭据解析 `resolvePassword` 先明文后钥匙串；
-  对外视图 `SshConnectionView` / `MachineView` 剔除密码与私钥。
-
-### 5.3 TOFU 主机指纹（`hostkey.ts`）
-
-- 三模式 `accept-new`（**默认**）/ `verify` / `off`；指纹 = sha256(blob) base64；首次记录、之后密钥一变即拒；
-  `forgetHostKey` 可重置。
-- 持久化 `<dsh home>/remote-workspaces/known_hosts.json`，键 `host:port` → `{ algo, fingerprint, firstSeen }`，
-  **沿用 dsh-remote 的路径与格式**，已有安装零迁移。
-- ssh2 v1.17 的 `hostVerifier` 收到的是原始 host-key blob Buffer（而非旧的 `{ algo, hash }` 对象），
-  两种形状都接受，契约漂移时 **fail closed** 而不是每次连接抛 crypto 错误。
-- 策略解析顺序：`spec.hostKeyMode`（TOFU）→ 旧 `strictHostKeyChecking` / `knownHosts`（手动档）→ 注册表默认模式。
-
-### 5.4 OS 钥匙串（`credential.ts`）
-
-- 逐机器可选的密码存储后端：darwin `security`（login keychain）、win32 DPAPI（PowerShell，CurrentUser 作用域，
-  文件在 `<dsh home>/remote-workspaces/.secrets/`）、linux `secret-tool`，其余平台 `plain`。
-- 所有后端都是 best-effort：失败返回 `{ ok: false }`，调用方回退明文——该功能绝不阻塞连接；
-  `credentialBackend` 是逐机器字段，UI 对加密回退态有诚实提示。
-- 错误脱敏由 `connection.ts` 的 `redactValues` / `redactSpecMessage` 承担；凭据永不进日志、不进 git。
-
-### 5.5 副工作区：薄声明清单 + 远程根路由（`session-workspaces.ts`）
-
-> 权限模型（`fs: r|rw` × `exec: on|off` 两道门）已随 REQ-I7 整体退役（ADR-0019）；
-> 本节描述退役后的现状。
-
-- 实体 `SideWorkspaceItem`：`id` / `kind: 'local' | 'remote'` / `rootKey`（本地绝对路径，或
-  `ssh://<machineId>/<posix>`）/ `label`。副根只是**声明**——「本会话把这个目录声明为可直接操作的附加根」，
-  无任何权限语义；加载既有状态文件时，记录上的旧 `fs`/`exec` 字段被忽略（不报错、不迁移）。
-- 状态文件 `<dsh home>/dsw-session-workspaces.json`，两个映射：
-  - `roots`：rootKey → 记录（**一个根一份记录**，两个会话挂同一目录共享同一条声明）；
-  - `sessions`：sessionId → 有序 rootKey 列表（展示与提示顺序）。
-- 匹配 `sideWorkspaceOf` / store 的 `match(path)` 做**最长前缀匹配**（跨 `local` / `ssh://` 家族，含分隔符边界、
-  win32 大小写与正斜杠归一、realpath 规范化）——它是**路由索引**：`MixedFileSystem.resolve` / `lstat`
-  先看副根（绝对路径落在远程副根上时，即使会话 cwd 是本地也走该机器）；spawn 面已不消费它
-  （按 cwd 世界路由）。
-- 提示注入：`composeWorkspacePrompt` 渲染主工作区事实行 + 副工作区清单（每行 label + rootKey，无档位标记；
-  无副工作区 = 零注入）；文案是 model-facing 英文常量（`src/model-prompts.ts`，ADR-0014）。
-- RPC：`session.ws.list` / `add` / `update(label)` / `remove`（远程机器先校验存在再落盘；
-  add/update 只消费 `id`/`kind`/`path`/`label`，payload 校验是宽松白名单——旧客户端仍发
-  `fs`/`exec` 等未知字段时被忽略、请求照常受理）。
-- 真正的隔离手段回归两层：每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
-  远程命令围栏走 `AUDIT-6`/`REQ-I9` 线。
-
-### 5.6 浏览器通道 `/api/dsw/*`（`web.ts` + `web-channel.ts`）
-
-- 通道是**官方共享 `/api` 传输上的精确 Fetch 路由**：`ctx.connection.fetch.register({ path, methods: ['POST'],
-  requestBody: 'buffered', fetch })`，路径 `/api/dsw/<端点的点号名>`，disposer 随 `ctx.effect` 回收；
-  `inject = ['connection', 'tools', 'systemPrompt']`。
-  - **为什么不是 `rpc.handle('/dsw', …)`**：`dsh-client-connection` 的 `register` 末行读 `owner.webServer`，
-    而 `owner` 是 **Connection 服务自己的 ctx**；该包在 0.1.5 上只声明 `["credentials"]` ⇒ 任何调用者都会抛
-    `cannot get property "webServer" without inject`（F1 启动崩溃 / F2 `/dsw` 405，见 `docs/rounds/R18-F2-dsw-405.md`）。
-  - **为什么不是 `rpc.intercept('/api', …)`**：共享通道的拦截器是**单占位**（`registerInterceptor` 二次注册抛错），
-    `@deepseek-ai/dsh-api-gateway` 已占用；精确 Fetch 路由在分发时**先于**拦截器被查（`createSharedFetchHandler`），
-    且物理载波仍会先做 loopback/Host 栅栏与浏览器会话校验。决策见 `ADR-0018`。
-- **线协议单一来源**：`src/web-channel.ts`（两半共用）给出通道路径、命名空间与信封校验；客户端只发
-  `connection.rpc.call('/api', 'dsw/<endpoint>', payload)`，服务端回
-  `{type:'server-response', rpcId, result}`（信封与上游一致，`method` 取 `/api` 之下的完整端点路径）。
-- 端点分组（`src/web.ts` 的 `switch`，与 `CHANNEL_ENDPOINTS` 由用例锁定一致）：`connections.list|resolve|add|remove|test`、
-  `config.hosts`、`machines.list|current|setCurrent|add|remove|test`、`hostkey.forget`、`status`、
-  `conn.status|probe|reconnect`、`browse.home|list|mkdir`、`session.route`、`local.pickNative`、
-  `session.ws.list|add|update|remove`。
-- 重载语义：路由是**无状态**的（按请求从 `liveDispatch` 取当前 dispatch）。注册落在 Connection 服务的
-  effect 作用域内，因此「重装后旧路由仍在」时第二次注册会撞 `already registered`——此时**捕获并继续**
-  （旧路由已服务新 handler），不得抛错（`AGENTS.md` §6 的可逆性红线）。
-- 远程目录列举与 picker 共用 `listRemoteLevel`（`src/listing.ts`）；`maxEntries` 默认 1000。
-- 错误契约：协议层 `bad-request: …` 保留英文；业务/路由错误用 `dsw:` 前缀并按宿主语言取词；
-  非法信封由 `web-channel.ts` 以 `gateway/bad-request`（与上游同码）回答；通道失败映射到宿主封闭的
-  rpc 错误词表（`connection-failed` / `internal` 等）。
-
-### 5.7 `sw_*` 工具（`tools.ts` / `exec-tools.ts`）
-
-- `tools.ts` 注册三个管理工具：`sw_status`（主机/工作区/连接/主机指纹/后端 + ping + 远端环境自检）、
-  `sw_connect`（含 `save:false` 临时连接）、`sw_pick_workspace`（校验存在后设远程工作区）；
-  外加系统提示 section `sw-remote`（order 90，按 `context.scope` 反查会话，本地零噪音）。
-- **提示 section 的注入判定（REQ-I6 ②）**：`session-remote-context.ts` 的
-  `hasRemoteWorkspaceContext(context, sides)` = 会话 cwd 解析出远程路由 **或** 该会话有副工作区。
-  `sw-remote`（order 90）按会话事实组合；`tool:sw-exec` / `tool:bash`（order 105）由静态字符串改为
-  `text: context => 判定 ? 文案 : ''`——纯本地会话三段**全部零注入**。
-- `exec-tools.ts` 注册：
-  - **`sw_exec`**：在**指定服务器**上执行命令。`server` 接受注册表机器 id 或 `sw_connect save:false` 的临时 id，
-    缺省 = 会话主工作区机器，未知 id 报错并列出已知 id；目标 OS 每连接探测一次
-    （`uname -s` → `cmd /c ver` → `unknown`，进程内 Map 缓存），POSIX/unknown 用 `bash -c`、win32 用 `pwsh -Command`；
-    spawn 经混合 provider（cwd = `ssh://<server>/<workdir 或机器工作区>`），机器路由原样生效
-    （副工作区 exec 门已随 ADR-0019 退役）；
-    非 0 退出**报告而非报错**；`run_in_background` 走可选服务 `ctx.jobs`（缺服务明确报错）；不做 escalation；
-    v1 不接受本地 server。
-  - **win32 宿主 `bash` 接缝**：仅 `process.platform === 'win32'` 注册（POSIX 宿主有官方 `bash`，重名注册会失败）；
-    执行期按 `worldOfCwd(会话 cwd)` 判定，远程 Linux 会话真跑远端，本地 Windows 会话抛清晰错误引导 pwsh，
-    绝不静默降级。
-- 工具描述与参数走 getter 化（§5.8），工具注册与提示 section 都挂在 `ctx.effect` 上。
-
-### 5.8 运行时国际化（`src/locale/`，命名空间 `dsw`）
-
-- **单一共享词典**：`src/locale/dsw.ts`（zh，键集真源）与 `dsw.en.ts`（en，`Record<DswKey, string>`）——
-  en 缺键或多键即编译错；两侧 import 同一批源文件（宿主 tsc 编到 `lib/locale/`，客户端被 tsdown 内联）。
-- **命名空间必须是 `dsw`**：官方 client 包已注册 `sidebar` / `conversation` / `workspace` /
-  `settings` / `settings.locale` / `common` 等，而 `ctx.locale.register` 对重复 (ns, locale) **抛错** ——
-  用 `workspace` 会与 `dsh-client-ui-workspace` 直接冲突崩溃。
-- 键命名 `<surface>.<scope>.<item>`，surface ∈ {flow, form, side, settings, status, rpc, tool, permission}；
-  模板参数 `{name}`，不做复数逻辑；禁止字符串拼接键名。
-  > **注（REQ-I6 / ADR-0014）**：`prompt` surface 已废弃并从词典删除——**model-facing 文案（系统提示段、
-  > 远端工具箱提示）统一为英文常量**，放在 `src/model-prompts.ts`，不随 UI 语言切换；词典只保留
-  > 人类面（客户端 UI + 用户能读到的宿主消息/工具错误）。键集因此从 340 降到 328（zh/en 仍严格相等）。
-- 客户端：`ctx.effect(() => ctx.locale.register('dsw', { zh, en }))`；槽位注册带 `locale: 'dsw'` 拿到类型化 `t`；
-  非渲染路径用 `ctx.locale.bind('dsw')`；语言解析、`<html lang>` 同步、设置页 Language 行全部交给框架，
-  本插件不写 preference、不加语言 UI。
-- 宿主：`hostLocaleOf(ctx)` = `ctx.get('settings')?.get('locale')?.preference ?? 'en'`，**每次求值即时读**
-  （无缓存、无订阅；`settings` 是可选服务）；`localizeTool` 把工具的 `description` / `parameters` 换成 getter
-  （官方 `run_code` 自证范式，路线 B），错误与输出在执行时取词。
-- 会话栏徽标：`CONN_STATE_LABEL_KEY` 单一键源 + 切语言就地重绘（`paintBadge` 变值守卫，不重建 DOM、不触发扫描风暴）。
-- 例外边界（`drafts/i18n-design.md` §13-1~8）：机器可 parse 标记（`[exit code: N]`、`[stderr]`、
-  `[timed out after Nms]` 等）两语**逐字节一致**；`tool call aborted`、`bad-request: …`、品牌与枚举值
-  （`Agent`、`accept-new`/`verify`/`off`、`linux`/`win32`/`unknown`、色值、符号）、库原始错误、注释/日志保持原文。
-
-## 6. 依赖与单例约束
-
-- **宿主已共享的 `@deepseek-ai/*` 一律进 `peerDependencies`**（当前 15 项，含 RC 通道范围，例如
-  `^0.1.2-rc.1`；另有 `@deepseek-ai/cordis` `^4.0.2`、`@deepseek-ai/schemastery` `^3.18.2`）。
-- **理由**：Cordis 的服务身份是**模块级 Symbol**。若把宿主已装的包放进 `dependencies`，会被当成自有运行时依赖
-  装出更近的副本，**遮蔽宿主单例**，导致 Cordis `Symbol` / `instanceof` 身份分裂 —— service 注册失效、
-  `HarnessError` 判类失效（`AGENTS.md` §2）。
-- **`dependencies` 只留 `ssh2`**；同一批包在 `devDependencies` 同步保留（供 `tsc` / `tsdown` 取类型）。
-- 客户端**运行时零新增依赖**：只经 `ctx.locale` 服务与类型导入（`dsh-client-locale` 不进 tsdown EXTERNALS，
-  值导入会被纯度门禁拒绝，类型导入被擦除）；`dsh.client.inject` 列出 6 个包。
-- 教训（`drafts/CONTEXT.md` 2026-08-30 补记）：v0.1.1 自身的 `dependencies` 家族劈叉（部分包停留在
-  `^0.1.0-rc.6`、个别精确版本），使 web profile 出现 6 条风险级 peer 不匹配；处置 A = profile 级
-  `pnpm.overrides` 钉版本（脚本由用户在外部终端执行），B = 仓库 `package.json` 对齐 rc.2 家族；
-  0.1.2 的发布口径 = 依赖对齐修复 + R6 i18n 同发。
-
-## 7. 已知边界
-
-1. **远端环境要求（现状）**：模型 `pwsh` 工具需远端装 pwsh，`glob` 需远端 ripgrep；终端（bash）开箱即用。
-   `sw_status` 有三行自检，缺 pwsh/rg 时工具诚实返回 127。REQ-I9 之后又加了一项 `bwrap`（执行围栏的 runner）。
-   **方向已改（`ADR-0023`，用户 2026-09-13 拍板）**：这三项收敛为**一个核心**——远端只需部署一个可校验产物，
-   插件负责上传/校验/升级；`rg` 与 runner 随核心就位，fs 写面的完全体由核心的远端 fs 服务承担。
-   **本文描述的是核心落地前的现状**，不是终态；核心未落地前不得宣称「已围栏」。
-2. **SSH 协议固有**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`，前台进程组不可见；
-   退出码/信号以 SSH channel close 为准。
-3. **副工作区无权限语义（ADR-0019，用户 2026-09-12 拍板）**：副根是薄声明清单，不设 fs/exec 档位。
-   背景：远程会话内同机任意绝对路径本就可达（`SshFileSystemEngine.resolve` 以 cwd 连接为 base），
-   副根对同机目录只剩限权作用，而旧权限门是 advisory 且有已知绕过（主工作区命令可用绝对路径写删「只读」副根）。
-   真正的隔离手段：每会话 `sandbox/mode`（本地）与操作者信任边界；远程命令围栏见 `AUDIT-6`/`REQ-I9`。
-   旧状态文件里的 `fs`/`exec` 字段加载时忽略（不迁移）。
-4. **远程会话 composer 预设显示 Custom**（已拍板仅记录）：远程会话只被写入 `sandbox/mode=danger-full-access`，
-   审批旋钮仍是 `ask`，组合不匹配任何预设整组 → 解析为 `custom`；候选方案 A/B/C 见 `drafts/CONTEXT.md` §7。
-5. **官方工作区注册表看不见远程工作区**：占位目录方案下 remote 会话的 cwd 是本地占位路径；镜像已砍，
-   没有「真实本地副本」这条绕开路径。
-6. **会话栏副工作区徽标延后**：v1 只有标题栏「工作区」按钮 + 面板，不做焦点指示。
-7. **双机同名裸 POSIX 路径归因 machine-agnostic**：`ssh://` 拼写精确，裸 POSIX 路径不带机器信息
-   （fs 侧遗留项；`sw_exec` 因 `server` 显式而无歧义）。
-8. **i18n 不一致窗口**：无持久化偏好 + 中文浏览器时，客户端 UI 是 zh、宿主模型面是 en
-   （框架 `FALLBACK_LOCALE = 'en'` 语义；在设置页 Language 选一次即收敛为三面一致）。
-9. **面板终端保持本地**：用户可见的侧栏终端由 dsh-better-sidebar 提供（直连 node-pty，不经 `ctx.subprocess` 接缝）；
-    本项目插件保持独立，不 monkey-patch 第三方内部实现；远程终端的可用路径是模型终端工具
-    （`dsh-bash-terminal` 经 `ctx.subprocess.spawnTerminal` 已远程）。
-10. **UI 一致性（已记录，不急着改）**：flow 表单与设置页表单曾字段不一致，R2 已用共享 `MachineForm` 收敛；
-    认证 tabs 无「SSH Agent」第三档（`drafts/ui-merge-design.md` §6.1 决定 R2 不做）。
-11. **上游漂移**：两份合并分析基于下载快照（dsh-ssh main 0.3.0-pre、dsh-remote 0.8.7），复核时以上游最新代码为准；
-    历史快照中 `dsh-ssh` main 曾存在不能过 typecheck 的文件，因此二开采用「按文件摘录 + 自行重构」而非整库照搬。
-
-## 8. 来源
-
-> 注：`drafts/` 是仓库本地草稿（按 `AGENTS.md` §3 不入库）；列出它是为了标明每条事实的出处，
-> 公开读者可跳过这些路径，只看 `src/` 与已入库的 `docs/`、`README`、`CHANGELOG`。
-
-- `drafts/CONTEXT.md`（§0 进度快照、§1 愿景、§3 历史分析、§4 合并设计、§5 决策记录、§6 里程碑、§7 风险与开放问题）
-- `drafts/features-breakdown.md`（特性拆解、§4 合并映射表、§5 dsh-ssh 精简审计）
-- `drafts/r5-design.md`（副工作区实体/路由/权限门/UI 设计与实现记录）
-- `drafts/i18n-design.md`（运行时国际化设计：命名空间、键命名、宿主语言、工具 getter 化、例外清单）
-- `drafts/security-audit.md`（副工作区权限门 case 矩阵与结论）
-- `drafts/sw-exec-requirement.md`（`sw_exec` 与 win32 `bash` 接缝需求与规格）
-- `drafts/ui-merge-design.md`（共享 MachineForm 字段并集与交互语义）
-- `AGENTS.md`（工程约定、依赖单例约束、安全红线、开发流程）
-- `src/` 源码本身（模块结构、导出、服务名、门禁实现、构建配置）
-- 交叉引用：`package.json`、`cordis.patch.yml`、`tsdown.config.ts`、`CHANGELOG.md`、`docs/ROADMAP.md`
-
-### 来源未明确之处（本文不猜测，逐条标注）
-
-- **决策日期粒度**：包名/前缀、镜像放弃、审计砍掉、端口转发延后、侧边栏对接这几条只记到「2026-08 会话」，
-  具体日来源未明确（见各 ADR 的「日期」行）；R0.5/R0.6 的完成日同样只有月粒度。
-- **`cordis.patch.yml` 里 `ssh-remote` 行的占位连接参数**（host/username/cwd 取值）为何取该组值、
-  是否沿用上游默认——来源未明确；patch 注释只说明它是占位、懒连接。
-- **两份客户端样式表的 token 前缀**为何一为 `--dshssh-*`、一为 `--dswsw-*` 而未统一——来源未明确。
-- **双机同名裸 POSIX 路径的 fs 归因**在来源中只记为「遗留 a（machine-agnostic）」，
-  无拍板日期与处置计划——来源未明确。
-- **各 ADR 被否方案的最终放弃时点**（例如镜像草案、`ws_*` 命名）只有「被某条决策取代」的记录，
-  没有单独的撤销日期——来源未明确。
-
-### 8.1 契约侦察的磁盘权威源（`cordis_inspect_*` 的等价物）
-
-`AGENTS.md` §5 红线 7 禁止子代理调用 `cordis_inspect_list` / `cordis_inspect_query`（client 查询依赖
-页面应答，页面不响应会**永久挂起**）。但这两个工具**供模型读取的那份数据本身就在磁盘上**，因此契约
-侦察完全不必碰 Inspect：
-
-| 项 | 事实 |
+| 行 | 动作 |
 |---|---|
-| 路径 | `<npm root -g>/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-cordis-client-runner/lib/client.js`（本机实测：只有全局安装树有该包；部署包 `$DSH_HOME/profiles/web/node_modules/` 与本仓库 `node_modules/` 均无） |
-| 包身份 | `@deepseek-ai/dsh-cordis-client-runner`，`@deepseek-ai/dsh` 的直接依赖（同家族 `0.1.2-rc.1`） |
-| 槽位目录 | `CLIENT_SLOT_API`（约 `:2135` 起，至 `:4198`；`SLOT_CATALOG = new Map(...)` 在 `:4199`）——宿主 web bundle 声明的**每一个**槽位 |
-| 服务目录 | Service Catalog，模块头注释在 `:1105`（`//#region lib/types/client/api-catalog.js` 起于 `:1099`） |
-| 事件目录 | Event Catalog，见 `:2103` 的投影注释（同一 `api-catalog` 模块） |
-| 槽位条目字段 | `key` / `kind` / `scope` / `summary` / `doc` / `registerOptions`（name + requirement + type + doc）/ `ownerProps` / `ownerPropsReferences` / `standardProps` / `keyDomain` / `hookContext` / `slotInject` / `declaredBy` / `occupants` / **`replaceRisk`** / `example` / `source`（上游源码路径:行） |
+| `directory-picker` / `subprocess` / `fs-sandbox` | `disabled: true`，把默认 picker 与本地 provider 让给本插件 |
+| `ssh-remote`（包根） | 挂 `ctx.ssh`，并把 `ctx.subprocess` / `ctx.fs` 换成混合门面 |
+| `directory-picker-ssh`（`/picker`） | 本机/远程 browse 后端 |
+| `ssh-web-channel`（`/web`） | 注册表 + `/api/dsw/*` 通道 |
 
-**用途**：给「这个槽位能不能插、插进去会不会遮蔽官方 UI、注册要传哪些 options、组件实收哪些 props」
-一次性答案。`replaceRisk` 是上游自己的判断（`none` = 新 id 追加在既有 entry 旁边；
-`shadows-shipped-ui` = 注册即替换），比自行推断可靠；`example` 直接给出可用的
-`ctx.slots.inject(...)` 骨架；`source` 指回上游 `src/`，可继续深挖。
+混合接线**只在聚合行**发生。子路径 `/ssh` `/subprocess` `/fs` 保留纯 SSH 形态。profile 自身的 patch 与 `--patch` 在本层之后生效。sandbox 策略行保持启用，它们消费的是混合 `ctx.subprocess`。
 
-**与 `cordis_inspect_*` 的关系**：**替代，不是补充**。这份 `client.js` 就是 Inspect 的 Slot / Service /
-Event provider 的**数据源**（文件头注明 `Generated by scripts/gen-cordis-inspect-catalog.ts`），
-所以「以后槽位/服务/事件契约侦察走磁盘，不必碰 Inspect」——两者读的是同一份生成数据，
-磁盘路径只是绕开了那次需要页面应答的 client 往返。
+### 2.2 客户端槽位
 
-**失效条件**（命中任一条即需重新核对，不可继续引用旧行号）：
+`src/client/index.ts` 的 `inject = ['slots', 'workspaces', 'sessions', 'locale']`：
 
-1. 上游家族升级（peer 范围 `^0.1.2-rc.1` 变更，见 `docs/compatibility.md` §1）或 `dsh` 升级导致该包换版；
-2. 全局安装树被重装 / `npm root -g` 变化，或该包不再作为 `dsh` 的直接依赖（路径失效）；
-3. 行号漂移——`client.js` 是**生成产物**（文件头 `do not edit by hand`），只能**只读引用**，
-   任何编辑都会被上游的 `verify-cordis-inspect-catalog` 判为过期；
-4. 槽位契约与包内 `.d.ts` 出现分歧时，**以部署包的 `lib/types/**/*.d.ts` 为准**，目录仅用于
-   补 `replaceRisk` / `occupants` / `example` 这类类型文件里没有的信息。
+| 槽位 | 组件 | 作用 |
+|---|---|---|
+| `conversation.hero.workspace.directoryFlow` + `sidebar.workspaces.directoryFlow` | `SshWorkspaceFlow` | 添加工作区目录流 |
+| `settings.section` | `RemoteWorkspaceSettingsPage` | 设置页机器管理 |
+| `conversation.session.header.actions` | `SideWorkspacesAction` | 标题栏「工作区」按钮与副工作区面板 |
+| `conversation.session.header.utilities`（`REMOTE_STATUS_SLOT`） | `RemoteStatusAction` | 会话头远程状态 |
 
-**已用案例**：`docs/decisions/ADR-0016-conversation-panel-tab-slot.md` 用该目录确认
-`conversation.view` 的 `replaceRisk: none`、occupants（`chat` / `trajectory`）与上游注册示例，
-并与 `dsh-client-ui-conversation` 的 `.d.ts` / `client.js` 双向核对。
+会话栏**行级**徽标没有官方槽位，由 `installRowBadges` 用 DOM 增辉层注入（ADR-0011）。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
+
+## 3. 模块地图
+
+`src/` 现 **53** 个文件：宿主 30、客户端 19、词典 4。下表按职责分组，不堆导出清单。
+
+### 3.1 宿主
+
+| 组 | 文件 | 职责 |
+|---|---|---|
+| 入口 | `index.ts` `plugin.ts` `css-modules.d.ts` | 公共 API、聚合行、混合 provider 安装 |
+| SSH 世界 | `runtime.ts` `ssh-core.ts` `connection.ts` `transport.ts` `subprocess.ts` `process.ts` `terminal.ts` `output.ts` `environment.ts` `filesystem.ts` `listing.ts` `picker.ts` | 跳板链、exec/SFTP/PTY、环境、目录遍历、`ssh://<id>/<path>` 路由 |
+| 注册表与密钥 | `registry.ts` `hostkey.ts` `credential.ts` | machines.json、TOFU、OS 钥匙串、`~/.ssh/config` |
+| 混合门面 | `mixed.ts` | `ctx.subprocess` / `ctx.fs` 的唯一实现：按 cwd / targetKey 路由 |
+| 会话状态 | `session-workspaces.ts` `session-connections.ts` `session-remote-context.ts` | 副根清单、本会话已连接机器、提示注入判定 |
+| 远程策略 | `remote-approval-gate.ts` `remote-sandbox.ts` `remote-sandbox-fence.ts` | 审批门纯逻辑；远端 bwrap 围栏与 fail-closed 探针 |
+| 通道与工具 | `web.ts` `web-channel.ts` `tools.ts` `exec-tools.ts` `model-prompts.ts` | `/api/dsw/*`、`sw_*`、win32 `bash`、model-facing 英文常量 |
+
+### 3.2 客户端
+
+| 组 | 文件 | 职责 |
+|---|---|---|
+| 入口 | `index.ts` | 词典、槽位、行徽标层 |
+| 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` | 连接侧栏 + 目录浏览；本机目录走 `uiWorkspace` |
+| 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` | 共享表单、payload 纯函数、设置页 |
+| 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
+| 状态与徽标 | `status.tsx` `row-badges.ts` `sandbox-badge.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、围栏档位、会话头远程状态 |
+| 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
+
+### 3.3 词典（`src/locale/`）
+
+`dsw.ts`（zh，键集真源）+ `dsw.en.ts`（`Record<DswKey, string>`，缺/多键即编译错）+ `index.ts` + `host.ts`。命名空间必须是 `dsw`（ADR-0010）。
+
+## 4. 机制索引
+
+每条只给现状要点。细节与取舍在对应 ADR / 源文件，不在这里展开。
+
+| 机制 | 现状 | 源 / 决策 |
+|---|---|---|
+| 混合门面与路由 | Cordis 同名服务只能注册一次，故聚合行是 `subprocess`/`fs` 的唯一实现。`worldOfCwd` / `worldOfTargetKey` 判定 local vs remote；`resolve`/`lstat` 先看副根。`resolveExecutable` 恒走本地。 | `mixed.ts` |
+| 注册表与 `ssh://` | `ctx.sshRegistry` 是机器宇宙的唯一真相。持久化 `<dsh home>/remote-workspaces/machines.json`。路由 `ssh://<id>/<path>`，以及本地占位树 `dsw-routes/`（旧 `dsh-ssh-routes/` 仍为活会话服务）。 | `registry.ts` `transport.ts` |
+| 会话连接门 | `sw_connect` 只接受**已注册**机器 id（`machines: string[]`），决定本会话看见哪些远程工具与提示。凭据永不进模型参数面。这是可见性门，不是强制门。 | `session-connections.ts` [ADR-0021](./decisions/ADR-0021-session-machine-connections.md) |
+| 副工作区 | 薄声明清单：挂/卸 + label + 远程根路由。无 fs/exec 档位。 | `session-workspaces.ts` [ADR-0019](./decisions/ADR-0019-side-workspace-permission-retirement.md) |
+| 审批门 | 混合 subprocess 远程分支上的可选门（`remoteApproval: off\|human\|ai`，默认 `off`）。拦 shell 形状的 spawn 与远程终端；SFTP 写路径不设门。 | `remote-approval-gate.ts` [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
+| 远端围栏 | 远端 bwrap 兼容 runner，`remoteSandbox: off\|read-only\|workspace-write`，fail-closed。缺 runner 或探针失败即拒绝执行。**SFTP 写面此刻不在围栏内**（ADR-0022 §2.7）；收口是核心（ADR-0023）。 | `remote-sandbox.ts` `remote-sandbox-fence.ts` [ADR-0022](./decisions/ADR-0022-remote-sandbox-runner.md) |
+| 浏览器通道 | 官方共享 `/api` 上的精确 Fetch 路由 `/api/dsw/<endpoint>`（`connection.fetch.register`）。端点清单以 `web.ts` 的 `CHANNEL_ENDPOINTS` 为准，含 `session.ws.*` 与 `session.conn.*`。 | `web.ts` `web-channel.ts` [ADR-0018](./decisions/ADR-0018-browser-channel-on-shared-api.md) |
+| `sw_*` 工具 | `sw_status` / `sw_connect` / `sw_pick_workspace`（日落见 backlog `REQ-I10`）/ `sw_exec`；win32 宿主另注册 `bash`。提示按会话事实按需注入，纯本地零噪音。 | `tools.ts` `exec-tools.ts` `model-prompts.ts` [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
+| i18n | 人类面走 `dsw` 词典（设置页 Language）；model-facing 文案是英文常量，不进 i18n。 | `src/locale/` [ADR-0010](./decisions/ADR-0010-runtime-i18n-dsw-namespace.md) [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
+| 方向（未落地） | 远端部署**一个核心**：围栏执行 + 远端读写（`ctx.fs` 不再走 SFTP）+ 打包 `rg`。落地前不得宣称「已围栏」。 | [ADR-0023](./decisions/ADR-0023-one-remote-core.md) |
+
+## 5. 已知边界
+
+完整安全模型与诚实边界在 [`SECURITY.md`](../SECURITY.md)。这里只列接手时必须知道的：
+
+1. **远程执行不受本地沙箱限制**——远程会话钉 `danger-full-access` 是 same-world 契约；可选审批门不覆盖 SFTP 写路径（ADR-0020）。
+2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
+3. **副根无权限语义**（ADR-0019）。真正隔离是本地 `sandbox/mode`、审批门、远端围栏、操作者信任边界。
+4. **远端前置（核心落地前）**：`pwsh`、`ripgrep`、围栏用的 `bwrap` 仍是分项安装；远程 `ctx.fs` 仍走 SFTP。核心落地后前置只剩「部署一个核心」（ADR-0023）。
+5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。
+6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。正式 ADR 化仍是 `AUDIT-2`。
+7. **远程会话 composer 常显示 `Custom`**：preset 表缺 `{danger-full-access, ask}` 这一组（ADR-0015，UX-1 blocked）。
+8. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。
+
+## 6. 契约侦察
+
+子代理禁止调用 `cordis_inspect_list` / `cordis_inspect_query`（页面不响应会永久挂起）。槽位/服务/事件契约走磁盘权威源，读取器是 `npm run slots -- --list|--key|--diff`。路径与失效条件见 `AGENTS.md` §5 红线 7；槽位 diff 的方法学见 [ADR-0017](./decisions/ADR-0017-rc2-client-slot-recon.md) §1.1。**行号不是契约**，只认 `key` / 字段名 / 符号名。

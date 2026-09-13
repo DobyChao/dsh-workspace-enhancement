@@ -10,15 +10,15 @@ English | [中文](README.zh.md)
 
 | Feature | Description |
 |---|---|
-| Remote workspaces | `ctx.subprocess` + `ctx.fs` transparent remote providers: one SSH chain (multi-hop) runs bash / files / PTY / directory browsing with no code changes on the tools |
-| Multi-workspace sessions | The「⊕ 工作区」button in the session header: attach one or more **side workspaces** (local dirs or remote machine dirs) as a **thin declaration list** (mount/unmount + label; the permission tiers were retired with ADR-0019); the model is told about them and can operate them directly |
-| Add-workspace flow | Connection sidebar (saved machines, `~/.ssh/config` aliases, local) + directory browser (breadcrumbs, native chooser, new folder); remote "Connect & open" creates the session straight on the server |
+| Remote workspaces | One SSH chain (multi-hop) runs bash / files / PTY / directory browsing. Tools that already use `ctx.subprocess` / `ctx.fs` keep working remotely with no code changes |
+| Multi-workspace sessions | The「⊕ 工作区」button in the session header attaches extra directories (local or remote) as a declaration list — mount/unmount + label. The model is told about them and can operate them directly |
+| Add-workspace flow | Connection sidebar (saved machines, `~/.ssh/config` aliases, local) + directory browser (breadcrumbs, native chooser, new folder); remote "Connect & open" creates the session on the server |
 | Machine settings page | Machine CRUD / test / set-current / forget host key; OS-keychain passwords; TOFU host keys (`accept-new` default) |
-| Session awareness | Remote marker + online tri-state + reconnect in the sidebar; per-session prompt injection states the remote / side-workspace context |
-| Cross-server execution | `sw_exec(server, command)` runs a command on a **named server** (a registry id like `c1`, or the temporary id of `sw_connect save:false`; defaults to the session's machine) — the target OS is probed once per connection and reported (`bash -c` on POSIX, `pwsh -Command` on win32); on Windows hosts a `bash` tool is registered for remote-Linux workspaces |
-| Remote approval gate | Optional per-machine gate (AUDIT-6 / ADR-0020, **default off**): every shell-shaped remote command and every remote terminal asks the platform approval service before it runs — `human` asks you each time, `ai` auto-grants a short read-only whitelist (`pwd`, `ls`, `git status`, …) and asks for the rest; every ask/reject pair lands in the session's audit log |
-| Model tools | `sw_status`, `sw_connect` (`save:false` = temporary), `sw_pick_workspace`, `sw_exec` (cross-server execution) |
-| Runtime localization | UI copy, the per-session remote-context prompt, `sw_*` tool descriptions/errors AND protocol-data validation/routing errors follow the settings-page **Language** option (`zh`/`en`); the UI defaults to the browser language, so a Chinese browser stays Chinese. Only `bad-request:` protocol-layer diagnostics (machine-readable contract) stay English |
+| Session awareness | Remote marker + online tri-state + reconnect in the sidebar; the session prompt states the remote / extra-workspace context |
+| Cross-server execution | `sw_exec(server, command)` runs a command on a **named registered machine** (defaults to the session's machine). The target OS is probed once per connection (`bash -c` on POSIX, `pwsh -Command` on win32). Windows hosts also get a `bash` tool for remote-Linux workspaces |
+| Remote approval gate | Optional per-machine gate (**default off**): every shell-shaped remote command and every remote terminal asks before it runs — `human` asks you each time, `ai` auto-grants a short read-only whitelist (`pwd`, `ls`, `git status`, …) and asks for the rest |
+| Model tools | `sw_status`, `sw_connect` (attach this session to machines you already registered), `sw_pick_workspace`, `sw_exec` |
+| Runtime localization | UI copy, tool descriptions/errors, and routing errors follow the settings-page **Language** option (`zh`/`en`); the UI defaults to the browser language. Protocol-layer `bad-request:` diagnostics stay English |
 
 ## How it works
 
@@ -35,14 +35,7 @@ flowchart LR
 
 No DSH install on the remote: the model orchestrates locally, commands run remotely, results come back into context.
 
-**Design notes** (implementation facts, not user features):
-
-- **Registry & routing**: `remote-workspaces/machines.json` is the single source of truth; `ssh://<id>/<path>` (and the local `dsw-routes` placeholder tree) route every operation to the right machine; `~/.ssh/config` aliases are recognized.
-- **Security**: TOFU host keys (`accept-new` / `verify` / `off`), per-machine OS keychain (DPAPI / security / secret-tool), credentials redacted in error messages. Remote commands run with the **remote OS account's permissions** — the local sandbox does not apply to them; the per-machine approval gate can be enabled (default off, ADR-0020).
-- **Side workspaces are a thin declaration list** (ADR-0019): a side root only declares "this session can operate on this directory directly" (mount/unmount + label) — there are no fs/exec permission tiers, because any absolute path on the same machine is already reachable from a remote session and per-root tiers never fenced shells. Remote side roots still participate in routing (an absolute path under a remote side root goes to that machine even when the session cwd is local); real isolation lives in the per-session `sandbox/mode` (local) and the operator's trust boundary.
-- **`sw_exec` semantics**: the command always runs on a **named server** — `server` takes a registry id or the temporary `sw_connect save:false` id and defaults to the session's machine (a local session without a server errors). The target OS is probed once per connection (`uname -s` → `cmd /c ver` → `unknown`) and reported in the first output line; POSIX/unknown runs `bash -c`, win32 runs `pwsh -Command`. The spawn goes through the same mixed provider, so machine routing applies unchanged. `run_in_background` mirrors the official bash tool (job id returned immediately, no timeout; requires `ctx.jobs` and errors honestly when absent); `sandbox_permissions`/escalation is intentionally unsupported (deployment policy only).
-- **win32 `bash` seam**: on a Windows host the plugin registers the `bash` tool itself (the official bash executor is not composed there, so the name is free) — a remote-Linux session runs `bash -c` on the server, a local Windows session gets a clear error instead of silently degrading; POSIX hosts never register it (the official `bash` tool owns the name).
-- **Remote approval gate (ADR-0020, AUDIT-6)**: one gate on the mixed subprocess seam's remote branch — `bash -c` / `pwsh -Command`-shaped spawns and remote terminals ask `ctx.approval` before any SSH activity (machine mode `remoteApproval: 'off' | 'human' | 'ai'` in machines.json, default `'off'` so upgrades change nothing). In `'ai'` mode a prepend waterfall answerer auto-grants only a reviewable read-only whitelist — everything else, and any classifier failure, goes to the human answerer (fail closed: `never` policy and missing answerers are deterministic denials). Honest boundaries: the SFTP **write path is NOT gated** (writing a script + `bash script.sh` bypasses the shape gate — the structural answer is the planned remote sandbox runner, REQ-I9); the plugin's own fixed probes and `sw_connect save:false` temporary connections are not gated; local sessions are unaffected. UX-1's `remote-full` permission preset snippet keeps its canonical home in [ADR-0015](./docs/decisions/ADR-0015-remote-composer-permission-preset.md) (apply it by hand in `cordis.patch.yml`).
+How routing, the approval gate, the remote sandbox fence, and session connections actually work: [docs/architecture.md](./docs/architecture.md). Known security boundaries: [SECURITY.md](./SECURITY.md).
 
 ## Install
 
@@ -78,21 +71,11 @@ this plugin in the same step; the full window and the upstream drift log are in
 
 ## Roadmap
 
-Current status and remaining milestones: [docs/ROADMAP.md](./docs/ROADMAP.md). The single backlog lives in [docs/backlog.md](./docs/backlog.md); the generated state snapshot is [docs/status.md](./docs/status.md).
+Public progress: [docs/ROADMAP.md](./docs/ROADMAP.md). The single backlog is [docs/backlog.md](./docs/backlog.md).
 
 ## Development
 
-Start with [AGENTS.md](./AGENTS.md) (rules, commands, red lines). Then:
-
-| Doc | What it answers |
-|---|---|
-| [docs/backlog.md](./docs/backlog.md) | what is planned, in progress, blocked, done |
-| [docs/status.md](./docs/status.md) | version, HEAD, backlog roll-up (generated by `npm run status`) |
-| [docs/architecture.md](./docs/architecture.md) | how the plugin is built and wired |
-| [docs/decisions/](./docs/decisions/) | why it is built that way (ADRs) |
-| [docs/testing.md](./docs/testing.md) | test layers, how to run them, sandbox limits |
-| [docs/compatibility.md](./docs/compatibility.md) | host version support window and upstream drift tracking |
-| [docs/rounds/](./docs/rounds/) | what each development round delivered and how it was verified |
+Start with [AGENTS.md](./AGENTS.md) (rules, commands, red lines). The document map — what lives where, and what must not be copied — is [docs/README.md](./docs/README.md).
 
 One gate for everything: `npm run check` (static constraints + typecheck + unit tests + build + pack smoke) —
 the same command CI runs.

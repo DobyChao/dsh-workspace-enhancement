@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-13 04:09 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-13 06:30 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.3` |
 | npm 已发布版本 | `0.1.3` |
 | 最新 tag | `v0.1.3` |
-| 分支 / HEAD | `feat/REQ-I11-machine-connect` / `7f284ab` |
-| HEAD 提交 | `docs: adopt the one-remote-core direction (ADR-0023) everywhere it was scattered` (2026-09-13) |
-| 与远端 | 30 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/INFRA-13-docs-map` / `326b94f` |
+| HEAD 提交 | `docs(rounds): renumber this round to R24 — R23 was already taken` (2026-09-13) |
+| 与远端 | 31 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -31,19 +31,19 @@
 | `todo` | 13 |
 | `doing` | 0 |
 | `blocked` | 7 |
-| `done` | 35 |
+| `done` | 36 |
 | `shipped` | 5 |
 | `dropped` | 7 |
 
 ## 被挡住 / 待拍板
 
-- SEC-3 — full 沙箱风险确认门按 preset id 判定，`remote-full` 等价 full 却无二次确认
+- SEC-3 — `remote-full` 无二次确认
 - INFRA-8 — AgentTeams 标准 profile 注册
-- UX-1 — 远程会话 composer 权限预设显示 `Custom`
+- UX-1 — 远程会话 composer 显示 `Custom`
 - UX-2 — 副工作区面板「浏览」输入框去留
-- BUG-1 — 用户截图「设置页顶部空白边框条」lab 未复现
-- INFRA-8a — `dsw-round` profile：需求→实现→验证→评审→集成
-- INFRA-8b — `dsw-spike` profile：只做侦察与设计，不成实现
+- BUG-1 — 设置页顶部空白边框条
+- INFRA-8a — `dsw-round` profile
+- INFRA-8b — `dsw-spike` profile
 
 ## 质量门
 

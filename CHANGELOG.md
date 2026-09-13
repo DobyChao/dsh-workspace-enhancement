@@ -5,10 +5,13 @@
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (未发布)
 
 0.1.5 家族运行时支持成立 + 浏览器通道换轨到官方 `/api` + **0.1.2 家族退场** +
-**副工作区权限档位退役（REQ-I7）** + **远程会话审批门（AUDIT-6）**。
+**副工作区权限档位退役（REQ-I7）** + **远程会话审批门（AUDIT-6）** +
+**会话级机器连接（REQ-I11）** + **远端 spawn 围栏（REQ-I9）**。
 
 ### 新增
 
+- **会话级机器连接（REQ-I11，ADR-0021，吸收 SEC-5）**：`sw_connect(machines: string[])` 改为本会话已连接机器集合的替换开关（`[]` = 全断）；只接受注册表里已有的机器 id，凭据不再进工具参数。面板变成会话工作区驾驶舱（主工作区 / 副根 / 已连机器）。`ssh://<id>/…` 走注册表级 fs 路由（可见性门，不是围栏）。UAT：`docs/uat/R24-req-i11-session-connections.md`。
+- **远端 spawn 围栏（REQ-I9，ADR-0022）**：逐机器 `remoteSandbox: off | read-only | workspace-write`（默认 `off`，零迁移）。围栏只覆盖经 spawn 的命令；缺 runner / 探针失败即 `SANDBOX_UNAVAILABLE`，不裸跑。**SFTP 写面此刻不在围栏内**（UAT I9-9）；收口是后续核心（`ADR-0023` / `REQ-I5`，预定 0.2.0）。UAT：`docs/uat/R24-req-i9-remote-runner.md`。
 - **远程命令审批门 + AI answerer + 诚实化文案（AUDIT-6，ADR-0020，用户 2026-09-12 拍板）**：混合 subprocess 接缝的远程分支上单一审批门——`bash -c`/`pwsh -Command` 形状的 spawn（含官方 bash/pwsh、`sw_exec`、win32 bash、后台任务，argv 以 `remoteArgvOf` 改写后的最终形态判定）与 `spawnTerminal`（交互 shell 本身即任意命令入口）在**任何 SSH 活动之前**经 `ctx.approval.request` 问询；`agent` 取 `ctx.agents.currentInitiator()`（仅路由/归因，非授权），`reason` 携带 `[dsw-remote-gate] machine=<id> target=<user>@<host> cmd=<预览>` 标记（ask 不带参数，reason 是预览唯一通道）。逐机器 `remoteApproval: 'off' | 'human' | 'ai'`（machines.json，**默认 `'off'` 零迁移**）同时驱动 asker（是否拦）与 answerer（是否自动放权）；`'ai'` 模式下一个 `prepend` 注册的 `approval/request` waterfall 监听器（`ctx.effect` 挂载、全量 try/catch、异常一律 `next()` 委派人类）只对可评审只读白名单（`pwd`/`whoami`/`uname`/`ls`/`cat`/`head`/`tail`/`wc`/`echo`/`git status|log|diff|show`/`node -v`/`rg --version` 等，独立常量表）自动放行。降级全 fail-closed 且文案两两可区分（无 approval 服务 / 无 agent / `rejected`（含 `never` 策略确定性拒绝）/ `cancelled` / `unavailable` / `request()` 抛错）。配套：`sw-remote` 提示段恒注入「远端执行不受本地沙箱限制」诚实句 + 门开启机器注入「勿原样重试被拒命令」预期句（`remoteNoSandbox`/`remoteGateActive` 英文常量，ADR-0014）；设置页机器表单高级区「远程命令审批」下拉（zh/en 词典键）与机器行「🛡 审批」徽标；README/SECURITY 边界句与 D1 不覆盖清单（SFTP 写路径、固定探针、临时连接——结构性答案是 REQ-I9）；UAT 脚本 `docs/uat/R22-audit6-remote-approval-gate.md`。已知实现偏离：`@deepseek-ai/dsh-user-approval` 未落 devDependency（沙箱禁 install、lockfile 无该条目，加列会令 `npm ci` 失步）——契约以本地结构化最小面镜像 + `ctx.get('approval')` 字符串名消费（与上游 0.1.5-rc.1/rc.2 d.ts 核对一致），见 R22 报告。
 
 ### 修复
@@ -19,6 +22,7 @@
 
 ### 变更（**破坏性**）
 
+- **`sw_connect` 不再注册机器或接受凭据（REQ-I11）**：参数面只剩 `machines: string[]`；`host` / `username` / `password` / `save:false` 临时连接全部删除。升级后旧的「用工具连任意主机」调用会失败，机器只能从设置页添加。
 - **副工作区权限模型退役，副根降级为薄声明清单（REQ-I7，ADR-0019，用户 2026-09-12 拍板）**：`SideWorkspaceItem` 收缩为 `id/kind/rootKey/label`（删 `fs`/`exec` 字段；加载既有 `dsw-session-workspaces.json` 时忽略旧字段，不报错、不迁移）；删 `mixed.ts` 的 fs 写门与 exec 门（`writeText`/`editText`/`spawn`/`spawnTerminal` 不再因副根档位拒绝；副根路由分支与最长前缀匹配原样保留）；`session.ws.add`/`session.ws.update` RPC 参数收窄（校验是宽松白名单：仍带 `fs`/`exec` 的旧客户端请求照常受理、未知字段被静默忽略——破坏性在旧客户端发来的档位不再产生任何限权效果）；面板删两个权限下拉（只剩挂/卸 + 显示名）；提示词清单行去掉权限标记、边界注改为无档位表述；词典删 6 键（zh/en 仍严格相等）。`SEC-1`/`SEC-2` 随之 dropped（失去对象），`ADR-0012` 作废。动机：远程主工作区成熟后，远程会话内同机任意绝对路径本就可达，副根对同机目录只剩限权作用，而权限门是 advisory 且有已知绕过。
 - **放弃 0.1.2 家族支持（`UPSTREAM-4`，所有者 2026-09-11 拍板）**：peer 13 项 + dev 21 项全部收窄为 `^0.1.5-rc.1`；`upstream.yml` 删除 `legacy`（0.1.2-rc.1）通道，哨兵只剩 `next` / `alpha`；`scripts/boot-smoke.mjs` 的 `--channel-warn`「已知破坏」降级口删除，每通道都强断言。
 - **浏览器通道路径变更**：`/dsw/<endpoint>` → `/api/dsw/<endpoint>`（`docs/architecture.md` §5.6）。**与已发布的 0.1.3 客户端半不兼容**；升级宿主必须一并升级本插件。
@@ -27,6 +31,7 @@
 
 - `scripts/boot-smoke.mjs` 探测改新路径并强断言 `result.ok=true`；新增 `test/web-channel.test.ts`（线身份、信封/方法不符、415/400/404、dispatch 抛错 500、重载契约、端点清单 ↔ dispatch switch 一致性、两半不得再硬编码通道）。
 - 真机实证（lab profile + `0.1.5-rc.2` 宿主）：`POST /api/dsw/connections.list → 200, result.ok=true`；同一探针在修前构建上给 405。
+- 文档地图（INFRA-13）：`docs/README.md` 为入口；architecture 改为现状短引导；轮次报告降为档案。方向 ADR-0023：远端核心把围栏执行与远端读写放进同一个产物（实现未排期）。
 
 ## [0.1.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-09)
 
