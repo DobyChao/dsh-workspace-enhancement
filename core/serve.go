@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -221,20 +223,27 @@ func (s *server) canWrite(posixPath string) bool {
 	if s.sandbox == "read-only" {
 		return false
 	}
-	if s.workspace == "" {
+	return posixInside(s.workspace, posixPath)
+}
+
+// posixInside reports whether target is the workspace root or a descendant.
+// Slash-separated on purpose (the wire paths are POSIX); filepath.Rel on
+// Windows would treat ".." prefixes incorrectly for this check, which is how
+// `/tmp/x` leaked through a workspace at `/home/uuz/ws` during WSL UAT.
+func posixInside(workspace, target string) bool {
+	ws := path.Clean(workspace)
+	if ws == "" || ws == "." {
 		return false
 	}
-	rel, err := filepath.Rel(filepath.FromSlash(s.workspace), filepath.FromSlash(posixPath))
-	if err != nil {
-		return false
-	}
-	if rel == "." {
+	got := path.Clean(target)
+	if got == ws {
 		return true
 	}
-	if rel == ".." || len(rel) >= 3 && rel[:3] == ".." {
-		return false
+	prefix := ws
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
 	}
-	return !filepath.IsAbs(rel)
+	return strings.HasPrefix(got, prefix)
 }
 
 func (s *server) writeOK(id int, ok any) {

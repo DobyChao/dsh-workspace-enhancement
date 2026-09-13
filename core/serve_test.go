@@ -150,6 +150,39 @@ func TestServeUnknownMethod(t *testing.T) {
 	<-done
 }
 
+func TestCanWriteWorkspaceBounds(t *testing.T) {
+	s := &server{sandbox: "workspace-write", workspace: "/home/uuz/dsh-i5-ws"}
+	allow := []string{
+		"/home/uuz/dsh-i5-ws",
+		"/home/uuz/dsh-i5-ws/",
+		"/home/uuz/dsh-i5-ws/inside.txt",
+		"/home/uuz/dsh-i5-ws/sub/a.txt",
+	}
+	deny := []string{
+		"/tmp/dsh-i5-ww.txt",
+		"/tmp/dsh-i5-out",
+		"/home/uuz/other.txt",
+		"/home/uuz/dsh-i5-ws-evil/x",
+		"/etc/passwd",
+		"/",
+		"",
+	}
+	for _, p := range allow {
+		if !s.canWrite(p) {
+			t.Fatalf("want allow %q", p)
+		}
+	}
+	for _, p := range deny {
+		if s.canWrite(p) {
+			t.Fatalf("want deny %q", p)
+		}
+	}
+	ro := &server{sandbox: "read-only", workspace: "/home/uuz/dsh-i5-ws"}
+	if ro.canWrite("/home/uuz/dsh-i5-ws/inside.txt") {
+		t.Fatal("read-only must deny the workspace too")
+	}
+}
+
 func TestServeReadOnlyWrite(t *testing.T) {
 	r, wIn, err := os.Pipe()
 	if err != nil {

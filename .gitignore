@@ -44,6 +44,8 @@ nul
 
 # Remote core tarball (built, never committed)
 /core/dist/
+# Operator-supplied linux-x64 bwrap/rg copied into the tarball (not source)
+/core/vendor/
 
 
 # npm pack artifacts
