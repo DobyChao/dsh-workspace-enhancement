@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-15 03:40 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-15 03:44 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/REQ-I5-remote-core` / `e193284` |
-| HEAD 提交 | `fix(core): keep workspace-write inside the bound POSIX root` (2026-09-13) |
-| 与远端 | 3 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I5-remote-core` / `4a52396` |
+| HEAD 提交 | `feat(core): align remote fs and spawn with session sandbox` (2026-09-15) |
+| 与远端 | 4 ahead / 0 behind origin/master |
 
 ## 质量
 
