@@ -23,6 +23,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | BUG-4 | 宿主项目根探测铸出祖先 jail | todo | P1 | 进远程会话时 `dsh-agent-instructions`（及 skills）静默 `ctx.fs.resolve` 往上找 `.git`，轨迹无 Git 卡片。`resolve`/`lstat` 把探测路径当 `cwd` 会铸 `/home`、`$HOME` 等可写 jail。事实 [`host-silent-fs.md`](./host-silent-fs.md)；键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §6.3。验收：无 `.git` 的会话只留会话根（+ 机器登记 workspace），不得 `--bind` 祖先 |
+| UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 真 drift（INFRA-14 修复后首次现形，非假警报）：alpha 通道 typecheck 红——`SubprocessHandle`（`CoreSubprocessHandle`）、`SubprocessTerminalHandle`（`SshTerminalHandle`，src/terminal.ts:28）、`SubprocessRuntime` 新增抽象成员 `terminalEnvironment`（`SshSubprocessRuntime`，src/subprocess.ts:338）。证据 run 34950619028、issue #7；行号属 master e96284a。0.1.6 升 rc 前须收口 |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后决定见 `ADR-0005` |
 | REQ-I10 | 日落 `sw_pick_workspace` | todo | P2 | 删工具 + 8 个词典键；`sw_connect`/`sw_status` 文案改诚实（工作区由添加流/设置页管理）；短 ADR 取代 `ADR-0001` 的四工具终态。验收：`src/` 无该符号（docs 历史除外）+ `check:static`/`typecheck`/`test:agent`/`build`/`boot-smoke --no-channel` |
@@ -94,7 +95,7 @@
 | UPSTREAM-4 | 0.1.2 家族退场 | done | P1 | peer/dev `^0.1.5-rc.1`；哨兵只留 next/alpha |
 | AUDIT-3 | 权限门测试 stub 漏方法 | done | P3 | 随 `REQ-I7` 整文件删除，失去对象 |
 | AUDIT-6 | 远程命令审批门 + AI 自动放权 | done | P1 | `ADR-0020`。[`R22-audit6-remote-approval-gate.md`](./rounds/R22-audit6-remote-approval-gate.md)。**e2e/UAT 按拍板延后**，与 `REQ-I9` 后统一审视；「e2e 零覆盖」仍算验收缺口，不勾销 |
-| INFRA-14 | Upstream drift 假红灯修复（boot smoke 装机缺陷） | done | P2 | 根因：boot smoke 步骤（PR #11 引入）用 `--legacy-peer-deps` 裸装宿主 CLI，漏 `dsh-app-boot` 的非可选 peer `cordis-plugin-group`，宿主启动即 `ERR_MODULE_NOT_FOUND`，next/alpha 两通道同因（issues #7/#9），三条断言从未执行；alpha 家族安装另被 `\| tail` 吞了退出码（对 rc.2 跑却声称 alpha）。修复：CLI 树 `@deepseek-ai/*` 闭合循环 + `pipefail` + 家族锚点断言（装错通道即红）。真 seam 漂移信号（rc.2 静态闸门）全程绿；调查档案 `.tmp/drift/report-2026-09-15.md` |
+| INFRA-14 | Upstream drift 假红灯修复（boot smoke 装机缺陷） | done | P2 | 根因：boot smoke 步骤（PR #11 引入）用 `--legacy-peer-deps` 裸装宿主 CLI，漏 `dsh-app-boot` 的非可选 peer `cordis-plugin-group`，宿主启动即 `ERR_MODULE_NOT_FOUND`，next/alpha 两通道同因（issues #7/#9），三条断言从未执行；alpha 家族安装另被 `\| tail` 吞了退出码（对 rc.2 跑却声称 alpha）。修复：CLI 树 `@deepseek-ai/*` 闭合循环 + `pipefail` + 家族锚点断言（装错通道即红）。真 seam 漂移信号（rc.2 静态闸门）全程绿；next 通道实测回绿（run 34950619028），alpha 转真信号 `UPSTREAM-5`。调查档案 `.tmp/drift/report-2026-09-15.md` |
 
 ## 5. 明确不做（决策留痕）
 
