@@ -129,7 +129,12 @@ jobs:
             done
             if [ -n "$DEPS" ]; then
               echo "family closure:$DEPS"
-              npm install --no-save --legacy-peer-deps $DEPS 2>&1 | tail -10
+              # Reinstall the family specs TOGETHER with the closure: every
+              # `npm install --no-save <specs>` reifies the whole tree from
+              # package.json, so a closure-only install silently reverts the
+              # channel family back to the lockfile's (the 2026-09-15 alpha run
+              # installed 0.1.6-alpha.1 and this step swapped it back to rc.2).
+              npm install --no-save --legacy-peer-deps $PKGS $DEPS 2>&1 | tail -10
             else
               echo "::warning::family closure needed but unresolved on '$WANT': $MISSING"
             fi
@@ -199,44 +204,67 @@ jobs:
           # regular dependency carries. Without this closure the host died with
           # ERR_MODULE_NOT_FOUND before printing its URL on BOTH channels
           # (2026-09-14 run 34824542756, issues #7/#9) and none of the smoke's
-          # assertions ever ran. Close the CLI tree's @deepseek-ai/* gap the same
-          # way the seam-family pass does: resolve through the channel tag first,
-          # fall back to latest for peers that live on independent version lines
-          # (cordis-* 1.x). Repeat until the tree stops revealing gaps.
+          # assertions ever ran. Close the CLI tree's @deepseek-ai/* gaps in a
+          # fixpoint loop, resolving each dep range-aware (channel tag first,
+          # but the requirer's declared range wins when the channel pin is
+          # stale), and install the UNION of every spec so far — a later
+          # `npm install --no-save <subset>` reifies the tree from package.json
+          # and would revert the unnamed ones back to the lockfile.
+          ALLDEPS="@deepseek-ai/dsh@$HOST"
           for round in 1 2 3; do
             MISSING="$(node -e '
               const fs = require("fs");
               const seen = new Set(["@deepseek-ai/dsh"]);
               const queue = ["@deepseek-ai/dsh"];
-              const out = new Set();
+              const out = new Map();
               while (queue.length) {
                 const name = queue.shift();
                 let manifest;
                 try { manifest = JSON.parse(fs.readFileSync("node_modules/" + name + "/package.json", "utf8")); } catch { continue; }
-                for (const field of ["dependencies", "peerDependencies", "optionalDependencies"]) {
-                  for (const dep of Object.keys(manifest[field] ?? {})) {
+                // optionalDependencies are deliberately NOT closed: the native
+                // node-addon-system-* platform binaries are optional on purpose,
+                // and force-installing a foreign-platform one dies with
+                // EBADPLATFORM (2026-09-15, first rerun of this step).
+                for (const field of ["dependencies", "peerDependencies"]) {
+                  const block = manifest[field] ?? {};
+                  for (const dep of Object.keys(block)) {
                     if (!dep.startsWith("@deepseek-ai/")) continue;
-                    if (!fs.existsSync("node_modules/" + dep + "/package.json")) out.add(dep);
+                    if (!fs.existsSync("node_modules/" + dep + "/package.json")) out.set(dep, block[dep]);
                     else if (!seen.has(dep)) { seen.add(dep); queue.push(dep); }
                   }
                 }
               }
-              console.log([...out].join(" "));
+              console.log([...out].map(([dep, range]) => dep + "|" + range).join("\n"));
             ')"
             if [ -z "$MISSING" ]; then break; fi
-            DEPS=""
+            NEW=""
             UNRESOLVED=""
-            for dep in $MISSING; do
+            while IFS= read -r entry; do
+              [ -z "$entry" ] && continue
+              dep="${entry%%|*}"; range="${entry#*|}"
+              # Channel tag first, but the REQUIRER's declared range wins when
+              # the channel pin does not satisfy it: cordis-* peers live on
+              # independent version lines whose next tag can trail the release
+              # app-boot needs (@deepseek-ai/cordis-plugin-group: next=1.0.1-rc.4
+              # vs required ^1.0.2, latest=1.0.2 — 2026-09-15).
               v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              if [ -n "$range" ] && [ -n "$v" ]; then
+                sat="$(npm view "$dep@$range" version 2>/dev/null | tail -1 || true)"
+                if [ -n "$sat" ] && [ "$sat" != "$v" ]; then v="$sat"; fi
+              fi
               if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 || true)"; fi
-              if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep"; fi
-            done
+              if [ -n "$v" ]; then NEW="$NEW $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep@$range"; fi
+            done <<< "$MISSING"
             if [ -n "$UNRESOLVED" ]; then
               echo "::error::boot smoke cannot resolve CLI deps/peers on '$WANT':$UNRESOLVED"
               exit 1
             fi
-            echo "boot closure (round $round):$DEPS"
-            npm install --no-save --legacy-peer-deps $DEPS 2>&1 | tail -10
+            echo "boot closure (round $round):$NEW"
+            # Union install, same reason as the seam-family closure: an install
+            # naming only this round's deps would revert every earlier
+            # --no-save spec (the CLI itself included) back to the lockfile.
+            ALLDEPS="$ALLDEPS$NEW"
+            npm install --no-save --legacy-peer-deps $ALLDEPS 2>&1 | tail -10
           done
           # Strict on EVERY channel: the plugin's channel is a set of exact Fetch
           # routes below the supported `/api` seam, so a 404/405 here is a
