@@ -9,9 +9,9 @@
  * (`bash-sandbox`/`pwsh-sandbox`) stay enabled and consume the mixed
  * `ctx.subprocess`.
  *
- * R4-I2 执行适配层：远程会话的每会话沙箱模式被固定为 `danger-full-access`
- * （session/created 时写入 `sandbox/mode` 覆盖事件），因此沙箱化的 shell
- * 执行器对远程会话跳过本地跑器包装，`bash -c`/`pwsh -Command` 原样到达远端。
+ * REQ-I13: remote sessions keep the deployment `/permission` default. A
+ * remote-cwd `confine` passthrough stops the local runner from wrapping
+ * remote argv (ADR-0025). Per-call sandbox policy selects core `--sandbox`.
  *
  * `name: dsh-workspace-enhancement` in cordis.yml is equivalent to the three
  * subpath rows (`dsh-workspace-enhancement/ssh`, `dsh-workspace-enhancement/
@@ -22,8 +22,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import type { Session } from '@deepseek-ai/dsh-session'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
@@ -35,7 +33,6 @@ import { SshSubprocessEngine } from './subprocess.ts'
 import { SshFileSystemEngine } from './filesystem.ts'
 import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
-import { remoteRouteFromCwd } from './transport.ts'
 import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
 import {
   composeFencedGate,
@@ -45,6 +42,9 @@ import {
   remoteSandboxDepsOf,
 } from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
+import { ensureCoreHub } from './core-hub.ts'
+import { CoreRoutingFileSystem } from './core-fs.ts'
+import { installRemoteConfinePassthrough } from './remote-confine.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -52,35 +52,6 @@ import { SessionSideWorkspaceStore } from './session-workspaces.ts'
  * diffBasisMaxBytes = 10 MiB (the backend's own default).
  */
 const LOCAL_FS_CONFIG = { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 1024 }
-
-/**
- * R4-I2 执行适配层：远程会话的沙箱视图。每会话策略由 dsh-permission-presets
- * 在 session/created 时 pin 成部署默认（如 workspace-write），而 sandbox 化的
- * shell 执行器（bash-sandbox/pwsh-sandbox）在非 full 模式会把命令包进「本地
- * 沙箱 runner」——那是本机路径/本机节点脚本，远端不存在（exit 127）。远程会话
- * 的唯一正确语义是 full：本地沙箱对远端命令没有意义，跳过包装后
- * `bash -c '<command>'` / `pwsh -Command …` 原样经混合 provider 路由到远端。
- * 我们监听 session/created 并在默认 pin 之后追加 `sandbox/mode:
- * danger-full-access`（寄存器顺序在本 bundle 之后，append 成为最后事件，
- * fold 生效）；用户之后在 UI 里主动切换的模式仍是最后事件，按其决定（诚实：
- * 窄模式 + 远程 = 本地 runner 不可用 → 明确失败，绝不静默本地）。
- *
- * REQ-I9 边界（ADR-0022 §2.1/D1）：这个 pin 正是「本地 runner 绝不进入远端命令
- * 行」的保证——它让 `dsh-bash-sandbox` 走 `danger-full-access` 快路径，所以
- * 远端命令行里永远只有一个 runner（即本插件自己包的 bwrap），不会出现
- * 「本地 bwrap/landlock argv 被发到远端」（I9-10）。由此推出：**远端围栏档位
- * 不能来自 `ctx.sandboxPolicy`**（那个 resolver 对远程会话一律报
- * `danger-full-access`），它必须是本插件自己的逐机器轴 `remoteSandbox`
- * （`src/registry.ts`），由 `src/remote-sandbox-fence.ts` 在
- * `SshSubprocessHandle` 的 argv 阶段消费。
- * @param ctx - the aggregate row's context.
- */
-function forceRemoteSandboxMode(ctx: Context): void {
-  ctx.on('session/created', (session: Session) => {
-    if (remoteRouteFromCwd(session.header.cwd) === null) return
-    setSandboxMode(session, 'danger-full-access')
-  })
-}
 
 /**
  * Install the mixed providers: the LOCAL implementation classes are
@@ -114,22 +85,22 @@ export function installMixedProviders(ctx: Context): void {
   // optional services (`approval`/`agents`) resolve by name at ask time, so
   // the gate composes in any deployment and no-ops for ungated machines.
   const localSubprocess = new LocalSubprocessRuntime(ctx)
-  // REQ-I9 (ADR-0022): the remote sandbox fence is built here and passed to the
-  // remote branch only. Its per-spawn ladder (mode → identity for `'off'`,
-  // functional probe for a fenced mode, throw on any unproven case) lives in
-  // `remote-sandbox-fence.ts`; the seam applies it AFTER the approval gate and
-  // BEFORE serialization so the gate keeps seeing the user's original argv.
-  const fence = createRemoteSandboxFence(ctx)
+  // REQ-I5: one core hub per process. The fence's job on a fenced machine is
+  // to ensure that session is alive and return the original argv; the engine
+  // then `spawn.start`s over RPC. Approval still sees unwrapped argv.
+  const hub = ensureCoreHub(ctx)
+  const fence = createRemoteSandboxFence(ctx, { hub })
   const sshSubprocess = new SshSubprocessEngine(
     ctx,
     createRemoteSpawnGate(ctx),
     fence,
     createRemoteSandboxTerminalGuard(ctx),
+    hub,
   )
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))
 
   const installFs = (owner: Context, localFs: FileSystemBranch): void => {
-    const sshFs = new SshFileSystemEngine(owner)
+    const sshFs = new CoreRoutingFileSystem(owner, new SshFileSystemEngine(owner), hub)
     owner.set('fs', new MixedFileSystem(localFs, sshFs, sides))
   }
 
@@ -157,12 +128,13 @@ export function installMixedProviders(ctx: Context): void {
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.plugin(SshRuntime, config)
-  forceRemoteSandboxMode(ctx)
+  installRemoteConfinePassthrough(ctx)
   // AUDIT-6 (ADR-0020 D4): the AI answerer — a prepend `approval/request`
   // waterfall listener that auto-grants only whitelisted commands on
   // `remoteApproval: 'ai'` machines and delegates everything else (including
   // its own failures) to the human answerer. Effect-bound ⇒ reversible.
   registerRemoteApprovalAnswerer(ctx)
+  ensureCoreHub(ctx)
   // The mixed providers need the local provider classes (dependencies, so
   // always resolvable); if installation fails anyway, fall back to the
   // pure-SSH mounting so the row never fails harder than before.

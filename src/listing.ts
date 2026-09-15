@@ -242,3 +242,82 @@ export async function listRemoteLevel(
     truncated,
   }
 }
+
+/**
+ * List one remote level through a core RPC session (`fs.listDir`). Directories
+ * and directory-symlinks only, same window semantics as {@link listRemoteLevel}.
+ */
+export async function listRemoteLevelViaCore(
+  client: { call(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> },
+  target: string,
+  limit: number,
+  opts?: { signal?: AbortSignal | undefined; home?: string | undefined },
+): Promise<RemoteListing> {
+  const signal = opts?.signal
+  signal?.throwIfAborted()
+  const home = opts?.home ?? target
+  const raw = await client.call('fs.listDir', { path: target }, signal)
+  const rec = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {}
+  const listed = Array.isArray(rec.entries) ? rec.entries : []
+  const keep = limit + 1
+  const window: Array<{ name: string; type: string }> = []
+  let evicted = false
+  for (const item of listed) {
+    signal?.throwIfAborted()
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    if (typeof row.name !== 'string') continue
+    const type = typeof row.type === 'string' ? row.type : 'other'
+    if (type !== 'directory' && type !== 'symlink') continue
+    if (boundedInsert(window, { name: row.name, type }, keep)) evicted = true
+  }
+  const entries: RemoteListingEntry[] = []
+  let truncated = evicted
+  for (const candidate of window) {
+    signal?.throwIfAborted()
+    let enterable = candidate.type === 'directory'
+    if (!enterable && candidate.type === 'symlink') {
+      try {
+        const st = await client.call('fs.stat', { path: posix.join(target, candidate.name) }, signal)
+        const kind = st !== null && typeof st === 'object' && !Array.isArray(st)
+          ? (st as Record<string, unknown>).type
+          : undefined
+        enterable = kind === 'directory'
+      } catch {
+        if (signal?.aborted === true) throw asError(signal.reason)
+        enterable = false
+      }
+    }
+    if (!enterable) continue
+    if (entries.length === limit) {
+      truncated = true
+      break
+    }
+    entries.push({
+      name: candidate.name,
+      path: posix.join(target, candidate.name),
+      hidden: candidate.name.startsWith('.'),
+    })
+  }
+  return {
+    path: target,
+    home,
+    crumbs: ancestryCrumbs(target, posix.dirname, posix.basename),
+    entries,
+    truncated,
+  }
+}
+
+/** Create one child directory through core RPC (`fs.mkdir`), non-recursive. */
+export async function mkdirRemoteViaCore(
+  client: { call(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> },
+  parent: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const target = posix.join(parent, name)
+  await client.call('fs.mkdir', { path: target }, signal)
+  return target
+}

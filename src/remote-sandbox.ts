@@ -52,10 +52,9 @@
  *
  * ## Honest boundaries (ADR-0022 §2.7)
  *
- *  - **The fs/SFTP write face is not fenced.** It travels the host-side SFTP
- *    channel and never becomes a remote process, so bwrap cannot confine it;
- *    the remote OS user's permissions are the only real bound there. This is
- *    reported truthfully by {@link remoteSandboxFactsOf}.
+ *  - **File tools share the core jail when fenced** (REQ-I5). `off` still uses
+ *    host-side SFTP. Interactive terminals stay refused. This is reported
+ *    truthfully by {@link remoteSandboxFactsOf}.
  *  - The profile is **file effects only**: no network namespace, no
  *    `--clearenv`, no `--chdir`, no syscall filtering, no process visibility
  *    outside the PID namespace.
@@ -72,11 +71,9 @@ import { quoteShellArg } from './ssh-core.ts'
 /* ------------------------------------------------------------------ mode */
 
 /**
- * Per-machine fence mode (ADR-0022 D1). This is an axis of its own and is NOT
- * a mirror of `ctx.sandboxPolicy`: remote sessions pin the session sandbox
- * mode to `danger-full-access` (`forceRemoteSandboxMode`) so that
- * `dsh-bash-sandbox` does not inject a LOCAL runner into a REMOTE command; the
- * remote mode axis therefore has to live in this plugin (ADR-0022 §2.1/D9).
+ * Per-machine fence mode (ADR-0022 D1). After ADR-0025 this field is leftover:
+ * session `/permission` is the permission axis. The value is still normalized
+ * on read so old machines.json round-trips, but routing ignores it.
  */
 export type RemoteSandboxMode = 'off' | 'read-only' | 'workspace-write'
 
@@ -547,7 +544,7 @@ export const REMOTE_SANDBOX_MESSAGES = {
     'remote sandbox refuses to open an interactive terminal: mode "{mode}" cannot fence a PTY session, and an unfenced terminal would be dishonest',
   /** The two coverage boundaries, quoted verbatim into tool/status output. */
   boundaryFsWrites:
-    'the remote sandbox fences spawned commands only: fs/SFTP writes travel the host-side channel and are NOT confined by it',
+    'the remote sandbox fences commands and file tools through one jailed core; SFTP is used only when remoteSandbox is off',
   boundaryFileEffects:
     'the remote sandbox profile is file effects only: no network isolation, no environment scrubbing, no syscall filtering',
 } as const
@@ -623,7 +620,7 @@ export interface RemoteSandboxFacts {
     readonly spawnedCommands: boolean
     /** Interactive `spawnTerminal` sessions — refused under a fence in v1. */
     readonly interactiveTerminals: boolean
-    /** fs/SFTP writes — **never** covered (host-side channel). */
+    /** fs writes — covered by the core RPC jail when the mode is fenced. */
     readonly fsWrites: boolean
     /** Network egress — never covered. */
     readonly network: boolean
@@ -664,7 +661,7 @@ export function remoteSandboxFactsOf(mode: RemoteSandboxMode): RemoteSandboxFact
     covers: {
       spawnedCommands: enabled,
       interactiveTerminals: false,
-      fsWrites: false,
+      fsWrites: enabled,
       network: false,
       hostProbes: false,
     },

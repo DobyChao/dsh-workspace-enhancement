@@ -67,7 +67,8 @@ test('t8 ⑧⑨: renderRemoteEnvProbe emits three check lines plus a hint (never
   assert.ok(partial.includes('pwsh: ✗') && partial.includes('rg: ✗') && partial.includes('bash: ✓'))
   // REQ-I6 ①: model-facing output is English only, whatever the UI language.
   assert.ok(partial.includes('the remote is missing pwsh, rg'))
-  assert.ok(partial.includes('sudo apt-get install ripgrep'), 'hint names the install command as reference only')
+  assert.ok(!partial.includes('sudo apt-get install ripgrep'), 'hint must not teach apt-get install ripgrep')
+  assert.ok(partial.includes('core.deploy'))
   assert.ok(!partial.includes('命令已执行'), 'hint must not claim execution')
 })
 

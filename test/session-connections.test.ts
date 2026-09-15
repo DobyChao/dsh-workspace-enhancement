@@ -32,6 +32,7 @@ test('normalizeMachineId: trims, accepts the routing charset, rejects route-brea
   assert.equal(normalizeMachineId('c1/../../etc'), null)
   assert.equal(normalizeMachineId('c1:22'), null)
   assert.equal(normalizeMachineId('a b'), null)
+  assert.equal(normalizeMachineId('.git'), null)
   assert.equal(normalizeMachineId(7), null)
   assert.equal(normalizeMachineId(undefined), null)
 })

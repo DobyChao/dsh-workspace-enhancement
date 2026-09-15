@@ -44,8 +44,12 @@ import type {
   DirectoryPickerBrowseCapability,
   DirectoryPickerCapability,
 } from '@deepseek-ai/dsh-host-directory-picker'
-import { ancestryCrumbs, asError, boundedInsert, listRemoteLevel, raceAbort, remoteHome } from './listing.ts'
+import { ancestryCrumbs, asError, boundedInsert, listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, raceAbort, remoteHome } from './listing.ts'
 import type { SshRuntime } from './runtime.ts'
+import { coreHubOf, ensureCoreHub } from './core-hub.ts'
+import { CoreClient } from './core-client.ts'
+import { isCoreMissingError } from './remote-policy.ts'
+import type { SshRegistry } from './registry.ts'
 
 /** Configuration for the directory-picker browse backend. */
 export interface Config {
@@ -172,6 +176,29 @@ export class SshDirectoryPicker extends DirectoryPicker {
     return this.remoteHomePromise
   }
 
+  /**
+   * Operator browse uses core when a Linux artifact is installed (`--sandbox
+   * off`); missing core falls back to SFTP so Windows / undeployed hosts still
+   * pick directories.
+   */
+  private async operatorCore(
+    connectionId: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<CoreClient | undefined> {
+    const hub = coreHubOf(this.ctx) ?? ensureCoreHub(this.ctx)
+    try {
+      return await hub.require(connectionId, {
+        path,
+        policy: 'danger-full-access',
+        ...(signal !== undefined ? { signal } : {}),
+      })
+    } catch (error) {
+      if (isCoreMissingError(error)) return undefined
+      throw error
+    }
+  }
+
   /** The browse interaction capability (stable for the service lifetime). */
   override capability(): DirectoryPickerCapability {
     return this.browseCapability
@@ -234,9 +261,18 @@ export class SshDirectoryPicker extends DirectoryPicker {
   /** List one remote level through the shared {@link listRemoteLevel} walk. */
   private async listRemote(target: string, signal?: AbortSignal): Promise<DirectoryListing> {
     try {
+      const home = await this.resolveRemoteHome(signal)
+      const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
+      const id = registry?.getActive()?.spec.id
+      if (id !== undefined) {
+        const client = await this.operatorCore(id, target, signal)
+        if (client !== undefined) {
+          return await listRemoteLevelViaCore(client, target, this.config.maxEntries, { signal, home })
+        }
+      }
       return await listRemoteLevel(this.ctx.ssh, target, this.config.maxEntries, {
         signal,
-        home: await this.resolveRemoteHome(signal),
+        home,
       })
     } catch (error) {
       signal?.throwIfAborted()
@@ -303,6 +339,21 @@ export class SshDirectoryPicker extends DirectoryPicker {
       throw new DirectoryPickerError('directory-create-failed', path, `cannot create under "${path}": not a fully qualified parent path`)
     }
     const target = posix.join(path, name)
+    const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
+    const id = registry?.getActive()?.spec.id
+    if (id !== undefined) {
+      try {
+        const client = await this.operatorCore(id, path)
+        if (client !== undefined) {
+          await mkdirRemoteViaCore(client, path, name)
+          return target
+        }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error)
+        if (/EEXIST|exists/i.test(text)) throw new DirectoryPickerError('directory-exists', target, `${target} already exists`)
+        throw new DirectoryPickerError('directory-create-failed', target, `cannot create ${target}: ${messageOf(error)}`)
+      }
+    }
     const sftp = await this.ctx.ssh.getSftp()
     try {
       const existing = await new Promise<Stats | undefined>((resolvePromise) => {

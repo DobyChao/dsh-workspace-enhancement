@@ -19,7 +19,8 @@ import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
 import type { RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
-import { sandboxBadgeOf } from './row-badges.ts'
+import { coreStatusLabel } from './core-status.ts'
+import type { CoreStatusPayload } from './core-status.ts'
 
 /** The `/dsw` RPC face injected by the client plugin. */
 export interface SettingsInjected {
@@ -136,6 +137,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [coreLines, setCoreLines] = useState<Record<string, string>>({})
 
   const refresh = async (): Promise<void> => {
     try {
@@ -206,6 +208,35 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     }
   }
 
+  const refreshCore = async (id: string): Promise<void> => {
+    try {
+      const result = await rpc('core.status', { id })
+      const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreStatusFailed'))
+      setCoreLines(current => ({ ...current, [id]: coreStatusLabel(view, t) }))
+    } catch (error) {
+      setCoreLines(current => ({
+        ...current,
+        [id]: error instanceof Error ? error.message : String(error),
+      }))
+    }
+  }
+
+  const deployCore = async (id: string): Promise<void> => {
+    setBusy(true)
+    setErr('')
+    setMsg('')
+    try {
+      const result = await rpc('core.deploy', { id })
+      const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreDeployFailed'))
+      setCoreLines(current => ({ ...current, [id]: coreStatusLabel(view, t) }))
+      setMsg(coreStatusLabel(view, t))
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleSaved = (view: MachineSaveView): void => {
     setEditing(null)
     setErr('')
@@ -246,16 +277,14 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                     {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
                     {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
                     {machine.remoteApproval !== 'off' ? <span style={{ fontSize: 12, opacity: 0.85 }}> {t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span> : ''}
-                    {/* REQ-I9: the fence badge — empty for 'off'/absent, so an
-                        upgraded settings page renders exactly as before. */}
-                    {sandboxBadgeOf(machine.remoteSandbox, t) !== ''
-                      ? <span style={{ fontSize: 12, opacity: 0.85 }}> {sandboxBadgeOf(machine.remoteSandbox, t)}</span>
-                      : ''}
                     {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>
                     <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
                     {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}>{t('settings.machines.currentBadge')}</span> : null}
+                    {coreLines[machine.id] !== undefined
+                      ? <span style={{ fontSize: 12, opacity: 0.75 }}>{coreLines[machine.id]}</span>
+                      : null}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
@@ -267,6 +296,16 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                     disabled={machine.id === currentId || busy}
                   >{t('settings.machines.setCurrent')}</button>
                   <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
+                  <button
+                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
+                    onClick={() => void refreshCore(machine.id)}
+                    disabled={busy}
+                  >{t('settings.machines.coreStatus')}</button>
+                  <button
+                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
+                    onClick={() => void deployCore(machine.id)}
+                    disabled={busy}
+                  >{t('settings.machines.deployCore')}</button>
                 </div>
               </div>
             </div>

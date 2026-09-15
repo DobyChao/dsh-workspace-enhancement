@@ -39,10 +39,10 @@ import type {
   SubprocessTerminalHandle,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import { posix } from 'node:path'
 import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
-import type { SshFileSystemEngine } from './filesystem.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
 
 /**
@@ -88,6 +88,8 @@ export interface SubprocessBranch {
 export function worldOfCwd(cwd: string | undefined, platform: NodeJS.Platform = process.platform): ExecutionWorld {
   if (cwd === undefined) return 'local'
   if (remoteRouteFromCwd(cwd) !== null) return 'remote'
+  // `ssh://.git/…` is a git-dir spelling, not a machine id (see parseSshRoute).
+  if (cwd.startsWith('ssh://') && cwd.slice('ssh://'.length).startsWith('.')) return 'remote'
   if (platform === 'win32' && cwd.startsWith('/') && !cwd.startsWith('//')) return 'remote'
   return 'local'
 }
@@ -210,9 +212,8 @@ export type FileSystemBranch = {
  * every target operation routes on the target key (`ssh://` = remote).
  * The sandbox mode fact is inherited from the LOCAL delegate (the sandboxed
  * backend reports the deployment default so the tool layer still advertises
- * escalation honestly); the per-call sandbox policy is forwarded to the local
- * delegate and dropped for remote targets — a write on the server can never
- * be fenced by the local sandbox.
+ * escalation honestly); the per-call sandbox policy is forwarded to BOTH
+ * worlds so a remote write can open the matching core `--sandbox` (ADR-0025).
  *
  * REQ-I11: routing is REGISTRY-level, not side-root-level. An `ssh://<id>/<path>`
  * spelling (or its local placeholder) names the remote world on its own, so the
@@ -225,7 +226,7 @@ export type FileSystemBranch = {
 export class MixedFileSystem implements FileSystemBranch {
   constructor(
     private readonly local: FileSystemBranch,
-    private readonly remote: SshFileSystemEngine,
+    private readonly remote: FileSystemBranch,
     private readonly sides?: () => SideWorkspaceFace | undefined,
   ) {}
 
@@ -240,7 +241,10 @@ export class MixedFileSystem implements FileSystemBranch {
     // cwd consideration — the machine id in the path is the whole decision.
     const route = remoteRouteFromCwd(path)
     if (route !== null) {
-      return this.remote.resolve(route.path, { cwd: sshTargetKey(route.connectionId, route.path), ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
+      // Prefer the session cwd. Using the FILE path as cwd minted a sibling
+      // jail at each ancestor (including `/`) via gitWorkingTreeOf.
+      const cwd = opts?.cwd ?? sshTargetKey(route.connectionId, posix.dirname(route.path))
+      return this.remote.resolve(route.path, { cwd, ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
     }
     // R5 T2: a side-workspace PATH wins over the cwd world — an absolute path
     // under a remote side root must resolve over its machine even when the
@@ -359,7 +363,14 @@ export class MixedFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
   ): Promise<Uint8Array> {
     if (worldOfTargetKey(String(target.targetKey)) === 'remote') {
-      return this.remote.readByteRange(target, range, signal)
+      const reader = this.remote.readByteRange
+      if (reader === undefined) {
+        throw new FsError(
+          `cannot read "${target.displayPath}": the remote filesystem backend does not support windowed reads`,
+          'FS_IO_ERROR',
+        )
+      }
+      return reader.call(this.remote, target, range, signal)
     }
     const reader = this.local.readByteRange
     if (reader === undefined) {
@@ -378,7 +389,7 @@ export class MixedFileSystem implements FileSystemBranch {
       : this.local.listDir(target, signal)
   }
 
-  /** @inheritdoc — the per-call policy reaches the local backend only. */
+  /** @inheritdoc — the per-call policy reaches both backends (ADR-0025). */
   async writeText(
     target: FsTarget,
     content: string,
@@ -389,11 +400,11 @@ export class MixedFileSystem implements FileSystemBranch {
     // REQ-I7 (ADR-0019): no write gate — a side root is a declaration, and a
     // write under it routes purely by target key.
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
-      ? this.remote.writeText(target, content, expected, signal)
+      ? this.remote.writeText(target, content, expected, signal, sandboxPolicy)
       : this.local.writeText(target, content, expected, signal, sandboxPolicy)
   }
 
-  /** @inheritdoc — the per-call policy reaches the local backend only. */
+  /** @inheritdoc — the per-call policy reaches both backends (ADR-0025). */
   async editText(
     target: FsTarget,
     edit: FsEditRequest,
@@ -402,7 +413,7 @@ export class MixedFileSystem implements FileSystemBranch {
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
-      ? this.remote.editText(target, edit, expected, signal)
+      ? this.remote.editText(target, edit, expected, signal, sandboxPolicy)
       : this.local.editText(target, edit, expected, signal, sandboxPolicy)
   }
 }

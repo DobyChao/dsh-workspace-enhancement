@@ -49,7 +49,11 @@ export const MODEL_PROMPTS = {
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
   envMissing:
-    'Hint: the remote is missing {missing} — install them on the remote (for reference only; not auto-installed): rg → sudo apt-get install ripgrep; pwsh → https://aka.ms/powershell',
+    'Hint: the remote is missing {missing}. Interactive terminals still need bash or pwsh on the host. Search/glob on a fenced machine uses the bundled rg inside the core — deploy the core from Settings (core.deploy); do not apt-get install ripgrep for that path.',
+  envCore:
+    'Remote environment:\n  core: {version} ({arch})\n  caps: {caps}',
+  envCoreMissing:
+    'Remote environment:\n  core: not installed ({detail})\n  Deploy the fenced core from Settings (core.deploy) before using a fenced machine.',
   /**
    * `tool:sw-exec` section (order 105) — injected only in a remote-context
    * session. REQ-I11 adds the session gate: `sw_exec` names a machine that is
@@ -62,14 +66,12 @@ export const MODEL_PROMPTS = {
   sectionWin32Bash:
     'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
   /**
-   * AUDIT-6 route-D honesty sentence (`sw-remote` section): injected in EVERY
-   * remote-main-workspace session. Remote commands are not confined by the
-   * local sandbox — `forceRemoteSandboxMode` pinning remote sessions to
-   * full access is same-world contract behavior, stated to the model as-is
-   * (ADR-0020 D6).
+   * REQ-I13 / ADR-0025: remote fs/spawn follow this session's `/permission`
+   * (and official `sandbox_permissions` escalation) via the Linux core.
+   * Missing core + confined mode fails closed; danger keeps SFTP/SSH.
    */
   remoteNoSandbox:
-    'Remote execution is not confined by the local sandbox: commands run with the remote OS account\'s permissions only.',
+    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined modes FAIL CLOSED if that core is missing (no SFTP fallback). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
   /**
    * AUDIT-6 gate-expectation sentence (`sw-remote` section): injected only
    * when the session's main-workspace machine has `remoteApproval !== 'off'`.
@@ -77,19 +79,14 @@ export const MODEL_PROMPTS = {
    * retried unchanged (ADR-0020 D6).
    */
   remoteGateActive:
-    'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
+    'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged. If the approval gate and sandbox escalation are both on, the operator sees two cards.',
   /**
-   * REQ-I9 fence sentence (`sw-remote` section): injected only when the routed
-   * machine has `remoteSandbox !== 'off'`. Stated to the model for the same
-   * reason as the approval sentence — a refusal must be understood rather than
-   * retried — and because the fence is the one place a remote command can fail
-   * for a reason the model cannot see on the remote host. It deliberately keeps
-   * the fs/SFTP boundary explicit: the fence covers commands only (ADR-0022 §2.7).
+   * Kept for older tests/callers; the session-sandbox sentence above now
+   * covers the fence. Empty so a leftover inject is a no-op.
    */
-  remoteFenced:
-    'Additionally, this machine runs commands inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the remote runner, and if that runner is missing or unusable the command FAILS (`SANDBOX_UNAVAILABLE`) instead of running unfenced. The fence covers commands only — the file tools are not confined by it.',
-  /** REQ-I9: the per-machine note appended to a connected machine that is fenced. */
-  connectedFenced: ' (commands fenced: {mode})',
+  remoteFenced: '',
+  /** REQ-I9: leftover connected-machine fence note; unused after ADR-0025. */
+  connectedFenced: '',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */

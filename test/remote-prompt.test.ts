@@ -60,6 +60,11 @@ test('remoteRouteFromCwd: an invalid id segment is not a route', () => {
   assert.equal(remoteRouteFromCwd(join(ROOT, 'c1!', 'proj'), BASE), null)
 })
 
+test('remoteRouteFromCwd: a leading-dot id is not a machine (.git is a git dir)', () => {
+  assert.equal(remoteRouteFromCwd('ssh://.git/HEAD'), null)
+  assert.equal(remoteRouteFromCwd(join(ROOT, '.git', 'HEAD'), BASE), null)
+})
+
 /* --------------------------------------- 2) route → 机器信息 → prompt fact */
 
 test('remotePromptFact: local cwd yields null (zero injection)', () => {

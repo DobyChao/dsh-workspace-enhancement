@@ -33,13 +33,9 @@
   远程会话内同机任意绝对路径本就可达，逐根限权是 advisory 且挡不住 shell（旧门的已知绕过记录见
   `ADR-0012`，已作废）。真正的隔离手段是每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
   远程命令围栏在 `AUDIT-6` / `REQ-I9` 线上推进。
-- **远程执行不受本地沙箱限制**（`ADR-0020` 路线 D，如实告知）：远程命令以远端 OS 账户权限执行，
-  本地沙箱对远端无效（远程会话被钉成 `danger-full-access` 是 same-world 契约内行为，系统提示已如实
-  告知模型）。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
-  shell 形状的远程命令与远程终端执行前经平台审批服务（人审或 AI 只读白名单自动放权）决定，
-  审计对自动落会话日志。该门**明确不覆盖**（诚实边界，`ADR-0020` D1）：
-  1. **fs/SFTP 写路径不设门**——模型可经 fs 接缝在远端写文件，「写脚本 + `bash script.sh`」组合可
-     绕过 shell 形状门；结构性答案是 REQ-I9 的远端沙箱 runner，本门不假装补上这个洞；
+- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 核心时，围栏档（read-only / workspace-write）fail-closed，不退 SFTP；`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
+  shell 形状的远程命令与远程终端执行前经平台审批服务决定。该门**明确不覆盖**（诚实边界，`ADR-0020` D1）：
+  1. **审批门不覆盖 fs 写**——围栏档的写由核心 jail 覆盖；danger 且无核心时仍是 SFTP；
   2. **插件自有固定探针**不设门（注册表 `probe`/`reconnect`、`sw_status` 环境自检、`sw_exec` 的
      OS 探针、连接测试）——走 `connection.exec` 直连通道，命令文本是插件常量、非模型输入；
   3. ~~`sw_connect save:false` 临时连接不设门~~——**该路径已退役**（`ADR-0021` §1/§5：临时连接整体
@@ -47,7 +43,7 @@
      会话级连接门（`ADR-0021` §2.5）；
   4. 非壳形状的远程 spawn（LSP、宿主自组 argv 的进程）不拦——威胁面是**模型撰写的命令文本**，
      shell `-c` 形状正是它的唯一常规载体。
-  UX-1 的 `remote-full` 预设片段（含整键替换警告与 SEC-3 已知副作用）正典位置在 `ADR-0015`。
+  审批门与 sandbox 提权同时开启会弹两张卡。UX-1 的 `remote-full` 预设片段正典位置在 `ADR-0015`（根因已随取消钉档消失，待 lab 确认）。
 - **会话级「已连接机器」门是可见性门，不是强制门**（`ADR-0021` §2.7，2026-09-13 实测取证）：
   `sw_connect` 的连接集合决定**本会话看到什么**（`sw_exec` 是否可用、提示词里有没有机器清单），
   但它**拦不住**会拼路径的模型，两条已验证的绕行：
@@ -60,12 +56,17 @@
   这是**结构性**的：`SubprocessSpawnSpec` 不携带会话身份，门面在 spawn 时无从判别会话，所以门只能
   做在工具层（用户 2026-09-12 拍板「门控只做在工具层与提示层」）。命令级仍有审批门兜底（该路径
   argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与 `REQ-I9` 的远端围栏
-  （`remoteSandbox ≠ off` 时，且同样只围经 spawn 的命令，SFTP 写面仍不在内）。
+  （`remoteSandbox ≠ off` 时命令**与文件工具**同进核心 jail；`off` 仍走 SFTP）。
 - SSH 固有：远端 pid / 前台进程组不可见。
-- 远端需装 `pwsh` / `ripgrep`，缺失时工具诚实报 127，不静默降级；`REQ-I9` 的围栏另需 `bwrap`
-  （缺失即 `SANDBOX_UNAVAILABLE`，**绝不裸跑**）。远程 `ctx.fs` 今天走 SFTP，围栏包不住写面
-  （UAT I9-9）。**方向**：部署**一个可校验核心**（`ADR-0023` / `REQ-I5`）——围栏执行与远端读写
-  进同一产物；落地前不得宣称「已围栏」。供应链（二进制来源、签名、校验和）是新信任根。
+- 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进核心 tarball，由设置页 `core.deploy`
+  上传。核心缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
+  `read-only` 下官方 `write` 工作区外失败且文件不存在）。`off` / 非 linux-x86_64 仍是 SFTP +
+  裸 exec。交互终端在围栏档仍拒绝。供应链（二进制来源、签名、校验和）是新信任根。
+- **宿主静默项目根探测会铸出比会话更宽的 workspace-write jail**（`BUG-4`，2026-09-15 R27）：
+  `dsh-agent-instructions` 等在组上下文时沿目录 `resolve(…/.git)`，轨迹不可见。插件把探测路径当
+  `cwd` 后会对 `/home`、`$HOME` 做 `--bind`。官方 Write 打进会话 jail 时工作区外拒绝仍可能成立；
+  多出来的宽 serve 是另一份可写面。事实 [`docs/host-silent-fs.md`](./docs/host-silent-fs.md)；
+  修完本条从这里删掉。
 
 如果你发现**上面之外的**绕过路径，请按下面的方式报告。
 

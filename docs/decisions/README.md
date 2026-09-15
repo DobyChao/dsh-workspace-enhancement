@@ -26,4 +26,6 @@
 | [0020](./ADR-0020-remote-approval-gate.md) | 远程 spawn 接缝审批门 + AI 自动放权 | accepted |
 | [0021](./ADR-0021-session-machine-connections.md) | 会话级机器连接与远程工具门控（`sw_connect` 重塑） | accepted |
 | [0022](./ADR-0022-remote-sandbox-runner.md) | 远端沙箱围栏（bwrap 兼容 runner over SSH） | accepted |
-| [0023](./ADR-0023-one-remote-core.md) | 远端一个核心：围栏执行 + 远端读写共用可校验产物 | accepted（方向；实现未排期） |
+| [0023](./ADR-0023-one-remote-core.md) | 远端一个核心：围栏执行 + 远端读写共用可校验产物 | accepted（落地中） |
+| [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
+| [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |

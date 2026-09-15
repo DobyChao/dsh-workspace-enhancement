@@ -33,6 +33,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { dshHome } from './hostkey.ts'
+import { isRegistryConnectionId } from './registry.ts'
 
 /** The persisted file shape (`sessions` only; anything else is ignored). */
 export interface SessionConnectionsFile {
@@ -44,18 +45,11 @@ export function defaultSessionConnectionsFile(dshBase?: string): string {
   return join(dshBase ?? dshHome(), 'dsw-session-connections.json')
 }
 
-/**
- * The machine-id charset the routing layer accepts (`parseSshRoute`): a machine
- * id may not contain `/`, `:` or whitespace, so one id can never smuggle a path
- * or a second route into a stored reference.
- */
-const MACHINE_ID = /^[A-Za-z0-9._-]+$/
-
-/** Normalize one stored/!incoming machine id, or null when it cannot be one. */
+/** Normalize one stored/incoming machine id, or null when it cannot be one. */
 export function normalizeMachineId(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const id = value.trim()
-  return id !== '' && MACHINE_ID.test(id) ? id : null
+  return id !== '' && isRegistryConnectionId(id) ? id : null
 }
 
 /** Normalize a session id (padded spellings collapse onto one account). */

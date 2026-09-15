@@ -45,10 +45,25 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # .npmrc pins legacy-peer-deps=true: the host-provided @deepseek-ai peers
-      # do not form a resolvable tree inside this plugin repo.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: core/go.mod
+
       - name: Install
         run: npm ci
+
+      - name: Go core (test + linux/amd64 build)
+        if: runner.os == 'Linux'
+        working-directory: core
+        run: |
+          go test ./...
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/dsh-core .
+
+      - name: Go core (unit tests, no jail)
+        if: runner.os != 'Linux'
+        working-directory: core
+        run: go test ./...
 
       - name: Gate (static + typecheck + unit + build + pack smoke)
         run: npm run check

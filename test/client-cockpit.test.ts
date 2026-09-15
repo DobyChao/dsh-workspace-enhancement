@@ -94,6 +94,7 @@ test('every accepted remote spelling becomes the main workspace (machine + path)
   // Anything else is a local session — never a guess.
   assert.equal(routeOfCwd('/srv/local'), undefined)
   assert.equal(routeOfCwd('ssh://bad id/x'), undefined)
+  assert.equal(routeOfCwd('ssh://.git/HEAD'), undefined)
   assert.equal(routeOfCwd(''), undefined)
   assert.equal(routeOfCwd(undefined), undefined)
 })

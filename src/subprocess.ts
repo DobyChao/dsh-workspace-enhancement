@@ -25,6 +25,8 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { quoteShellArg } from './ssh-core.ts'
 import { resolveSshCwd } from './transport.ts'
 import type { SshCwdRoute, SshTransport } from './transport.ts'
+import { SshSubprocessHandle } from './process.ts'
+import { spawnSshTerminal } from './terminal.ts'
 import { createRemoteSpawnGate } from './remote-approval-gate.ts'
 import type { RemoteSpawnGate } from './remote-approval-gate.ts'
 import { RemoteSandboxError } from './remote-sandbox.ts'
@@ -33,8 +35,9 @@ import {
   createRemoteSandboxTerminalGuard,
 } from './remote-sandbox-fence.ts'
 import type { RemoteSandboxFence, RemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
-import { SshSubprocessHandle } from './process.ts'
-import { spawnSshTerminal } from './terminal.ts'
+import type { CoreHub } from './core-hub.ts'
+import { CoreSubprocessHandle } from './core-process.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
 import type { SshTerminalHandle } from './terminal.ts'
 
 /**
@@ -77,7 +80,7 @@ function requireRepresentableGrace(graceMs: number): void {
  * explicitly passed dep still wins (no double-wrap on the aggregate path).
  */
 export class SshSubprocessEngine {
-  private readonly live = new Set<SshSubprocessHandle>()
+  private readonly live = new Set<SshSubprocessHandle | CoreSubprocessHandle>()
   private readonly terminals = new Set<SshTerminalHandle>()
   private readonly spillDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-ssh-'))
   /** Memoized context-derived fence (see {@link sandboxFence}). */
@@ -91,6 +94,7 @@ export class SshSubprocessEngine {
     private readonly gate?: RemoteSpawnGate,
     private readonly fence?: RemoteSandboxFence,
     private readonly terminalGuard?: RemoteSandboxTerminalGuard,
+    private readonly hub?: CoreHub,
   ) {
     ctx.effect(() => async () => {
       await this.dispose()
@@ -122,7 +126,10 @@ export class SshSubprocessEngine {
    * lookups at call time.
    */
   private sandboxFence(): RemoteSandboxFence {
-    this.lazyFence ??= this.fence ?? createRemoteSandboxFence(this.ctx)
+    this.lazyFence ??= this.fence ?? createRemoteSandboxFence(
+      this.ctx,
+      this.hub !== undefined ? { hub: this.hub } : {},
+    )
     return this.lazyFence
   }
 
@@ -233,6 +240,31 @@ export class SshSubprocessEngine {
     // (explicit dep or context-derived) is the later stage that turns that same
     // argv into the executed one.
     const fence = this.sandboxFence()
+    const policy = resolveRemoteSessionMode(this.ctx)
+    if (this.hub !== undefined && route.connectionId !== undefined) {
+      const connectionId = route.connectionId
+      const hub = this.hub
+      const sshFallback = isConfinedSandboxMode(policy)
+        ? undefined
+        : () => new SshSubprocessHandle(
+          route.transport,
+          route.cwd,
+          spec,
+          this.spillDir,
+          undefined,
+          async (argv) => argv,
+        )
+      const handle = sshFallback === undefined
+        ? new CoreSubprocessHandle(hub, connectionId, route.cwd, spec, this.spillDir, preflight, policy)
+        : new CoreSubprocessHandle(hub, connectionId, route.cwd, spec, this.spillDir, preflight, policy, sshFallback)
+      this.live.add(handle)
+      const release = async (): Promise<void> => {
+        await handle.waitForExit()
+        this.live.delete(handle)
+      }
+      void handle.done.then(release, release).catch(() => {})
+      return handle
+    }
     const resolveArgv = (argv: readonly string[]) => fence({
       connectionId: route.connectionId,
       cwd: route.cwd,
@@ -314,9 +346,10 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
     gate?: RemoteSpawnGate,
     fence?: RemoteSandboxFence,
     terminalGuard?: RemoteSandboxTerminalGuard,
+    hub?: CoreHub,
   ) {
     super(ctx)
-    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, terminalGuard)
+    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, terminalGuard, hub)
   }
 
   /** @inheritdoc */

@@ -314,6 +314,15 @@ export interface SshRoute {
   path: string
 }
 
+/**
+ * Registry connection ids: start with an alphanumeric character. A leading
+ * `.` would treat paths like `.git` as a machine (official git tools then
+ * throw "unknown connection `.git`").
+ */
+export function isRegistryConnectionId(id: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
+}
+
 /** Parse `ssh://<connId>/<abs>` (the workspace/cwd spelling of a remote path). */
 export function parseSshRoute(value: string): { id: string; path: string } | null {
   if (!value.startsWith('ssh://')) return null
@@ -322,7 +331,7 @@ export function parseSshRoute(value: string): { id: string; path: string } | nul
   if (separator <= 0) return null
   const id = rest.slice(0, separator)
   const path = rest.slice(separator)
-  if (!/^[A-Za-z0-9._-]+$/.test(id) || !posix.isAbsolute(path)) return null
+  if (!isRegistryConnectionId(id) || !posix.isAbsolute(path)) return null
   return { id, path }
 }
 

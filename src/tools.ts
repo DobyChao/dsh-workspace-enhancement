@@ -26,6 +26,8 @@ import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
+import { coreHubOf } from './core-hub.ts'
+import type { CoreHub, CoreStatusView } from './core-hub.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -158,11 +160,9 @@ export interface ConnectedMachineFact {
 
 /** Pure prompt projection of one connected registry machine. */
 export function connectedMachineFact(id: string, machine: PromptMachineFace | undefined): ConnectedMachineFact {
-  const sandbox = machine?.remoteSandbox
   return {
     id,
     endpoint: machine !== undefined ? `${machine.username}@${machine.host}` : `conn-${id}`,
-    ...(sandbox !== undefined && sandbox !== 'off' ? { sandbox } : {}),
   }
 }
 
@@ -178,7 +178,7 @@ export function renderConnectedMachines(facts: readonly ConnectedMachineFact[]):
   const lines = facts.map(fact => modelPrompt('connectedItem', {
     id: fact.id,
     endpoint: fact.endpoint,
-    note: `${fact.reachable === false ? modelPrompt('connectedUnreachable') : ''}${fact.sandbox !== undefined ? modelPrompt('connectedFenced', { mode: fact.sandbox }) : ''}`,
+    note: `${fact.reachable === false ? modelPrompt('connectedUnreachable') : ''}`,
   }))
   return `${modelPrompt('connectedHeading')}\n${lines.join('\n')}`
 }
@@ -252,9 +252,6 @@ export function composeWorkspacePrompt(
     if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
       parts.push(modelPrompt('remoteGateActive'))
     }
-    if (machine?.remoteSandbox !== undefined && machine.remoteSandbox !== 'off') {
-      parts.push(modelPrompt('remoteFenced', { mode: machine.remoteSandbox }))
-    }
   }
   const side = renderSideWorkspaces(sides)
   if (side !== '') parts.push(side)
@@ -319,6 +316,18 @@ export function renderRemoteEnvProbe(probe: RemoteEnvProbe): string {
   return lines.join('\n')
 }
 
+/** Render a fenced machine's core hello/status for `sw_status`. */
+export function renderCoreEnv(view: CoreStatusView): string {
+  if (view.ok === true && view.version !== undefined) {
+    return modelPrompt('envCore', {
+      version: view.version,
+      arch: view.arch ?? 'unknown',
+      caps: (view.caps ?? []).join(', ') || 'none',
+    })
+  }
+  return modelPrompt('envCoreMissing', { detail: view.detail ?? 'core not installed' })
+}
+
 /** Ping result: the render text plus a structured ok/detail pair for composition. */
 interface PingResult {
   ok: boolean
@@ -348,9 +357,18 @@ async function pingActive(registry: SshRegistry, tr: TranslateFn): Promise<PingR
 }
 
 /** Probe the remote toolbox (bash/pwsh/rg) with the same bounded budget. */
-async function remoteEnvLine(registry: SshRegistry): Promise<string> {
+async function remoteEnvLine(registry: SshRegistry, hub?: CoreHub): Promise<string> {
   const active = registry.getActive()
   if (active === null) return ''
+  const id = active.spec.id
+  if (hub !== undefined) {
+    try {
+      const view = await hub.status(id, AbortSignal.timeout(8_000))
+      if (view.ok) return renderCoreEnv(view)
+    } catch {
+      return renderCoreEnv({ ok: false, detail: 'core status failed' })
+    }
+  }
   try {
     const outcome = await active.connection.exec(remoteEnvProbeCommand(), { signal: AbortSignal.timeout(8_000) })
     if (outcome.exitCode !== 0) return ''
@@ -464,7 +482,7 @@ export function registerWorkspaceTools(
           t('tool.sw_status.outputs.backend', { backend: status.backend }),
         ]
         lines.push((await pingActive(instance, t)).text)
-        lines.push(await remoteEnvLine(instance))
+        lines.push(await remoteEnvLine(instance, coreHubOf(ctx)))
         return { text: lines.join('\n') }
       },
     }), locale, { descriptionKey: 'tool.sw_status.description', buildParams: () => ({}) }),

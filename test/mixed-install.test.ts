@@ -70,7 +70,7 @@ test('installMixedProviders: without a sandbox policy the bare local backend bac
   assert.equal(fs.sandboxMode, undefined)
 })
 
-test('t6: remote sessions get a forced danger-full-access sandbox override (session/created)', async () => {
+test('t6: remote sessions are NOT pinned to danger-full-access (REQ-I13)', async () => {
   const ctx = new Context()
   const { default: SessionStore } = await import('@deepseek-ai/dsh-session')
   await ctx.plugin(SessionStore)
@@ -87,9 +87,6 @@ test('t6: remote sessions get a forced danger-full-access sandbox override (sess
     }
     return undefined
   }
-  // dsh-session 0.1.2-rc.1 replaced the old `session.events` array with the
-  // `ownEvents()` accessor (snapshotEvents/ownEvents). Keep the assertion on the
-  // live event log this session owns.
-  assert.equal(modeOf(remote.ownEvents()), 'danger-full-access', 'remote session must be forced to full')
+  assert.equal(modeOf(remote.ownEvents()), undefined, 'remote session must keep the deployment default')
   assert.equal(modeOf(local.ownEvents()), undefined, 'local session must keep no override')
 })

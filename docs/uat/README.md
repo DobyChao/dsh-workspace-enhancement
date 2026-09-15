@@ -100,6 +100,8 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | [R22-audit6-remote-approval-gate.md](./R22-audit6-remote-approval-gate.md) | R22 远程命令审批门（AUDIT-6） |
 | [R24-req-i11-session-connections.md](./R24-req-i11-session-connections.md) | R24 会话级机器连接（REQ-I11，15 步） |
 | [R24-req-i9-remote-runner.md](./R24-req-i9-remote-runner.md) | R24 远端沙箱围栏（REQ-I9，11 步 + G1–G3） |
+| [R26-req-i5-remote-core.md](./R26-req-i5-remote-core.md) | **已作废**（曾按机器 `remoteSandbox` 写；勿跑） |
+| [R27-req-i13-remote-session-sandbox.md](./R27-req-i13-remote-session-sandbox.md) | R27 REQ-I5 + REQ-I13 合验（核心运输 + 会话 `/permission`） |
 | [FEEDBACK.md](./FEEDBACK.md) | 用户反馈模板 |
 
 来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`docs/README.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）

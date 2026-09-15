@@ -80,9 +80,8 @@ dsh --profile <scratch> --dump-config   # 检查 bundle 行、patch 行、工具
 
 ## 6. 已知环境要求
 
-- 远端主机需装 `pwsh`（PowerShell 工具）与 `ripgrep`（glob）；终端（bash）开箱即用。
-  REQ-I9 之后围栏还需要 `bwrap`。**这三项目前是分项安装。方向是部署一个核心**（`ADR-0023`）：
-  围栏执行 + 远端读写（fs 不再走 SFTP）+ 打包 `rg`。核心落地后测试的远端前置只剩「部署一个核心」。
+- 围栏档远端前置是**部署核心**（设置页 `core.deploy`，linux x86_64）。`off` 机器仍可用系统
+  `bash`/`pwsh`；搜索在围栏档走核心捆绑 `rg`。Go 单测：`core/` 下 `go test`（CI ubuntu 另 `go build` linux/amd64）。
 - 本机 Playwright 浏览器二进制在 `%LOCALAPPDATA%\ms-playwright`；`@playwright/test` 是 devDependency。
 - Node ≥ 22.8（`--experimental-test-isolation` 与内置 TS transform 的最低要求）。
 

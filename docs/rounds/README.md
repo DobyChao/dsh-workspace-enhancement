@@ -33,6 +33,7 @@
 | R23 | 侧边栏远程浏览接入面侦察 | [R23-sidebar-remote-browse-recon.md](./R23-sidebar-remote-browse-recon.md) |
 | R24 | 会话连接（REQ-I11）+ 远端围栏（REQ-I9） | [R24-session-connections-and-remote-fence.md](./R24-session-connections-and-remote-fence.md) |
 | R25 | 发布 npm `v0.1.4` | [R25-v0.1.4-release.md](./R25-v0.1.4-release.md) |
+| R26 | REQ-I5 远端一个核心 | [R26-req-i5-remote-core.md](./R26-req-i5-remote-core.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 

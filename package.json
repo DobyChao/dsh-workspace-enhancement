@@ -70,6 +70,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc && tsdown",
+    "build:core": "node scripts/build-core.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "test:agent": "node scripts/test-agent.mjs",
