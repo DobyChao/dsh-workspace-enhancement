@@ -75,12 +75,16 @@ func TestFsWriteAndRead(t *testing.T) {
 
 func TestFsRealpathMissingLeaf(t *testing.T) {
 	dir := t.TempDir()
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	missing := filepath.Join(dir, "new.txt")
 	got, err := fsRealpath(missing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := slashAbs(missing)
+	want, err := slashAbs(filepath.Join(realDir, "new.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
