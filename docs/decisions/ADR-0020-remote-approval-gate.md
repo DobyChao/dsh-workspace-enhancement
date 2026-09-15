@@ -231,10 +231,9 @@ catch 后 `next()` 是唯一正确动作：AI 坏了，决定权交还人类。
 **结论**：
 
 1. **系统提示（`src/model-prompts.ts` 新增英文常量，接 `sw-remote` 段）**：
-   - `remoteNoSandbox`——远程会话**恒**注入：「Remote execution is not confined by the
-     local sandbox: commands run with the remote OS account's permissions only.」（D 的
-     核心诚实句：本地沙箱对远端无效，`forceRemoteSandboxMode` 钉 full 是 same-world
-     契约内行为，向模型如实陈述）；
+   - `remoteNoSandbox`——远程会话**恒**注入。~~原句「Remote execution is not confined by the
+     local sandbox…」~~ **被 ADR-0025 改写**：现陈述远端跟会话 `/permission` 走核心，
+     无核心+围栏档 fail-closed。审批门句子不变。
    - `remoteGateActive`——仅当会话主工作区机器 `remoteApproval !== 'off'` 时注入：
      「Commands on this machine additionally require an approval decision before they
      run; do not retry a rejected command unchanged.」（管理模型对拒绝的预期，防重试

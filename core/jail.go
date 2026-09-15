@@ -46,8 +46,8 @@ func maybeJail(sandbox, workspace string, noJail bool) error {
 	argv := []string{bwrap}
 	argv = append(argv, profile.ReadOnly...)
 	if sandbox == "workspace-write" {
-		if workspace == "" || workspace[0] != '/' {
-			return fmt.Errorf("workspace-write needs an absolute --workspace")
+		if workspace == "" || workspace[0] != '/' || workspace == "/" {
+			return fmt.Errorf("workspace-write needs a non-root absolute --workspace")
 		}
 		argv = append(argv, profile.WorkspaceWriteExtra...)
 		argv = append(argv, "--bind", workspace, workspace)

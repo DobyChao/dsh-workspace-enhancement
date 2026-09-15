@@ -19,9 +19,17 @@ import type {
   FsWriteIntent,
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { sandboxDenialMarker } from '@deepseek-ai/dsh-sandbox'
 import { CoreClient, CoreRpcError } from './core-client.ts'
 import { CORE_ERROR_NOT_FOUND, CORE_ERROR_READ_ONLY, CORE_METHODS, asRecord } from './core-protocol.ts'
-import { isRemoteSandboxEnabled, RemoteSandboxError } from './remote-sandbox.ts'
+import { RemoteSandboxError } from './remote-sandbox.ts'
+import {
+  initiatorSessionOf,
+  isConfinedSandboxMode,
+  isCoreMissingError,
+  resolveRemoteSessionMode,
+} from './remote-policy.ts'
 import type { CoreHub } from './core-hub.ts'
 import { SshFileSystemEngine } from './filesystem.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
@@ -80,7 +88,20 @@ function literalEdit(content: string, request: FsEditRequest, displayPath: strin
   return request.replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
 }
 
-function mapRpc(error: unknown, operation: string, displayPath: string, signal?: AbortSignal): FsError {
+function sandboxDenied(operation: string, displayPath: string, mode: SandboxMode, cause?: unknown): FsError {
+  const marker = sandboxDenialMarker(mode)
+  const message = `cannot ${operation} "${displayPath}": file access denied under ${mode} mode ${marker}`
+  if (cause !== undefined) return new FsError(message, 'FS_SANDBOX_DENIED', { cause })
+  return new FsError(message, 'FS_SANDBOX_DENIED')
+}
+
+function mapRpc(
+  error: unknown,
+  operation: string,
+  displayPath: string,
+  signal?: AbortSignal,
+  mode: SandboxMode = 'workspace-write',
+): FsError {
   if (error instanceof FsError) return error
   if (signal?.aborted === true) return new FsError(`${operation} aborted`, 'FS_ABORTED', { cause: error })
   if (error instanceof RemoteSandboxError) {
@@ -92,12 +113,52 @@ function mapRpc(error: unknown, operation: string, displayPath: string, signal?:
     return new FsError(`cannot ${operation} "${displayPath}": not found`, 'FS_NOT_FOUND', { cause: error })
   }
   if (code === CORE_ERROR_READ_ONLY || /EROFS|read-only/i.test(message)) {
-    return new FsError(`cannot ${operation} "${displayPath}": permission denied`, 'FS_PERMISSION_DENIED', { cause: error })
+    return sandboxDenied(operation, displayPath, mode, error)
   }
   if (/EACCES|permission denied/i.test(`${code} ${message}`)) {
+    if (isConfinedSandboxMode(mode)) return sandboxDenied(operation, displayPath, mode, error)
     return new FsError(`cannot ${operation} "${displayPath}": permission denied`, 'FS_PERMISSION_DENIED', { cause: error })
   }
   return new FsError(`cannot ${operation} "${displayPath}": ${message}`, 'FS_IO_ERROR', { cause: error })
+}
+
+function isMissingRpc(error: unknown): boolean {
+  const code = error instanceof CoreRpcError ? error.code : ''
+  const message = error instanceof Error ? error.message : String(error)
+  return code === CORE_ERROR_NOT_FOUND || /ENOENT|not found/i.test(message)
+}
+
+/**
+ * Official Write resolves a path before the file exists. Local dsh-fs-local
+ * realpaths the nearest existing ancestor; deployed cores that still
+ * EvalSymlinks the leaf need the same walk on this side.
+ */
+export async function realpathAllowMissing(
+  lookup: (path: string, signal?: AbortSignal) => Promise<string>,
+  path: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  try {
+    return await lookup(path, signal)
+  } catch (error) {
+    if (!isMissingRpc(error)) throw error
+  }
+  const leaf = posix.basename(path)
+  const missing: string[] = leaf === '' || leaf === '/' ? [] : [leaf]
+  let ancestor = posix.dirname(path)
+  while (true) {
+    try {
+      const realAncestor = await lookup(ancestor, signal)
+      return missing.length === 0 ? realAncestor : posix.join(realAncestor, ...missing)
+    } catch (error) {
+      if (!isMissingRpc(error)) throw error
+      const parent = posix.dirname(ancestor)
+      if (parent === ancestor) return path
+      const base = posix.basename(ancestor)
+      if (base !== '') missing.unshift(base)
+      ancestor = parent
+    }
+  }
 }
 
 function asStat(raw: unknown): { type: FsInfo['type']; size?: number; version: ReturnType<typeof FsVersion> } | undefined {
@@ -117,6 +178,7 @@ export class CoreFileSystem implements FileSystemBranch {
   constructor(
     private readonly ctx: Context,
     private readonly client: CoreClient,
+    private readonly mode: SandboxMode = 'workspace-write',
   ) {}
 
   processPathFromHostPath(_hostPath: string): string | undefined {
@@ -147,12 +209,14 @@ export class CoreFileSystem implements FileSystemBranch {
     const remotePath = posix.resolve(route.cwd, path)
     const displayPath = route.connectionId === undefined ? remotePath : sshTargetKey(route.connectionId, remotePath)
     try {
-      const ok = asRecord(await this.client.call(CORE_METHODS.fsRealpath, { path: remotePath }, opts?.signal))
-      const canonical = typeof ok?.path === 'string' ? ok.path : remotePath
+      const canonical = await realpathAllowMissing(async (probe, signal) => {
+        const ok = asRecord(await this.client.call(CORE_METHODS.fsRealpath, { path: probe }, signal))
+        return typeof ok?.path === 'string' ? ok.path : probe
+      }, remotePath, opts?.signal)
       const targetKey = route.connectionId === undefined ? canonical : sshTargetKey(route.connectionId, canonical)
       return { targetKey: FsTargetKey(targetKey), displayPath }
     } catch (error: unknown) {
-      throw mapRpc(error, 'resolve', displayPath, opts?.signal)
+      throw mapRpc(error, 'resolve', displayPath, opts?.signal, this.mode)
     }
   }
 
@@ -165,7 +229,7 @@ export class CoreFileSystem implements FileSystemBranch {
       if (st === undefined) return undefined
       return { version: st.version, type: st.type, ...(st.size !== undefined ? { size: st.size } : {}) }
     } catch (error: unknown) {
-      throw mapRpc(error, 'stat', target.displayPath, signal)
+      throw mapRpc(error, 'stat', target.displayPath, signal, this.mode)
     }
   }
 
@@ -180,7 +244,7 @@ export class CoreFileSystem implements FileSystemBranch {
       if (st === undefined) return undefined
       return { version: st.version, type: st.type, ...(st.size !== undefined ? { size: st.size } : {}) }
     } catch (error: unknown) {
-      throw mapRpc(error, 'lstat', displayPath, signal)
+      throw mapRpc(error, 'lstat', displayPath, signal, this.mode)
     }
   }
 
@@ -205,7 +269,7 @@ export class CoreFileSystem implements FileSystemBranch {
       }
       return bytes
     } catch (error: unknown) {
-      throw mapRpc(error, 'read', target.displayPath, signal)
+      throw mapRpc(error, 'read', target.displayPath, signal, this.mode)
     }
   }
 
@@ -224,7 +288,7 @@ export class CoreFileSystem implements FileSystemBranch {
       }, signal))
       return Buffer.from(String(rec?.b64 ?? ''), 'base64')
     } catch (error: unknown) {
-      throw mapRpc(error, 'read', target.displayPath, signal)
+      throw mapRpc(error, 'read', target.displayPath, signal, this.mode)
     }
   }
 
@@ -263,7 +327,7 @@ export class CoreFileSystem implements FileSystemBranch {
       }
       return out.sort((left, right) => left.name.localeCompare(right.name))
     } catch (error: unknown) {
-      throw mapRpc(error, 'list', target.displayPath, signal)
+      throw mapRpc(error, 'list', target.displayPath, signal, this.mode)
     }
   }
 
@@ -338,7 +402,7 @@ export class CoreFileSystem implements FileSystemBranch {
         after: normalizeLineEndings(content),
       }
     } catch (error: unknown) {
-      throw mapRpc(error, 'write', target.displayPath, signal)
+      throw mapRpc(error, 'write', target.displayPath, signal, this.mode)
     }
   }
 
@@ -356,7 +420,8 @@ export class CoreFileSystem implements FileSystemBranch {
 }
 
 /**
- * Remote-world filesystem: SFTP when the machine is `off`, core RPC when fenced.
+ * Remote-world filesystem: core RPC when a Linux core is up; SFTP only for
+ * danger-full-access when the core is missing. Confined modes fail closed.
  */
 export class CoreRoutingFileSystem implements FileSystemBranch {
   constructor(
@@ -369,15 +434,24 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     return undefined
   }
 
-  private async delegate(connectionId: string | undefined, signal?: AbortSignal): Promise<FileSystemBranch> {
+  private async delegate(
+    connectionId: string | undefined,
+    opts?: { signal?: AbortSignal; path?: string; cwd?: string; sandboxPolicy?: unknown },
+  ): Promise<FileSystemBranch> {
+    const policy = resolveRemoteSessionMode(this.ctx, opts?.sandboxPolicy)
+    if (connectionId === undefined) return this.sftp
+    const sessionCwd = opts?.cwd ?? initiatorSessionOf(this.ctx)?.header?.cwd
     try {
-      if (connectionId === undefined || !isRemoteSandboxEnabled(this.hub.modeOf(connectionId))) {
-        return this.sftp
-      }
-      const client = await this.hub.require(connectionId, signal !== undefined ? { signal } : {})
-      return new CoreFileSystem(this.ctx, client)
+      const client = await this.hub.require(connectionId, {
+        policy,
+        ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
+        ...(opts?.path !== undefined ? { path: opts.path } : {}),
+        ...(sessionCwd !== undefined ? { cwd: sessionCwd } : {}),
+      })
+      return new CoreFileSystem(this.ctx, client, policy)
     } catch (error) {
-      throw mapRpc(error, 'use fenced core', connectionId ?? '', signal)
+      if (!isConfinedSandboxMode(policy) && isCoreMissingError(error)) return this.sftp
+      throw mapRpc(error, 'use fenced core', connectionId, opts?.signal, policy)
     }
   }
 
@@ -385,8 +459,20 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     return parseSshTargetKey(String(target.targetKey)).connectionId
   }
 
-  private idOfCwd(cwd: string | undefined): string | undefined {
-    return resolveSshCwd(this.ctx, cwd).connectionId
+  private pathOf(target: FsTarget): string {
+    return parseSshTargetKey(String(target.targetKey)).path
+  }
+
+  private targetOpts(
+    target: FsTarget,
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): { path: string; signal?: AbortSignal; sandboxPolicy?: unknown } {
+    return {
+      path: this.pathOf(target),
+      ...(signal !== undefined ? { signal } : {}),
+      ...(sandboxPolicy !== undefined ? { sandboxPolicy } : {}),
+    }
   }
 
   processPath(target: FsTarget): string {
@@ -402,28 +488,35 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
   }
 
   async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
-    const id = this.idOfCwd(opts?.cwd)
-    return (await this.delegate(id, opts?.signal)).resolve(path, opts)
+    const route = resolveSshCwd(this.ctx, opts?.cwd)
+    return (await this.delegate(route.connectionId, {
+      ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
+      cwd: route.cwd,
+    })).resolve(path, opts)
   }
 
   async stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined> {
-    return (await this.delegate(this.idOfTarget(target), signal)).stat(target, signal)
+    return (await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))).stat(target, signal)
   }
 
   async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
-    return (await this.delegate(this.idOfCwd(opts?.cwd), signal)).lstat(path, opts, signal)
+    const route = resolveSshCwd(this.ctx, opts?.cwd)
+    return (await this.delegate(route.connectionId, {
+      ...(signal !== undefined ? { signal } : {}),
+      cwd: route.cwd,
+    })).lstat(path, opts, signal)
   }
 
   async readText(target: FsTarget, signal?: AbortSignal): Promise<string> {
-    return (await this.delegate(this.idOfTarget(target), signal)).readText(target, signal)
+    return (await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))).readText(target, signal)
   }
 
   async streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>> {
-    return (await this.delegate(this.idOfTarget(target), signal)).streamText(target, signal)
+    return (await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))).streamText(target, signal)
   }
 
   async readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array> {
-    return (await this.delegate(this.idOfTarget(target), signal)).readBytes(target, signal, maxBytes)
+    return (await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))).readBytes(target, signal, maxBytes)
   }
 
   async readByteRange(
@@ -431,7 +524,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     range: { offset: number; length: number },
     signal?: AbortSignal,
   ): Promise<Uint8Array> {
-    const branch = await this.delegate(this.idOfTarget(target), signal)
+    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))
     if (branch.readByteRange === undefined) {
       throw new FsError(`cannot read "${target.displayPath}": windowed reads are unavailable`, 'FS_IO_ERROR')
     }
@@ -439,7 +532,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
   }
 
   async listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]> {
-    return (await this.delegate(this.idOfTarget(target), signal)).listDir(target, signal)
+    return (await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal))).listDir(target, signal)
   }
 
   async writeText(
@@ -449,7 +542,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsWriteOutcome> {
-    const branch = await this.delegate(this.idOfTarget(target), signal)
+    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy))
     return branch.writeText(target, content, expected, signal, sandboxPolicy)
   }
 
@@ -460,7 +553,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
-    const branch = await this.delegate(this.idOfTarget(target), signal)
+    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy))
     return branch.editText(target, edit, expected, signal, sandboxPolicy)
   }
 }

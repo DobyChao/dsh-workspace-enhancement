@@ -66,14 +66,12 @@ export const MODEL_PROMPTS = {
   sectionWin32Bash:
     'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
   /**
-   * AUDIT-6 route-D honesty sentence (`sw-remote` section): injected in EVERY
-   * remote-main-workspace session. Remote commands are not confined by the
-   * local sandbox — `forceRemoteSandboxMode` pinning remote sessions to
-   * full access is same-world contract behavior, stated to the model as-is
-   * (ADR-0020 D6).
+   * REQ-I13 / ADR-0025: remote fs/spawn follow this session's `/permission`
+   * (and official `sandbox_permissions` escalation) via the Linux core.
+   * Missing core + confined mode fails closed; danger keeps SFTP/SSH.
    */
   remoteNoSandbox:
-    'Remote execution is not confined by the local sandbox: commands run with the remote OS account\'s permissions only.',
+    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined modes FAIL CLOSED if that core is missing (no SFTP fallback). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
   /**
    * AUDIT-6 gate-expectation sentence (`sw-remote` section): injected only
    * when the session's main-workspace machine has `remoteApproval !== 'off'`.
@@ -81,17 +79,14 @@ export const MODEL_PROMPTS = {
    * retried unchanged (ADR-0020 D6).
    */
   remoteGateActive:
-    'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged.',
+    'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged. If the approval gate and sandbox escalation are both on, the operator sees two cards.',
   /**
-   * REQ-I5 fence sentence (`sw-remote` section): injected only when the routed
-   * machine has `remoteSandbox !== 'off'`. Commands AND file tools share one
-   * jailed core; a missing core fails closed (`SANDBOX_UNAVAILABLE`) instead of
-   * falling back to SFTP.
+   * Kept for older tests/callers; the session-sandbox sentence above now
+   * covers the fence. Empty so a leftover inject is a no-op.
    */
-  remoteFenced:
-    'Additionally, this machine runs commands and file tools inside a remote sandbox fence (`{mode}`): writes outside the allowed roots are refused by the core, and if that core is missing or unusable both file tools and commands FAIL (`SANDBOX_UNAVAILABLE`) instead of running unfenced. Interactive terminals stay refused while the fence is on.',
-  /** REQ-I9: the per-machine note appended to a connected machine that is fenced. */
-  connectedFenced: ' (commands and file tools fenced: {mode})',
+  remoteFenced: '',
+  /** REQ-I9: leftover connected-machine fence note; unused after ADR-0025. */
+  connectedFenced: '',
 } as const
 
 /** A key of {@link MODEL_PROMPTS}. */

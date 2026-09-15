@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,19 +12,55 @@ import (
 	"time"
 )
 
+// fsRealpath matches local dsh-fs-local: EvalSymlinks the path when it exists,
+// otherwise realpath the nearest existing ancestor and append the missing suffix
+// so official Write can create a new file (GNU realpath -m).
 func fsRealpath(path string) (string, error) {
+	if path == "" {
+		return "", os.ErrNotExist
+	}
 	real, err := filepath.EvalSymlinks(path)
-	if err != nil {
+	if err == nil {
+		return slashAbs(real)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if !filepath.IsAbs(real) {
-		abs, err := filepath.Abs(real)
+	missing := []string{filepath.Base(path)}
+	ancestor := filepath.Dir(path)
+	for {
+		realAnc, err := filepath.EvalSymlinks(ancestor)
+		if err == nil {
+			info, statErr := os.Stat(realAnc)
+			if statErr != nil {
+				return "", statErr
+			}
+			if !info.IsDir() {
+				return "", fmt.Errorf("not a directory")
+			}
+			return slashAbs(filepath.Join(append([]string{realAnc}, missing...)...))
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return slashAbs(path)
+		}
+		missing = append([]string{filepath.Base(ancestor)}, missing...)
+		ancestor = parent
+	}
+}
+
+func slashAbs(path string) (string, error) {
+	if !filepath.IsAbs(path) {
+		abs, err := filepath.Abs(path)
 		if err != nil {
 			return "", err
 		}
-		real = abs
+		path = abs
 	}
-	return filepath.ToSlash(real), nil
+	return filepath.ToSlash(path), nil
 }
 
 type statOK struct {

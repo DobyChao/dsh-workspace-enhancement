@@ -19,7 +19,6 @@ import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
 import type { RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
-import { sandboxBadgeOf } from './row-badges.ts'
 import { coreStatusLabel } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
 
@@ -278,11 +277,6 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                     {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
                     {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
                     {machine.remoteApproval !== 'off' ? <span style={{ fontSize: 12, opacity: 0.85 }}> {t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span> : ''}
-                    {/* REQ-I9: the fence badge — empty for 'off'/absent, so an
-                        upgraded settings page renders exactly as before. */}
-                    {sandboxBadgeOf(machine.remoteSandbox, t) !== ''
-                      ? <span style={{ fontSize: 12, opacity: 0.85 }}> {sandboxBadgeOf(machine.remoteSandbox, t)}</span>
-                      : ''}
                     {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>

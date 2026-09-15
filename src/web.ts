@@ -36,7 +36,7 @@ import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel
 import { ensureCoreHub } from './core-hub.ts'
 import type { CoreHub } from './core-hub.ts'
 import { deployCore, coreStatusViaExec } from './core-deploy.ts'
-import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
+import { isCoreMissingError } from './remote-policy.ts'
 import type { SshTransport } from './transport.ts'
 
 /** Channel config. */
@@ -392,7 +392,20 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     return sharedRemoteHome(requireConnection(id), signal)
   }
 
-  /** List one remote level: core RPC when fenced, SFTP when `off`. */
+  const operatorCore = async (id: string, path: string, signal?: AbortSignal) => {
+    try {
+      return await hub().require(id, {
+        path,
+        policy: 'danger-full-access',
+        ...(signal !== undefined ? { signal } : {}),
+      })
+    } catch (error) {
+      if (isCoreMissingError(error)) return undefined
+      throw error
+    }
+  }
+
+  /** List one remote level: core RPC when a Linux core is up, else SFTP. */
   const listRemote = async (id: string, target: string | undefined, signal?: AbortSignal): Promise<WireListing> => {
     const connection = requireConnection(id)
     const resolvedTarget = target ?? await sharedRemoteHome(connection, signal)
@@ -400,9 +413,8 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
       throw new Error(`dsw: ${t('rpc.cannotList', { target: resolvedTarget })}`)
     }
     const home = await sharedRemoteHome(connection, signal)
-    const mode = hub().modeOf(id)
-    if (isRemoteSandboxEnabled(mode)) {
-      const client = await hub().require(id, { signal, cwd: resolvedTarget })
+    const client = await operatorCore(id, resolvedTarget, signal)
+    if (client !== undefined) {
       return listRemoteLevelViaCore(client, resolvedTarget, maxEntries, { signal, home })
     }
     return listRemoteLevel(connection, resolvedTarget, maxEntries, {
@@ -419,9 +431,8 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     }
     const target = posix.join(path, name)
     const connection = requireConnection(id)
-    const mode = hub().modeOf(id)
-    if (isRemoteSandboxEnabled(mode)) {
-      const client = await hub().require(id, { signal, cwd: path })
+    const client = await operatorCore(id, path, signal)
+    if (client !== undefined) {
       try {
         await mkdirRemoteViaCore(client, path, name, signal)
       } catch (error) {
@@ -507,6 +518,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
         }
         case 'machines.remove': {
           const input = requirePayload(payload, isIdPayload, 'machines.remove')
+          hub().close(input.id.trim())
           const removed = registry().remove(input.id.trim())
           if (removed) {
             // Drop the connection's local route placeholders; stale ones would
@@ -564,6 +576,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           // rebuild a fresh one, and probe it. A failure is an offline status,
           // not an RPC error.
           const input = requirePayload(payload, isIdPayload, 'conn.reconnect')
+          hub().close(input.id.trim())
           const status = await registry().reconnect(input.id.trim(), signal)
           if (status === undefined) throw new Error('bad-request: unknown connection id')
           return { ok: true, value: status }

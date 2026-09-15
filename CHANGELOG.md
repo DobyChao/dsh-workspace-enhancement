@@ -10,12 +10,16 @@
 
 - **Go `dsh-core` + 成帧 JSON RPC**：围栏档远程 `ctx.fs` / spawn / browse 改走核心；进程自 re-exec 捆绑 bwrap；`off` 仍 SFTP + 裸 exec。未知方法 `UNIMPLEMENTED`；`hello.caps` 为演进舱口。
 - **设置页部署**：通道 `core.deploy` / `core.status`；首次上传允许 SFTP；**不**在模型调用时偷偷安装。v1 只认 linux x86_64。
-- UAT：`docs/uat/R26-req-i5-remote-core.md`（对偶 I9-1/2/3，**反转 I9-9**）。
+- UAT：`docs/uat/R27-req-i13-remote-session-sandbox.md`（REQ-I5 + REQ-I13 合验；对偶 I9-1/2/3，**反转 I9-9**）。原 R26 脚本已作废。
 
 ### 变更
 
 - 围栏提示与 `envMissing` 不再声称「文件工具不在围栏内」，也不再教 `apt-get install ripgrep`。
 - 死字段 `remoteSandboxRunner` 不再读取（REQ-I12 ④）。
+- **核心进程寿命与工作区键（ADR-0024 §6）**：活 `dsh-core serve` 按 `(machine, mode, workspaceRoot)` 缓存；`read-only`/`off` 每机一条，`workspace-write` 每工作区根一条（嵌套共用祖先）；browse/list 路径不再变成 `--workspace`。channel 死后驱逐；SSH 重连/删机器关掉该机全部 serve；空闲 10 分钟且无 spawn job 则杀进程（根身份记得住）。`core.status` 对活会话发不缓存的 `hello`。部署脚本给 `bin/bwrap`/`bin/rg` 也 `chmod +x`。不改 SSH keepalive 默认 0，不随连接自动安装。
+- **远端权限对齐本地提权（REQ-I13 / ADR-0025）**：取消远程会话 `danger-full-access` 钉档；远程 cwd 上 `confine` 短路本机 runner；`sandboxPolicy` 转发到核心 `--sandbox`（`danger` → `off`）；无核心+围栏档 fail-closed；核心拒写带 `FS_SANDBOX_DENIED` + `sandboxDenialMarker`。机器 `remoteSandbox` 不再当权限轴。
+- **R27 当场**：官方 Write 缺叶路径走祖先 `realpath`；禁止 workspace-write `--workspace /`（会盖掉 tmpfs 泄漏 `/tmp`）。
+- **已知未修（`BUG-4`）**：宿主静默项目根探测会把祖先目录铸成 workspace-write jail。事实 `docs/host-silent-fs.md`。
 
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-13)
 

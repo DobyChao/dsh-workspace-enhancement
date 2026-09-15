@@ -37,7 +37,7 @@ import {
 import type { RemoteSandboxFence, RemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
 import type { CoreHub } from './core-hub.ts'
 import { CoreSubprocessHandle } from './core-process.ts'
-import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
 import type { SshTerminalHandle } from './terminal.ts'
 
 /**
@@ -240,18 +240,23 @@ export class SshSubprocessEngine {
     // (explicit dep or context-derived) is the later stage that turns that same
     // argv into the executed one.
     const fence = this.sandboxFence()
-    const fenced = route.connectionId !== undefined
-      && this.hub !== undefined
-      && isRemoteSandboxEnabled(this.hub.modeOf(route.connectionId))
-    if (fenced && this.hub !== undefined && route.connectionId !== undefined) {
-      const handle = new CoreSubprocessHandle(
-        this.hub,
-        route.connectionId,
-        route.cwd,
-        spec,
-        this.spillDir,
-        preflight,
-      )
+    const policy = resolveRemoteSessionMode(this.ctx)
+    if (this.hub !== undefined && route.connectionId !== undefined) {
+      const connectionId = route.connectionId
+      const hub = this.hub
+      const sshFallback = isConfinedSandboxMode(policy)
+        ? undefined
+        : () => new SshSubprocessHandle(
+          route.transport,
+          route.cwd,
+          spec,
+          this.spillDir,
+          undefined,
+          async (argv) => argv,
+        )
+      const handle = sshFallback === undefined
+        ? new CoreSubprocessHandle(hub, connectionId, route.cwd, spec, this.spillDir, preflight, policy)
+        : new CoreSubprocessHandle(hub, connectionId, route.cwd, spec, this.spillDir, preflight, policy, sshFallback)
       this.live.add(handle)
       const release = async (): Promise<void> => {
         await handle.waitForExit()

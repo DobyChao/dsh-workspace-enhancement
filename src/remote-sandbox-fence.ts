@@ -64,6 +64,11 @@ import type {
 } from './remote-sandbox.ts'
 import type { ExecOutcome } from './ssh-core.ts'
 import type { CoreHub } from './core-hub.ts'
+import {
+  isConfinedSandboxMode,
+  isCoreMissingError,
+  resolveRemoteSessionMode,
+} from './remote-policy.ts'
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -187,7 +192,14 @@ export function remoteSandboxDepsOf(ctx: Context): RemoteSandboxDeps {
  */
 export function createRemoteSandboxTerminalGuard(ctx: Context): RemoteSandboxTerminalGuard {
   const deps = remoteSandboxDepsOf(ctx)
-  return (connectionId, mode) => terminalRefusalOf(deps, connectionId, mode)
+  return (connectionId, fallbackMode) => {
+    if (typeof ctx.get === 'function' && ctx.get('sandboxPolicy', false) !== undefined) {
+      const mode = resolveRemoteSessionMode(ctx)
+      if (!isConfinedSandboxMode(mode)) return undefined
+      return REMOTE_SANDBOX_MESSAGES.terminalUnsupported.replace('{mode}', mode)
+    }
+    return terminalRefusalOf(deps, connectionId, fallbackMode)
+  }
 }
 
 /** The pure refusal decision shared by the context-built guard and the tests. */
@@ -537,30 +549,39 @@ export function createRemoteSandboxFence(
   }
 
   return async (input: RemoteSandboxFenceInput): Promise<readonly string[]> => {
+    if (hub !== undefined) {
+      const policy = resolveRemoteSessionMode(ctx)
+      const connectionId = input.connectionId
+      if (connectionId === undefined) {
+        if (!isConfinedSandboxMode(policy)) return input.argv ?? []
+        throw deps.unavailable(
+          policy === 'workspace-write' ? 'workspace-write' : 'read-only',
+          'no registry connection is associated with this route',
+        )
+      }
+      try {
+        await hub.require(connectionId, {
+          policy,
+          ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+          ...(input.signal !== undefined ? { signal: input.signal } : {}),
+        })
+        return input.argv ?? []
+      } catch (error) {
+        if (!isConfinedSandboxMode(policy) && isCoreMissingError(error)) return input.argv ?? []
+        throw error
+      }
+    }
     const mode = effectiveModeOf(deps, input.connectionId, fallbackMode)
     // 'off' — and every record predating the field: identity argv, zero probes.
     if (!isRemoteSandboxEnabled(mode)) return input.argv ?? []
-    // `isRemoteSandboxEnabled` is a plain boolean, so TypeScript cannot narrow
-    // the union through it; re-derive the tightened type from the already
-    // checked value instead of casting.
     const confinement: RemoteSandboxConfinementMode = mode === 'workspace-write' ? 'workspace-write' : 'read-only'
     if (input.connectionId === undefined) {
-      // Unreachable via effectiveModeOf unless a fallback mode was configured
-      // without a connection: there is no connection to probe, so the only
-      // honest answer is refusal.
       throw deps.unavailable(confinement, 'no registry connection is associated with this route')
     }
     const machine = deps.machine(input.connectionId)
     const connection = deps.connection(input.connectionId)
     if (machine === undefined || connection === undefined) {
       throw deps.unavailable(confinement, `machine ${JSON.stringify(input.connectionId)} is not usable as a registry connection`)
-    }
-    if (hub !== undefined) {
-      await hub.require(input.connectionId, {
-        ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
-        ...(input.signal !== undefined ? { signal: input.signal } : {}),
-      })
-      return input.argv ?? []
     }
     const runnerPath = DEFAULT_REMOTE_RUNNER_PATH
     await probeOnce(connection, runnerPath, confinement, input.signal)

@@ -15,6 +15,7 @@ import { serveFakeCore } from '../src/core-fake.ts'
 import {
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
+  CORE_ERROR_IO,
   CORE_ERROR_READ_ONLY,
   CORE_ERROR_UNIMPLEMENTED,
   CORE_MAX_FRAME,
@@ -91,6 +92,11 @@ test('fake core: hello advertises proto, version, and v1 caps', async () => {
   assert.equal(hello.proto, CORE_PROTO)
   assert.equal(hello.version, CORE_ARTIFACT_VERSION)
   assert.deepEqual([...hello.caps], [...CORE_CAPS])
+  const cached = await client.hello()
+  assert.equal(cached, hello)
+  const live = await client.hello(undefined, { cached: false })
+  assert.notEqual(live, hello)
+  assert.equal(live.version, hello.version)
   client.close()
 })
 
@@ -115,6 +121,15 @@ test('fake core: read-only refuses writes (I9-1 dual for fs)', async () => {
     () => client.call('fs.write', { path: '/tmp/x', b64: Buffer.from('hi').toString('base64') }),
     (error: unknown) => error instanceof CoreRpcError && error.code === CORE_ERROR_READ_ONLY,
   )
+  client.close()
+})
+
+test('fake core: fs.realpath joins a missing leaf onto an existing parent', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-'))
+  mkdirSync(join(root, 'work'), { recursive: true })
+  const client = pair(root, 'workspace-write', '/work')
+  const got = await client.call('fs.realpath', { path: '/work/new.txt' }) as { path: string }
+  assert.equal(got.path, '/work/new.txt')
   client.close()
 })
 
@@ -144,4 +159,20 @@ test('fake core: spawn.start emits stdout then exit events', async () => {
   await new Promise(resolve => setTimeout(resolve, 20))
   assert.equal(events.some(event => event.m === 'spawn.exit'), true)
   client.close()
+})
+
+test('CoreClient: stdout end includes a stderr suffix', async () => {
+  const toServer = new PassThrough()
+  const toClient = new PassThrough()
+  const client = new CoreClient(toServer, toClient, {
+    stderrOf: () => 'dsh-core: jail: workspace-write needs an absolute --workspace\n',
+  })
+  const pending = client.hello()
+  toClient.end()
+  await assert.rejects(
+    pending,
+    (error: unknown) => error instanceof CoreRpcError
+      && error.code === CORE_ERROR_IO
+      && error.message.includes('workspace-write needs an absolute --workspace'),
+  )
 })

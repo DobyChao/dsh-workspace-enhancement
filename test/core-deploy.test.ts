@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { assertLinuxAmd64 } from '../src/core-deploy.ts'
+import { assertLinuxAmd64, coreInstallScript } from '../src/core-deploy.ts'
 import { coreStatusLabel } from '../src/client/core-status.ts'
 
 test('assertLinuxAmd64: linux + x86_64/amd64 accepted', () => {
@@ -27,4 +27,9 @@ test('coreStatusLabel: installed / missing / unsupported', () => {
   assert.equal(coreStatusLabel({ ok: true, version: '0.2.0-dev', arch: 'x86_64' }, t), 'ok:0.2.0-dev x86_64')
   assert.equal(coreStatusLabel({ ok: false, detail: 'core not installed' }, t), 'miss:core not installed')
   assert.match(coreStatusLabel({ ok: false, detail: 'uname -s = Darwin' }, t), /^bad:/)
+})
+
+test('coreInstallScript: chmod includes dsh-core and bundled bin helpers', () => {
+  const script = coreInstallScript('0.2.0-dev', '/tmp/dsh-core-0.2.0-dev-linux-x64.tar.gz')
+  assert.match(script, /chmod \+x -- .*\/dsh-core .*\/bin\/bwrap .*\/bin\/rg/)
 })

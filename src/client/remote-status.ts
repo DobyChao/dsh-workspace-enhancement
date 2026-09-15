@@ -33,7 +33,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { routeIdOf } from './route-id.ts'
+import { isClientConnectionId, routeIdOf } from './route-id.ts'
 
 /**
  * The official additive list slot the entry occupies: "Right-aligned Session
@@ -78,7 +78,7 @@ export function remoteConnectionIdOf(cwd: string | undefined): string | undefine
     const rest = cwd.slice('ssh://'.length)
     const slash = rest.indexOf('/')
     const id = slash === -1 ? rest : rest.slice(0, slash)
-    return /^[A-Za-z0-9._-]+$/.test(id) ? id : undefined
+    return isClientConnectionId(id) ? id : undefined
   }
   return routeIdOf(cwd)
 }

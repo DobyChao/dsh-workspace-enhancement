@@ -51,6 +51,37 @@ function hostPath(root: string, posixPath: string): string {
   return resolve(root, ...parts)
 }
 
+function posixOfHost(root: string, host: string, fallback: string): string {
+  const base = resolve(root)
+  const real = resolve(host)
+  if (!real.startsWith(base)) return fallback.startsWith('/') ? fallback : `/${fallback}`
+  const rel = real.slice(base.length).split(sep).join('/')
+  return rel.startsWith('/') ? rel : `/${rel}`
+}
+
+/** Missing-leaf realpath: existing parent + basename (same as Go fsRealpath / dsh-fs-local). */
+function realpathAllowMissingHost(root: string, posixPath: string): string {
+  const tryExisting = (path: string): string | undefined => {
+    const host = hostPath(root, path)
+    if (!existsSync(host)) return undefined
+    return posixOfHost(root, host, path)
+  }
+  const hit = tryExisting(posixPath)
+  if (hit !== undefined) return hit
+  const leaf = posix.basename(posixPath)
+  const missing: string[] = leaf === '' || leaf === '/' ? [] : [leaf]
+  let ancestor = posix.dirname(posixPath)
+  while (true) {
+    const realAnc = tryExisting(ancestor)
+    if (realAnc !== undefined) return missing.length === 0 ? realAnc : posix.join(realAnc, ...missing)
+    const parent = posix.dirname(ancestor)
+    if (parent === ancestor) return posixPath.startsWith('/') ? posixPath : `/${posixPath}`
+    const base = posix.basename(ancestor)
+    if (base !== '') missing.unshift(base)
+    ancestor = parent
+  }
+}
+
 function versionOf(path: string, size: number, mtimeMs: number, mode: number): string {
   return createHash('sha256').update(JSON.stringify([path, size, mtimeMs, mode])).digest('hex')
 }
@@ -132,15 +163,7 @@ export function serveFakeCore(stdin: Readable, stdout: Writable, options: FakeCo
         }
       case CORE_METHODS.fsRealpath: {
         const path = String(p.path ?? '')
-        const host = hostPath(options.root, path)
-        if (!existsSync(host)) {
-          throw Object.assign(new Error('not found'), { code: CORE_ERROR_NOT_FOUND })
-        }
-        const real = resolve(host)
-        const rel = real.startsWith(resolve(options.root))
-          ? real.slice(resolve(options.root).length).split(sep).join('/')
-          : path
-        return { path: rel.startsWith('/') ? rel : `/${rel}` }
+        return { path: realpathAllowMissingHost(options.root, path) }
       }
       case CORE_METHODS.fsStat:
       case CORE_METHODS.fsLstat: {

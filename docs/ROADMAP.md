@@ -7,7 +7,7 @@
 
 ## 现在在哪
 
-已发布 **v0.1.4**（npm 审批中）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` / `ctx.fs`、
+已发布 **v0.1.4**（npm 已上）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` / `ctx.fs`、
 多机注册表、`ssh://<id>/<path>` 路由、TOFU 与 OS 钥匙串、会话级机器连接、副工作区薄声明清单、
 可选审批门、远端围栏（围栏档走核心 RPC；`off` 仍 SFTP）、运行时 zh/en。宿主只支持 `0.1.5` 家族。
 
@@ -16,8 +16,8 @@
 
 ## 接下来
 
-按 [`backlog.md`](./backlog.md) §2 的优先级。`REQ-I5` 实现在短分支上等 0.2.0。
-`REQ-I1` 已往后排。R24 真机 UAT 仍待仓库所有者跑；R26 核心 UAT 反转 I9-9。
+按 [`backlog.md`](./backlog.md) §2 的优先级。`REQ-I5` / `REQ-I13` 在 `feat/REQ-I5-remote-core`（PR #18）上等 0.2.0。
+`REQ-I1` 已往后排。R24 真机 UAT 仍待仓库所有者跑；R27 合验进行中。
 
 ## 已完成轮次
 

@@ -277,7 +277,11 @@ export function execChannel(client: Client, text: string, opts?: { signal?: Abor
 export function startExec(
   client: Client,
   text: string,
-  opts?: { signal?: AbortSignal | undefined },
+  opts?: {
+    signal?: AbortSignal | undefined
+    /** Drain exec stderr (ssh2 otherwise buffers it and can stall or drop the channel). */
+    onStderr?: ((chunk: Buffer) => void) | undefined
+  },
 ): Promise<ClientChannel> {
   return new Promise<ClientChannel>((resolve, reject) => {
     let settled = false
@@ -295,7 +299,9 @@ export function startExec(
         return
       }
       channel = stream
-      stream.on('close', () => { opts?.signal?.removeEventListener('abort', onAbort) })
+      // Always drain stderr: unread stderr is a known ssh2 stall, and jail
+      // failures (`dsh-core: jail: …`) are written here, not stdout.
+      stream.stderr.on('data', (chunk: Buffer) => { opts?.onStderr?.(chunk) })
       if (settled) {
         stream.close()
         return
@@ -307,6 +313,9 @@ export function startExec(
         return
       }
       settled = true
+      // The serve outlives one tool call (ADR-0024 idle 10 min). Do not close
+      // the channel when the opener's AbortSignal later fires.
+      opts?.signal?.removeEventListener('abort', onAbort)
       resolve(stream)
     })
     if (opts?.signal?.aborted === true) {

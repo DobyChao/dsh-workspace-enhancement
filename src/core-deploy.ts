@@ -42,6 +42,21 @@ function sftpWrite(sftp: SFTPWrapper, remote: string, data: Buffer): Promise<voi
 }
 
 /**
+ * Remote extract + chmod + current symlink. Windows-built tarballs land as
+ * 644; `bin/bwrap` and `bin/rg` must be executable or the self-jail cannot start.
+ */
+export function coreInstallScript(version: string, remoteTar: string): string {
+  const prefix = `"$HOME"/.dsh-core/${version}`
+  return [
+    `mkdir -p -- ${prefix}`,
+    `tar -xzf ${quoteShellArg(remoteTar)} -C ${prefix}`,
+    `chmod +x -- ${prefix}/dsh-core ${prefix}/bin/bwrap ${prefix}/bin/rg`,
+    `ln -sfn -- ${quoteShellArg(version)} "$HOME"/.dsh-core/current`,
+    `rm -f -- ${quoteShellArg(remoteTar)}`,
+  ].join(' && ')
+}
+
+/**
  * Deploy the linux-x64 tarball to the login user's `~/.dsh-core/<version>/`.
  */
 export async function deployCore(
@@ -65,13 +80,7 @@ export async function deployCore(
   await transport.exec('mkdir -p -- "$HOME"/.dsh-core', options.signal !== undefined ? { signal: options.signal } : undefined)
   const remoteTar = `/tmp/${tarName}`
   await sftpWrite(sftp, remoteTar, readFileSync(artifact))
-  const script = [
-    `mkdir -p -- "$HOME"/.dsh-core/${version}`,
-    `tar -xzf ${quoteShellArg(remoteTar)} -C "$HOME"/.dsh-core/${version}`,
-    `chmod +x -- "$HOME"/.dsh-core/${version}/dsh-core`,
-    `ln -sfn -- ${quoteShellArg(version)} "$HOME"/.dsh-core/current`,
-    `rm -f -- ${quoteShellArg(remoteTar)}`,
-  ].join(' && ')
+  const script = coreInstallScript(version, remoteTar)
   const outcome = await transport.exec(script, options.signal !== undefined ? { signal: options.signal } : undefined)
   if (outcome.exitCode !== 0) {
     return { ok: false, detail: (outcome.stderr || outcome.stdout || 'extract failed').trim() }

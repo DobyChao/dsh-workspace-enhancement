@@ -39,27 +39,44 @@ interface Pending {
 }
 
 /**
- * One live RPC session. The caller owns the streams (SSH channel or a fake
- * duplex); this class only frames and demuxes.
+ * One live RPC session. The caller owns the streams (SSH exec channel or a
+ * fake duplex); this class only frames and demuxes.
  */
+export interface CoreClientOptions {
+  /** Latest stderr text from the exec channel (jail diagnostics). */
+  stderrOf?: () => string
+}
+
 export class CoreClient {
   private nextId = 1
   private rest: Buffer<ArrayBufferLike> = Buffer.alloc(0)
   private readonly pending = new Map<number, Pending>()
   private readonly events: CoreEventSink[] = []
+  private readonly activitySinks: Array<() => void> = []
+  private readonly closeSinks: Array<() => void> = []
   private closed = false
+  private closeNotified = false
   private helloCache: CoreHelloOk | undefined
 
   constructor(
     private readonly stdin: Writable,
     private readonly stdout: Readable,
+    private readonly options: CoreClientOptions = {},
   ) {
     stdout.on('data', (chunk: Buffer | string) => {
       this.onData(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
     })
-    stdout.on('end', () => { this.failAll(new CoreRpcError({ code: CORE_ERROR_IO, message: 'core stdout closed' })) })
+    stdout.on('end', () => {
+      this.failAll(new CoreRpcError({ code: CORE_ERROR_IO, message: this.stdoutClosedMessage() }))
+    })
     stdout.on('error', (error: Error) => { this.failAll(error) })
     stdin.on('error', (error: Error) => { this.failAll(error) })
+  }
+
+  private stdoutClosedMessage(): string {
+    const detail = this.options.stderrOf?.().trim().replace(/\s+/gu, ' ')
+    if (detail === undefined || detail === '') return 'core stdout closed'
+    return `core stdout closed: ${detail.slice(0, 240)}`
   }
 
   /** Subscribe to id=0 events (spawn stdout/stderr/exit). */
@@ -71,9 +88,30 @@ export class CoreClient {
     }
   }
 
-  /** Cached hello, or a fresh round-trip. */
-  async hello(signal?: AbortSignal): Promise<CoreHelloOk> {
-    if (this.helloCache !== undefined) return this.helloCache
+  /** Fired on every outbound RPC (idle accounting). */
+  onActivity(sink: () => void): () => void {
+    this.activitySinks.push(sink)
+    return () => {
+      const index = this.activitySinks.indexOf(sink)
+      if (index >= 0) this.activitySinks.splice(index, 1)
+    }
+  }
+
+  /** Fired once when the duplex dies or {@link close} runs. */
+  onClose(sink: () => void): () => void {
+    this.closeSinks.push(sink)
+    return () => {
+      const index = this.closeSinks.indexOf(sink)
+      if (index >= 0) this.closeSinks.splice(index, 1)
+    }
+  }
+
+  /**
+   * Cached hello, or a fresh round-trip. Settings/status pass `{ cached: false }`
+   * so a stale cache cannot look like a live process (ADR-0024 §6.1).
+   */
+  async hello(signal?: AbortSignal, opts?: { cached?: boolean }): Promise<CoreHelloOk> {
+    if (opts?.cached !== false && this.helloCache !== undefined) return this.helloCache
     const ok = await this.call(CORE_METHODS.hello, {}, signal)
     const rec = ok as CoreHelloOk
     this.helloCache = rec
@@ -88,6 +126,7 @@ export class CoreClient {
     if (this.closed) {
       return Promise.reject(new CoreRpcError({ code: CORE_ERROR_SANDBOX, message: 'core session is closed' }))
     }
+    for (const sink of this.activitySinks) sink()
     signal?.throwIfAborted()
     const id = this.nextId
     this.nextId += 1
@@ -130,7 +169,6 @@ export class CoreClient {
   /** End the stdin side; pending calls fail. */
   close(): void {
     if (this.closed) return
-    this.closed = true
     try {
       this.stdin.end()
     } catch {
@@ -163,11 +201,28 @@ export class CoreClient {
   }
 
   private failAll(error: unknown): void {
-    if (this.closed && this.pending.size === 0) return
+    if (this.closed && this.pending.size === 0) {
+      this.notifyClosed()
+      return
+    }
     this.closed = true
     const pending = [...this.pending.values()]
     this.pending.clear()
     for (const waiter of pending) waiter.reject(error)
+    this.notifyClosed()
+  }
+
+  private notifyClosed(): void {
+    if (this.closeNotified) return
+    this.closeNotified = true
+    const sinks = this.closeSinks.splice(0)
+    for (const sink of sinks) {
+      try {
+        sink()
+      } catch {
+        // Listener failures must not block teardown.
+      }
+    }
   }
 }
 

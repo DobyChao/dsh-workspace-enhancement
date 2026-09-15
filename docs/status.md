@@ -1,45 +1,44 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-13 11:10 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-15 03:40 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.1.4` |
-| npm 已发布版本 | `0.1.3` |
+| npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/REQ-I5-remote-core` / `ea4977a` |
-| HEAD 提交 | `feat(core): run fenced remote fs and spawn through one Go core` (2026-09-13) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I5-remote-core` / `e193284` |
+| HEAD 提交 | `fix(core): keep workspace-write inside the bound POSIX root` (2026-09-13) |
+| 与远端 | 3 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 38 |
-| 单测用例（静态计数） | 492 |
+| 单测文件 | 42 |
+| 单测用例（静态计数） | 540 |
 | E2E 场景文件 | 8 |
-| ADR | 24 |
+| ADR | 25 |
 | 轮次报告 | 29 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
+| `todo` | 14 |
 | `doing` | 2 |
-| `blocked` | 7 |
+| `blocked` | 6 |
 | `done` | 36 |
-| `shipped` | 5 |
+| `shipped` | 6 |
 | `dropped` | 7 |
 
 ## 被挡住 / 待拍板
 
 - SEC-3 — `remote-full` 无二次确认
 - INFRA-8 — AgentTeams 标准 profile 注册
-- UX-1 — 远程会话 composer 显示 `Custom`
 - UX-2 — 副工作区面板「浏览」输入框去留
 - BUG-1 — 设置页顶部空白边框条
 - INFRA-8a — `dsw-round` profile

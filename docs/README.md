@@ -13,6 +13,7 @@
 | 某一轮做了什么、怎么验的 | [`rounds/`](./rounds/)（**历史档案，不是现状**） | 当作当前架构或待办表 |
 | 测试怎么跑、沙箱限制 | [`testing.md`](./testing.md) | AGENTS 里除命令表以外再写一遍 |
 | 宿主支持窗口与上游漂移 | [`compatibility.md`](./compatibility.md) | README 里展开漂移日志 |
+| 宿主静默 `ctx.fs`（项目根探测） | [`host-silent-fs.md`](./host-silent-fs.md) | 聊天里复述；当待办表 |
 | 用户验收脚本 | [`uat/`](./uat/) | |
 | 安全模型与已知边界 | [`../SECURITY.md`](../SECURITY.md) | 在 README 里展开实现细节 |
 | 公开进度叙事 | [`ROADMAP.md`](./ROADMAP.md) | 再列一份待办或轮次表 |

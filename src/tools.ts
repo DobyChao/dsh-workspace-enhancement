@@ -22,7 +22,6 @@ import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from '.
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import type { RemoteSandboxMode } from './remote-sandbox.ts'
-import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
 import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
@@ -161,11 +160,9 @@ export interface ConnectedMachineFact {
 
 /** Pure prompt projection of one connected registry machine. */
 export function connectedMachineFact(id: string, machine: PromptMachineFace | undefined): ConnectedMachineFact {
-  const sandbox = machine?.remoteSandbox
   return {
     id,
     endpoint: machine !== undefined ? `${machine.username}@${machine.host}` : `conn-${id}`,
-    ...(sandbox !== undefined && sandbox !== 'off' ? { sandbox } : {}),
   }
 }
 
@@ -181,7 +178,7 @@ export function renderConnectedMachines(facts: readonly ConnectedMachineFact[]):
   const lines = facts.map(fact => modelPrompt('connectedItem', {
     id: fact.id,
     endpoint: fact.endpoint,
-    note: `${fact.reachable === false ? modelPrompt('connectedUnreachable') : ''}${fact.sandbox !== undefined ? modelPrompt('connectedFenced', { mode: fact.sandbox }) : ''}`,
+    note: `${fact.reachable === false ? modelPrompt('connectedUnreachable') : ''}`,
   }))
   return `${modelPrompt('connectedHeading')}\n${lines.join('\n')}`
 }
@@ -254,9 +251,6 @@ export function composeWorkspacePrompt(
     parts.push(modelPrompt('remoteNoSandbox'))
     if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
       parts.push(modelPrompt('remoteGateActive'))
-    }
-    if (machine?.remoteSandbox !== undefined && machine.remoteSandbox !== 'off') {
-      parts.push(modelPrompt('remoteFenced', { mode: machine.remoteSandbox }))
     }
   }
   const side = renderSideWorkspaces(sides)
@@ -367,10 +361,10 @@ async function remoteEnvLine(registry: SshRegistry, hub?: CoreHub): Promise<stri
   const active = registry.getActive()
   if (active === null) return ''
   const id = active.spec.id
-  const mode = hub?.modeOf(id) ?? 'off'
-  if (isRemoteSandboxEnabled(mode) && hub !== undefined) {
+  if (hub !== undefined) {
     try {
-      return renderCoreEnv(await hub.status(id, AbortSignal.timeout(8_000)))
+      const view = await hub.status(id, AbortSignal.timeout(8_000))
+      if (view.ok) return renderCoreEnv(view)
     } catch {
       return renderCoreEnv({ ok: false, detail: 'core status failed' })
     }

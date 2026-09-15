@@ -21,6 +21,9 @@ import { CoreClient } from './core-client.ts'
 import { CORE_EVENTS, CORE_METHODS, asRecord } from './core-protocol.ts'
 import { SshOutputCollector } from './output.ts'
 import type { CoreHub } from './core-hub.ts'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { isCoreMissingError } from './remote-policy.ts'
+import type { SshSubprocessHandle } from './process.ts'
 
 function isCollect(mode: SubprocessOutputMode): mode is SubprocessCollect {
   return mode !== 'pipe' && mode !== 'inherit'
@@ -45,8 +48,13 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   readonly stdin: Writable | undefined
   readonly stdout: Readable | undefined
   readonly stderr: Readable | undefined
-  readonly collected: SubprocessHandle['collected']
+  private readonly ownCollected: SubprocessHandle['collected']
+  private fallbackHandle: SubprocessHandle | undefined
   readonly done: Promise<SubprocessOutcome>
+
+  get collected(): SubprocessHandle['collected'] {
+    return this.fallbackHandle?.collected ?? this.ownCollected
+  }
 
   private readonly stdoutCollector: SshOutputCollector | undefined
   private readonly stderrCollector: SshOutputCollector | undefined
@@ -61,6 +69,8 @@ export class CoreSubprocessHandle implements SubprocessHandle {
     private readonly spec: SubprocessSpawnSpec,
     private readonly spillDir: string,
     private readonly preflight?: () => Promise<void>,
+    private readonly policy: SandboxMode = 'read-only',
+    private readonly sshFallback?: () => SshSubprocessHandle,
   ) {
     const outMode = spec.stdio.stdout
     const errMode = spec.stdio.stderr
@@ -72,7 +82,7 @@ export class CoreSubprocessHandle implements SubprocessHandle {
     this.stderrCollector = isCollect(errMode)
       ? new SshOutputCollector(errMode.maxBytes, errMode.spill?.maxBytes, 'stderr', spillDir)
       : undefined
-    this.collected = {
+    this.ownCollected = {
       ...(this.stdoutCollector !== undefined ? { stdout: this.stdoutCollector } : {}),
       ...(this.stderrCollector !== undefined ? { stderr: this.stderrCollector } : {}),
     }
@@ -88,9 +98,13 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   }
 
   terminate(): void {
+    if (this.fallbackHandle !== undefined) {
+      this.fallbackHandle.terminate()
+      return
+    }
     const job = this.job
     if (job === undefined) return
-    const client = this.hub.peek(this.connectionId)
+    const client = this.hub.peek(this.connectionId, { cwd: this.cwd, policy: this.policy })
     void client?.call(CORE_METHODS.spawnTerminate, { job }).catch(() => {})
   }
 
@@ -120,13 +134,17 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   }
 
   private async run(): Promise<SubprocessOutcome> {
+    let releaseHold = (): void => {}
     try {
       if (this.preflight !== undefined) await this.preflight()
-      const client = await this.hub.require(this.connectionId, {
+      const requireOpts = {
         cwd: this.cwd,
+        policy: this.policy,
         ...(this.spec.signal !== undefined ? { signal: this.spec.signal } : {}),
-      })
-      const exit = this.watch(client)
+      }
+      const client = await this.hub.require(this.connectionId, requireOpts)
+      releaseHold = this.hub.hold(this.connectionId, requireOpts)
+      const exit = this.watch(client).finally(releaseHold)
       const started = asRecord(await client.call(CORE_METHODS.spawnStart, {
         argv: [...this.spec.argv],
         cwd: this.cwd,
@@ -137,6 +155,13 @@ export class CoreSubprocessHandle implements SubprocessHandle {
       this.job = job
       return await exit
     } catch (error) {
+      releaseHold()
+      if (this.sshFallback !== undefined && isCoreMissingError(error)) {
+        this.fallbackHandle = this.sshFallback()
+        const outcome = await this.fallbackHandle.done
+        this.settle()
+        return outcome
+      }
       this.settle()
       throw error
     }

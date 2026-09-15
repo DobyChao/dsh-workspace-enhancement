@@ -86,6 +86,10 @@ syscall / 子进程。否则 ADR-0022 §2.7 / UAT I9-9 仍然成立——围栏�
 
 ## 4. 验收（核心落地那轮的验收口径，供 backlog 引用）
 
+> 权限轴已改会话 `/permission`（ADR-0025）。下文「档位」读作会话 `sandboxPolicy`；
+> 文中的 `off` 读作 `danger-full-access` 的运输旁路。合验：
+> `docs/uat/R27-req-i13-remote-session-sandbox.md`。
+
 1. **一个产物**：一次面板/一条命令把核心部署到远端用户域，**不需要 root**；
 2. **可校验**：版本 + 校验和，失败即拒绝使用；
 3. **执行面**：`remoteSandbox: read-only|workspace-write` 不再要求系统 `bwrap`；fail-closed 口径沿用 REQ-I9

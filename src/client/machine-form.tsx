@@ -828,24 +828,13 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
                 <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.remoteApproval.hint')}</span>
               </div>
             </div>
-            {/* REQ-I9 (ADR-0022 D1/D9): per-machine remote sandbox FENCE. A
-                separate axis from the approval gate above and from the
-                session's /permission control: the approval axis decides
-                WHETHER a command runs, this one decides what it can reach once
-                it does. The hint states the honest boundary in one line. */}
+            {/* REQ-I13 (ADR-0025): session /permission is the permission axis.
+                The machine remoteSandbox field is leftover and not shown as a
+                control so it cannot fight the composer chip. Deploy-core stays
+                on the settings list. */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.remoteSandbox')}</span>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-                <select
-                  style={{ ...inputStyle, maxWidth: 260 }}
-                  value={form.remoteSandbox}
-                  disabled={busy}
-                  onChange={event => { setForm(prev => ({ ...prev, remoteSandbox: event.target.value as MachineFormState['remoteSandbox'] })) }}
-                >
-                  <option value="off">{t('form.remoteSandbox.off')}</option>
-                  <option value="read-only">{t('form.remoteSandbox.readOnly')}</option>
-                  <option value="workspace-write">{t('form.remoteSandbox.workspaceWrite')}</option>
-                </select>
                 <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.remoteSandbox.hint')}</span>
               </div>
             </div>

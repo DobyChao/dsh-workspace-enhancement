@@ -71,11 +71,9 @@ import { quoteShellArg } from './ssh-core.ts'
 /* ------------------------------------------------------------------ mode */
 
 /**
- * Per-machine fence mode (ADR-0022 D1). This is an axis of its own and is NOT
- * a mirror of `ctx.sandboxPolicy`: remote sessions pin the session sandbox
- * mode to `danger-full-access` (`forceRemoteSandboxMode`) so that
- * `dsh-bash-sandbox` does not inject a LOCAL runner into a REMOTE command; the
- * remote mode axis therefore has to live in this plugin (ADR-0022 §2.1/D9).
+ * Per-machine fence mode (ADR-0022 D1). After ADR-0025 this field is leftover:
+ * session `/permission` is the permission axis. The value is still normalized
+ * on read so old machines.json round-trips, but routing ignores it.
  */
 export type RemoteSandboxMode = 'off' | 'read-only' | 'workspace-write'
 

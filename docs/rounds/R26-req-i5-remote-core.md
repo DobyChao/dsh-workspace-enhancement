@@ -17,7 +17,7 @@
 
 - `npm run check:static && npm run typecheck && npm run test:agent`（代理沙箱）
 - 有 shell 时 `npm run check`；Linux 上 `go test` / `go build`
-- 真机 UAT：`docs/uat/R26-req-i5-remote-core.md`（步骤 3/6/9 未过不得宣称已围栏）
+- 真机 UAT：改走 `docs/uat/R27-req-i13-remote-session-sandbox.md`（与 REQ-I13 合验；原 R26 脚本已作废）
 
 ## 结果
 
@@ -28,6 +28,6 @@
 
 - 捆绑 `bwrap`/`rg` 需操作者放入 `core/vendor/` 后再 `npm run build:core`
 - aarch64 / Windows 远端不在 v1
-- `REQ-I12` ①②③、等 0.1.4 Approve（PUB-4）
+- `REQ-I12` ①②③；`PUB-4` 已 shipped
 
 来源：`docs/decisions/ADR-0024-remote-core-protocol.md`；`docs/backlog.md` REQ-I5

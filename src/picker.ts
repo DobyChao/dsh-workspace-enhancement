@@ -47,8 +47,8 @@ import type {
 import { ancestryCrumbs, asError, boundedInsert, listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, raceAbort, remoteHome } from './listing.ts'
 import type { SshRuntime } from './runtime.ts'
 import { coreHubOf, ensureCoreHub } from './core-hub.ts'
-import type { CoreHub } from './core-hub.ts'
-import { isRemoteSandboxEnabled } from './remote-sandbox.ts'
+import { CoreClient } from './core-client.ts'
+import { isCoreMissingError } from './remote-policy.ts'
 import type { SshRegistry } from './registry.ts'
 
 /** Configuration for the directory-picker browse backend. */
@@ -177,18 +177,26 @@ export class SshDirectoryPicker extends DirectoryPicker {
   }
 
   /**
-   * Core session when the active machine is fenced. Missing hub on a fenced
-   * machine must not fall back to SFTP (ADR-0024). Unfenced / no registry
-   * returns undefined so the existing SFTP walk stays byte-identical.
+   * Operator browse uses core when a Linux artifact is installed (`--sandbox
+   * off`); missing core falls back to SFTP so Windows / undeployed hosts still
+   * pick directories.
    */
-  private hubIfFenced(): CoreHub | undefined {
-    const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
-    if (registry === undefined) return undefined
-    const id = registry.getActive()?.spec.id
-    if (id === undefined) return undefined
-    const machine = registry.listMachines().machines.find(entry => entry.id === id)
-    if (machine === undefined || !isRemoteSandboxEnabled(machine.remoteSandbox)) return undefined
-    return coreHubOf(this.ctx) ?? ensureCoreHub(this.ctx)
+  private async operatorCore(
+    connectionId: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<CoreClient | undefined> {
+    const hub = coreHubOf(this.ctx) ?? ensureCoreHub(this.ctx)
+    try {
+      return await hub.require(connectionId, {
+        path,
+        policy: 'danger-full-access',
+        ...(signal !== undefined ? { signal } : {}),
+      })
+    } catch (error) {
+      if (isCoreMissingError(error)) return undefined
+      throw error
+    }
   }
 
   /** The browse interaction capability (stable for the service lifetime). */
@@ -254,12 +262,13 @@ export class SshDirectoryPicker extends DirectoryPicker {
   private async listRemote(target: string, signal?: AbortSignal): Promise<DirectoryListing> {
     try {
       const home = await this.resolveRemoteHome(signal)
-      const hub = this.hubIfFenced()
       const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
       const id = registry?.getActive()?.spec.id
-      if (hub !== undefined && id !== undefined) {
-        const client = await hub.require(id, { signal, cwd: target })
-        return await listRemoteLevelViaCore(client, target, this.config.maxEntries, { signal, home })
+      if (id !== undefined) {
+        const client = await this.operatorCore(id, target, signal)
+        if (client !== undefined) {
+          return await listRemoteLevelViaCore(client, target, this.config.maxEntries, { signal, home })
+        }
       }
       return await listRemoteLevel(this.ctx.ssh, target, this.config.maxEntries, {
         signal,
@@ -330,14 +339,15 @@ export class SshDirectoryPicker extends DirectoryPicker {
       throw new DirectoryPickerError('directory-create-failed', path, `cannot create under "${path}": not a fully qualified parent path`)
     }
     const target = posix.join(path, name)
-    const hub = this.hubIfFenced()
     const registry = this.ctx.get('sshRegistry', false) as SshRegistry | undefined
     const id = registry?.getActive()?.spec.id
-    if (hub !== undefined && id !== undefined) {
+    if (id !== undefined) {
       try {
-        const client = await hub.require(id, { cwd: path })
-        await mkdirRemoteViaCore(client, path, name)
-        return target
+        const client = await this.operatorCore(id, path)
+        if (client !== undefined) {
+          await mkdirRemoteViaCore(client, path, name)
+          return target
+        }
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error)
         if (/EEXIST|exists/i.test(text)) throw new DirectoryPickerError('directory-exists', target, `${target} already exists`)

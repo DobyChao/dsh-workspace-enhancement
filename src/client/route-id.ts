@@ -16,6 +16,14 @@
  */
 
 /**
+ * Same charset as the host `isRegistryConnectionId` (no leading `.`, so
+ * `.git` is never a machine id).
+ */
+export function isClientConnectionId(id: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
+}
+
+/**
  * The registry connection id inside a route-placeholder path, or undefined.
  * Mirrors the host's `routeFromPlaceholder` root/id rules: the id is the first
  * path segment under the placeholder root and must be a safe registry id.
@@ -26,6 +34,6 @@ export function routeIdOf(path: string): string | undefined {
   const match = /(?:dsw-routes|dsh-ssh-routes)[\\/]([^\\/]+)/i.exec(path)
   if (match === null) return undefined
   const id = match[1]
-  if (id === undefined || !/^[A-Za-z0-9._-]+$/.test(id)) return undefined
+  if (id === undefined || !isClientConnectionId(id)) return undefined
   return id
 }

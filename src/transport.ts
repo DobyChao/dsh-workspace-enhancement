@@ -17,13 +17,14 @@
 
 import { existsSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, join, posix, relative, resolve } from 'node:path'
 import type { Client, SFTPWrapper } from 'ssh2'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ExecOutcome, SshRuntime } from './runtime.ts'
 import type { SshRegistry } from './registry.ts'
-import { parseSshRoute } from './registry.ts'
+import { isRegistryConnectionId, parseSshRoute } from './registry.ts'
 import { hostLocaleOf } from './locale/host.ts'
+import { initiatorSessionOf } from './remote-policy.ts'
 
 /** The connection-owner face both providers consume. */
 export interface SshTransport {
@@ -108,7 +109,7 @@ function routeFromPlaceholder(value: string, dshBase?: string): { id: string; pa
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null
   const segments = rel.split(/[\\/]+/).filter(segment => segment !== '')
   const id = segments[0]
-  if (id === undefined || !/^[A-Za-z0-9._-]+$/.test(id)) return null
+  if (id === undefined || !isRegistryConnectionId(id)) return null
   const rest = segments.slice(1)
   return { id, path: rest.length === 0 ? '/' : `/${rest.join('/')}` }
 }
@@ -136,6 +137,31 @@ export function remoteRouteFromCwd(cwd: string | undefined, dshBase?: string): R
   return { connectionId: parsed.id, path: parsed.path }
 }
 
+function registryConnectionOf(ctx: Context, id: string): SshTransport | undefined {
+  const registry = ctx.get('sshRegistry') as SshRegistry | undefined
+  return registry?.get(id) as SshTransport | undefined
+}
+
+function posixRemoteCwd(path: string): string {
+  const cleaned = posix.normalize(path).replace(/\/+$/u, '')
+  return cleaned === '' ? '/' : cleaned
+}
+
+/**
+ * Bind a path to the calling session's registry machine. Official tools on a
+ * Windows host pass POSIX `/home/…` (and sometimes `ssh://.git/…`) which are
+ * not `ssh://<id>/…` routes; without this they fall through to aggregate
+ * `ctx.ssh` and have no connection id.
+ */
+function initiatorBind(ctx: Context, remotePath: string): SshCwdRoute | undefined {
+  const initiator = remoteRouteFromCwd(initiatorSessionOf(ctx)?.header?.cwd)
+  if (initiator === null) return undefined
+  const connection = registryConnectionOf(ctx, initiator.connectionId)
+  if (connection === undefined) return undefined
+  const absolute = posix.isAbsolute(remotePath) ? remotePath : posix.resolve(initiator.path, remotePath)
+  return { transport: connection, cwd: posixRemoteCwd(absolute), connectionId: initiator.connectionId }
+}
+
 /**
  * Resolve one caller cwd against the transport it names. POSIX absolute paths
  * and the normal local-path redirection stay on the aggregate `ctx.ssh`;
@@ -145,16 +171,27 @@ export function remoteRouteFromCwd(cwd: string | undefined, dshBase?: string): R
 export function resolveSshCwd(ctx: Context, cwd: string | undefined): SshCwdRoute {
   if (cwd !== undefined) {
     const parsed = cwd.startsWith('ssh://') ? parseSshRoute(cwd) : routeFromPlaceholder(cwd)
-    if (parsed === null && cwd.startsWith('ssh://')) {
-      throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.invalidWorkdir', { dir: JSON.stringify(cwd) })}`)
-    }
     if (parsed !== null) {
-      const registry = ctx.get('sshRegistry') as SshRegistry | undefined
-      const connection = registry?.get(parsed.id)
+      const connection = registryConnectionOf(ctx, parsed.id)
       if (connection === undefined) {
         throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.workdirUnknownConnection', { id: parsed.id })}`)
       }
       return { transport: connection, cwd: parsed.path, connectionId: parsed.id }
+    }
+    if (cwd.startsWith('ssh://')) {
+      const rest = cwd.slice('ssh://'.length)
+      // `ssh://.git/HEAD` is a git-dir spelling, not machine id `.git`.
+      const bound = rest.startsWith('.') ? initiatorBind(ctx, rest) : undefined
+      if (bound !== undefined) return bound
+      throw new Error(`dsw: ${hostLocaleOf(ctx).t('rpc.invalidWorkdir', { dir: JSON.stringify(cwd) })}`)
+    }
+    // On Windows a POSIX absolute cwd is already classified remote (mixed.ts)
+    // but is not a placeholder. Bind it to the initiator session's machine so
+    // official bash/fs calls that pass `/home/…` still hit the registry SSH
+    // connection instead of the aggregate `ctx.ssh` (no connection id).
+    if (posix.isAbsolute(cwd)) {
+      const bound = initiatorBind(ctx, cwd)
+      if (bound !== undefined) return bound
     }
   }
   return { transport: ctx.ssh as unknown as SshTransport, cwd: (ctx.ssh as SshRuntime).resolveRemoteCwd(cwd) }

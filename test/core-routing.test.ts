@@ -18,11 +18,12 @@ import { serveFakeCore } from '../src/core-fake.ts'
 import { CoreRoutingFileSystem } from '../src/core-fs.ts'
 import { createCoreHub } from '../src/core-hub.ts'
 import type { CoreHub } from '../src/core-hub.ts'
+import { coreServeCommand } from '../src/core-hub.ts'
 import { SshFileSystemEngine } from '../src/filesystem.ts'
-import { REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
+import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps, RemoteSandboxMachineFace } from '../src/remote-sandbox-fence.ts'
-import type { SshTransport } from '../src/transport.ts'
+import { sshRoutesRoot, type SshTransport } from '../src/transport.ts'
 
 function pair(root: string, sandbox: 'read-only' | 'workspace-write' = 'read-only', workspace?: string): CoreClient {
   const toServer = new PassThrough()
@@ -63,7 +64,7 @@ function target(path = '/work/a.txt'): FsTarget {
   return { targetKey: FsTargetKey(`ssh://c1${path}`), displayPath: `ssh://c1${path}` }
 }
 
-test('CoreRoutingFileSystem: off delegates writes to SFTP and never opens a core', async () => {
+test('CoreRoutingFileSystem: danger-full-access with no core delegates writes to SFTP', async () => {
   const t = transport()
   let sftpWrites = 0
   const sftp = {
@@ -91,7 +92,7 @@ test('CoreRoutingFileSystem: off delegates writes to SFTP and never opens a core
     },
   })
   const fs = new CoreRoutingFileSystem(ctxWith(t), sftp as unknown as SshFileSystemEngine, hub)
-  await fs.writeText(target(), 'hello')
+  await fs.writeText(target(), 'hello', undefined, undefined, { mode: 'danger-full-access' })
   assert.equal(sftpWrites, 1)
 })
 
@@ -109,8 +110,10 @@ test('CoreRoutingFileSystem: fenced write uses core RPC (I9-1 dual: outside work
   const exploding = new Proxy({}, { get: () => () => { throw new Error('SFTP consulted on fenced path') } }) as unknown as SshFileSystemEngine
   const fs = new CoreRoutingFileSystem(ctx, exploding, hub)
   await assert.rejects(
-    () => fs.writeText(target('/etc-hostname'), 'nope'),
-    (error: unknown) => error instanceof FsError,
+    () => fs.writeText(target('/etc-hostname'), 'nope', undefined, undefined, { mode: 'read-only' }),
+    (error: unknown) => error instanceof FsError
+      && error.code === 'FS_SANDBOX_DENIED'
+      && error.message.includes('[sandbox: file access denied under read-only mode]'),
   )
   client.close()
 })
@@ -160,4 +163,228 @@ test('fence with a hub returns the original argv (approval still sees unwrapped)
   const argv = await fence({ connectionId: 'c1', cwd: '/work', argv: ['bash', '-c', 'echo hi'] })
   assert.deepEqual([...argv], ['bash', '-c', 'echo hi'])
   client.close()
+})
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => { setTimeout(resolve, ms) })
+}
+
+test('createCoreHub: workspace-write sibling cwds open two serves', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-sib-'))
+  const t = transport()
+  const opened: Array<string | undefined> = []
+  const clients: CoreClient[] = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      const client = pair(root, 'workspace-write', request.workspace)
+      clients.push(client)
+      return client
+    },
+  })
+  const a = await hub.require('c1', { cwd: '/a', policy: 'workspace-write' })
+  const b = await hub.require('c1', { cwd: '/b', policy: 'workspace-write' })
+  assert.notEqual(a, b)
+  assert.deepEqual(opened, ['/a', '/b'])
+  hub.close('c1')
+  for (const client of clients) client.close()
+})
+
+test('createCoreHub: nested cwd shares the ancestor jail', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-nest-'))
+  const t = transport()
+  const opened: Array<string | undefined> = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      return pair(root, 'workspace-write', request.workspace)
+    },
+  })
+  const parent = await hub.require('c1', { cwd: '/work', policy: 'workspace-write' })
+  const nested = await hub.require('c1', { cwd: '/work/sub', policy: 'workspace-write' })
+  assert.equal(parent, nested)
+  assert.deepEqual(opened, ['/work'])
+  parent.close()
+})
+
+test('createCoreHub: browse path does not mint a workspace-write jail', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-browse-'))
+  const t = transport()
+  const opened: Array<string | undefined> = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      return pair(root, 'workspace-write', request.workspace)
+    },
+  })
+  await hub.require('c1', { path: '/tmp', policy: 'workspace-write' })
+  assert.deepEqual(opened, ['/work'])
+  hub.peek('c1')?.close()
+})
+
+test('createCoreHub: read-only is one serve regardless of cwd', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-ro-'))
+  const t = transport()
+  let opens = 0
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('read-only', t),
+    open: async () => {
+      opens += 1
+      return pair(root, 'read-only')
+    },
+  })
+  const a = await hub.require('c1', { cwd: '/a' })
+  const b = await hub.require('c1', { cwd: '/b' })
+  assert.equal(a, b)
+  assert.equal(opens, 1)
+  a.close()
+})
+
+test('createCoreHub: channel death evicts; next require reopens', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-die-'))
+  const t = transport()
+  let opens = 0
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('read-only', t),
+    open: async () => {
+      opens += 1
+      return pair(root, 'read-only')
+    },
+  })
+  const first = await hub.require('c1')
+  first.close()
+  assert.equal(hub.peek('c1'), undefined)
+  await hub.require('c1')
+  assert.equal(opens, 2)
+  hub.peek('c1')?.close()
+})
+
+test('createCoreHub: idle kill then reopen', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-idle-'))
+  const t = transport()
+  let opens = 0
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 40,
+    deps: deps('read-only', t),
+    open: async () => {
+      opens += 1
+      return pair(root, 'read-only')
+    },
+  })
+  await hub.require('c1')
+  assert.equal(opens, 1)
+  await delay(90)
+  assert.equal(hub.peek('c1'), undefined)
+  await hub.require('c1')
+  assert.equal(opens, 2)
+  hub.peek('c1')?.close()
+})
+
+test('createCoreHub: hold keeps the serve off the idle timer', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-hold-'))
+  const t = transport()
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 40,
+    deps: deps('read-only', t),
+    open: async () => pair(root, 'read-only'),
+  })
+  await hub.require('c1')
+  const release = hub.hold('c1')
+  await delay(90)
+  assert.notEqual(hub.peek('c1'), undefined)
+  release()
+  await delay(90)
+  assert.equal(hub.peek('c1'), undefined)
+  hub.peek('c1')?.close()
+})
+
+test('createCoreHub.require: danger-full-access opens --sandbox off', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-off-'))
+  const t = transport()
+  const opened: string[] = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('off', t),
+    open: async (request) => {
+      opened.push(request.mode)
+      return pair(root, 'off')
+    },
+  })
+  await hub.require('c1', { policy: 'danger-full-access' })
+  assert.deepEqual(opened, ['off'])
+  assert.equal(coreServeCommand('off').includes("--sandbox 'off'"), true)
+  hub.peek('c1')?.close()
+})
+
+test('CoreRoutingFileSystem: confined + dead core never touches SFTP', async () => {
+  const t = transport()
+  const ctx = ctxWith(t)
+  const hub = createCoreHub(ctx, {
+    deps: deps('off', t),
+    open: async () => {
+      throw new Error('core binary missing')
+    },
+  })
+  const exploding = new Proxy({}, { get: () => () => { throw new Error('SFTP fallback is forbidden') } }) as unknown as SshFileSystemEngine
+  const fs = new CoreRoutingFileSystem(ctx, exploding, hub)
+  await assert.rejects(
+    () => fs.writeText(target(), 'x', undefined, undefined, { mode: 'workspace-write' }),
+    (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
+  )
+})
+
+test('coreServeCommand: workspace-write without a root omits --workspace', () => {
+  assert.equal(coreServeCommand('workspace-write').includes('--workspace'), false)
+  assert.equal(coreServeCommand('workspace-write', '/home/uuz/ws').includes("--workspace '/home/uuz/ws'"), true)
+})
+
+test('createCoreHub: workspace-write with no usable root does not open serve', async () => {
+  const t = transport()
+  const opened: string[] = []
+  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'workspace-write' }
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: {
+      machine: (id) => (id === 'c1' ? machine : undefined),
+      connection: (id) => (id === 'c1' ? t : undefined),
+      unavailable: (confinement, detail) => new RemoteSandboxError(`${confinement}: ${detail}`, REMOTE_SANDBOX_UNAVAILABLE),
+    },
+    open: async () => {
+      opened.push('opened')
+      throw new Error('must not open')
+    },
+  })
+  await assert.rejects(
+    () => hub.require('c1', { policy: 'workspace-write' }),
+    (error: unknown) => error instanceof RemoteSandboxError
+      && error.message.includes(REMOTE_SANDBOX_MESSAGES.workspaceRootRequired),
+  )
+  assert.deepEqual(opened, [])
+})
+
+test('createCoreHub: placeholder cwd mints a POSIX workspace-write jail', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-ph-'))
+  const t = transport()
+  const opened: Array<string | undefined> = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      const client = pair(root, 'workspace-write', request.workspace)
+      return client
+    },
+  })
+  const placeholder = join(sshRoutesRoot(), 'c1', 'home', 'uuz', 'ssh-test-lab')
+  await hub.require('c1', { cwd: placeholder, policy: 'workspace-write' })
+  assert.deepEqual(opened, ['/home/uuz/ssh-test-lab'])
+  hub.close('c1')
 })

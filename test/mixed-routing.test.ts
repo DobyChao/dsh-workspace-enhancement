@@ -17,7 +17,7 @@ import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import type { SubprocessHandle, SubprocessSpawnSpec, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
-import { sshRoutesRoot } from '../src/transport.ts'
+import { sshRoutesRoot, resolveSshCwd } from '../src/transport.ts'
 import { MixedFileSystem, MixedSubprocessRuntime, remoteArgvOf, worldOfCwd, worldOfTargetKey } from '../src/mixed.ts'
 import type { FileSystemBranch, SubprocessBranch } from '../src/mixed.ts'
 
@@ -38,6 +38,7 @@ test('worldOfCwd: remote cwd spellings resolve remote; local/absent resolve loca
   assert.equal(worldOfCwd('ssh://c1/srv/work'), 'remote')
   assert.equal(worldOfCwd(remotePlaceholder()), 'remote')
   assert.equal(worldOfCwd(remotePlaceholder().replace(/[\\/]dsw-routes$/u, `${'\\'}dsh-ssh-routes`)), 'remote')
+  assert.equal(worldOfCwd('ssh://.git/HEAD'), 'remote')
 })
 
 test('worldOfTargetKey: ssh:// keys are remote; realpath keys are local', () => {
@@ -424,4 +425,45 @@ test('REQ-I11: an ordinary absolute/relative path on a local cwd still routes lo
     'lstat:local',
   ])
   assert.deepEqual(remote.calls, [])
+})
+
+test('REQ-I13: remote writeText/editText forward sandboxPolicy', async () => {
+  const seen: unknown[] = []
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  remote.writeText = async (_target, _content, _expected, _signal, policy) => {
+    seen.push(['write', policy])
+    return { operation: 'create', version: FsVersion('v'), before: null, after: 'x' }
+  }
+  remote.editText = async (_target, _edit, _expected, _signal, policy) => {
+    seen.push(['edit', policy])
+    return { version: FsVersion('v'), before: '', after: 'y' }
+  }
+  const mixed = new MixedFileSystem(local, remote as never)
+  const target = { targetKey: FsTargetKey('ssh://c1/tmp/a.txt'), displayPath: 'ssh://c1/tmp/a.txt' }
+  const policy = { mode: 'danger-full-access' }
+  await mixed.writeText(target, 'x', undefined, undefined, policy)
+  await mixed.editText(target, { oldString: 'a', newString: 'b', replaceAll: false }, undefined, undefined, policy)
+  assert.deepEqual(seen, [['write', policy], ['edit', policy]])
+  assert.deepEqual(local.calls, [])
+})
+
+test('resolveSshCwd: POSIX cwd on a remote initiator binds the registry connection', () => {
+  const ctx = new Context()
+  const t = {
+    endpoint: 'uuz@c1',
+    cwd: '/home/uuz/ssh-test-lab',
+    resolveRemoteCwd: (cwd?: string) => cwd ?? '/home/uuz/ssh-test-lab',
+  }
+  ctx.provide('ssh', t)
+  ctx.provide('sshRegistry', { get: (id: string) => (id === 'c1' ? t : undefined) })
+  ctx.provide('agents', {
+    currentInitiator: () => ({ session: { header: { cwd: 'ssh://c1/home/uuz/ssh-test-lab' } } }),
+  })
+  const posix = resolveSshCwd(ctx, '/home/uuz/ssh-test-lab')
+  assert.equal(posix.connectionId, 'c1')
+  assert.equal(posix.cwd, '/home/uuz/ssh-test-lab')
+  const git = resolveSshCwd(ctx, 'ssh://.git/HEAD')
+  assert.equal(git.connectionId, 'c1')
+  assert.equal(git.cwd, '/home/uuz/ssh-test-lab/.git/HEAD')
 })

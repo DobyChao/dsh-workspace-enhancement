@@ -73,6 +73,22 @@ func TestFsWriteAndRead(t *testing.T) {
 	}
 }
 
+func TestFsRealpathMissingLeaf(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "new.txt")
+	got, err := fsRealpath(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := slashAbs(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestFsCreateIfAbsent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
