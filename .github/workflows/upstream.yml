@@ -70,11 +70,12 @@ jobs:
         # peer ranges may not satisfy (alpha), or an older one than the dev deps
         # resolve (legacy); npm would otherwise refuse with ERESOLVE.
         run: |
+          set -o pipefail
           PKGS=""
           NAMES="$(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")"
           if [ -n "${{ matrix.family }}" ]; then
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1)"
+              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1 || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -83,7 +84,7 @@ jobs:
             done
           else
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1)"
+              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1 || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -123,7 +124,7 @@ jobs:
           if [ -n "$MISSING" ]; then
             DEPS=""
             for dep in $MISSING; do
-              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1)"
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
               if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; fi
             done
             if [ -n "$DEPS" ]; then
@@ -141,8 +142,22 @@ jobs:
           node -e "for (const n of ['@deepseek-ai/dsh-http-proxy']) { try { console.log(n + ' -> ' + require.resolve(n + '/package.json')) } catch { console.log(n + ' -> UNRESOLVED') } }" || true
 
       - name: Print resolved family
+        # The anchor assertion exists because `npm install | tail` once swallowed
+        # a failed alpha install: the 2026-09-14 run (34824542756) kept testing
+        # rc.2 on the alpha job while claiming to probe alpha. Fail loudly when
+        # the channel did not take effect on the family anchor.
         run: |
           node -e "for (const n of Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-'))) { try { console.log('  '+n+'@'+require('./node_modules/'+n+'/package.json').version) } catch { console.log('  '+n+'@MISSING') } }"
+          WANT="${{ matrix.family }}"
+          if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
+          ANCHOR="$(node -e "try { console.log(require('./node_modules/@deepseek-ai/dsh-fs/package.json').version) } catch { console.log('') }")"
+          WANT_V="$(npm view "@deepseek-ai/dsh-fs@$WANT" version 2>/dev/null | tail -1 || true)"
+          if [ -z "$WANT_V" ]; then
+            echo "::warning::@deepseek-ai/dsh-fs has no '$WANT' release — family anchor not verified"
+          elif [ "$ANCHOR" != "$WANT_V" ]; then
+            echo "::error::family anchor resolved to '${ANCHOR:-MISSING}' but channel '$WANT' publishes '$WANT_V' — the channel install never took effect"
+            exit 1
+          fi
 
       - name: Typecheck against the '${{ matrix.channel }}' host
         run: npm run typecheck
@@ -166,9 +181,10 @@ jobs:
       # DSH_HOME and asserts the surface the row must provide.
       - name: Boot smoke — the row must survive a real host (${{ matrix.channel }})
         run: |
+          set -o pipefail
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
-          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1)"
+          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1 || true)"
           if [ -z "$HOST" ]; then
             echo "::warning::@deepseek-ai/dsh has no release on '$WANT' — boot smoke skipped"
             exit 0
@@ -176,6 +192,52 @@ jobs:
           echo "boot host: @deepseek-ai/dsh@$HOST"
           npm install --no-save --legacy-peer-deps "@deepseek-ai/dsh@$HOST" 2>&1 | tail -5
           ls node_modules/@deepseek-ai/dsh/lib/bin.js
+          # --legacy-peer-deps above is required (the repo's dev tree may sit on a
+          # different family than the channel; plain resolution would ERESOLVE),
+          # but it also skips the CLI's OWN peers — and @deepseek-ai/dsh-app-boot
+          # imports its peer @deepseek-ai/cordis-plugin-group at boot, which no
+          # regular dependency carries. Without this closure the host died with
+          # ERR_MODULE_NOT_FOUND before printing its URL on BOTH channels
+          # (2026-09-14 run 34824542756, issues #7/#9) and none of the smoke's
+          # assertions ever ran. Close the CLI tree's @deepseek-ai/* gap the same
+          # way the seam-family pass does: resolve through the channel tag first,
+          # fall back to latest for peers that live on independent version lines
+          # (cordis-* 1.x). Repeat until the tree stops revealing gaps.
+          for round in 1 2 3; do
+            MISSING="$(node -e '
+              const fs = require("fs");
+              const seen = new Set(["@deepseek-ai/dsh"]);
+              const queue = ["@deepseek-ai/dsh"];
+              const out = new Set();
+              while (queue.length) {
+                const name = queue.shift();
+                let manifest;
+                try { manifest = JSON.parse(fs.readFileSync("node_modules/" + name + "/package.json", "utf8")); } catch { continue; }
+                for (const field of ["dependencies", "peerDependencies", "optionalDependencies"]) {
+                  for (const dep of Object.keys(manifest[field] ?? {})) {
+                    if (!dep.startsWith("@deepseek-ai/")) continue;
+                    if (!fs.existsSync("node_modules/" + dep + "/package.json")) out.add(dep);
+                    else if (!seen.has(dep)) { seen.add(dep); queue.push(dep); }
+                  }
+                }
+              }
+              console.log([...out].join(" "));
+            ')"
+            if [ -z "$MISSING" ]; then break; fi
+            DEPS=""
+            UNRESOLVED=""
+            for dep in $MISSING; do
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 || true)"; fi
+              if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep"; fi
+            done
+            if [ -n "$UNRESOLVED" ]; then
+              echo "::error::boot smoke cannot resolve CLI deps/peers on '$WANT':$UNRESOLVED"
+              exit 1
+            fi
+            echo "boot closure (round $round):$DEPS"
+            npm install --no-save --legacy-peer-deps $DEPS 2>&1 | tail -10
+          done
           # Strict on EVERY channel: the plugin's channel is a set of exact Fetch
           # routes below the supported `/api` seam, so a 404/405 here is a
           # regression, not a tracked upstream break. (`--channel-warn`, the old

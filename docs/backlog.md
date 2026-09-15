@@ -94,6 +94,7 @@
 | UPSTREAM-4 | 0.1.2 家族退场 | done | P1 | peer/dev `^0.1.5-rc.1`；哨兵只留 next/alpha |
 | AUDIT-3 | 权限门测试 stub 漏方法 | done | P3 | 随 `REQ-I7` 整文件删除，失去对象 |
 | AUDIT-6 | 远程命令审批门 + AI 自动放权 | done | P1 | `ADR-0020`。[`R22-audit6-remote-approval-gate.md`](./rounds/R22-audit6-remote-approval-gate.md)。**e2e/UAT 按拍板延后**，与 `REQ-I9` 后统一审视；「e2e 零覆盖」仍算验收缺口，不勾销 |
+| INFRA-14 | Upstream drift 假红灯修复（boot smoke 装机缺陷） | done | P2 | 根因：boot smoke 步骤（PR #11 引入）用 `--legacy-peer-deps` 裸装宿主 CLI，漏 `dsh-app-boot` 的非可选 peer `cordis-plugin-group`，宿主启动即 `ERR_MODULE_NOT_FOUND`，next/alpha 两通道同因（issues #7/#9），三条断言从未执行；alpha 家族安装另被 `\| tail` 吞了退出码（对 rc.2 跑却声称 alpha）。修复：CLI 树 `@deepseek-ai/*` 闭合循环 + `pipefail` + 家族锚点断言（装错通道即红）。真 seam 漂移信号（rc.2 静态闸门）全程绿；调查档案 `.tmp/drift/report-2026-09-15.md` |
 
 ## 5. 明确不做（决策留痕）
 
