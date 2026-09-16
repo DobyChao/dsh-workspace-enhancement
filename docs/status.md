@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-16 16:56 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-16 16:59 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `docs/BUG-5-live-verification` / `8229423` |
-| HEAD 提交 | `docs(round): record the BUG-5 live verification in R29 and backlog` (2026-09-17) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `docs/backlog-note-tidy` / `c23ff41` |
+| HEAD 提交 | `docs(upstream): record the official SSH runtime and UPSTREAM-5 cautions` (2026-09-17) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 

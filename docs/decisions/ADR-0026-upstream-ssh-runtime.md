@@ -55,6 +55,10 @@
 `drift (alpha)` 的 typecheck 红**全部**来自这张表；`upstream.yml` 的 rc 通道（现 `next` = `0.1.5-rc.2`）
 不红，因为它还没有这些成员。
 
+> **证据**：`drift (alpha)` run 34950619028、issue #7；上表我方行号属 master `e96284a`
+> （行号不是契约，只在该快照内有效）。本次是 `INFRA-14` 修好哨兵装机缺陷后**首次现形的真信号**，
+> 不是旧假警报。
+
 > **重名提醒**：上游 `dsh-subprocess-ssh@0.1.6-alpha.1` 的类**也叫**
 > `SshSubprocessRuntime`（`lib/types/index.d.ts:5`），与我方 `src/subprocess.ts:338` 同名但无关系。
 > 引用时**必须带包名 + 版本**，否则会读成同一件事（`docs/compatibility.md` §5.3 的引用纪律）。
