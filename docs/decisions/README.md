@@ -29,3 +29,4 @@
 | [0023](./ADR-0023-one-remote-core.md) | 远端一个核心：围栏执行 + 远端读写共用可校验产物 | accepted（落地中） |
 | [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
 | [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |
+| [0026](./ADR-0026-upstream-ssh-runtime.md) | 上游官方 SSH 运行时（`0.1.6-alpha.1`）事实、helper 模型与我方定位 | proposed |
