@@ -1,0 +1,357 @@
+/*
+ * dsh-workspace-enhancement remote-workspace settings page — DeepSeek Harness
+ * design language.
+ *
+ * The page renders inside the host settings panel's `.options` area (800x?
+ * panel, 188px nav rail, 24px content padding, see the host's
+ * packages/client/ui-settings-general/src/client/SettingsRoot.module.css), so
+ * it contributes NO panel chrome of its own: no outer padding, no second
+ * surface, no nested card-in-card. Structure follows the host's ModelsSection:
+ * a 14/22 intro under a 16/24 title, outlined row cards for configured
+ * entries, and one filled module for the editor.
+ *
+ * Every value resolves through a `--dsw-alias-*` / `--dsw-static-*` token.
+ */
+
+/* ---------- page ---------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.intro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Page-level acknowledgment banners (F2): the durable save/error seat, so the
+   copy survives a form remount. */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.bannerIcon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.bannerSuccess {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.bannerError {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---------- groups ---------- */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A configured machine: outlined on the panel fill, so the filled editor
+   module below reads as the nested object rather than a peer card. */
+.rowCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rowIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowName {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The endpoint reads as a machine identifier, not prose. It sits on the facts
+   line so the action cluster always keeps its place on the identity line —
+   with a long hostname inline, the actions wrapped onto a second line on some
+   rows and not others, which made the list rhythm uneven. */
+.rowEndpoint {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* Annotation on the name (figma-style tag): caption size and the secondary
+   tone, so it never competes with the row's own title. */
+.rowTag {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* ---------- core-status chip ---------- */
+
+.coreChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.coreChipOk {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.coreChipWarn {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.coreChipError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---------- overflow menu (⋯) ---------- */
+
+/* Native `<details>` rather than a portal: the host's Menu primitive is not a
+   dependency of this plugin (the client bundle stays self-contained), and the
+   disclosure carries the same dismiss/escape semantics for a short action
+   list. */
+.more {
+  position: relative;
+  flex: none;
+}
+
+.moreSummary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.moreSummary::-webkit-details-marker {
+  display: none;
+}
+
+.moreSummaryOpen {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Chevron points down at rest, up while the menu is open. */
+.moreChevron {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.more[open] > .moreSummary .moreChevron {
+  transform: rotate(-90deg);
+}
+
+.moreMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
+  box-shadow: var(--dsw-shadow-lv3);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.moreItem:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.moreItem:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.moreItem:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.moreItemDanger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.moreItemDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.moreSep {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--dsw-alias-border-l2);
+}
+
+/* ---------- empty state ---------- */
+
+/* Dashed rather than solid: it reads as a place, not as a configured machine. */
+.empty {
+  padding: 20px 12px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* ---------- editor module (add / edit machine) ---------- */
+
+/* Filled module on the panel — the same surface the host's ModelsSection
+   gives its provider editor, so "this is the thing I am editing" needs no
+   extra outline. */
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.editorHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.editorTitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.editorNote {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---------- a11y ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .moreChevron {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .rowActions {
+    margin-left: 0;
+  }
+}

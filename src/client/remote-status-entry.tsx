@@ -15,7 +15,9 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteSessionFacts, RemoteStatusSeats } from './remote-status.ts'
 import { remoteConnectionIdOf } from './remote-status.ts'
 import type { RpcCall } from './status.tsx'
-import { CONN_STATE_COLOR, CONN_STATE_LABEL_KEY, getStatusCenter, useConnStatus, zhBaseline } from './status.tsx'
+import { CONN_STATE_LABEL_KEY, getStatusCenter, useConnStatus, zhBaseline } from './status.tsx'
+import { ServerIcon } from './icons.tsx'
+import styles from './status.module.css'
 
 /** The props this entry receives: its seats, the session, the wire, the seat. */
 export interface RemoteStatusActionProps extends RemoteStatusSeats {
@@ -59,42 +61,26 @@ export function RemoteStatusAction(props: RemoteStatusActionProps): JSX.Element 
   if (connId === undefined) return null
   const state = view?.state ?? 'unknown'
   const machine = view !== null && view.label !== '' ? view.label : connId
+  const dotClass = `${styles.dot} ${
+    state === 'active' ? styles.dotActive : state === 'offline' ? styles.dotOffline : styles.dotUnknown
+  }`
   return (
     <button
       type="button"
       data-dsw-remote-status={connId}
-      className="dsw-remote-status"
+      // The global class stays: it is the DOM contract the UAT scripts and the
+      // row-badge layer select on. `styles.statusChip` supplies the look.
+      className={`dsw-remote-status ${styles.statusChip}`}
       title={t('header.remote.title', { machine })}
       aria-label={t('header.remote.label')}
       disabled={busy}
       onClick={() => { void reconnect() }}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '2px 6px',
-        borderRadius: 6,
-        border: '1px solid rgba(128,128,128,0.35)',
-        background: 'rgba(128,128,128,0.08)',
-        color: 'inherit',
-        cursor: busy ? 'default' : 'pointer',
-        fontSize: 11,
-        whiteSpace: 'nowrap',
-      }}
     >
-      <span aria-hidden style={{ fontSize: 11, lineHeight: 1 }}>🌐</span>
-      <span
-        aria-hidden
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: CONN_STATE_COLOR[state],
-          display: 'inline-block',
-          flexShrink: 0,
-        }}
-      />
-      <span style={{ fontSize: 12, opacity: 0.85 }}>{busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])}</span>
+      <ServerIcon className={styles.statusChipIcon} width={13} height={13} />
+      <span className={dotClass} aria-hidden />
+      <span className={busy ? `${styles.label} ${styles.labelBusy}` : styles.label}>
+        {busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])}
+      </span>
     </button>
   )
 }

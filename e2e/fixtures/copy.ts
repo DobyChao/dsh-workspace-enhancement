@@ -49,7 +49,7 @@ export const COPY = {
   'form.auth.passwordTab': { zh: '密码', en: 'Password' },
   'form.test.button': { zh: '测试连接', en: 'Test connection' },
   'form.save.settingsLabel': { zh: '保存', en: 'Save' },
-  'form.advanced.collapsed': { zh: '▸ 高级', en: '▸ Advanced' },
+  'form.advanced.label': { zh: '高级', en: 'Advanced' },
 
   /* ------------------------------------------------------ settings.tsx */
   'settings.label': { zh: '远程工作区', en: 'Remote workspaces' },

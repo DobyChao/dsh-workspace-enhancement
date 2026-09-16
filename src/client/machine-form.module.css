@@ -1,0 +1,574 @@
+/*
+ * dsh-workspace-enhancement shared machine form — DeepSeek Harness design
+ * language.
+ *
+ * Every value resolves through a `--dsw-alias-*` / `--dsw-static-*` token, the
+ * vocabulary dsh's own settings sections use (see the host's
+ * packages/client/ui-theme/src/styles/design-platform.css). No bare `--border`
+ * / `--surface` names and no light-mode literals as fallbacks: those would
+ * freeze the light palette under `body[data-ds-dark-theme]`.
+ *
+ * Geometry follows the settings-panel vocabulary: 32px fields (r8,
+ * border-l2), capsule buttons (h36 r18; h28 r14 on dense rows), 12/18 field
+ * labels, 14/22 body, and `border-l2` hairlines.
+ *
+ * This one stylesheet serves both consumers of {@link MachineForm} — the
+ * settings page (`mode="settings"`) and the flow's nested dialog
+ * (`mode="flow"`) — so the two surfaces can never drift apart.
+ */
+
+/* ---------- layout ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 端口 + 用户名: a narrow numeric cell beside a flexible one. `minmax(0, …)`
+   on the wide track is load-bearing — the Username input's intrinsic width
+   (~169px) would otherwise refuse to shrink and push past the card edge
+   (E2E-02 / E2E-04 regressions). */
+.pairPort {
+  display: grid;
+  grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* Auto-fitting track set for equal-weight fields (advanced group). */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Host row: the input takes the track, 「识别 ssh 配置」 keeps its label width. */
+.hostRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hostRow > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hostRow > .secondaryButton {
+  flex: none;
+}
+
+/* The picker's own chevron points down while closed and up while the alias
+   list is open — the affordance the text-only label could not carry. */
+.pickerChevron {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.pickerChevronOpen {
+  transform: rotate(-90deg);
+}
+
+/* ---------- labels & hints ---------- */
+
+.fieldLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.required {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.invalid {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* A hint that carries an inline spinner (in-flight resolve / probe). */
+.busyHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---------- text controls ---------- */
+
+/* `box-sizing` on every control: the app has no global border-box reset, so
+   the outlined and filled variants would otherwise stand 2px apart. */
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.inputInvalid,
+.inputInvalid:hover:not(:disabled) {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.inputInvalid:focus {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* Select variant: replaces the OS arrow (flush against the right edge) with
+   the shared 12px chevron inset, matching the composer's select chips. A
+   data-URI SVG cannot resolve CSS variables, so the glyph carries the
+   caption-strip gray shared by both themes (#81858C). */
+.select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+  cursor: pointer;
+}
+
+/* ---------- buttons ---------- */
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.ghostButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 18px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+
+.secondaryButton,
+.ghostButton {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+}
+
+.secondaryButton:hover:not(:disabled),
+.ghostButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dangerButton {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled,
+.ghostButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.dangerButton:focus-visible,
+.ghostButton:focus-visible,
+.segment:focus-visible,
+.disclosureSummary:focus-visible,
+.configOption:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+/* Dense rows take the compact capsule (Button `.sm`). */
+.small {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+/* ---------- auth segmented control ---------- */
+
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.segment {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.segment:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Selected segment lifts onto the panel fill — the same raised-cell read as
+   the settings nav's active item, so selection never depends on hue alone. */
+.segmentOn {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-shadow-lv1);
+}
+
+.segment:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- checkbox ---------- */
+
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.checkbox {
+  box-sizing: border-box;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  cursor: pointer;
+}
+
+.checkLabel {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+/* ---------- disclosure (高级) ---------- */
+
+/* Native marker replaced by a rotating chevron: the built-in triangle differs
+   per engine and cannot take the label color. */
+.disclosureSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 8px 2px 4px;
+  margin-left: -4px;
+  border-radius: 6px;
+  list-style: none;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.disclosureSummary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosureSummary::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(-45deg) translate(-1px, -1px);
+  transition: transform 120ms ease;
+}
+
+.disclosure[open] > .disclosureSummary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.disclosureSummary:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.disclosureBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+/* ---------- ssh-config alias picker ---------- */
+
+.configList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+  /* Elevated-surface scrollbar rebinding (see ui-theme styles/scrollbar.css). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
+}
+
+.configEmpty {
+  padding: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.configOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.configOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.configAlias {
+  flex: none;
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
+.configArrow {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+.configTarget {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Capability marker on a config host (private key present / jump chain) —
+   the same outlined micro-tag the settings rows use. */
+.configBadge {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.configSpinner {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--dsw-alias-state-business-primary);
+  animation: dsw-spin 0.8s linear infinite;
+}
+
+@keyframes dsw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- feedback ---------- */
+
+.feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.feedbackIcon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.feedbackInfo {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.feedbackSuccess {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.feedbackError {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---------- actions ---------- */
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* Flow mode puts its primary on the leading edge and the cancel opposite. */
+.actionsFlow {
+  justify-content: space-between;
+}
+
+.actionsTrailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- a11y ---------- */
+
+.hiddenLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosureSummary::before {
+    transition: none;
+  }
+
+  .pickerChevron {
+    transition: none;
+  }
+
+  .configSpinner {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .pairPort {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostRow {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

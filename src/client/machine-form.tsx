@@ -21,12 +21,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
 import { zhBaseline } from './status.tsx'
 import { machinePayload } from './machine-payload.ts'
 import type { MachineFormState, RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
+import { AlertIcon, CheckIcon, ChevronIcon, SpinnerIcon } from './icons.tsx'
+import styles from './machine-form.module.css'
 
 /** One manual or resolved ProxyJump hop. */
 export interface JumpInput {
@@ -293,45 +295,24 @@ interface FieldErrors {
   username?: string
 }
 
-/** Shared inline styles (settings-page vocabulary; used by both shells). */
-const inputStyle: CSSProperties = {
-  // `minWidth: 0` is load-bearing: a flex item defaults to `min-width: auto`,
-  // which for an <input> is its intrinsic width (~169px). Without it the
-  // Username field refuses to shrink and pushes ~13px past the card edge at a
-  // 1440px viewport (E2E-02 / E2E-04 regression guards).
-  flex: 1, minWidth: 0, boxSizing: 'border-box',
-  padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(128,128,128,0.35)',
-  background: 'rgba(128,128,128,0.08)', color: 'inherit', outline: 'none', fontSize: 13,
-}
-const inputErrorStyle: CSSProperties = { borderColor: '#e06c75' }
-const buttonStyle: CSSProperties = {
-  padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(128,128,128,0.35)',
-  background: 'rgba(128,128,128,0.08)', color: 'inherit', cursor: 'pointer', fontSize: 12,
-  whiteSpace: 'nowrap',
-}
-const primaryStyle: CSSProperties = {
-  ...buttonStyle, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 600,
-}
-const segmentStyle: (active: boolean) => CSSProperties = (active) => ({
-  padding: '4px 10px', borderRadius: 6, border: active
-    ? '1px solid #2563eb'
-    : '1px solid rgba(128,128,128,0.35)',
-  background: active ? 'rgba(37,99,235,0.18)' : 'rgba(128,128,128,0.08)',
-  color: 'inherit', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap',
-})
-
-/** One field row: label column + control. */
-function fieldRow(label: string, control: ReactNode, key: string, hint?: string): ReactNode {
-  return (
-    <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 8, flexWrap: 'wrap' }}>
-      <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{label}</label>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-        {control}
-        {hint !== undefined ? <span style={{ fontSize: 11, opacity: 0.6 }}>{hint}</span> : null}
-      </div>
-    </div>
-  )
-}
+/**
+ * Stable ids so every label is programmatically tied to its control — the
+ * stacked-label layout has no wrapper to imply the association, and the
+ * settings page can host two instances across a machine-list rerender.
+ */
+const FIELD_IDS = {
+  host: 'dsw-field-host',
+  port: 'dsw-field-port',
+  username: 'dsw-field-username',
+  name: 'dsw-field-name',
+  workspace: 'dsw-field-workspace',
+  keyPath: 'dsw-field-key-path',
+  passphrase: 'dsw-field-passphrase',
+  password: 'dsw-field-password',
+  hostKey: 'dsw-field-hostkey',
+  remoteApproval: 'dsw-field-approval',
+  jump: 'dsw-field-jump',
+} as const
 
 /** The shared form body: fields + feedback + actions (no modal shell). */
 export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }: MachineFormProps): ReactNode {
@@ -622,291 +603,357 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
   const usernameError = errorOf('username')
   const saveLabel = mode === 'flow' ? t('form.save.flowLabel') : t('form.save.settingsLabel')
 
+  // `noUncheckedIndexedAccess` types a CSS-module lookup as `string | undefined`;
+  // the className prop accepts that, so the helper returns the lookup verbatim.
+  const inputClass = (invalid: boolean): string | undefined =>
+    invalid ? `${styles.input} ${styles.inputInvalid}` : styles.input
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-        <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>
-          {t('form.label.host')}<span style={{ color: '#e06c75' }}> *</span>
+    <div className={styles.form}>
+      {/* ---------------------------------------------------------- host */}
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor={FIELD_IDS.host}>
+          {t('form.label.host')}<span className={styles.required}>*</span>
         </label>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              style={{ ...inputStyle, ...(hostError !== undefined ? inputErrorStyle : {}) }}
-              value={form.host}
-              placeholder={t('form.placeholder.host')}
-              disabled={busy}
-              onChange={event => {
-                setForm(prev => ({ ...prev, host: event.target.value }))
-                setResolveSummary(null)
-                lastAutoHost.current = null
-              }}
-              onBlur={() => { void autoResolve(form.host) }}
-              onPaste={event => {
-                const text = event.clipboardData.getData('text')
-                if (text.trim() !== '') void autoResolve(text)
-              }}
+        <div className={styles.hostRow}>
+          <input
+            id={FIELD_IDS.host}
+            className={inputClass(hostError !== undefined)}
+            value={form.host}
+            placeholder={t('form.placeholder.host')}
+            disabled={busy}
+            aria-invalid={hostError !== undefined}
+            onChange={event => {
+              setForm(prev => ({ ...prev, host: event.target.value }))
+              setResolveSummary(null)
+              lastAutoHost.current = null
+            }}
+            onBlur={() => { void autoResolve(form.host) }}
+            onPaste={event => {
+              const text = event.clipboardData.getData('text')
+              if (text.trim() !== '') void autoResolve(text)
+            }}
+          />
+          <button
+            type="button"
+            className={`${styles.secondaryButton} ${styles.small}`}
+            disabled={busy}
+            aria-expanded={configOpen}
+            onClick={() => { void toggleConfigList() }}
+          >
+            {t('form.config.recognize')}
+            <ChevronIcon
+              className={configOpen ? `${styles.pickerChevron} ${styles.pickerChevronOpen}` : styles.pickerChevron}
+              width={12}
+              height={12}
             />
-            <button
-              type="button"
-              style={buttonStyle}
-              disabled={busy}
-              onClick={() => { void toggleConfigList() }}
-            >{t('form.config.recognize')} ▾</button>
-          </div>
-          {autoBusy && <span style={{ fontSize: 11, opacity: 0.7 }} role="status">{t('form.config.matching')}</span>}
-          {hostError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{hostError}</span>}
-          <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.config.hint')}</span>
+          </button>
         </div>
+        {autoBusy && (
+          <span className={styles.busyHint} role="status">
+            <SpinnerIcon className={styles.configSpinner} width={13} height={13} />
+            {t('form.config.matching')}
+          </span>
+        )}
+        {hostError !== undefined && <span className={styles.invalid}>{hostError}</span>}
+        <span className={styles.hint}>{t('form.config.hint')}</span>
       </div>
 
       {configOpen && (
-        <div style={{ border: '1px solid rgba(128,128,128,0.35)', borderRadius: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto', background: 'rgba(128,128,128,0.06)' }}>
+        <div className={styles.configList}>
           {configBusy
-            ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>{t('form.config.reading')}</div>
+            ? <div className={styles.configEmpty}>{t('form.config.reading')}</div>
             : configError !== null
-              ? <div style={{ padding: 8, fontSize: 12, color: '#e06c75' }}>{configError}</div>
+              ? <div className={styles.configEmpty}>{configError}</div>
               : (configList ?? []).length === 0
-                ? <div style={{ padding: 8, fontSize: 12, opacity: 0.6 }}>{t('form.config.empty')}</div>
+                ? <div className={styles.configEmpty}>{t('form.config.empty')}</div>
                 : (configList ?? []).map(host => (
-                  <div
+                  <button
                     key={host.alias}
+                    type="button"
+                    className={styles.configOption}
+                    disabled={busy}
                     onClick={() => { void resolveExplicit(host.alias, (configList ?? []).length) }}
-                    style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid rgba(128,128,128,0.25)' }}
                   >
-                    {host.alias} → {host.host}{host.username !== '' ? ` (${host.username})` : ''}
-                    {host.identityFile ? ` ${t('form.config.badge.key')}` : ''}{host.jump ? ' ⛳' : ''}
-                  </div>
+                    <span className={styles.configAlias}>{host.alias}</span>
+                    <span className={styles.configArrow}>→</span>
+                    <span className={styles.configTarget}>
+                      {host.host}{host.username !== '' ? ` (${host.username})` : ''}
+                    </span>
+                    {host.identityFile ? <span className={styles.configBadge}>{t('form.config.badge.key')}</span> : null}
+                    {host.jump ? <span className={styles.configBadge}>{t('form.config.badge.jump')}</span> : null}
+                  </button>
                 ))}
         </div>
       )}
 
       {resolveSummary !== null && (
-        <div style={{ fontSize: 12, color: '#98c379', marginBottom: 8 }} role="status">
-          ✓ {formatResolvedSummary(resolveSummary, t)}
+        <div className={`${styles.feedback} ${styles.feedbackSuccess}`} role="status">
+          <CheckIcon className={styles.feedbackIcon} />
+          <span>{formatResolvedSummary(resolveSummary, t)}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: '1 1 220px', minWidth: 0 }}>
-          <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.port')}<span style={{ color: '#e06c75' }}> *</span></label>
+      {/* ------------------------------------------------- port + username */}
+      <div className={styles.pairPort}>
+        <div className={styles.field}>
+          <label className={styles.fieldLabel} htmlFor={FIELD_IDS.port}>
+            {t('form.label.port')}<span className={styles.required}>*</span>
+          </label>
           <input
-            style={{ ...inputStyle, maxWidth: 110, ...(portError !== undefined ? inputErrorStyle : {}) }}
+            id={FIELD_IDS.port}
+            className={inputClass(portError !== undefined)}
             value={form.port}
             inputMode="numeric"
             disabled={busy}
+            aria-invalid={portError !== undefined}
             onChange={event => { setForm(prev => ({ ...prev, port: event.target.value })) }}
           />
-          {portError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{portError}</span>}
+          {portError !== undefined && <span className={styles.invalid}>{portError}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: '1 1 220px', minWidth: 0 }}>
-          <label style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.username')}<span style={{ color: '#e06c75' }}> *</span></label>
+        <div className={styles.field}>
+          <label className={styles.fieldLabel} htmlFor={FIELD_IDS.username}>
+            {t('form.label.username')}<span className={styles.required}>*</span>
+          </label>
           <input
+            id={FIELD_IDS.username}
             ref={usernameRef}
-            style={{ ...inputStyle, ...(usernameError !== undefined ? inputErrorStyle : {}) }}
+            className={inputClass(usernameError !== undefined)}
             value={form.username}
             disabled={busy}
+            aria-invalid={usernameError !== undefined}
             onChange={event => { setForm(prev => ({ ...prev, username: event.target.value })) }}
           />
-          {usernameError !== undefined && <span style={{ fontSize: 11, color: '#e06c75' }}>{usernameError}</span>}
+          {usernameError !== undefined && <span className={styles.invalid}>{usernameError}</span>}
         </div>
       </div>
 
-      {fieldRow(t('form.label.name'), (
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor={FIELD_IDS.name}>{t('form.label.name')}</label>
         <input
-          style={inputStyle}
+          id={FIELD_IDS.name}
+          className={styles.input}
           value={form.name}
           placeholder={t('form.placeholder.name')}
           disabled={busy}
           onChange={event => { setForm(prev => ({ ...prev, name: event.target.value })) }}
         />
-      ), 'name')}
+      </div>
 
-      {fieldRow(t('form.label.workspace'), (
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor={FIELD_IDS.workspace}>{t('form.label.workspace')}</label>
         <input
-          style={inputStyle}
+          id={FIELD_IDS.workspace}
+          className={styles.input}
           value={form.workspace}
           placeholder={t('form.placeholder.workspace')}
           disabled={busy}
           onChange={event => { setForm(prev => ({ ...prev, workspace: event.target.value })) }}
         />
-      ), 'workspace')}
+      </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 4 }}>{t('form.label.auth')}</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button type="button" role="radio" aria-checked={authKind === 'key'} style={segmentStyle(authKind === 'key')} disabled={busy} onClick={() => { setAuthKind('key') }}>
-            {t('form.auth.keyTab')}
-          </button>
-          <button type="button" role="radio" aria-checked={authKind === 'password'} style={segmentStyle(authKind === 'password')} disabled={busy} onClick={() => { setAuthKind('password') }}>
-            {t('form.auth.passwordTab')}
-          </button>
+      {/* ------------------------------------------------------ auth tabs */}
+      <div className={styles.field}>
+        <span className={styles.fieldLabel} id="dsw-auth-label">{t('form.label.auth')}</span>
+        <div className={styles.segmented} role="radiogroup" aria-labelledby="dsw-auth-label">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={authKind === 'key'}
+            className={authKind === 'key' ? `${styles.segment} ${styles.segmentOn}` : styles.segment}
+            disabled={busy}
+            onClick={() => { setAuthKind('key') }}
+          >{t('form.auth.keyTab')}</button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={authKind === 'password'}
+            className={authKind === 'password' ? `${styles.segment} ${styles.segmentOn}` : styles.segment}
+            disabled={busy}
+            onClick={() => { setAuthKind('password') }}
+          >{t('form.auth.passwordTab')}</button>
         </div>
+
         {authKind === 'key' ? (
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              style={inputStyle}
-              value={form.privateKeyPath}
-              placeholder={t('form.placeholder.keyPath')}
-              disabled={busy}
-              onChange={event => { setForm(prev => ({ ...prev, privateKeyPath: event.target.value })) }}
-            />
-            <input
-              type="password"
-              style={inputStyle}
-              value={form.passphrase}
-              placeholder={t('form.placeholder.keyPassphrase')}
-              disabled={busy}
-              onChange={event => { setForm(prev => ({ ...prev, passphrase: event.target.value })) }}
-            />
-          </div>
+          <>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor={FIELD_IDS.keyPath}>{t('form.label.keyPath')}</label>
+              <input
+                id={FIELD_IDS.keyPath}
+                className={styles.input}
+                value={form.privateKeyPath}
+                placeholder={t('form.placeholder.keyPath')}
+                disabled={busy}
+                onChange={event => { setForm(prev => ({ ...prev, privateKeyPath: event.target.value })) }}
+              />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor={FIELD_IDS.passphrase}>{t('form.label.keyPassphrase')}</label>
+              <input
+                id={FIELD_IDS.passphrase}
+                type="password"
+                className={styles.input}
+                value={form.passphrase}
+                disabled={busy}
+                onChange={event => { setForm(prev => ({ ...prev, passphrase: event.target.value })) }}
+              />
+            </div>
+          </>
         ) : (
-          <div style={{ marginTop: 8 }}>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor={FIELD_IDS.password}>{t('form.auth.passwordTab')}</label>
             <input
+              id={FIELD_IDS.password}
               type="password"
-              style={inputStyle}
+              className={styles.input}
               value={form.password}
               placeholder={form.id !== '' ? t('form.placeholder.password.edit') : t('form.placeholder.password.new')}
               disabled={busy}
               onChange={event => { setForm(prev => ({ ...prev, password: event.target.value })) }}
             />
-            <span style={{ display: 'block', fontSize: 11, opacity: 0.6, marginTop: 4 }}>
-              {t('form.password.hint.edit')}
-            </span>
+            <span className={styles.hint}>{t('form.password.hint.edit')}</span>
           </div>
         )}
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <button
-          type="button"
-          style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', fontSize: 12, opacity: 0.75, cursor: 'pointer', textAlign: 'left' }}
-          onClick={() => { setAdvanced(value => !value) }}
-          aria-expanded={advanced}
-        >
-          {advanced ? t('form.advanced.expanded') : t('form.advanced.collapsed')}
-        </button>
-        {advanced && (
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {authKind === 'password' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.credentialStore')}</span>
-                <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <input type="checkbox" checked={form.encryptPassword} disabled={busy}
-                    onChange={event => { setForm(prev => ({ ...prev, encryptPassword: event.target.checked })) }} />
-                  {t('form.encrypt.checkbox')}
-                </label>
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{t('form.label.hostKey')}</span>
-              <select
-                style={{ ...inputStyle, maxWidth: 260 }}
-                value={form.hostKeyMode}
+      {/* ------------------------------------------------------- advanced */}
+      <details
+        className={styles.disclosure}
+        open={advanced}
+        onToggle={event => { setAdvanced((event.currentTarget as HTMLDetailsElement).open) }}
+      >
+        <summary className={styles.disclosureSummary}>{t('form.advanced.label')}</summary>
+        <div className={styles.disclosureBody}>
+          {authKind === 'password' && (
+            <div className={styles.checkRow}>
+              <input
+                id="dsw-field-encrypt"
+                type="checkbox"
+                className={styles.checkbox}
+                checked={form.encryptPassword}
                 disabled={busy}
-                onChange={event => { setForm(prev => ({ ...prev, hostKeyMode: event.target.value as MachineFormState['hostKeyMode'] })) }}
-              >
-                <option value="">{t('form.hostKey.default')}</option>
-                <option value="accept-new">{t('form.hostKey.acceptNew')}</option>
-                <option value="verify">{t('form.hostKey.verify')}</option>
-                <option value="off">{t('form.hostKey.off')}</option>
-              </select>
+                onChange={event => { setForm(prev => ({ ...prev, encryptPassword: event.target.checked })) }}
+              />
+              <label className={styles.checkLabel} htmlFor="dsw-field-encrypt">{t('form.encrypt.checkbox')}</label>
             </div>
-            {/* AUDIT-6 (ADR-0020 D2): per-machine remote-command approval gate. */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.remoteApproval')}</span>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-                <select
-                  style={{ ...inputStyle, maxWidth: 260 }}
-                  value={form.remoteApproval}
-                  disabled={busy}
-                  onChange={event => { setForm(prev => ({ ...prev, remoteApproval: event.target.value as MachineFormState['remoteApproval'] })) }}
-                >
-                  <option value="off">{t('form.remoteApproval.off')}</option>
-                  <option value="human">{t('form.remoteApproval.human')}</option>
-                  <option value="ai">{t('form.remoteApproval.ai')}</option>
-                </select>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.remoteApproval.hint')}</span>
-              </div>
-            </div>
-            {/* REQ-I13 (ADR-0025): session /permission is the permission axis.
-                The machine remoteSandbox field is leftover and not shown as a
-                control so it cannot fight the composer chip. Deploy-core stays
-                on the settings list. */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.remoteSandbox')}</span>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('form.remoteSandbox.hint')}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 90, fontSize: 12, opacity: 0.8, flexShrink: 0, paddingTop: 8 }}>{t('form.label.jump')}</span>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    style={inputStyle}
-                    value={jumpText}
-                    placeholder={t('form.placeholder.jump')}
-                    disabled={busy}
-                    onChange={event => { setJumpText(event.target.value) }}
-                  />
-                  <button
-                    type="button"
-                    style={buttonStyle}
-                    disabled={busy || jumpText === ''}
-                    onClick={() => { setJumpText('') }}
-                  >{t('form.jump.clear')}</button>
-                </div>
-                {jumpSummary !== '' && (
-                  <span style={{ fontSize: 11, opacity: 0.7 }}>{jumpSummary}</span>
-                )}
-              </div>
-            </div>
+          )}
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor={FIELD_IDS.hostKey}>{t('form.label.hostKey')}</label>
+            <select
+              id={FIELD_IDS.hostKey}
+              className={`${styles.input} ${styles.select}`}
+              value={form.hostKeyMode}
+              disabled={busy}
+              onChange={event => { setForm(prev => ({ ...prev, hostKeyMode: event.target.value as MachineFormState['hostKeyMode'] })) }}
+            >
+              <option value="">{t('form.hostKey.default')}</option>
+              <option value="accept-new">{t('form.hostKey.acceptNew')}</option>
+              <option value="verify">{t('form.hostKey.verify')}</option>
+              <option value="off">{t('form.hostKey.off')}</option>
+            </select>
           </div>
-        )}
-      </div>
+
+          {/* AUDIT-6 (ADR-0020 D2): per-machine remote-command approval gate. */}
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor={FIELD_IDS.remoteApproval}>{t('form.label.remoteApproval')}</label>
+            <select
+              id={FIELD_IDS.remoteApproval}
+              className={`${styles.input} ${styles.select}`}
+              value={form.remoteApproval}
+              disabled={busy}
+              onChange={event => { setForm(prev => ({ ...prev, remoteApproval: event.target.value as MachineFormState['remoteApproval'] })) }}
+            >
+              <option value="off">{t('form.remoteApproval.off')}</option>
+              <option value="human">{t('form.remoteApproval.human')}</option>
+              <option value="ai">{t('form.remoteApproval.ai')}</option>
+            </select>
+            <span className={styles.hint}>{t('form.remoteApproval.hint')}</span>
+          </div>
+
+          {/* REQ-I13 (ADR-0025): session /permission is the permission axis.
+              The machine remoteSandbox field is leftover and not shown as a
+              control so it cannot fight the composer chip. Deploy-core stays
+              on the settings list. */}
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>{t('form.label.remoteSandbox')}</span>
+            <span className={styles.hint}>{t('form.remoteSandbox.hint')}</span>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor={FIELD_IDS.jump}>{t('form.label.jump')}</label>
+            <div className={styles.hostRow}>
+              <input
+                id={FIELD_IDS.jump}
+                className={styles.input}
+                value={jumpText}
+                placeholder={t('form.placeholder.jump')}
+                disabled={busy}
+                onChange={event => { setJumpText(event.target.value) }}
+              />
+              <button
+                type="button"
+                className={`${styles.secondaryButton} ${styles.small}`}
+                disabled={busy || jumpText === ''}
+                onClick={() => { setJumpText('') }}
+              >{t('form.jump.clear')}</button>
+            </div>
+            {jumpSummary !== '' && <span className={styles.hint}>{jumpSummary}</span>}
+          </div>
+        </div>
+      </details>
 
       {feedback !== null && (
         <div
           role={feedback.kind === 'error' ? 'alert' : 'status'}
-          style={{
-            fontSize: 12,
-            marginBottom: 8,
-            padding: '6px 10px',
-            borderRadius: 8,
-            border: '1px solid rgba(128,128,128,0.25)',
-            background: feedback.kind === 'success'
-              ? 'rgba(152,195,121,0.12)'
+          className={`${styles.feedback} ${
+            feedback.kind === 'success'
+              ? styles.feedbackSuccess
               : feedback.kind === 'error'
-                ? 'rgba(224,108,117,0.12)'
-                : 'rgba(128,128,128,0.08)',
-            color: feedback.kind === 'success' ? '#98c379' : feedback.kind === 'error' ? '#e06c75' : 'inherit',
-          }}
+                ? styles.feedbackError
+                : styles.feedbackInfo
+          }`}
         >
-          {feedback.kind === 'success' ? '✓ ' : feedback.kind === 'error' ? '✕ ' : '··· '}
-          {feedback.text}
+          {feedback.kind === 'success'
+            ? <CheckIcon className={styles.feedbackIcon} />
+            : feedback.kind === 'error'
+              ? <AlertIcon className={styles.feedbackIcon} />
+              : <SpinnerIcon className={styles.feedbackIcon} width={13} height={13} />}
+          <span>{feedback.text}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
-        <button type="button" style={buttonStyle} disabled={busy} onClick={() => { void runTest() }}>
-          {busyTask === 'test' ? t('form.test.testing') : t('form.test.button')}
-        </button>
+      <div className={mode === 'flow' ? `${styles.actions} ${styles.actionsFlow}` : styles.actions}>
         {mode === 'flow' && onCancel !== undefined && (
-          <button type="button" style={buttonStyle} disabled={busy} onClick={onCancel}>{t('form.cancel')}</button>
-        )}
-        {mode === 'settings' && (
-          <button type="button" style={buttonStyle} disabled={busy} onClick={resetForm}>
-            {initial?.id !== undefined ? t('form.clear.edit') : t('form.clear.empty')}
+          <button type="button" className={`${styles.secondaryButton} ${styles.small}`} disabled={busy} onClick={onCancel}>
+            {t('form.cancel')}
           </button>
         )}
-        <button
-          type="button"
-          style={primaryStyle}
-          disabled={busy}
-          onClick={() => { void runSave() }}
-        >
-          {busyTask === 'save' ? t('form.save.saving') : saveLabel}
-        </button>
+        <div className={styles.actionsTrailing}>
+          <button
+            type="button"
+            className={`${styles.secondaryButton} ${styles.small}`}
+            disabled={busy}
+            onClick={() => { void runTest() }}
+          >
+            {busyTask === 'test'
+              ? <><SpinnerIcon className={styles.configSpinner} width={13} height={13} /> {t('form.test.testing')}</>
+              : t('form.test.button')}
+          </button>
+          {mode === 'settings' && (
+            <button type="button" className={`${styles.secondaryButton} ${styles.small}`} disabled={busy} onClick={resetForm}>
+              {initial?.id !== undefined ? t('form.clear.edit') : t('form.clear.empty')}
+            </button>
+          )}
+          <button
+            type="button"
+            className={`${styles.primaryButton} ${styles.small}`}
+            disabled={busy}
+            onClick={() => { void runSave() }}
+          >
+            {busyTask === 'save' ? t('form.save.saving') : saveLabel}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -303,104 +303,111 @@ export function SideWorkspacesPanel(props: SideWorkspacesProps & { injected: Flo
           <button type="button" className={styles.iconButton} onClick={onClose} aria-label={t('side.close.label')}><CloseIcon width={14} height={14} /></button>
         </div>
 
-        {error !== '' ? <div className={styles.error}>{error}</div> : null}
+        {/*
+          The card is a host-styled dialog: its header owns the top padding and
+          `.body` owns the scroll, so the panel keeps its corner while a long
+          side-root list scrolls (the same split the settings panel uses).
+        */}
+        <div className={styles.body}>
+          {error !== '' ? <div className={styles.error}>{error}</div> : null}
 
-        {/* 1. main workspace — read-only, driven by the session's own cwd. */}
-        <div className={styles.section}>
-          <div className={styles.sectionTitle}>{t('side.main.heading')}</div>
-          {view.main.kind === 'remote'
-            ? (
-              <div className={styles.mainRow}>
-                <ServerIcon className={styles.rowIcon} width={13} height={13} />
-                <span className={styles.itemLabel}>{view.main.label}</span>
-                {machineEndpointOf(view.main) !== ''
-                  ? <span className={styles.rowHost}>{machineEndpointOf(view.main)}</span>
-                  : null}
-                <span className={styles.mainPath} title={view.main.path}>{view.main.path}</span>
-              </div>
-            )
-            : <div className={styles.empty}>{t('side.main.none')}</div>}
-        </div>
-
-        {/* 2. side roots — the REQ-I7 declaration list, behaviour unchanged. */}
-        <div className={`${styles.section} ${styles.divided}`}>
-          <div className={styles.sectionTitle}>{t('side.roots.heading')}</div>
-          <div className={styles.list}>
-            {busy && items.length === 0 ? <div className={styles.loading}>{t('side.loading')}</div> : null}
-            {items.length === 0 ? <div className={styles.empty}>{t('side.empty')}</div> : null}
-            {items.map(item => (
-              <div key={item.rootKey} className={styles.row}>
-                {item.kind === 'remote' ? <ServerIcon className={styles.rowIcon} width={13} height={13} /> : <FolderIcon className={styles.rowIcon} width={13} height={13} />}
-                {editing === item.rootKey
-                  ? (
-                    <input
-                      className={styles.input}
-                      value={editingLabel}
-                      onChange={(event) => setEditingLabel(event.target.value)}
-                      onKeyDown={(event) => { if (event.key === 'Enter') updateLabel(item.rootKey, editingLabel) }}
-                    />
-                  )
-                  : <span className={styles.itemLabel}>{item.label}</span>}
-                <span className={styles.rowPath} title={item.rootKey}>{item.rootKey}</span>
-                <button type="button" className={styles.renameButton} title={t('side.rename.title')} onClick={() => { setEditing(item.rootKey); setEditingLabel(item.label) }}>{t('side.rename.button')}</button>
-                <button type="button" className={`${styles.iconButton} ${styles.danger}`} title={t('side.remove.title')} onClick={() => removeSide(item.rootKey)}><TrashIcon width={13} height={13} /></button>
-              </div>
-            ))}
+          {/* 1. main workspace — read-only, driven by the session's own cwd. */}
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>{t('side.main.heading')}</div>
+            {view.main.kind === 'remote'
+              ? (
+                <div className={styles.mainRow}>
+                  <ServerIcon className={styles.rowIcon} width={13} height={13} />
+                  <span className={styles.itemLabel}>{view.main.label}</span>
+                  {machineEndpointOf(view.main) !== ''
+                    ? <span className={styles.rowHost}>{machineEndpointOf(view.main)}</span>
+                    : null}
+                  <span className={styles.mainPath} title={view.main.path}>{view.main.path}</span>
+                </div>
+              )
+              : <div className={styles.empty}>{t('side.main.none')}</div>}
           </div>
 
-          <div className={styles.form}>
-            <div className={styles.segment} role="group" aria-label={t('side.kind.label')}>
-              <button type="button" className={draftKind === 'local' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('local')}>{t('side.kind.local')}</button>
-              <button type="button" className={draftKind === 'remote' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('remote')}>{t('side.kind.remote')}</button>
+          {/* 2. side roots — the REQ-I7 declaration list, behaviour unchanged. */}
+          <div className={`${styles.section} ${styles.divided}`}>
+            <div className={styles.sectionTitle}>{t('side.roots.heading')}</div>
+            <div className={styles.list}>
+              {busy && items.length === 0 ? <div className={styles.loading}>{t('side.loading')}</div> : null}
+              {items.length === 0 ? <div className={styles.empty}>{t('side.empty')}</div> : null}
+              {items.map(item => (
+                <div key={item.rootKey} className={styles.row}>
+                  {item.kind === 'remote' ? <ServerIcon className={styles.rowIcon} width={13} height={13} /> : <FolderIcon className={styles.rowIcon} width={13} height={13} />}
+                  {editing === item.rootKey
+                    ? (
+                      <input
+                        className={styles.input}
+                        value={editingLabel}
+                        onChange={(event) => setEditingLabel(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === 'Enter') updateLabel(item.rootKey, editingLabel) }}
+                      />
+                    )
+                    : <span className={styles.itemLabel}>{item.label}</span>}
+                  <span className={styles.rowPath} title={item.rootKey}>{item.rootKey}</span>
+                  <button type="button" className={styles.renameButton} title={t('side.rename.title')} onClick={() => { setEditing(item.rootKey); setEditingLabel(item.label) }}>{t('side.rename.button')}</button>
+                  <button type="button" className={`${styles.iconButton} ${styles.danger}`} title={t('side.remove.title')} onClick={() => removeSide(item.rootKey)}><TrashIcon width={13} height={13} /></button>
+                </div>
+              ))}
             </div>
-            {draftKind === 'remote' ? (
-              <select className={`${styles.select} ${styles.selectWide}`} value={draftMachine} onChange={(event) => setDraftMachine(event.target.value)} aria-label={t('side.machine.label')}>
-                {machines.map(machine => <option key={machine.id} value={machine.id}>{machine.label}</option>)}
-              </select>
-            ) : null}
-            <div className={styles.fieldRow}>
-              <input
-                className={styles.input}
-                placeholder={draftKind === 'remote' ? t('side.draft.path.remote') : t('side.draft.path.local')}
-                value={draftPath}
-                onChange={(event) => setDraftPath(event.target.value)}
-              />
-              <button type="button" className={styles.button} onClick={() => setBrowseOpen(true)}>{t('side.browse')}</button>
-            </div>
-            <div className={styles.fieldRow}>
-              <input className={styles.input} placeholder={t('side.draft.labelPlaceholder')} value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} />
-              <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={addSide}>{t('side.mount')}</button>
+
+            <div className={styles.form}>
+              <div className={styles.segment} role="group" aria-label={t('side.kind.label')}>
+                <button type="button" className={draftKind === 'local' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('local')}>{t('side.kind.local')}</button>
+                <button type="button" className={draftKind === 'remote' ? `${styles.segmentButton} ${styles.segmentButtonOn}` : styles.segmentButton} onClick={() => setDraftKind('remote')}>{t('side.kind.remote')}</button>
+              </div>
+              {draftKind === 'remote' ? (
+                <select className={`${styles.select} ${styles.selectWide}`} value={draftMachine} onChange={(event) => setDraftMachine(event.target.value)} aria-label={t('side.machine.label')}>
+                  {machines.map(machine => <option key={machine.id} value={machine.id}>{machine.label}</option>)}
+                </select>
+              ) : null}
+              <div className={styles.fieldRow}>
+                <input
+                  className={styles.input}
+                  placeholder={draftKind === 'remote' ? t('side.draft.path.remote') : t('side.draft.path.local')}
+                  value={draftPath}
+                  onChange={(event) => setDraftPath(event.target.value)}
+                />
+                <button type="button" className={styles.button} onClick={() => setBrowseOpen(true)}>{t('side.browse')}</button>
+              </div>
+              <div className={styles.fieldRow}>
+                <input className={styles.input} placeholder={t('side.draft.labelPlaceholder')} value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} />
+                <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={addSide}>{t('side.mount')}</button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 3. connected machines — the same store `sw_connect` writes. */}
-        <div className={`${styles.section} ${styles.divided}`}>
-          <div className={styles.sectionTitle}>{t('side.conn.heading')}</div>
-          <div className={styles.hint}>{t('side.conn.hint')}</div>
-          {!busy && !view.anyConnected ? <div className={styles.empty}>{t('side.conn.empty')}</div> : null}
-          <div className={styles.list}>
-            {view.connections.map(row => (
-              <div key={row.id} className={styles.row}>
-                <ServerIcon className={styles.rowIcon} width={13} height={13} />
-                <span className={styles.itemLabel}>{row.label}</span>
-                {machineEndpointOf(row) !== '' ? <span className={styles.rowHost}>{machineEndpointOf(row)}</span> : null}
-                <span className={styles.spacer} />
-                {row.canToggle
-                  ? (
-                    <button
-                      type="button"
-                      className={row.connected ? `${styles.toggle} ${styles.toggleOn}` : styles.toggle}
-                      aria-pressed={row.connected}
-                      disabled={busy || toggling !== ''}
-                      onClick={() => { toggleConnection(row) }}
-                    >
-                      {toggling === row.id ? t('side.conn.busy') : row.connected ? t('side.conn.disconnect') : t('side.conn.connect')}
-                    </button>
-                  )
-                  : <span className={styles.badge}>{t('side.main.heading')}</span>}
-              </div>
-            ))}
+          {/* 3. connected machines — the same store `sw_connect` writes. */}
+          <div className={`${styles.section} ${styles.divided}`}>
+            <div className={styles.sectionTitle}>{t('side.conn.heading')}</div>
+            <div className={styles.hint}>{t('side.conn.hint')}</div>
+            {!busy && !view.anyConnected ? <div className={styles.empty}>{t('side.conn.empty')}</div> : null}
+            <div className={styles.list}>
+              {view.connections.map(row => (
+                <div key={row.id} className={styles.row}>
+                  <ServerIcon className={styles.rowIcon} width={13} height={13} />
+                  <span className={styles.itemLabel}>{row.label}</span>
+                  {machineEndpointOf(row) !== '' ? <span className={styles.rowHost}>{machineEndpointOf(row)}</span> : null}
+                  <span className={styles.spacer} />
+                  {row.canToggle
+                    ? (
+                      <button
+                        type="button"
+                        className={row.connected ? `${styles.toggle} ${styles.toggleOn}` : styles.toggle}
+                        aria-pressed={row.connected}
+                        disabled={busy || toggling !== ''}
+                        onClick={() => { toggleConnection(row) }}
+                      >
+                        {toggling === row.id ? t('side.conn.busy') : row.connected ? t('side.conn.disconnect') : t('side.conn.connect')}
+                      </button>
+                    )
+                    : <span className={styles.badge}>{t('side.main.heading')}</span>}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

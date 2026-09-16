@@ -144,12 +144,15 @@ test('F2: asSaveView carries the honest plaintext-fallback marker', () => {
 test('shared render (settings): full union field set with save + reset actions', () => {
   const html = markup('settings')
   for (const piece of [
-    '主机名 / 别名', '识别 ssh 配置 ▾', '端口', '用户名', '名称（可选）',
+    '主机名 / 别名', '识别 ssh 配置', '端口', '用户名', '名称（可选）',
     '默认工作区', '认证方式', '私钥文件', '私钥口令（可选）', '高级',
     '测试连接', '保存', '清空',
   ]) {
     assert.equal(html.includes(piece), true, `settings render must contain "${piece}"`)
   }
+  // The picker's dropdown affordance is an inline chevron glyph now, not the
+  // ' ▾' text suffix the field used to carry.
+  assert.equal(html.includes('识别 ssh 配置 ▾'), false)
   // The save label is plain 保存 (no 并浏览), and flow-only 取消 is absent.
   assert.equal(html.includes('保存并浏览'), false)
   assert.equal(html.includes('>取消<'), false)
@@ -158,7 +161,7 @@ test('shared render (settings): full union field set with save + reset actions',
 test('shared render (flow): same fields, 「保存并浏览」 + 取消, no 清空', () => {
   const html = markup('flow')
   for (const piece of [
-    '主机名 / 别名', '识别 ssh 配置 ▾', '端口', '用户名', '名称（可选）',
+    '主机名 / 别名', '识别 ssh 配置', '端口', '用户名', '名称（可选）',
     '默认工作区', '认证方式', '私钥文件', '高级', '测试连接', '保存并浏览', '取消',
   ]) {
     assert.equal(html.includes(piece), true, `flow render must contain "${piece}"`)
