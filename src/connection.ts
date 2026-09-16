@@ -275,7 +275,10 @@ export class SshConnection {
     // Tailscale/DERP-relayed paths routinely exceed 20s to ready (observed
     // 4–20s variance); OpenSSH has no client-side handshake cap at all.
     const readyTimeout = spec.readyTimeout ?? 45_000
-    const keepaliveInterval = spec.keepaliveInterval ?? 0
+    // A zero keepalive lets a silently dead socket (NAT idle recycling, sshd
+    // ClientAliveInterval) surface only as a bare ECONNRESET hours later;
+    // 30s x 3 finds it within ~90s instead (BUG-5, owner-approved 2026-09-16).
+    const keepaliveInterval = spec.keepaliveInterval ?? 30_000
     const keepaliveCountMax = spec.keepaliveCountMax ?? 3
     const parent: ResolvedConnectionHost = {
       host: spec.host,

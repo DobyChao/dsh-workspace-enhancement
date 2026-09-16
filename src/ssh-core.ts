@@ -183,10 +183,12 @@ export function forwardThrough(client: Client, host: string, port: number): Prom
  * Open the whole jump chain: each hop connects after the previous one, and the
  * last client is the target. On failure the already-opened clients are ended
  * (the original error owns the failure) and it is rethrown.
- * @param hosts - resolved hops in order (target last).
- * @param strict - whether to enforce {@link hostVerifierFor} on every hop.
- * @param knownHosts - trusted host keys applied when strict.
  * @param hostVerifier - optional per-hop verifier (TOFU); wins over strict.
+ * @param onClient - optional callback run with each client immediately after
+ * construction, BEFORE its connect attempt — the seam where a session owner
+ * attaches lifecycle listeners so no window exists in which an emitted
+ * `'error'` would be unobserved (an unobserved ssh2 `'error'` crashes the
+ * host process).
  * @returns the opened clients, target last.
  */
 export async function openChain(
@@ -194,6 +196,7 @@ export async function openChain(
   strict: boolean,
   knownHosts: readonly string[],
   hostVerifier?: (host: ResolvedConnectionHost, key: Buffer) => boolean,
+  onClient?: (client: Client) => void,
 ): Promise<Client[]> {
   const clients: Client[] = []
   try {
@@ -201,6 +204,7 @@ export async function openChain(
       const host = hosts[index] as ResolvedConnectionHost
       const previous = clients[index - 1]
       const client = new Client()
+      onClient?.(client)
       clients.push(client)
       const config = toConnectConfig(host, strict, knownHosts, hostVerifier)
       if (previous === undefined) {
@@ -392,6 +396,21 @@ export interface SshSessionOptions {
 }
 
 /**
+ * Observe one opened chain client for transport-level death. ssh2 emits a
+ * bare `'error'` (e.g. a post-auth ECONNRESET) on the Client; with no
+ * listener attached Node turns it into an uncaught exception that kills the
+ * host process. The `'close'` event covers silent socket death without an
+ * error. Both are terminal for the chain.
+ * @param client - a client returned by (or handed to) {@link openChain}.
+ * @param onDead - called at most once per client; the error is present for
+ * the `'error'` path and absent for a clean/silent close.
+ */
+export function watchChainClient(client: Client, onDead: (error?: Error) => void): void {
+  client.on('error', (error: Error) => { onDead(error) })
+  client.on('close', () => { onDead() })
+}
+
+/**
  * One authenticated SSH session state shared by the aggregate runtime and the
  * registry-owned connections: the opened jump chain, the lazily shared SFTP
  * channel, and the cached remote login environment, plus disposal. Order and
@@ -407,6 +426,8 @@ export class SshSession {
   private remoteEnvironment: Promise<Record<string, string>> | undefined
   private disposed = false
   private connected = false
+  /** Bumped on every chain open; death events from stale chains are ignored. */
+  private generation = 0
 
   constructor(
     private readonly hosts: readonly ResolvedConnectionHost[],
@@ -525,7 +546,7 @@ export class SshSession {
     return this.options.disposedMessage ?? 'SSH service is disposing'
   }
 
-  /** Whether the chain reached its ready state and has not been disposed. */
+  /** Whether the chain reached ready and has not been disposed or invalidated. */
   isConnected(): boolean {
     return this.connected && !this.disposed
   }
@@ -570,9 +591,51 @@ export class SshSession {
     const hosts = this.options.resolveHosts === undefined
       ? this.hosts
       : await this.options.resolveHosts(this.hosts)
-    const clients = await openChain(hosts, this.strict, this.knownHosts, this.options.hostVerifier)
+    const generation = ++this.generation
+    const clients = await openChain(
+      hosts,
+      this.strict,
+      this.knownHosts,
+      this.options.hostVerifier,
+      // Attached before the connect attempt (issue BUG-5): from this moment
+      // every `'error'` is observed, so a post-auth ECONNRESET can never
+      // reach Node as an uncaught exception. See {@link handleChainDeath}
+      // for the guard.
+      (client) => {
+        watchChainClient(client, (error) => { this.handleChainDeath(generation, error) })
+      },
+    )
     this.clients = clients
     this.connected = true
     return clients[clients.length - 1] as Client
+  }
+
+  /**
+   * Death handler for one opened chain client of the given generation. Only
+   * the current generation owns the session state: a failed connect attempt
+   * is torn down by openChain itself, a superseding open has already bumped
+   * the generation, and a dispose ends the clients deliberately — all three
+   * are ignored here.
+   */
+  private handleChainDeath(generation: number, error?: Error): void {
+    if (this.disposed || generation !== this.generation) return
+    this.invalidate(error)
+  }
+
+  /**
+   * Drop every cached artifact of a dead connection so the next call reopens:
+   * the ready promise, the shared SFTP channel (its own close/end handlers
+   * also self-invalidate), and the cached login environment. The dead clients
+   * are dropped too — a terminal `'error'`/`'close'` already ended them.
+   */
+  private invalidate(error?: Error): void {
+    if (!this.connected) return
+    this.connected = false
+    this.ready = undefined
+    this.sftp = undefined
+    this.sftpOpening = undefined
+    this.remoteEnvironment = undefined
+    this.clients = []
+    void error
   }
 }
