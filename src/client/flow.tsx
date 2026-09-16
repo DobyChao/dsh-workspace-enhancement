@@ -841,14 +841,17 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
               )}
             </section>
 
+            {/* Dashed full-width "add one more" affordance, the same the host's
+                own settings lists use — a floating accent circle is not part of
+                this design language. */}
             <button
               type="button"
               className={styles.sidebarAdd}
-              aria-label={t('flow.connection.new.label')}
               title={t('flow.connection.new.title')}
               onClick={() => { openForm() }}
             >
               <PlusIcon style={{ width: 14, height: 14 }} />
+              {t('flow.connection.new.label')}
             </button>
           </nav>
 
