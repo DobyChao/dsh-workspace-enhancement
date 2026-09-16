@@ -17,6 +17,7 @@
 |---|---|---|---|---|
 | REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
 | REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
+| UX-3 | 客户端 UI 统一到宿主 dsh 设计语言 | doing | P2 | 四类界面（设置页机器管理 / 添加工作区流 / 会话工作区 cockpit / 会话头部状态条）原先各自造配色与圆角（`rgba(128,128,128,*)` 灰、`#2563eb` 蓝、`--dshssh-*` 自造 token），与宿主设置面板脱节。改为全量走 `--dsw-*` token + 宿主 Modal/控件几何，深色主题自动跟随。UAT [`docs/uat/R28-ui-design-language.md`](./uat/R28-ui-design-language.md)。验收：浅/深两套主题下与宿主同语言；`npm run check` 绿 |
 
 ## 2. 已排期（todo，按优先级）
 
