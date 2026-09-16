@@ -6,13 +6,19 @@
  * audit / update sections — those belong to dsh-remote only and are
  * deliberately not ported.
  *
- * All data rides the package's `/dsw` RPC channel (machines.*, hostkey.forget);
- * all styles are inline.
+ * All data rides the package's `/dsw` RPC channel (machines.*, hostkey.forget).
+ *
+ * Styling lives in `settings.module.css` and resolves through the host's
+ * `--dsw-*` design tokens, so the page inherits the DeepSeek Harness settings
+ * vocabulary (16/24 title, 14/22 body, outlined row cards, one filled editor
+ * module, capsule buttons) and follows the dark theme automatically. The page
+ * renders inside the host panel's `.options` area and therefore adds no outer
+ * padding or surface of its own — see the stylesheet header.
  * @module dsh-workspace-enhancement/settings
  */
 
 import { useEffect, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
@@ -21,6 +27,12 @@ import type { RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
 import { coreStatusLabel } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
+import { AlertIcon, CheckIcon, ChevronIcon } from './icons.tsx'
+import styles from './settings.module.css'
+// The control vocabulary (capsule buttons, 32px fields) is owned by the form
+// stylesheet, which the editor hosted below already renders with — reusing it
+// here is what keeps the row actions and the form actions identical.
+import form from './machine-form.module.css'
 
 /** The `/dsw` RPC face injected by the client plugin. */
 export interface SettingsInjected {
@@ -128,6 +140,32 @@ export function savedBanner(view: MachineSaveView, t: TranslateNS<'dsw'> = zhBas
   return t('settings.saved', { label, fallback })
 }
 
+/** Core-status tone, so the chip can carry the host's semantic state color. */
+export type CoreTone = 'ok' | 'warn' | 'error'
+
+/** One machine's last core status: copy + the tone its chip renders in. */
+export interface CoreLine {
+  label: string
+  tone: CoreTone
+}
+
+/**
+ * Tone of a core.status / core.deploy payload: `ok` for a live core,
+ * `warn` for a machine whose architecture has no fenced core, and `error`
+ * for a plain failure or an RPC throw.
+ */
+export function coreToneOf(view: CoreStatusPayload): CoreTone {
+  if (view.ok === true) return 'ok'
+  const detail = typeof view.detail === 'string' ? view.detail : ''
+  return /linux|x86_64|amd64|uname/i.test(detail) ? 'warn' : 'error'
+}
+
+const CORE_TONE_CLASS: Record<CoreTone, string | undefined> = {
+  ok: styles.coreChipOk,
+  warn: styles.coreChipWarn,
+  error: styles.coreChipError,
+}
+
 /** The registers page component: machine list + shared form. */
 export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected & Partial<SettingsOwnerProps>): ReactNode {
   const t = tSeat ?? zhBaseline
@@ -137,7 +175,8 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
-  const [coreLines, setCoreLines] = useState<Record<string, string>>({})
+  const [coreLines, setCoreLines] = useState<Record<string, CoreLine>>({})
+  const [moreOpen, setMoreOpen] = useState('')
 
   const refresh = async (): Promise<void> => {
     try {
@@ -162,6 +201,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setBusy(true)
     setErr('')
     setMsg('')
+    setMoreOpen('')
     try {
       const result = await rpc('machines.remove', { id })
       const state = unwrap<{ machines: unknown; currentId: unknown; removed: boolean }>(result, t('settings.rpc.removeFailed'))
@@ -180,6 +220,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setBusy(true)
     setErr('')
     setMsg('')
+    setMoreOpen('')
     try {
       const result = await rpc('machines.setCurrent', { id })
       const state = unwrap<{ machines: unknown; currentId: unknown; ok: boolean }>(result, t('settings.rpc.switchFailed'))
@@ -197,6 +238,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setBusy(true)
     setErr('')
     setMsg('')
+    setMoreOpen('')
     try {
       const result = await rpc('hostkey.forget', { id: machine.id })
       unwrap<{ ok: boolean; host: string; port: number }>(result, t('settings.rpc.forgetKeyFailed'))
@@ -209,14 +251,15 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   }
 
   const refreshCore = async (id: string): Promise<void> => {
+    setMoreOpen('')
     try {
       const result = await rpc('core.status', { id })
       const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreStatusFailed'))
-      setCoreLines(current => ({ ...current, [id]: coreStatusLabel(view, t) }))
+      setCoreLines(current => ({ ...current, [id]: { label: coreStatusLabel(view, t), tone: coreToneOf(view) } }))
     } catch (error) {
       setCoreLines(current => ({
         ...current,
-        [id]: error instanceof Error ? error.message : String(error),
+        [id]: { label: error instanceof Error ? error.message : String(error), tone: 'error' },
       }))
     }
   }
@@ -225,11 +268,13 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setBusy(true)
     setErr('')
     setMsg('')
+    setMoreOpen('')
     try {
       const result = await rpc('core.deploy', { id })
       const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreDeployFailed'))
-      setCoreLines(current => ({ ...current, [id]: coreStatusLabel(view, t) }))
-      setMsg(coreStatusLabel(view, t))
+      const line: CoreLine = { label: coreStatusLabel(view, t), tone: coreToneOf(view) }
+      setCoreLines(current => ({ ...current, [id]: line }))
+      setMsg(line.label)
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -246,84 +291,136 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     void refresh()
   }
 
-  const buttonStyle: CSSProperties = {
-    padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(128,128,128,0.35)',
-    background: 'rgba(128,128,128,0.08)', color: 'inherit', cursor: 'pointer', fontSize: 12,
-  }
-  const boxStyle: CSSProperties = {
-    border: '1px solid rgba(128,128,128,0.35)', borderRadius: 8, background: 'rgba(128,128,128,0.06)', padding: 10,
-  }
-
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 860 }}>
-      <div style={{ fontSize: 15, fontWeight: 600 }}>{t('settings.title')}</div>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>
-        {t('settings.description')}
-      </div>
+    <div className={styles.section}>
+      <h1 className={styles.title}>{t('settings.title')}</h1>
+      <p className={styles.intro}>{t('settings.description')}</p>
 
-      {err !== '' ? <div style={{ color: '#e06c75', fontSize: 12 }}>{err}</div> : null}
-      {msg !== '' ? <div style={{ color: '#98c379', fontSize: 12 }}>{msg}</div> : null}
+      {err !== '' ? (
+        <div className={`${styles.banner} ${styles.bannerError}`} role="alert">
+          <AlertIcon className={styles.bannerIcon} />
+          <span>{err}</span>
+        </div>
+      ) : null}
+      {msg !== '' ? (
+        <div className={`${styles.banner} ${styles.bannerSuccess}`} role="status">
+          <CheckIcon className={styles.bannerIcon} />
+          <span>{msg}</span>
+        </div>
+      ) : null}
 
-      <div style={boxStyle}>
-        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{t('settings.machines.title')}</div>
+      <section className={styles.group}>
+        <h2 className={styles.groupTitle}>{t('settings.machines.title')}</h2>
         {machines.length > 0
-          ? machines.map(machine => (
-            <div key={machine.id} style={{ padding: '6px 0', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 220px', minWidth: 0, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-                    <span>{machine.label}</span>
-                    <code style={{ fontSize: 12, opacity: 0.8 }}>{machine.username}@{machine.host}:{machine.port}</code>
-                    {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain' ? ' 🗝' : ''}
-                    {machine.encryptFallback === true ? <span style={{ color: '#e6c07b', fontSize: 12 }}> {t('settings.machines.encryptFallbackBadge')}</span> : ''}
-                    {machine.remoteApproval !== 'off' ? <span style={{ fontSize: 12, opacity: 0.85 }}> {t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span> : ''}
-                    {machine.jumpHosts.length > 0 ? ' ⛳' : ''}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                    <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
-                    {machine.id === currentId ? <span style={{ color: '#98c379', fontSize: 12 }}>{t('settings.machines.currentBadge')}</span> : null}
-                    {coreLines[machine.id] !== undefined
-                      ? <span style={{ fontSize: 12, opacity: 0.75 }}>{coreLines[machine.id]}</span>
-                      : null}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
-                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => startEdit(machine)}>{t('settings.machines.edit')}</button>
-                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
-                  <button
-                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
-                    onClick={() => void useNow(machine.id)}
-                    disabled={machine.id === currentId || busy}
-                  >{t('settings.machines.setCurrent')}</button>
-                  <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
-                  <button
-                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
-                    onClick={() => void refreshCore(machine.id)}
-                    disabled={busy}
-                  >{t('settings.machines.coreStatus')}</button>
-                  <button
-                    style={{ ...buttonStyle, whiteSpace: 'nowrap' }}
-                    onClick={() => void deployCore(machine.id)}
-                    disabled={busy}
-                  >{t('settings.machines.deployCore')}</button>
-                </div>
-              </div>
-            </div>
-          ))
-          : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('settings.machines.empty')}</div>}
-      </div>
+          ? (
+            <ul className={styles.rows}>
+              {machines.map(machine => {
+                const isCurrent = machine.id === currentId
+                const core = coreLines[machine.id]
+                return (
+                  <li key={machine.id} className={styles.rowCard}>
+                    <div className={styles.rowHead}>
+                      <div className={styles.rowIdentity}>
+                        <span className={styles.rowName}>{machine.label}</span>
+                        {/* Configured traits ride with the name; live state and the
+                            endpoint belong to the facts line below, so the action
+                            cluster always keeps its place on the first line. */}
+                        {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain'
+                          ? <span className={styles.rowTag}>{t('settings.machines.keychainBadge')}</span>
+                          : null}
+                        {machine.jumpHosts.length > 0
+                          ? <span className={styles.rowTag}>{t('settings.machines.jumpBadge', { count: machine.jumpHosts.length })}</span>
+                          : null}
+                        {isCurrent ? <span className={styles.rowTag}>{t('settings.machines.currentBadge')}</span> : null}
+                      </div>
 
-      <div style={boxStyle}>
-        <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{editing !== null ? t('settings.form.editTitle') : t('settings.form.addTitle')}</div>
-        <MachineForm
-          key={editing?.id ?? 'blank'}
-          mode="settings"
-          rpc={rpc}
-          initial={editing ?? undefined}
-          t={t}
-          onSaved={handleSaved}
-        />
-      </div>
+                      <div className={styles.rowActions}>
+                        {!isCurrent && (
+                          <button
+                            type="button"
+                            className={`${form.secondaryButton} ${form.small}`}
+                            disabled={busy}
+                            onClick={() => void useNow(machine.id)}
+                          >{t('settings.machines.setCurrent')}</button>
+                        )}
+                        <button
+                          type="button"
+                          className={`${form.secondaryButton} ${form.small}`}
+                          disabled={busy}
+                          onClick={() => startEdit(machine)}
+                        >{t('settings.machines.edit')}</button>
+
+                        <details
+                          className={styles.more}
+                          open={moreOpen === machine.id}
+                          onToggle={event => {
+                            const isOpen = (event.currentTarget as HTMLDetailsElement).open
+                            setMoreOpen(current => (isOpen ? machine.id : current === machine.id ? '' : current))
+                          }}
+                        >
+                          <summary
+                            className={`${form.secondaryButton} ${form.small} ${styles.moreSummary} ${moreOpen === machine.id ? styles.moreSummaryOpen : ''}`}
+                            aria-label={t('settings.machines.more')}
+                          >
+                            {t('settings.machines.more')}
+                            <ChevronIcon className={styles.moreChevron} width={12} height={12} />
+                          </summary>
+                          <div className={styles.moreMenu} role="menu">
+                            <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
+                              onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
+                            <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
+                              onClick={() => void refreshCore(machine.id)}>{t('settings.machines.coreStatus')}</button>
+                            <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
+                              onClick={() => void deployCore(machine.id)}>{t('settings.machines.deployCore')}</button>
+                            <div className={styles.moreSep} />
+                            <button type="button" role="menuitem"
+                              className={`${styles.moreItem} ${styles.moreItemDanger}`}
+                              disabled={busy}
+                              onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+
+                    <div className={styles.rowMeta}>
+                      <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
+                      <span className={styles.rowEndpoint}>{machine.username}@{machine.host}:{machine.port}</span>
+                      {machine.encryptFallback === true
+                        ? <span className={`${styles.coreChip} ${styles.coreChipWarn}`}>{t('settings.machines.encryptFallbackBadge')}</span>
+                        : null}
+                      {machine.remoteApproval !== 'off'
+                        ? <span className={styles.coreChip}>{t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span>
+                        : null}
+                      {core !== undefined
+                        ? <span className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]}`} role="status">{core.label}</span>
+                        : null}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )
+          : <p className={styles.empty}>{t('settings.machines.empty')}</p>}
+      </section>
+
+      <section className={styles.group}>
+        <h2 className={styles.groupTitle}>
+          {editing !== null ? t('settings.form.editTitle') : t('settings.form.addTitle')}
+        </h2>
+        <div className={styles.editor}>
+          {editing !== null
+            ? <div className={styles.editorHead}><span className={styles.editorNote}>{t('settings.form.editNote')}</span></div>
+            : null}
+          <MachineForm
+            key={editing?.id ?? 'blank'}
+            mode="settings"
+            rpc={rpc}
+            initial={editing ?? undefined}
+            t={t}
+            onSaved={handleSaved}
+          />
+        </div>
+      </section>
     </div>
   )
 }

@@ -1,0 +1,121 @@
+/*
+ * Connection status badge — DeepSeek Harness design language.
+ *
+ * The tri-state dot reuses the host's semantic state tokens, so a machine
+ * reads the same green/red here as a configured provider does in the host's
+ * own models section. Sizes follow the settings caption scale (12/18 label,
+ * 11px chip).
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  min-width: 0;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dotActive {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dotOffline {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.dotUnknown {
+  background: var(--dsw-alias-label-caption);
+}
+
+.label {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.labelBusy {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* "重新连接" sits inside a dense meta row, so it takes the compact capsule. */
+.retry {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 11px;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.retry:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.retry:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.retry:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Header-strip status chip: the session-header action row's dense capsule, so
+   it sits beside the「工作区」trigger as a peer. The dot + label reuse the
+   `.dot` / `.label` rules above. */
+.statusChip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.statusChip:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.statusChip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.statusChip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.statusChipIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}

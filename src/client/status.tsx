@@ -16,6 +16,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DswKey } from '../locale/index.ts'
 import { lookup } from '../locale/index.ts'
 import type { WireResult } from './index.ts'
+import styles from './status.module.css'
 
 /**
  * zh baseline translate: the design's backward-compatible default for pure
@@ -222,15 +223,27 @@ export const CONN_STATE_LABEL_KEY: Record<ConnState, DswKey> = {
   offline: 'status.offline',
 }
 
+/**
+ * Literal dot colors for the DOM row-badge layer (`row-badges.ts` /
+ * `remote-status-entry.tsx`), which injects into host DOM nodes and therefore
+ * cannot address a CSS module class. These mirror the semantic tokens the
+ * React badge resolves through `status.module.css`
+ * (`--dsw-alias-state-success-primary` = green-500 in both themes,
+ * `--dsw-alias-label-caption` for the unknown state); `offline` takes the
+ * red-400 step so the dot stays legible on both panel fills.
+ */
 export const CONN_STATE_COLOR: Record<ConnState, string> = {
-  unknown: '#8a8f98',
-  active: '#98c379',
-  offline: '#e06c75',
+  unknown: '#8A8F98',
+  active: '#22C55E',
+  offline: '#F25A5A',
 }
 
 /**
  * The tri-state badge: colored dot + label, and (unless `compact`) the
  * "re-check and try to connect" button shown for unknown/offline entries.
+ * Styling lives in `status.module.css` and rides the host's semantic state
+ * tokens, so a machine here reads the same green/red as a configured provider
+ * does in the host's own settings sections.
  */
 export function ConnStatusBadge({
   id, rpc, center, compact = false, t: tSeat,
@@ -248,29 +261,23 @@ export function ConnStatusBadge({
   const state = view?.state ?? 'unknown'
   const label = busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])
   const actionTitle = t('status.retryAction.title')
+  const dotClass = `${styles.dot} ${
+    state === 'active' ? styles.dotActive : state === 'offline' ? styles.dotOffline : styles.dotUnknown
+  }`
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle' }}>
+    <span className={styles.badge}>
       <span
+        className={dotClass}
         title={view?.message !== undefined && view.message !== '' ? view.message : t(CONN_STATE_LABEL_KEY[state])}
-        style={{ width: 8, height: 8, borderRadius: '50%', background: CONN_STATE_COLOR[state], display: 'inline-block', flexShrink: 0 }}
       />
-      <span style={{ fontSize: 12, opacity: 0.85, whiteSpace: 'nowrap' }}>{label}</span>
+      <span className={busy ? `${styles.label} ${styles.labelBusy}` : styles.label}>{label}</span>
       {state !== 'active' && (
         <button
           type="button"
           title={actionTitle}
           disabled={busy}
+          className={styles.retry}
           onClick={() => { void reconnect() }}
-          style={{
-            padding: compact ? '1px 5px' : '2px 6px',
-            borderRadius: 6,
-            border: '1px solid rgba(128,128,128,0.35)',
-            background: 'rgba(128,128,128,0.08)',
-            color: 'inherit',
-            cursor: busy ? 'default' : 'pointer',
-            fontSize: compact ? 10 : 11,
-            whiteSpace: 'nowrap',
-          }}
         >{compact ? t('status.retryAction.compact') : t('status.retryAction.full')}</button>
       )}
     </span>
