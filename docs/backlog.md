@@ -17,12 +17,12 @@
 |---|---|---|---|---|
 | REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
 | REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
-| UX-3 | 客户端 UI 统一到宿主 dsh 设计语言 | doing | P2 | 四类界面（设置页机器管理 / 添加工作区流 / 会话工作区 cockpit / 会话头部状态条）原先各自造配色与圆角（`rgba(128,128,128,*)` 灰、`#2563eb` 蓝、`--dshssh-*` 自造 token），与宿主设置面板脱节。改为全量走 `--dsw-*` token + 宿主 Modal/控件几何，深色主题自动跟随。UAT [`docs/uat/R28-ui-design-language.md`](./uat/R28-ui-design-language.md)。验收：浅/深两套主题下与宿主同语言；`npm run check` 绿 |
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-5 | ssh2 Client 生命周期无 error 监听：ready 后 ECONNRESET 打挂宿主进程 | done | P1 | 已核实属实（issue #19，2026-09-16 对 master 复核）。根因：`connectReady()`（src/ssh-core.ts:158-170）ready 一到即摘掉唯一 error 监听，此后全仓库对 ssh2 `Client` 无任何 error 监听；`keepaliveInterval` 默认 0（runtime.ts:178、connection.ts:278）→ 空闲回收/keepalive 超时以裸 ECONNRESET 冒出 → Node 对无人监听的 'error' 抛未捕获异常 → **整个 dsh web 宿主退出**（非仅插件失效）。同源缺陷：`isConnected()`（ssh-core.ts:529）只在 dispose 翻 false，静默断链后 registry/UI 仍报「已连接」。**已修**：① `openChain` 增 `onClient` 接缝，`new Client()` 后连接前即挂 `watchChainClient`（error/close）→ `SshSession.handleChainDeath`（generation + disposed 守卫）→ `invalidate` 清 ready/sftp/remoteEnvironment，下次调用自动重连；② keepalive 默认 0 → 30 000×3（用户 2026-09-16 拍板修 BUG-5 时一并落）；③ `isConnected` 现反映静默断链。测试 `test/ssh-session-lifecycle.test.ts`；boot-smoke PASS（悬挂为 INFRA-12 既有问题）。验收残余：真机 ready 后强杀连接（ss -K / 停 sshd）观察宿主存活 + 状态点转离线，随下轮 lab 验证 |
 | BUG-4 | 宿主项目根探测铸出祖先 jail | todo | P1 | 进远程会话时 `dsh-agent-instructions`（及 skills）静默 `ctx.fs.resolve` 往上找 `.git`，轨迹无 Git 卡片。`resolve`/`lstat` 把探测路径当 `cwd` 会铸 `/home`、`$HOME` 等可写 jail。事实 [`host-silent-fs.md`](./host-silent-fs.md)；键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §6.3。验收：无 `.git` 的会话只留会话根（+ 机器登记 workspace），不得 `--bind` 祖先 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 真 drift（INFRA-14 修复后首次现形，非假警报）：alpha 通道 typecheck 红——`SubprocessHandle`（`CoreSubprocessHandle`）、`SubprocessTerminalHandle`（`SshTerminalHandle`，src/terminal.ts:28）、`SubprocessRuntime` 新增抽象成员 `terminalEnvironment`（`SshSubprocessRuntime`，src/subprocess.ts:338）。证据 run 34950619028、issue #7；行号属 master e96284a。0.1.6 升 rc 前须收口 |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
@@ -36,6 +36,7 @@
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `showsRemoteStatus` 零调用者；渲染看 `remote-status-entry.tsx`。修法：`remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 用 `ctx.sessionPersistence` 拼带历史的新 cwd。核三件事：列表是否出现、能否 resume、标题/投影。产出 ADR（可行 → 工作区生命周期；不可行 → fork 留档 + 新会话） |
+| UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | todo | P3 | `src/client/status.tsx` 的 `CONN_STATE_COLOR` 仍是 JS 硬编码 hex（#8A8F98/#22C55E/#F25A5A）且被 `row-badges.ts` 消费（行内状态点走内联色），与 UX-3「状态点走 state-* token」不完全一致。评审证据：PR #20。验收：状态点颜色全部来自宿主语义 token，双主题核对 |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | **往后排**（2026-09-13：先做核心）。走 `conversation.view`（`ADR-0016`；`ADR-0017` §7）。tab id 进 localStorage，发布后不可改名。不要改走右侧面板 Tab |
 | UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | **根因随 ADR-0025 消失**（不再钉 `{danger, ask}`）。待 lab 确认 chip 回到 Workspace write 后改 `done`。勿再补 `remote-full` 除非仍 Custom |
 
@@ -79,6 +80,7 @@
 | REQ-I3 | 会话副工作区 | done | — | R5；权限档已随 `REQ-I7` 退役 |
 | REQ-I4 | 远程焦点时模型认知 | done | — | R4 |
 | REQ-I6 | 系统提示英文 + 按需注入 | done | P2 | `ADR-0014`。[`R13-req-i6-and-recon.md`](./rounds/R13-req-i6-and-recon.md) |
+| UX-3 | 客户端 UI 统一到宿主 dsh 设计语言 | done | P2 | PR #20 合并（squash 883a99f）。四类界面全量走 `--dsw-*` token + 宿主几何；评审确认 CSS module 内联进 `lib/client.js`、词典 370/370、无宿主半夹带。**真机尾巴**：UAT [`docs/uat/R28-ui-design-language.md`](./uat/R28-ui-design-language.md)（浅/深主题 12 步，第 11 步旧配色哨兵）待跑；`CONN_STATE_COLOR` 收紧拆 `UX-4` |
 | REQ-I7 | 副工作区权限档退役 | done | P1 | `ADR-0019`。[`R20-req-i7-permission-retirement.md`](./rounds/R20-req-i7-permission-retirement.md) |
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | 代码完成，`ADR-0022`。[`R24-session-connections-and-remote-fence.md`](./rounds/R24-session-connections-and-remote-fence.md)。**待用户**：[`uat/R24-req-i9-remote-runner.md`](./uat/R24-req-i9-remote-runner.md)（G1–G3；G1 为否则该主机类退化为审批门 + 低权用户） |
 | REQ-I11 | 会话级机器连接（吸收 SEC-5） | done | P1 | 代码完成，`ADR-0021`。同上 R24 报告。**待用户**：[`uat/R24-req-i11-session-connections.md`](./uat/R24-req-i11-session-connections.md) |
