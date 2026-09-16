@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-15 09:08 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-16 16:52 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `master` / `e96284a` |
-| HEAD 提交 | `fix(ci): make the drift closure installs sticky and range-aware` (2026-09-15) |
+| 分支 / HEAD | `docs/BUG-5-live-verification` / `86f9d6f` |
+| HEAD 提交 | `fix(ssh): observe chain client death and default a live keepalive (#21)` (2026-09-17) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 42 |
-| 单测用例（静态计数） | 540 |
+| 单测文件 | 43 |
+| 单测用例（静态计数） | 545 |
 | E2E 场景文件 | 8 |
 | ADR | 25 |
-| 轮次报告 | 29 |
+| 轮次报告 | 30 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 15 |
+| `todo` | 16 |
 | `doing` | 2 |
 | `blocked` | 6 |
-| `done` | 37 |
+| `done` | 39 |
 | `shipped` | 6 |
 | `dropped` | 7 |
 
