@@ -17,6 +17,7 @@
 |---|---|---|---|---|
 | REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
 | REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
+| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/INFRA-15-core-artifact-distribution`（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -37,6 +38,7 @@
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `showsRemoteStatus` 零调用者；渲染看 `remote-status-entry.tsx`。修法：`remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 用 `ctx.sessionPersistence` 拼带历史的新 cwd。核三件事：列表是否出现、能否 resume、标题/投影。产出 ADR（可行 → 工作区生命周期；不可行 → fork 留档 + 新会话） |
 | UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | todo | P3 | `src/client/status.tsx` 的 `CONN_STATE_COLOR` 仍是 JS 硬编码 hex（#8A8F98/#22C55E/#F25A5A）且被 `row-badges.ts` 消费（行内状态点走内联色），与 UX-3「状态点走 state-* token」不完全一致。评审证据：PR #20。验收：状态点颜色全部来自宿主语义 token，双主题核对 |
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 设计已议定（2026-09-15，本轮对话）：① 机器连接成功且围栏档≠off → 后台 job 自动 `core.status`→`core.deploy`（artifact 已随 npm 分发，秒级）；未就绪期间 fail-closed 降级审批门，不阻断功能。② 升级走版本化目录并存：新版本健康探测（version 门 + profile 探针）通过才翻 `current` symlink，不过不翻、旧目录保留回滚。③ 模型路径首次调用遇「核心未安装」→ 走 `ctx.approval` 发明确标注的安装审批（人类机器弹人 / AI 机器 answerer 放行），把 ADR-0024「不偷偷装」红线转译为显式一键同意。**红线**：无用户来源同意绝不上传执行二进制。键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §3；依赖 INFRA-15（npm 分发 artifact）与 AUDIT-6 面。排期：INFRA-15 合并后下一轮 |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | **往后排**（2026-09-13：先做核心）。走 `conversation.view`（`ADR-0016`；`ADR-0017` §7）。tab id 进 localStorage，发布后不可改名。不要改走右侧面板 Tab |
 | UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | **根因随 ADR-0025 消失**（不再钉 `{danger, ask}`）。待 lab 确认 chip 回到 Workspace write 后改 `done`。勿再补 `remote-full` 除非仍 Custom |
 

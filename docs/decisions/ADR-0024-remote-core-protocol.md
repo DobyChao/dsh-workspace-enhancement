@@ -9,9 +9,10 @@
 
 ## 0. 结论
 
-v1 核心是 Linux x86_64 上一个可校验 tarball（`dsh-core` + 捆绑 `bwrap`/`rg`）。
+v1 核心是 Linux x86_64 上一个可校验 tarball，**只含第一方 `dsh-core`**；第三方工具按
+§3 的来源策略在部署时落地（`bwrap` 由远端发行版提供，`rg` 缺失时才从官方 release 取）。
 宿主经 SSH exec 拉起 `dsh-core serve`，进程**自己**按 `remoteSandbox` profile
-re-exec 进捆绑 bwrap；之后 stdin/stdout 上的成帧 JSON RPC 就是该 jail 里的
+re-exec 进解析到的 bwrap；之后 stdin/stdout 上的成帧 JSON RPC 就是该 jail 里的
 syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 SFTP**。
 `remoteSandbox: off` 保持今天的 SFTP + 裸 spawn。
 
@@ -21,19 +22,22 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
    （不是「一机一条」）。档位不是 `off` 时，`ssh exec`
    `~/.dsh-core/current/dsh-core serve --sandbox <mode> [--workspace <root>]`。
    进程身份与磁盘产物、SSH 连接的分层见 §6。
-2. 核心若尚未 jail（环境变量 `DSH_CORE_JAILED` 未置），用捆绑 `bin/bwrap` 加上
-   `core/profile.json` 的向量 re-exec **自身**，stdin/stdout 继承。`--unshare-pid`
+2. 核心若尚未 jail（环境变量 `DSH_CORE_JAILED` 未置），用**解析到的** bwrap 加上
+   `core/profile.json` 的向量 re-exec **自身**，stdin/stdout 继承。解析顺序：
+   `DSH_CORE_BWRAP` → 与核心同目录的 `bin/bwrap`（若运维手动放了一份）→ 远端
+   `PATH` 上的 `bwrap`（见 §3）。`--unshare-pid`
    让宿主 `ps` 上每条 serve 显示 **3 个 PID**（外层 bwrap / PID-ns 内层 bwrap /
    `dsh-core serve`）；这是 bubblewrap 的固定树，不是每次 RPC 新起三份。见
    [`../host-silent-fs.md`](../host-silent-fs.md)。
-3. 之后 `spawn` 不再包 bwrap：子进程在同一 mount namespace。捆绑 `rg` 靠
-   `PATH` 前置 `.../bin`。
+3. 之后 `spawn` 不再包 bwrap：子进程在同一 mount namespace。`bin/rg`（只在远端本来
+   没有 `rg`、且宿主成功取回官方件时才存在）靠 `PATH` 前置 `.../bin`，否则回退到
+   远端自己的 `rg`。
 4. 核心挂了且档位不是 `off`：fs（含 browse）与 spawn **一起**
    `SANDBOX_UNAVAILABLE`，禁止读面退回 SFTP。
 5. 审批门仍看**未包装** argv（ADR-0022 §2.2）。插件侧围栏从「包装 argv」变成
    「确保核心会话活着」，返回原 argv。
 6. 交互终端在围栏档仍拒绝（ADR-0022 §2.4）。
-7. `remoteSandboxRunner` 不再被读取；runner 永远是捆绑 `bwrap`。
+7. `remoteSandboxRunner` 不再被读取；runner 由核心自己解析（见 §1.2 / §3）。
 
 ## 2. 线协议
 
@@ -56,8 +60,33 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 
 ## 3. 产物与部署
 
-- 工件：`dsh-core-<version>-linux-x64.tar.gz`（`dsh-core`、`bin/bwrap`、`bin/rg`、
-  `MANIFEST.json`）。不入库；`.gitignore` 覆盖 `core/dist/`。
+> **2026-09-16 政策修订（INFRA-15 收口，所有者拍板）**：本仓库**不再分发任何第三方
+> 二进制**——既不随 npm 包，也不进 git 历史。（原方案把 linux-x64 `bwrap`+`rg` 入库并
+> 打进 tarball，被否：来源说不清、许可要跟着走、二进制进 git 不可回收。）
+
+- 工件：`dsh-core-<version>-linux-x64.tar.gz`（**只含** `dsh-core` + `MANIFEST.json`）。
+  不入库；`.gitignore` 覆盖 `core/dist/` 与 `core/vendor/`。
+- **版本/架构单一来源**：`core/artifact.json`（第一方）与 `core/vendor.json`（第三方
+  pin），由 `scripts/sync-core-manifest.mjs` 生成 `src/core-artifact.ts` 与
+  `src/core-vendor-pins.ts`；`npm run check:static` 第 14 道闸门拦漂移。
+- **`bwrap`：远端自带，永不由我们提供**（上游只发源码 tarball，没有官方二进制；
+  `containers/bubblewrap` 的 release 资产只有 `.tar.xz` + `.sha256sum`）。核心按
+  §1.2 的顺序解析；**找不到就拒绝**这次围栏操作（`SANDBOX_UNAVAILABLE`），
+  文案给出各发行版安装命令与「临时改用 `danger-full-access`」两条出路——
+  宿主进程**不崩**、其他工具照常。宿主侧探测发生在部署时（状态备注）与围栏探针时。
+- **`rg`：远端优先，缺失才由宿主取官方件**。部署前探 `command -v rg`：有 ⇒ 什么都不推；
+  没有 ⇒ 宿主从 **ripgrep 官方 release**（`BurntSushi/ripgrep`，`x86_64-unknown-linux-musl`
+  静态件）下载 → 校验 `core/vendor.json` 里 pin 的 sha256（与官方 `.sha256` 资产交叉核对）
+  → 解出 `rg` → 缓存到 `$DSH_HOME/cache/dsw-core-vendor/rg-<version>-<arch>/rg`
+  （附 `.sha256` sidecar）→ 与核心一起 SFTP 推送到 `~/.dsh-core/<version>/bin/rg`。
+  网络：`curl`，尊重 `https_proxy`/`http_proxy`；`DSW_CORE_VENDOR_PROXY` 覆盖代理，
+  `DSW_CORE_VENDOR_BASE_URL` 换镜像前缀，`DSW_CORE_VENDOR_OFFLINE=1` 禁网。
+  **取不回来不算部署失败**：核心照装，状态备注给出官方地址 + 期望 sha256 + 缓存路径，
+  运维可手放文件或直接在远端装 ripgrep，再部署一次即可。
+- **npm 分发含工件**（INFRA-15）：`package.json` `files` 含 `core/dist/`，
+  `prepack` 守卫（`scripts/ensure-core.mjs`）保证打包前工件必在，
+  `npm run check` 在 pack 冒烟前构建 tarball——通过 npm 安装的实例开箱即可
+  `core.deploy`，且包里**没有**第三方二进制。
 - 远端：`~/.dsh-core/<version>/` + `current` 符号链接。不需要 root。
 - 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`，**不**在模型
   第一次调用时偷偷装。
