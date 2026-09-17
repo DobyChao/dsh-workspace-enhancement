@@ -64,9 +64,14 @@ chip 仍显示「工作区内修改」。官方 Write 只要打进会话那个 j
 
 `ADR-0024` §6.2：jail 根不是操作路径。browse 的「当前目录」只当 `path` 匹配已有根，**不得**变成 `--workspace`。
 
-缺口：混合门面把这次 `resolve`/`lstat` 的**被查路径**（或它的 `dirname`）塞进 hub 的 **`cwd`**。`resolveCoreWorkspace` 规定：**`cwd` 不在已声明根里就铸一个兄弟 workspace-write jail**；`path` 才不会铸。
+缺口（**BUG-4，2026-09-17 已修**）：混合门面把这次 `resolve`/`lstat` 的**被查路径**（或它的 `dirname`）塞进 hub 的 **`cwd`**。`resolveCoreWorkspace` 规定：**`cwd` 不在已声明根里就铸一个兄弟 workspace-write jail**；`path` 才不会铸。
 
 静默探测没有会话 cwd，于是每一层祖先都变成新的 `--bind <祖先> <祖先>`。`gitWorkingTreeOf` 只是把 `…/.git` 剥成工作树字符串，**不会**在磁盘上找 git；名字像 git，实际是「cwd 字符串怎么变成 jail 根」。
+
+**修法**：`CoreRoutingFileSystem.resolve` / `.lstat` 现在只把探测目标当 **`path`** 交给 hub
+（cwd 由 `delegate` 回落到发起会话自己的 cwd）。路由不受影响——机器 id 来自
+`resolveSshCwd`，与 workspace 选择无关；`fs.stat`/`readText` 等本来就只传 `path`。
+回归：`test/core-routing.test.ts` 的「BUG-4」用例（拿掉修复即红）。
 
 ## 4. 怎么确认（不要看聊天）
 
@@ -80,6 +85,10 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
 
 改名 `~/.dsh-core/current` **不会**杀掉已 exec 的 serve（argv0 已是解析后的 `0.2.0-dev/dsh-core`）。要停：重连该机、重启 lab 宿主、或杀那些 serve。空闲 10 分钟无 RPC 也会被 hub 关掉。
 
-## 5. 修法（`BUG-4`，尚未做）
+## 5. 修法（`BUG-4`，2026-09-17 已落地）
 
 `resolve` / `lstat` 与 write/stat 一样：铸根只认会话 cwd / 已声明根；探测路径只当 `path`。祖先目录不得成为 workspace-write `--workspace`。验收：无 `.git` 的远程会话开一次，远端只该有会话根（外加机器登记工作区若有独立 `require`），不得出现 `/home`、`$HOME` 这种更宽的 bind。
+
+已落地的是**宿主侧这一半**（探测不再铸根）；**远端实机那一半仍待验**：远程会话开一次，
+`ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'` 只该见会话根 + 机器登记 workspace。
+lab 现有机器都带 `.git` 的会话根，需造一个无 `.git` 的目录来复现原症状。

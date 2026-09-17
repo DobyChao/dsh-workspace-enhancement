@@ -23,7 +23,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-4 | 宿主项目根探测铸出祖先 jail | todo | P1 | 静默 `ctx.fs.resolve` 逐层找 `.git` ⇒ 祖先目录（`/home`、`$HOME`…）变成可写 jail，轨迹里无 Git 卡片。事实、爆发证据与修法 [`host-silent-fs.md`](./host-silent-fs.md)；工作区键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §6.2–§6.3。验收：无 `.git` 的会话只留会话根（+ 机器登记 workspace），不得 `--bind` 祖先 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | `@deepseek-ai/dsh-subprocess@0.1.6-alpha.1` 加宽四处 ⇒ `CoreSubprocessHandle` / `SshTerminalHandle` / `SshSubprocessRuntime` 编译失配（drift run 34950619028、issue #7）。成员表与**收口注意清单** [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 通道回绿 + `check:static`/`typecheck`/`test:agent`/boot smoke 全绿；`0.1.6` 升 rc 前收口 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | 官方在 `0.1.6-alpha.1` 首发 SSH 家族（`dsh-ssh`/`dsh-fs-ssh`/`dsh-sandbox-ssh`/`dsh-subprocess-ssh`）；事实、helper 模型、差异矩阵 [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md)。**待所有者**：§5 定位拍板（A/B/C）。代理侧：scope 新包巡检（哨兵只装固定 13 包、看不见新能力包）。验收：§5 有结论 + 巡检有落地机制（或如实写「人工 + 频率」） |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
@@ -69,6 +68,7 @@
 | INFRA-10 | 上游 alpha 通道预警 | done | — | 现为 next/alpha 两通道 + 自动 issue。见 `compatibility.md` §3.1 |
 | BUG-2 | 缺 `processPathFromHostPath` → 贴图 `TRANSPORT` | done | P1 | [`R14-BUG-2-fix.md`](./rounds/R14-BUG-2-fix.md)。随 `PUB-3` 发布 |
 | BUG-3 | 本机目录接错 `workspaces` 服务 | done | P1 | 改接 `uiWorkspace`。[`R15-BUG-3-local-directory.md`](./rounds/R15-BUG-3-local-directory.md) |
+| BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 根因：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling jail ⇒ 每个祖先各成一份 `--workspace` bind。改为只传 `path`（`CoreRoutingFileSystem`），探测落回会话根 / 机器登记 workspace。事实与证据 [`host-silent-fs.md`](./host-silent-fs.md)；回归 `test/core-routing.test.ts`「BUG-4」（拿掉修复即红）。**真机尾巴**：无 `.git` 的远程会话开一次，`ps` 只该见会话根（+ 机器登记 workspace），不得出现 `/home`、`$HOME` |
 | BUG-5 | ssh2 死链打挂宿主（无 error 监听 + keepalive 默认 0） | done | P1 | 根因、修法、回归与**真机验收全在** [`R29-bug5-ssh-error-listener.md`](./rounds/R29-bug5-ssh-error-listener.md)。代码随 PR #21（squash 86f9d6f）进 master |
 | FIX-1 | `Session.events` 移除 | done | — | 改 `ownEvents()`。`compatibility.md` §2 |
 | FIX-2 | 用户名输入溢出 13px | done | — | `machine-form.tsx` 补 `minWidth: 0` |

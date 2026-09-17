@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-17 08:46 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-17 09:28 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/INFRA-15-core-sourcing` / `3eb3a4c` |
-| HEAD 提交 | `feat(core): use the remote's own bwrap/rg and fetch ripgrep officially` (2026-09-17) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/INFRA-15-core-sourcing` / `9a0f47b` |
+| HEAD 提交 | `docs(core): record the INFRA-15 tool-sourcing policy` (2026-09-17) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
 | 单测文件 | 44 |
-| 单测用例（静态计数） | 555 |
+| 单测用例（静态计数） | 556 |
 | E2E 场景文件 | 8 |
 | ADR | 26 |
 | 轮次报告 | 31 |
@@ -28,10 +28,10 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 18 |
+| `todo` | 17 |
 | `doing` | 3 |
 | `blocked` | 6 |
-| `done` | 39 |
+| `done` | 40 |
 | `shipped` | 6 |
 | `dropped` | 7 |
 

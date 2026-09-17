@@ -20,6 +20,7 @@ import { createCoreHub } from '../src/core-hub.ts'
 import type { CoreHub } from '../src/core-hub.ts'
 import { coreServeCommand } from '../src/core-hub.ts'
 import { SshFileSystemEngine } from '../src/filesystem.ts'
+import { MixedFileSystem } from '../src/mixed.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps, RemoteSandboxMachineFace } from '../src/remote-sandbox-fence.ts'
@@ -226,6 +227,45 @@ test('createCoreHub: browse path does not mint a workspace-write jail', async ()
   await hub.require('c1', { path: '/tmp', policy: 'workspace-write' })
   assert.deepEqual(opened, ['/work'])
   hub.peek('c1')?.close()
+})
+
+test('BUG-4: the silent project-root probe never mints an ancestor jail', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-bug4-probe-'))
+  mkdirSync(join(root, 'work'), { recursive: true })
+  const t = transport()
+  const ctx = ctxWith(t)
+  // A confined session: this is the mode whose `resolveCoreWorkspace` call mints
+  // a jail root when it is handed a cwd outside every declared root.
+  ctx.provide('sandboxPolicy', { resolve: () => 'workspace-write' })
+  const opened: Array<string | undefined> = []
+  const clients: CoreClient[] = []
+  const hub = createCoreHub(ctx, {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      const client = pair(root, 'workspace-write', request.workspace)
+      clients.push(client)
+      return client
+    },
+  })
+  const exploding = new Proxy({}, {
+    get: () => () => { throw new Error('SFTP consulted on a fenced path') },
+  }) as unknown as SshFileSystemEngine
+  const routing = new CoreRoutingFileSystem(ctx, exploding, hub)
+  const mixed = new MixedFileSystem(exploding, routing, () => undefined)
+
+  // `dsh-agent-instructions` / `dsh-skill-filesystem` walk up from the session
+  // cwd asking about `<dir>/.git` and pass NO cwd (docs/host-silent-fs.md §1).
+  // Routing that probe target through `cwd` used to mint a workspace-write jail
+  // for every ancestor (`/home/uuz`, `/home`, …); it must stay a `path`.
+  for (const probe of ['/home/uuz/ssh-test-lab/.git', '/home/uuz/.git', '/home/.git', '/.git']) {
+    await mixed.resolve(`ssh://c1${probe}`).catch(() => undefined)
+    await mixed.lstat(`ssh://c1${probe}`).catch(() => undefined)
+  }
+  assert.deepEqual([...new Set(opened)], ['/work'],
+    'only declared roots (machine workspace / session cwd) may be bound')
+  for (const client of clients) client.close()
 })
 
 test('createCoreHub: read-only is one serve regardless of cwd', async () => {

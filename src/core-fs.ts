@@ -489,9 +489,14 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
 
   async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     const route = resolveSshCwd(this.ctx, opts?.cwd)
+    // BUG-4: a probe offers the TARGET as `path`, never as `cwd`. A cwd that is
+    // not an already-declared root mints a sibling workspace-write jail
+    // (`resolveCoreWorkspace`), so routing the silent project-root probe's own
+    // path through `cwd` turned every ancestor into its own `--workspace` bind
+    // (`/home/uuz`, `/home`, …). `path` only ever matches a declared root.
     return (await this.delegate(route.connectionId, {
       ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
-      cwd: route.cwd,
+      path: posix.resolve(route.cwd, path),
     })).resolve(path, opts)
   }
 
@@ -501,9 +506,11 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
 
   async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
     const route = resolveSshCwd(this.ctx, opts?.cwd)
+    // BUG-4: same rule as `resolve` — the probe target is a `path`, and the
+    // delegate falls back to the initiator session's cwd for the jail.
     return (await this.delegate(route.connectionId, {
       ...(signal !== undefined ? { signal } : {}),
-      cwd: route.cwd,
+      path: posix.resolve(route.cwd, path),
     })).lstat(path, opts, signal)
   }
 
