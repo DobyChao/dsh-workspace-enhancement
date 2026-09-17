@@ -92,3 +92,8 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
 已落地的是**宿主侧这一半**（探测不再铸根）；**远端实机那一半仍待验**：远程会话开一次，
 `ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'` 只该见会话根 + 机器登记 workspace。
 lab 现有机器都带 `.git` 的会话根，需造一个无 `.git` 的目录来复现原症状。
+
+**核心缺失时这条探测会拒绝整轮**（不是静默降级）：围栏档下 `fs.resolve`/`fs.stat` 同样走核心，
+核心不在就 fail-closed，宿主在会话起步（首条上下文、还没有任何事件落盘）就会失败。这是
+`ADR-0025` §2.9 的**拍板行为**（所有者 2026-09-17，选项 A：降级会让项目根识别静默失效），
+拒绝文案由 `fenceMissingHint` 分诊到「去 `core.deploy`」，而不是「装 bubblewrap」。

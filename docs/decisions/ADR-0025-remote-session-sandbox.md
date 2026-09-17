@@ -53,6 +53,13 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 7. **交互终端**在会话围栏档仍拒绝。danger 是否放开未围栏 PTY 本轮不做。
 8. **拒写**映射为 `FS_SANDBOX_DENIED`，文案含上游 `sandboxDenialMarker`，以便官方
    fs 工具走同一条提权重试。
+9. **核心缺失时，只读的静默探测同样 fail-closed**（所有者 2026-09-17 拍板，选项 A）。
+   宿主首次上下文装配会跑上游的项目根探测（`dsh-agent-instructions` /
+   `dsh-skill-filesystem` 的 `findProjectRoot` → `fs.resolve` + `fs.stat`，**不带 cwd**），
+   围栏档下它也要走核心；核心不在就拒绝整轮，**不降级成「标记未找到」**——
+   降级会让 `AGENTS.md` / skills 的项目根识别静默失效（"看起来没事其实错了"）。
+   拒绝文案必须点名真正的缺失物（`fenceMissingHint`：detail 里是 `dsh-core` ⇒ 提示
+   `core.deploy`；只有出现 runner 名字才提示装 bubblewrap；都认不出则不给建议）。
 
 ## 3. 不做
 
