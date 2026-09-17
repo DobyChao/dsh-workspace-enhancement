@@ -428,3 +428,39 @@ test('createCoreHub: placeholder cwd mints a POSIX workspace-write jail', async 
   assert.deepEqual(opened, ['/home/uuz/ssh-test-lab'])
   hub.close('c1')
 })
+
+test('BUG-6: core.status answers from the artifact, never from a live session', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-bug6-'))
+  const base = transport()
+  // The artifact probe (`~/.dsh-core/current/dsh-core version`) is driven per call.
+  let probe: { exitCode: number; signal: null; stdout: string; stderr: string } = {
+    exitCode: 0,
+    signal: null,
+    stdout: '{"version":"0.2.0-dev","arch":"linux-x86_64","proto":1,"caps":["fs"]}',
+    stderr: '',
+  }
+  const probing = { ...base, exec: async () => probe } as unknown as SshTransport
+  const hub = createCoreHub(ctxWith(probing), {
+    idleMs: 0,
+    deps: deps('workspace-write', probing),
+    open: async () => pair(root, 'workspace-write', '/work'),
+  })
+  const live = await hub.require('c1', { cwd: '/work', policy: 'workspace-write' })
+  const installed = await hub.status('c1')
+  assert.equal(installed.ok, true)
+  assert.equal(installed.sandbox, 'workspace-write')
+
+  // The operator deletes `~/.dsh-core/<version>/` while the exec'd serve is
+  // still alive (it outlives its own directory until the idle kill).
+  probe = {
+    exitCode: 127,
+    signal: null,
+    stdout: '',
+    stderr: 'bash: /home/uuz/.dsh-core/current/dsh-core: No such file or directory',
+  }
+  const after = await hub.status('c1')
+  assert.equal(after.ok, false, 'a cached serve must not report a deleted artifact as installed')
+  assert.match(String(after.detail), /No such file or directory/)
+  assert.match(String(after.detail), /cached core session is still running/)
+  live.close()
+})

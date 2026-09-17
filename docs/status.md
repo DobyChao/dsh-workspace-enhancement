@@ -10,16 +10,16 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/INFRA-15-core-sourcing` / `9a0f47b` |
-| HEAD 提交 | `docs(core): record the INFRA-15 tool-sourcing policy` (2026-09-17) |
-| 与远端 | 2 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/INFRA-15-core-sourcing` / `38e2833` |
+| HEAD 提交 | `fix(core): stop fs probes from minting ancestor jails` (2026-09-17) |
+| 与远端 | 3 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
 | 单测文件 | 44 |
-| 单测用例（静态计数） | 556 |
+| 单测用例（静态计数） | 557 |
 | E2E 场景文件 | 8 |
 | ADR | 26 |
 | 轮次报告 | 31 |
@@ -31,7 +31,7 @@
 | `todo` | 17 |
 | `doing` | 3 |
 | `blocked` | 6 |
-| `done` | 40 |
+| `done` | 41 |
 | `shipped` | 6 |
 | `dropped` | 7 |
 

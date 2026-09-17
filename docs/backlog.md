@@ -70,6 +70,7 @@
 | BUG-3 | 本机目录接错 `workspaces` 服务 | done | P1 | 改接 `uiWorkspace`。[`R15-BUG-3-local-directory.md`](./rounds/R15-BUG-3-local-directory.md) |
 | BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 根因：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling jail ⇒ 每个祖先各成一份 `--workspace` bind。改为只传 `path`（`CoreRoutingFileSystem`），探测落回会话根 / 机器登记 workspace。事实与证据 [`host-silent-fs.md`](./host-silent-fs.md)；回归 `test/core-routing.test.ts`「BUG-4」（拿掉修复即红）。**真机尾巴**：无 `.git` 的远程会话开一次，`ps` 只该见会话根（+ 机器登记 workspace），不得出现 `/home`、`$HOME` |
 | BUG-5 | ssh2 死链打挂宿主（无 error 监听 + keepalive 默认 0） | done | P1 | 根因、修法、回归与**真机验收全在** [`R29-bug5-ssh-error-listener.md`](./rounds/R29-bug5-ssh-error-listener.md)。代码随 PR #21（squash 86f9d6f）进 master |
+| BUG-6 | 删掉核心后 `core.status` 仍显示「已安装」 | done | P2 | 根因：`CoreHub.status` 优先问**活着的** `dsh-core serve`（`hello`），只有没有活会话时才探磁盘 ⇒ 删掉 `~/.dsh-core/<ver>/` 后缓存会话仍报 installed（最长撑到 idle 回收）。改为**只以磁盘工件为准**（`dsh-core version`）；missing 且仍有活会话时在 detail 里说明。`web.ts` 的 `core.status` 不再二次探测。回归 `test/core-routing.test.ts`「BUG-6」（负向对照已跑）。**真机尾巴**：删核心后状态立即变未安装 |
 | FIX-1 | `Session.events` 移除 | done | — | 改 `ownEvents()`。`compatibility.md` §2 |
 | FIX-2 | 用户名输入溢出 13px | done | — | `machine-form.tsx` 补 `minWidth: 0` |
 | FIX-3 | pack 含 source map | done | — | `files` 加 `!**/*.map` |
