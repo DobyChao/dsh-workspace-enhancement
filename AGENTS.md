@@ -48,11 +48,21 @@
 改完代码后**至少**跑 `npm run check:static && npm run typecheck && npm run test:agent`；
 能跑 shell 时跑完整 `npm run check`。
 
-**改了 `src/` 必须 `npm run build`**：`lib/` 是 gitignore 的产物，而**以 `link:` 装本仓库的 profile
-直接加载 `lib/`**——不 build 就重启，跑的仍是旧代码（2026-09-09 实锤：进程跑着 6 小时前的 build，
-REQ-I6 没生效，见 `INFRA-11`）。**2026-09-11 起产品 profile（3080）已不再安装本插件**，唯一以
-`link:` 装本仓库的实例是隔离 lab `C:\Users\Admin\.dsh-lab`（`DSH_HOME=.dsh-lab`，端口 50599）；
-真机验证一律在那里做，`.tmp/engineer-host/lab-home-probe.ps1` 是现成的探针（不删 home、自带清理）。
+**改了 `src/` 必须 `npm run build`**：`lib/` 是 gitignore 的产物，历史上以 `link:` 装的 profile
+直接加载 `lib/`——不 build 就重启，跑的仍是旧代码（2026-09-09 实锤：进程跑着 6 小时前的 build，
+REQ-I6 没生效，见 `INFRA-11`）。**2026-09-11 起产品 profile（3080）已不再安装本插件**。
+
+**2026-09-17 起：lab 校验用 `npm pack` 的 tarball 安装**（与真实发包场景一致），不再是 `link:`：
+
+```powershell
+$env:DSH_HOME = 'C:\Users\Admin\.dsh-lab'      # ← 必须先设！否则 dsh 默认写到产品 home ~/.dsh（踩过）
+dsh plugin --profile web remove dsh-workspace-enhancement
+dsh plugin --profile web add <repo>\.tmp\dsh-workspace-enhancement-<ver>.tgz
+```
+
+⇒ 改完代码要进 lab，固定动作是 **`npm run build` → `npm pack` → 上面的 remove/add → 重启 lab**；
+`npm run build` 本身**不再影响 lab**。真机验证一律在 lab（`DSH_HOME=.dsh-lab`、端口 50599）；
+`.tmp/engineer-host/lab-home-probe.ps1` 是现成的探针（不删 home、自带清理）。
 闸门在「`lib/` 早于 `src/`」时打 WARN（非阻断，CI 无 `lib/` 时跳过）。
 
 **改了测试或跨平台代码，push 前必须跑 Linux 复验**（Windows 全绿抓不到 Linux-only 假设）：

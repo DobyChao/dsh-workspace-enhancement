@@ -15,7 +15,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| INFRA-16 | npm 包泄漏：`build:core` 的 staging 目录随包发布 | doing | P1 | **0.2.0 发布前实测抓到**：`files: ["core/dist"]` 把 `build:core` 留在 `core/dist/staging/` 的**未打包裸 ELF（4.72 MB）+ 重复 MANIFEST** 一起发出去（整包 5.68 MB）。修法：`build:core` 收尾删 staging；`files` 收窄为 `core/dist/*.tar.gz`；`pack-smoke` 新增闸门「`core/dist` 下只允许工件」（负向对照已跑：退回旧写法即 FAIL 并点名 `core/dist/staging/dsh-core`）。修复后实测 **135 文件 / 3.03 MB**，`core/` 只剩工件 |
+| — | （空）下一个 `doing` 项开工时填这里 | — | — | 2026-09-17：`INFRA-16` 随 PR #24 收口、`PUB-5` 已发布，本区暂时清空 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -99,6 +99,8 @@
 | PUB-2 | 3080 换装 0.1.2 | done | P1 | 当时 `link:` 安装；3080 现已不装本插件 |
 | PUB-3 | 发布 0.1.3 | shipped | P1 | OIDC；`dependencies` 仅 `ssh2` |
 | PUB-4 | 发布 0.1.4 | shipped | P1 | tag `v0.1.4`；OIDC Approve 后 npm 已上。不含 `REQ-I5`（预定 0.2.0）。档案 [`rounds/R25-v0.1.4-release.md`](./rounds/R25-v0.1.4-release.md) |
+| PUB-5 | 发布 0.2.0 | shipped | P1 | tag `v0.2.0` → `8074528`（含 PR #24 打包修复）；release run 35244617848 经 owner Approve 后 OIDC 发布。registry 复核：`latest=0.2.0`、`dist.fileCount=135`（修好的打包，非 137）、包内工件 MANIFEST 与实际二进制 sha256 一致。档案 [`rounds/R30-v0.2.0-release.md`](./rounds/R30-v0.2.0-release.md) |
+| INFRA-16 | npm 包泄漏：`build:core` 的 staging 随包发布 | done | P1 | 打 tag 前实测抓到：`files: core/dist` 把 `build:core` 留在 `core/dist/staging/` 的未打包裸 ELF（4.72 MB）+ 重复 MANIFEST 一起收进包（整包 137 文件 / 5.68 MB）。修随 **PR #24**（squash `8074528`）：`build:core` 收尾删 staging、`files` 收窄 `core/dist/*.tar.gz`、`pack-smoke` 新增「`core/dist` 下只允许工件」闸门（负向对照已跑）。发布后 registry 复核 `dist.fileCount=135` |
 | UPSTREAM-1 | `readByteRange` | done | P1 | [`R16-upstream-1-byte-range.md`](./rounds/R16-upstream-1-byte-range.md)。双家族窗口随后被 `UPSTREAM-4` 收窄 |
 | UPSTREAM-2 | rc.2 槽位重排侦察 | done | P2 | `ADR-0017`；我方槽位未破。读取器 `npm run slots` |
 | UPSTREAM-3 | 0.1.5 运行时兼容（F1/F2/F3） | done | P0 | `ADR-0018`。[`R19-f2-shared-api-channel.md`](./rounds/R19-f2-shared-api-channel.md) |

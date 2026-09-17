@@ -46,6 +46,11 @@
   坑清单见 `e2e/README.md` §7。
 - 目标实例永远是**隔离 lab**（`scripts/dev-lab.ps1`，`DSH_HOME=.dsh-lab`，端口 50599）；
   `playwright.config.ts` 里有守卫，baseURL 指向 3080 直接抛错。
+- **lab 的插件安装形态（2026-09-17 起）**：`npm pack` 出的 tarball，不再是 `link:`——
+  与用户装 npm 包一致。改完代码进 lab 的固定动作是
+  `npm run build` → `npm pack` → `$env:DSH_HOME='C:\Users\Admin\.dsh-lab'` →
+  `dsh plugin --profile web remove dsh-workspace-enhancement` → `add <repo>\.tmp\<tgz>` → 重启 lab。
+  **`DSH_HOME` 不设会写进产品 home `~/.dsh`（3080 的 profile）**，2026-09-17 实锤踩过一次。
 - **lab 需要 URL token**：`dsh web` 打印 `http://127.0.0.1:50599/?token=<token>`，直接访问 `/` 是 401。
   `e2e/setup/lab-reachability.ts` 自动兑换 token（303 + HttpOnly Cookie）并写成 storage state，
   也可用 `DSW_E2E_TOKEN` 显式指定。
