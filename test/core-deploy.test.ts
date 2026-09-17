@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { assertLinuxAmd64, coreInstallScript, manifestIssues } from '../src/core-deploy.ts'
+import { assertLinuxAmd64, coreInstallScript, forcedMissingTools, manifestIssues, remoteToolsPresent } from '../src/core-deploy.ts'
 import { coreStatusLabel } from '../src/client/core-status.ts'
 
 test('assertLinuxAmd64: linux + x86_64/amd64 accepted', () => {
@@ -73,4 +73,20 @@ test('manifestIssues: malformed manifests are refused', () => {
   assert.equal(manifestIssues('nope').length, 1)
   assert.equal(manifestIssues({}).length, 1)
   assert.equal(manifestIssues({ files: { 'dsh-core': 'deadbeef' } }).length, 1)
+})
+
+test('remoteToolsPresent: the probe decides, unless the dev knob forces a name', () => {
+  const stdout = 'RG\nBWRAP\n'
+  assert.deepEqual(remoteToolsPresent(stdout, []), { rg: true, bwrap: true })
+  assert.deepEqual(remoteToolsPresent(stdout, ['rg']), { rg: false, bwrap: true })
+  assert.deepEqual(remoteToolsPresent('', ['bwrap']), { rg: false, bwrap: false })
+  assert.deepEqual(remoteToolsPresent('RG\n', []), { rg: true, bwrap: false })
+  assert.deepEqual(remoteToolsPresent('', []), { rg: false, bwrap: false })
+})
+
+test('forcedMissingTools: trims, lowercases and de-duplicates the dev knob', () => {
+  assert.deepEqual(forcedMissingTools(''), [])
+  assert.deepEqual(forcedMissingTools('   '), [])
+  assert.deepEqual(forcedMissingTools(' rg , BWRAP ,rg'), ['rg', 'bwrap'])
+  assert.deepEqual(forcedMissingTools('bwrap'), ['bwrap'])
 })

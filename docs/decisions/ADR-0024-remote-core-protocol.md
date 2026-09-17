@@ -81,6 +81,9 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   （附 `.sha256` sidecar）→ 与核心一起 SFTP 推送到 `~/.dsh-core/<version>/bin/rg`。
   网络：`curl`，尊重 `https_proxy`/`http_proxy`；`DSW_CORE_VENDOR_PROXY` 覆盖代理，
   `DSW_CORE_VENDOR_BASE_URL` 换镜像前缀，`DSW_CORE_VENDOR_OFFLINE=1` 禁网。
+  **开发开关** `DSW_CORE_VENDOR_FORCE_MISSING=rg,bwrap`：让部署把列出的工具当作远端
+  **没有**（否则 fetch+推送那半只能在真缺该工具的机器上跑到）；部署 detail 会自报该
+  开关生效，以免被误读成真实探测结果。
   **取不回来不算部署失败**：核心照装，状态备注给出官方地址 + 期望 sha256 + 缓存路径，
   运维可手放文件或直接在远端装 ripgrep，再部署一次即可。
 - **npm 分发含工件**（INFRA-15）：`package.json` `files` 含 `core/dist/`，

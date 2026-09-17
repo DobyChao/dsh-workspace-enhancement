@@ -136,6 +136,37 @@ export function remoteToolProbe(): string {
 }
 
 /**
+ * Development aid: names the deploy should treat as ABSENT on the remote even
+ * when the probe finds them (`DSW_CORE_VENDOR_FORCE_MISSING=rg,bwrap`). The
+ * fetch-and-push branch is otherwise only reachable on a host that genuinely
+ * lacks the tool, which makes it painful to exercise locally.
+ *
+ * @returns the forced names, lowercased, without blanks or duplicates.
+ */
+export function forcedMissingTools(raw: string | undefined = process.env.DSW_CORE_VENDOR_FORCE_MISSING): readonly string[] {
+  if (raw === undefined) return []
+  const names = raw.split(',').map(name => name.trim().toLowerCase()).filter(name => name !== '')
+  return [...new Set(names)]
+}
+
+/**
+ * Which of the optional tools the remote already has, honouring
+ * {@link forcedMissingTools}.
+ *
+ * @param probeStdout - the output of {@link remoteToolProbe}.
+ * @param forced - names to treat as absent regardless of the probe.
+ */
+export function remoteToolsPresent(
+  probeStdout: string,
+  forced: readonly string[] = forcedMissingTools(),
+): { rg: boolean; bwrap: boolean } {
+  return {
+    rg: !forced.includes('rg') && /^RG$/m.test(probeStdout),
+    bwrap: !forced.includes('bwrap') && /^BWRAP$/m.test(probeStdout),
+  }
+}
+
+/**
  * Deploy the linux-x64 tarball to the login user's `~/.dsh-core/<version>/`.
  *
  * Never fails just because an optional tool is unavailable: the core is still
@@ -169,8 +200,11 @@ export async function deployCore(
 
   const notes: string[] = []
   const probe = await transport.exec(remoteToolProbe(), execOptions)
-  const remoteHasRg = /^RG$/m.test(probe.stdout)
-  const remoteHasBwrap = /^BWRAP$/m.test(probe.stdout)
+  const forced = forcedMissingTools()
+  const { rg: remoteHasRg, bwrap: remoteHasBwrap } = remoteToolsPresent(probe.stdout, forced)
+  if (forced.length > 0) {
+    notes.push(`DSW_CORE_VENDOR_FORCE_MISSING=${forced.join(',')} (development aid: the probe above is not authoritative)`)
+  }
 
   const vendors: VendorFile[] = []
   if (!remoteHasRg) {

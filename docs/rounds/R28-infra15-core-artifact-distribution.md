@@ -56,6 +56,12 @@
 - **负向对照**：sha256 不匹配 → 拒绝且**不写缓存**；`DSW_CORE_VENDOR_OFFLINE=1`
   → fail-closed 且文案含官方地址；bwrap 缺失 → 错误携带 `SANDBOX_UNAVAILABLE` +
   安装命令 + `danger-full-access` 出路。
+- **本地怎么模拟「自动装 rg」**（不然 fetch+推送那半只能在真缺 rg 的机器上跑到）：
+  ① 宿主级真下载：临时 `DSH_HOME` + `DSW_CORE_VENDOR_PROXY`，直接调 `ensureRgVendor()`；
+  ② lab 端到端：起 lab 前设 `DSW_CORE_VENDOR_FORCE_MISSING=rg`（部署会自报该开关），
+  清掉 `$DSH_HOME/cache/dsw-core-vendor/` 后点「部署核心」，detail 会写
+  `fetched rg …`（首次）或 `provisioned rg … from the host cache`（命中缓存），
+  再在远端核对 `~/.dsh-core/current/bin/rg --version`。
 
 ## 遗留
 
