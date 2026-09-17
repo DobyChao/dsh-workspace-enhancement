@@ -10,9 +10,9 @@
 | package.json 版本 | `0.1.4` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/INFRA-15-core-sourcing` / `38e2833` |
-| HEAD 提交 | `fix(core): stop fs probes from minting ancestor jails` (2026-09-17) |
-| 与远端 | 3 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/core-sourcing-and-bugfixes` / `f1ced46` |
+| HEAD 提交 | `fix(core): report core status from the installed artifact` (2026-09-17) |
+| 与远端 | 4 ahead / 0 behind origin/master |
 
 ## 质量
 

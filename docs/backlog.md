@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
 | REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
-| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/INFRA-15-core-artifact-distribution`（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
+| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/core-sourcing-and-bugfixes`（同一 PR 还带 BUG-4 / BUG-6）（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
 
 ## 2. 已排期（todo，按优先级）
 
