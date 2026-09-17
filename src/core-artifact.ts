@@ -4,7 +4,7 @@
  */
 
 /** Artifact/hello version of the remote core (ADR-0024). */
-export const CORE_ARTIFACT_VERSION = '0.2.0-dev'
+export const CORE_ARTIFACT_VERSION = '0.2.0'
 
 /** Filename arch segment of the core tarball. */
 export const CORE_ARTIFACT_ARCH = 'linux-x64'

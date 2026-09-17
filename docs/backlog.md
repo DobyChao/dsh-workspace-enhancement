@@ -15,8 +15,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
-| REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
 | INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/core-sourcing-and-bugfixes`（同一 PR 还带 BUG-4 / BUG-6）（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
 
 ## 2. 已排期（todo，按优先级）
@@ -24,6 +22,8 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | `@deepseek-ai/dsh-subprocess@0.1.6-alpha.1` 加宽四处 ⇒ `CoreSubprocessHandle` / `SshTerminalHandle` / `SshSubprocessRuntime` 编译失配（drift run 34950619028、issue #7）。成员表与**收口注意清单** [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 通道回绿 + `check:static`/`typecheck`/`test:agent`/boot smoke 全绿；`0.1.6` 升 rc 前收口 |
+| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | todo | P2 | 现状：围栏档下**任何** fs 调用都要核心；核心起不来（未部署/缺 bwrap/被删）⇒ 会话起步的静默探测（上游 `findProjectRoot` → `fs.resolve`+`fs.stat`，无 cwd）抛穿上下文装配，**连纯聊天都进不去**（2026-09-17 lab 实测）。方案：读面（`resolve`/`lstat`/`stat`/`readText`/`streamText`/`listDir`）可见降级到 SFTP；写面（`writeText`/`editText`）与 spawn/terminal **保持 fail-closed**；降级必须可见（状态面板 + 模型提示写明「围栏未生效」）。需改 `ADR-0025` §2.1 并在 §2.9 记修订。验收：缺 bwrap 的机器上 workspace-write 会话能正常对话与读；写/bash 仍被拒且文案指向装 bwrap 或 `core.deploy` |
+| BUG-7 | 跨传输 `version` 算法不一致 ⇒ 读→写 CAS 误报 | todo | P2 | SFTP 用 `ssh:sha256([完整路径,size,mtime(ms),mode])`；Go 核心用 `basename:hex(RFC3339Nano mtime):hex(size 低 16 位,mode)` ⇒ **两条传输对同一文件算出的 version 不同**，而上游 `dsh-fs-observation-policy` 以 `replaceIfVersion(prior.version)` 做 CAS、未观察过则 `FS_NOT_OBSERVED`。后果：会话中途切模式（danger 读 → workspace-write 写）会误报「文件已变/需重读」；核心那份用 basename + 16 位 size 本身也偏弱。修法二选一统一成「完整路径 + sha256 + 毫秒 mtime」+ 跨传输回归 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | 官方在 `0.1.6-alpha.1` 首发 SSH 家族（`dsh-ssh`/`dsh-fs-ssh`/`dsh-sandbox-ssh`/`dsh-subprocess-ssh`）；事实、helper 模型、差异矩阵 [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md)。**待所有者**：§5 定位拍板（A/B/C）。代理侧：scope 新包巡检（哨兵只装固定 13 包、看不见新能力包）。验收：§5 有结论 + 巡检有落地机制（或如实写「人工 + 频率」） |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后决定见 `ADR-0005` |
@@ -88,6 +88,8 @@
 | REQ-I7 | 副工作区权限档退役 | done | P1 | `ADR-0019`。[`R20-req-i7-permission-retirement.md`](./rounds/R20-req-i7-permission-retirement.md) |
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | 代码完成，`ADR-0022`。[`R24-session-connections-and-remote-fence.md`](./rounds/R24-session-connections-and-remote-fence.md)。**待用户**：[`uat/R24-req-i9-remote-runner.md`](./uat/R24-req-i9-remote-runner.md)（G1–G3；G1 为否则该主机类退化为审批门 + 低权用户） |
 | REQ-I11 | 会话级机器连接（吸收 SEC-5） | done | P1 | 代码完成，`ADR-0021`。同上 R24 报告。**待用户**：[`uat/R24-req-i11-session-connections.md`](./uat/R24-req-i11-session-connections.md) |
+| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | done | P1 | 代码随 **PR #18**（squash `74e0d58`）进 master；范围认 `ADR-0023` / `ADR-0024`，权限轴认 `ADR-0025` / `REQ-I13`。验收 [`uat/R27-req-i13-remote-session-sandbox.md`](./uat/R27-req-i13-remote-session-sandbox.md)：**11/12 通过**（步骤 13 N/A、步骤 9 无 PTY 工具跳过），步骤 11–12 用户 2026-09-15 口头通过；**2026-09-17 lab 复核了步骤 11**（挪走核心 ⇒ 围栏档 fail-closed，且同轮暴露 BUG-6） |
+| REQ-I13 | 远端权限对齐本地 sandbox 提权 | done | P1 | 范围认 `ADR-0025`，与 `REQ-I5` 同 PR #18、同一份 UAT R27（同上结论）。核心 `/permission` → `--sandbox`、无核心 + 围栏档 fail-closed、危险档 SFTP 旁路都在该脚本 11–12 步验过 |
 | REQ-R6 | 运行时国际化 | done | — | [`R6-i18n.md`](./rounds/R6-i18n.md) |
 | REQ-S1 | `sw_exec` | shipped | — | v0.1.1 |
 | REQ-S2 | win32 宿主 `bash` | shipped | — | v0.1.1 |

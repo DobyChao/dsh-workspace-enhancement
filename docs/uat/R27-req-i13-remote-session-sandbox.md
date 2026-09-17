@@ -21,7 +21,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.1.4` 源码线上的未发 0.2.0 能力（`package.json` 不 bump） |
+| 版本 | `0.1.4` 源码线上的 0.2.0 能力（当时未 bump；该能力随 **0.2.0** 发布） |
 | 分支 | `feat/REQ-I5-remote-core` |
 | commit | `feat/REQ-I5-remote-core`（含 R27 当场修的 realpath 缺叶与禁止 `/` jail） |
 | 构建产物 | `npm run build`；真机部署再 `npm run build:core` |
@@ -39,7 +39,7 @@
 
 | # | 操作 | 期望 | 观察点 | 结果 |
 |---|---|---|---|---|
-| 1 | 设置页机器表单：确认**没有**围栏档位下拉；对 `c1` 点「核心状态」再「部署核心」 | 提示说跟 `/permission` 走；部署成功后状态含版本 `0.2.0-dev` 与 arch | 高级区文案；RPC `core.status` / `core.deploy` | ☑ |
+| 1 | 设置页机器表单：确认**没有**围栏档位下拉；对 `c1` 点「核心状态」再「部署核心」 | 提示说跟 `/permission` 走；部署成功后状态含版本 `0.2.0` 与 arch | 高级区文案；RPC `core.status` / `core.deploy` | ☑ |
 | 2 | 打开远程会话，看 composer 权限 chip | 不是 Custom；应是 Workspace write（或部署默认） | chip 文案 | ☑ |
 | 3 | 会话 workspace-write：官方 `write` **工作区内**一路径 | **成功** | 文件内容 | ☑ |
 | 4 | 同一会话：官方 `write` **工作区外**一路径 | **失败**；错误含 `[sandbox: file access denied under workspace-write mode]`；目标文件**不存在**（反转 I9-9） | 工具错误；远端 `ls` | ☑ |
@@ -59,11 +59,11 @@
 
 | 项 | 值 |
 |---|---|
-| 结论 | ☐ 通过 ☑ 进行中 ☐ 不通过 |
+| 结论 | ☑ 通过 ☐ 进行中 ☐ 不通过 |
 | 通过项 / 总项 | `11/12`（步骤 13 为 N/A；步骤 9 用户跳过） |
 | 证据链接 | lab 50599；会话 `ssh-test-lab`；截图 `r27-step1-settings.png` / `r27-step2-chip.png` / `r27-step3-write-inside.png` / `r27-step4-denied-step5-card.png` |
-| 未通过项 | 步骤 9 跳过（Flash 无 PTY）。11–12 用户 2026-09-15 口头通过。 |
-| 是否阻塞发布 | 步骤 9 不挡合入。祖先 jail（`BUG-4`）已记录、本轮不修。 |
+| 未通过项 | 步骤 9 跳过（Flash 无 PTY 工具，非失败）。11–12 用户 2026-09-15 口头通过；**2026-09-17 lab 复核了步骤 11**（手工删核心 ⇒ 围栏档 fail-closed；同轮暴露 `BUG-6` 与拒绝文案误诊，均已修） |
+| 是否阻塞发布 | 步骤 9 不挡合入。`BUG-4`（祖先 jail）当时记录未修，**已于 2026-09-17 修复**（`docs/host-silent-fs.md`，随 0.2.0）。 |
 | 用户签字 | |
 
 ## 4. 环境指纹
@@ -71,7 +71,7 @@
 | 项 | 值 |
 |---|---|
 | 实例 / 端口 | lab / 50599 |
-| 插件版本 | `0.1.4`（未发 0.2.0 能力） |
+| 插件版本 | `0.1.4`（0.2.0 能力，当时未 bump；现已随 **0.2.0** 发布） |
 | commit | `feat/REQ-I5-remote-core` 工作区（含 R27 当场修） |
 | 宿主 OS / 版本 | Windows 10 26200 |
 | 远端 | linux x86_64 / Ubuntu 24.04（WSL `user@127.0.0.1:22`；机器 id `c1`） |
@@ -86,7 +86,7 @@
 - `remoteApproval: human` 与提权卡同时开会弹两张卡；本脚本默认审批门 off。
 - 审批门仍不覆盖 fs 写（ADR-0020 D1）；围栏档的 fs 由**核心**覆盖。
 - 2026-09-14 lab 50599 跑到步骤 5 卡面：
-  - 步骤 1：设置「远程工作区」无围栏 `<select>`；高级区「远端权限」文案跟 `/permission`；`c1` 核心状态 `0.2.0-dev x86_64`。
+  - 步骤 1：设置「远程工作区」无围栏 `<select>`；高级区「远端权限」文案跟 `/permission`；`c1` 核心状态 `0.2.0 x86_64`。
   - 步骤 2：chip「工作区内修改」，不是 Custom。
   - 步骤 3：官方 Write 新建 `/home/uuz/ssh-test-lab/r27-in-20260914.txt` 内容 `R27-in`。第一次失败是核心 `fs.realpath` 对缺叶 `EvalSymlinks`（已在宿主侧补祖先 walk）。
   - 步骤 4：官方 Write `/tmp/dsw-r27-out-20260914.txt` 拒绝，文案含 `[sandbox: file access denied under workspace-write mode]`；远端 `ls` 无该文件。第一次泄漏是把 `/` 当成 workspace-write jail（`--bind / /` 盖掉 tmpfs）；已禁止 `/` 根并让 fs 写跟会话 cwd。
