@@ -259,9 +259,21 @@ test('BUG-4: the silent project-root probe never mints an ancestor jail', async 
   // cwd asking about `<dir>/.git` and pass NO cwd (docs/host-silent-fs.md §1).
   // Routing that probe target through `cwd` used to mint a workspace-write jail
   // for every ancestor (`/home/uuz`, `/home`, …); it must stay a `path`.
+  // Two spellings matter: the `ssh://` one and — the shape the real probe
+  // actually produces — the local PLACEHOLDER path of the session route.
   for (const probe of ['/home/uuz/ssh-test-lab/.git', '/home/uuz/.git', '/home/.git', '/.git']) {
     await mixed.resolve(`ssh://c1${probe}`).catch(() => undefined)
     await mixed.lstat(`ssh://c1${probe}`).catch(() => undefined)
+  }
+  const placeholderRoot = join(sshRoutesRoot(), 'c1', 'home', 'uuz')
+  for (const probe of [
+    join(placeholderRoot, 'ssh-test-lab', '.git'),
+    join(placeholderRoot, '.git'),
+    join(sshRoutesRoot(), 'c1', 'home', '.git'),
+    join(sshRoutesRoot(), 'c1', '.git'),
+  ]) {
+    await mixed.resolve(probe).catch(() => undefined)
+    await mixed.lstat(probe).catch(() => undefined)
   }
   assert.deepEqual([...new Set(opened)], ['/work'],
     'only declared roots (machine workspace / session cwd) may be bound')
