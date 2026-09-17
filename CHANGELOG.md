@@ -32,7 +32,7 @@
 ### 质量
 
 - 新增回归：`test/core-vendor.test.ts`（官方取件/校验/缓存/离线 fail-closed）、`test/core-routing.test.ts`「BUG-4」「BUG-6」、`test/core-deploy.test.ts`（安装脚本与远端工具判定）、`test/remote-sandbox.test.ts`「fenceMissingHint」、`core/jail_test.go`（bwrap 三层解析 5 例）。关键用例都跑过**负向对照**（拿掉修复即红）。
-- `check:static` 新增第 14 道闸门（生成的核心清单不得漂移）；`pack-smoke` 硬要求 `core/dist` 工件、体积上限 5→15 MB。
+- `check:static` 新增第 14 道闸门（生成的核心清单不得漂移）；`pack-smoke` 硬要求 `core/dist` 工件、体积上限 5→15 MB，并新增「`core/dist` 下只允许 `dsh-core-*.tar.gz`」闸门（0.2.0 发布前实测抓到 `build:core` 的 staging 暂存目录会被一起发出去：+4.72 MB 裸二进制 + 重复 MANIFEST；修后整包 **135 文件 / 3.03 MB**）。
 
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-13)
 

@@ -15,7 +15,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/core-sourcing-and-bugfixes`（同一 PR 还带 BUG-4 / BUG-6）（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
+| INFRA-16 | npm 包泄漏：`build:core` 的 staging 目录随包发布 | doing | P1 | **0.2.0 发布前实测抓到**：`files: ["core/dist"]` 把 `build:core` 留在 `core/dist/staging/` 的**未打包裸 ELF（4.72 MB）+ 重复 MANIFEST** 一起发出去（整包 5.68 MB）。修法：`build:core` 收尾删 staging；`files` 收窄为 `core/dist/*.tar.gz`；`pack-smoke` 新增闸门「`core/dist` 下只允许工件」（负向对照已跑：退回旧写法即 FAIL 并点名 `core/dist/staging/dsh-core`）。修复后实测 **135 文件 / 3.03 MB**，`core/` 只剩工件 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -57,6 +57,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/` 结构。收口见 `INFRA-13` |
+| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | done | P1 | 随 **PR #23**（squash `cf92dae`）进 master，CI 全绿（ubuntu 22/24 + windows 22，`go test`/`go build` 权威执行）。npm 只带第一方工件；`bwrap` 远端自带（三层解析 + 可操作拒绝、不崩宿主）、`rg` 远端优先/缺失才取官方件并按 pin 校验；版本与 pin 单一来源 + `check:static` 第 14 道闸门。档案 [`R28`](./rounds/R28-infra15-core-artifact-distribution.md)。**真机尾巴**：远端四组合 UAT（有/无 bwrap × 有/无 rg）未跑；缺 bwrap 的机器现会如实拒绝围栏 |
 | INFRA-13 | 文档地图收口 | done | P3 | [`docs/README.md`](./README.md) 是地图；architecture 短引导；轮次为档案。同轮 `ADR-0023` 补拍：远端读写纳入核心，`REQ-I1` 往后排 |
 | INFRA-2 | 统一质量门 `npm run check` | done | P0 | 另有 `test:agent` |
 | INFRA-3 | GitHub Actions CI + 上游冒烟 | done | P0 | `ci.yml` / `upstream.yml` |

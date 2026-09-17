@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-17 12:12 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-17 12:30 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.0` |
 | npm 已发布版本 | `0.1.4` |
 | 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `feat/core-sourcing-and-bugfixes` / `9e1e2f1` |
-| HEAD 提交 | `feat(core): add a dev knob to simulate a remote without rg` (2026-09-17) |
-| 与远端 | 9 ahead / 0 behind origin/master |
+| 分支 / HEAD | `fix/INFRA-16-pack-staging-leak` / `cf92dae` |
+| HEAD 提交 | `feat(core): official tool sourcing, probe fixes, and the 0.2.0 release prep (#23)` (2026-09-17) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -31,7 +31,7 @@
 | `todo` | 19 |
 | `doing` | 1 |
 | `blocked` | 6 |
-| `done` | 43 |
+| `done` | 44 |
 | `shipped` | 6 |
 | `dropped` | 7 |
 

@@ -50,6 +50,10 @@ const MUST_EXCLUDE = [
   /(^|\/)machines\.json$/,
   /(^|\/)known_hosts\.json$/,
   /(^|\/)\.env/,
+  // `core/dist` may hold ONLY the built artifact: `build:core` used to leave its
+  // unpacked staging tree behind and a `core/dist` glob shipped it (bare binary +
+  // duplicate MANIFEST, +2.4 MB). Anything else under core/dist is a leak.
+  /^core\/dist\/(?!dsh-core-[\w.-]+\.tar\.gz$)/,
 ]
 
 const failures = []
