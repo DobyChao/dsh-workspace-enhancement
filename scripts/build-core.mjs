@@ -64,6 +64,10 @@ writeFileSync(join(staging, 'MANIFEST.json'), `${JSON.stringify({
 }, null, 2)}\n`)
 
 const tar = spawnSync('tar', ['-czf', join(dist, artifact), '-C', staging, '.'], { encoding: 'utf8' })
+// The staging tree holds an UNPACKED copy of the same binary plus its MANIFEST.
+// `files: ["core/dist/*.tar.gz"]` keeps it out of the npm package, and removing
+// it here keeps it off disk too (2026-09-17: a `core/dist` glob shipped it).
+rmSync(staging, { recursive: true, force: true })
 if (tar.status !== 0) {
   console.error(tar.stderr || tar.stdout || 'tar failed')
   process.exit(tar.status ?? 1)
