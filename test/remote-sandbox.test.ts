@@ -29,6 +29,7 @@ import {
   WORKSPACE_ROOT_PLACEHOLDER,
   buildRemoteProbeCommand,
   createRemoteSandboxCache,
+  fenceMissingHint,
   isRemoteDenialText,
   isRemoteSandboxEnabled,
   isUsableRemoteWorkspaceRoot,
@@ -536,6 +537,29 @@ test('remoteSandboxUnavailableError: carries the code and the mode, with and wit
 
   const emptyDetail = remoteSandboxUnavailableError('read-only', '')
   assert.equal(emptyDetail.message, plain.message)
+})
+
+test('fenceMissingHint: a missing core is a deploy problem, not a bubblewrap problem', () => {
+  // The real detail a deleted `~/.dsh-core/<version>/` produces (core-client
+  // reports the remote shell's stderr verbatim).
+  const coreGone = 'core stdout closed: bash: line 1: /home/uuz/.dsh-core/current/dsh-core: No such file or directory'
+  assert.match(String(fenceMissingHint(coreGone)), /core\.deploy/)
+  assert.match(String(fenceMissingHint("env: 'bwrap': No such file or directory")), /no bubblewrap/)
+  assert.equal(fenceMissingHint('bwrap: Permission denied'), undefined, 'no signature ⇒ no hint')
+  const refusal = remoteSandboxUnavailableError('workspace-write', coreGone)
+  assert.match(refusal.message, /deploy it from the plugin settings \(core\.deploy\)/)
+  assert.equal(/apt-get install|pacman|zypper|dnf install/.test(refusal.message), false,
+    'a deleted core must not be reported as a missing bubblewrap')
+
+  // A runner that is genuinely absent still gets the install hints.
+  const noRunner = remoteSandboxUnavailableError('read-only', "env: 'bwrap': No such file or directory")
+  assert.match(noRunner.message, /The remote has no bubblewrap/)
+  assert.match(noRunner.message, /apt-get install -y bubblewrap/)
+
+  // An unrelated failure gets no remedy sentence at all.
+  const other = remoteSandboxUnavailableError('read-only', 'bwrap: setting up uid map: Permission denied')
+  assert.equal(other.message.includes('The remote has no bubblewrap'), false)
+  assert.equal(other.message.includes('not installed on the remote'), false)
 })
 
 test('the refusal vocabulary stays distinct from the approval gate refusal', () => {

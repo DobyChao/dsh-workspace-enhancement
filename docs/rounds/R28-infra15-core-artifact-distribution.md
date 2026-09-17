@@ -38,6 +38,7 @@
 | `src/core-deploy.ts` | 部署前探远端 `command -v rg` / `bwrap`：有 `rg` 什么都不推，没有才取官方件并随核心推送；`chmod` 清单按实际推送生成；`MANIFEST` 必填项只剩 `dsh-core` |
 | `core/jail.go` | bwrap 解析三层：`DSH_CORE_BWRAP` → 同目录 `bin/bwrap` → 远端 `PATH`；都无 ⇒ 带安装命令的可操作拒绝（新增 `core/jail_test.go` 5 例） |
 | 提示词 | `model-prompts.ts` 的远端工具箱提示改写（「别 apt 装 rg」的旧语义作废）；`remote-sandbox.ts` 新增 runner 缺失提示（含各发行版命令） |
+| 拒绝文案分诊（2026-09-17 补） | `fenceMissingHint`：detail 里出现 `dsh-core` ⇒ 提示「核心没装/被删，去设置页 `core.deploy`」；只有出现 **runner 名字**（`bwrap`）才提示装 bubblewrap；两者都不是 ⇒ **不给提示**。第一版只看 `No such file or directory` 这类通用串，把「核心被删」误报成「缺 bwrap」（lab 实测抓到） |
 | `package.json` / `pack-smoke.mjs` / `release.yml` | `files` 加 `core/dist`；`prepack` 守卫（缺工件即构建、构不出硬失败）；`check` 链加 `build:core`；pack 冒烟硬要求工件、上限 5→15 MB；发布机加 `setup-go@v5` |
 | 文档 | `ADR-0024` §0/§1/§3 按新政策改写（含政策修订说明）；backlog INFRA-15 |
 
