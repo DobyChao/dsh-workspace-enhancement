@@ -36,6 +36,13 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      # INFRA-15: `npm run check` (prepublishOnly) now builds the linux-x64
+      # core tarball and pack-smoke hard-requires it in the published package.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: core/go.mod
+
       - name: The npm CLI must support trusted publishing (>= 11.5.1)
         run: |
           npm --version

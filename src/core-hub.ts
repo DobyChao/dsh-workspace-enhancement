@@ -12,6 +12,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from './core-client.ts'
 import {
+  CORE_ARTIFACT_ARCH,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
   CORE_ERROR_SANDBOX,
@@ -117,7 +118,7 @@ export function coreVersionCommand(): string {
 }
 
 export function coreArtifactName(): string {
-  return `dsh-core-${CORE_ARTIFACT_VERSION}-linux-x64.tar.gz`
+  return `dsh-core-${CORE_ARTIFACT_VERSION}-${CORE_ARTIFACT_ARCH}.tar.gz`
 }
 
 async function openOverSsh(request: CoreOpenRequest): Promise<CoreClient> {

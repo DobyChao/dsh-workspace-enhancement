@@ -66,6 +66,7 @@
  */
 
 import { posix } from 'node:path'
+import { BWRAP_VENDOR } from './core-vendor-pins.ts'
 import { quoteShellArg } from './ssh-core.ts'
 
 /* ------------------------------------------------------------------ mode */
@@ -532,6 +533,14 @@ export const REMOTE_SANDBOX_MESSAGES = {
   /** Probe failed ⇒ the fence never ran a command. `{detail}` is the stderr. */
   probeFailed:
     'Runner failure: remote sandbox probe failed; no command text was sent — {detail}',
+  /**
+   * Appended to a probe failure whose stderr says the runner is absent (INFRA-15:
+   * bubblewrap is never redistributed — there is no upstream binary release — so
+   * the remote must install it from its own package manager). `{hints}` is the
+   * per-distro command list; the last clause is the honest escape hatch.
+   */
+  runnerMissing:
+    'The remote has no bubblewrap — install it on that host ({hints}), or re-run this work with sandbox mode "danger-full-access" (the fence is then gone).',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',
@@ -583,6 +592,31 @@ function interpolate(text: string, params: Record<string, unknown>): string {
   return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match))
 }
 
+/** Stderr shapes that mean "the runner binary is not installed at all". */
+const RUNNER_MISSING_SIGNATURES = [
+  'no such file or directory',
+  'command not found',
+  'not found',
+  'exit 127',
+  'exit code 127',
+  'exited 127',
+]
+
+/**
+ * The install hint for a probe whose runner is simply absent, if that is what
+ * the detail says. Pure: the caller decides whether to append it.
+ * @param detail - the probe's stderr/detail line.
+ * @returns the hint sentence, or undefined for any other failure.
+ */
+export function runnerMissingHint(detail: string | undefined): string | undefined {
+  if (detail === undefined || detail === '') return undefined
+  const lowered = detail.toLowerCase()
+  if (!RUNNER_MISSING_SIGNATURES.some(signature => lowered.includes(signature))) return undefined
+  return interpolate(REMOTE_SANDBOX_MESSAGES.runnerMissing, {
+    hints: BWRAP_VENDOR.installHints.join('; '),
+  })
+}
+
 /**
  * The refusal the wiring raises when a fenced mode has no positive probe
  * verdict. Fail closed: the caller must not fall back to an unwrapped command.
@@ -595,10 +629,13 @@ export function remoteSandboxUnavailableError(
   detail?: string,
 ): RemoteSandboxError {
   const base = interpolate(REMOTE_SANDBOX_MESSAGES.unavailable, { mode })
-  const text = detail === undefined || detail === ''
-    ? base
-    : `${base} ${interpolate(REMOTE_SANDBOX_MESSAGES.probeFailed, { detail })}`
-  return new RemoteSandboxError(text)
+  const hint = runnerMissingHint(detail)
+  const parts = [base]
+  if (detail !== undefined && detail !== '') {
+    parts.push(interpolate(REMOTE_SANDBOX_MESSAGES.probeFailed, { detail }))
+  }
+  if (hint !== undefined) parts.push(hint)
+  return new RemoteSandboxError(parts.join(' '))
 }
 
 /** The tool-layer reporting shape of one mode (`sw_status`-style output). */

@@ -3,24 +3,90 @@
  *
  * Operator action only — never triggered by a model tool.
  *
+ * INFRA-15: the tarball carries only the first-party `dsh-core`. Optional
+ * third-party tools are provisioned separately — `rg` is fetched from its
+ * official release on the host (or skipped when the remote already has one) and
+ * pushed beside the core; `bwrap` is never shipped and must come from the remote
+ * host's own package manager, so its absence is reported here as a note and
+ * refuses fenced work later.
+ *
  * @module dsh-workspace-enhancement/core-deploy
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SFTPWrapper } from 'ssh2'
 import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
 import { coreArtifactName, type CoreStatusView } from './core-hub.ts'
+import { bwrapInstallHints, ensureRgVendor } from './core-vendor.ts'
+import { RG_VENDOR } from './core-vendor-pins.ts'
 import { quoteShellArg } from './ssh-core.ts'
 import type { SshTransport } from './transport.ts'
 
 const LINUX = new Set(['linux', 'Linux'])
 const AMD64 = new Set(['x86_64', 'amd64', 'x64'])
 
+/**
+ * Files the tarball MUST contain. Only the first-party binary: third-party
+ * tools are pushed separately (or provided by the remote) — see the module note.
+ */
+const REQUIRED_ARTIFACT_FILES = ['dsh-core'] as const
+
+/** One extra executable pushed beside the core after extraction. */
+export interface VendorFile {
+  /** Absolute path of the uploaded temp file on the remote. */
+  temp: string
+  /** Path relative to `~/.dsh-core/<version>/`. */
+  relative: string
+}
+
 export function localCoreTarball(): string {
   const here = dirname(fileURLToPath(import.meta.url))
   return join(here, '..', 'core', 'dist', coreArtifactName())
+}
+
+/**
+ * Pure MANIFEST gate: every required file listed with a sha256. Returns the
+ * list of problems; empty = the tarball can be deployed as-is.
+ */
+export function manifestIssues(manifest: unknown): string[] {
+  if (typeof manifest !== 'object' || manifest === null) return ['MANIFEST.json is not an object']
+  const files = (manifest as { files?: unknown }).files
+  if (typeof files !== 'object' || files === null) return ['MANIFEST.json has no files map']
+  const issues: string[] = []
+  for (const name of REQUIRED_ARTIFACT_FILES) {
+    const sha = (files as Record<string, unknown>)[name]
+    if (typeof sha !== 'string' || !/^[0-9a-f]{64}$/.test(sha)) {
+      issues.push(`MANIFEST.json is missing sha256 for ${name}`)
+    }
+  }
+  return issues
+}
+
+/**
+ * Read MANIFEST.json out of the tarball via the system tar. Stdout is captured
+ * through a file descriptor on purpose: the DSH file sandbox denies piped
+ * stdio, and this runs in tests as well as at deploy time.
+ * @returns the parsed manifest, or null when it cannot be read.
+ */
+export function readTarballManifest(artifact: string): unknown {
+  const out = `${artifact}.manifest.tmp`
+  const fd = openSync(out, 'w')
+  try {
+    const tar = spawnSync('tar', ['-xzOf', artifact, 'MANIFEST.json'], { stdio: ['ignore', fd, 'ignore'] })
+    if (tar.status !== 0) return null
+  } finally {
+    closeSync(fd)
+  }
+  try {
+    return JSON.parse(readFileSync(out, 'utf8')) as unknown
+  } catch {
+    return null
+  } finally {
+    rmSync(out, { force: true })
+  }
 }
 
 export function assertLinuxAmd64(unameS: string, unameM: string): void {
@@ -42,22 +108,39 @@ function sftpWrite(sftp: SFTPWrapper, remote: string, data: Buffer): Promise<voi
 }
 
 /**
- * Remote extract + chmod + current symlink. Windows-built tarballs land as
- * 644; `bin/bwrap` and `bin/rg` must be executable or the self-jail cannot start.
+ * Remote extract + chmod + current symlink. Windows-built tarballs land as 644,
+ * so every executable must be chmod'ed explicitly; `vendors` are the extra
+ * tools uploaded for this deploy (only what we actually pushed is listed).
  */
-export function coreInstallScript(version: string, remoteTar: string): string {
+export function coreInstallScript(version: string, remoteTar: string, vendors: readonly VendorFile[] = []): string {
   const prefix = `"$HOME"/.dsh-core/${version}`
-  return [
+  const steps = [
     `mkdir -p -- ${prefix}`,
     `tar -xzf ${quoteShellArg(remoteTar)} -C ${prefix}`,
-    `chmod +x -- ${prefix}/dsh-core ${prefix}/bin/bwrap ${prefix}/bin/rg`,
-    `ln -sfn -- ${quoteShellArg(version)} "$HOME"/.dsh-core/current`,
-    `rm -f -- ${quoteShellArg(remoteTar)}`,
-  ].join(' && ')
+  ]
+  if (vendors.length > 0) {
+    steps.push(`mkdir -p -- ${prefix}/bin`)
+    for (const vendor of vendors) {
+      steps.push(`cp -- ${quoteShellArg(vendor.temp)} ${prefix}/${vendor.relative}`)
+    }
+  }
+  steps.push(`chmod +x -- ${prefix}/dsh-core ${vendors.map(vendor => `${prefix}/${vendor.relative}`).join(' ')}`.trimEnd())
+  steps.push(`ln -sfn -- ${quoteShellArg(version)} "$HOME"/.dsh-core/current`)
+  steps.push(`rm -f -- ${quoteShellArg(remoteTar)} ${vendors.map(vendor => quoteShellArg(vendor.temp)).join(' ')}`.trimEnd())
+  return steps.join(' && ')
+}
+
+/** Remote probe for the tools that decide what this deploy has to push. */
+export function remoteToolProbe(): string {
+  return 'if command -v rg >/dev/null 2>&1; then echo RG; fi; if command -v bwrap >/dev/null 2>&1; then echo BWRAP; fi; true'
 }
 
 /**
  * Deploy the linux-x64 tarball to the login user's `~/.dsh-core/<version>/`.
+ *
+ * Never fails just because an optional tool is unavailable: the core is still
+ * deployed and the returned detail explains what is missing and where the
+ * official copy comes from.
  */
 export async function deployCore(
   transport: SshTransport,
@@ -67,7 +150,12 @@ export async function deployCore(
   if (!existsSync(artifact)) {
     return { ok: false, detail: `core artifact missing: ${artifact}` }
   }
-  const uname = await transport.exec('uname -s; uname -m', options.signal !== undefined ? { signal: options.signal } : undefined)
+  const issues = manifestIssues(readTarballManifest(artifact))
+  if (issues.length > 0) {
+    return { ok: false, detail: `core artifact incomplete (${artifact}): ${issues.join('; ')}` }
+  }
+  const execOptions = options.signal !== undefined ? { signal: options.signal } : undefined
+  const uname = await transport.exec('uname -s; uname -m', execOptions)
   const [sys, machine] = uname.stdout.split(/\r?\n/).map(line => line.trim())
   try {
     assertLinuxAmd64(sys ?? '', machine ?? '')
@@ -77,18 +165,43 @@ export async function deployCore(
   const version = CORE_ARTIFACT_VERSION
   const tarName = coreArtifactName()
   const sftp = await transport.getSftp(options.signal)
-  await transport.exec('mkdir -p -- "$HOME"/.dsh-core', options.signal !== undefined ? { signal: options.signal } : undefined)
+  await transport.exec('mkdir -p -- "$HOME"/.dsh-core', execOptions)
+
+  const notes: string[] = []
+  const probe = await transport.exec(remoteToolProbe(), execOptions)
+  const remoteHasRg = /^RG$/m.test(probe.stdout)
+  const remoteHasBwrap = /^BWRAP$/m.test(probe.stdout)
+
+  const vendors: VendorFile[] = []
+  if (!remoteHasRg) {
+    const outcome = ensureRgVendor()
+    if (outcome.ok) {
+      const temp = `/tmp/dsh-core-rg-${RG_VENDOR.version}`
+      await sftpWrite(sftp, temp, readFileSync(outcome.path))
+      vendors.push({ temp, relative: 'bin/rg' })
+      notes.push(outcome.cached
+        ? `provisioned rg ${RG_VENDOR.version} from the host cache`
+        : `fetched rg ${RG_VENDOR.version} from the official release`)
+    } else {
+      notes.push(outcome.detail)
+    }
+  }
+  if (!remoteHasBwrap) {
+    notes.push(`the remote has no bwrap — fenced work will refuse until it is installed (${bwrapInstallHints().join('; ')})`)
+  }
+
   const remoteTar = `/tmp/${tarName}`
   await sftpWrite(sftp, remoteTar, readFileSync(artifact))
-  const script = coreInstallScript(version, remoteTar)
-  const outcome = await transport.exec(script, options.signal !== undefined ? { signal: options.signal } : undefined)
+  const script = coreInstallScript(version, remoteTar, vendors)
+  const outcome = await transport.exec(script, execOptions)
   if (outcome.exitCode !== 0) {
     return { ok: false, detail: (outcome.stderr || outcome.stdout || 'extract failed').trim() }
   }
-  const ver = await transport.exec('"$HOME"/.dsh-core/current/dsh-core version', options.signal !== undefined ? { signal: options.signal } : undefined)
+  const ver = await transport.exec('"$HOME"/.dsh-core/current/dsh-core version', execOptions)
   if (ver.exitCode !== 0) {
     return { ok: false, version, detail: (ver.stderr || ver.stdout || 'version probe failed').trim() }
   }
+  const note = notes.length > 0 ? notes.join('; ') : undefined
   try {
     const parsed = JSON.parse(ver.stdout) as { version?: string; arch?: string; proto?: number; caps?: string[] }
     return {
@@ -97,9 +210,10 @@ export async function deployCore(
       arch: parsed.arch,
       proto: parsed.proto,
       caps: parsed.caps,
+      ...(note !== undefined ? { detail: note } : {}),
     }
   } catch {
-    return { ok: true, version, detail: ver.stdout.trim() }
+    return { ok: true, version, detail: note ?? ver.stdout.trim() }
   }
 }
 

@@ -15,6 +15,7 @@ import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } fr
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import { artifactName, readArtifactMeta } from './core-artifact.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(new URL('.', import.meta.url))))
 
@@ -27,6 +28,14 @@ const MUST_INCLUDE = [
   'README.md',
   'LICENSE',
 ]
+
+// INFRA-15: the remote-core tarball ships inside the npm package — an install
+// without it can never deploy the core (`core artifact missing`). `npm run
+// check` builds it right before this gate, and `prepack` refuses to pack
+// without it, so it is a hard requirement here. The expected name comes from
+// the single source (`core/artifact.json`), never a literal.
+const CORE_ARTIFACT = `core/dist/${artifactName(readArtifactMeta())}`
+MUST_INCLUDE.push(CORE_ARTIFACT)
 
 const MUST_EXCLUDE = [
   /^src\//,
@@ -118,7 +127,8 @@ const leaked = files.filter(path => MUST_EXCLUDE.some(re => re.test(path)))
 check('tarball leaks no private paths', leaked.length === 0, leaked.slice(0, 8).join(', '))
 
 const sizeMb = (report.size ?? 0) / 1024 / 1024
-check('tarball size under 5 MB', sizeMb < 5, `${sizeMb.toFixed(2)} MB`)
+// Raised from 5 MB in INFRA-15: the bundled core tarball (~4.7 MB) now ships.
+check('tarball size under 15 MB', sizeMb < 15, `${sizeMb.toFixed(2)} MB`)
 
 console.log(files.length === 0
   ? '[pack-smoke] FAIL — empty file list'

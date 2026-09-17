@@ -1,0 +1,22 @@
+{
+  "rg": {
+    "version": "15.2.0",
+    "arch": "x86_64-unknown-linux-musl",
+    "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+    "checksumUrl": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz.sha256",
+    "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c",
+    "member": "ripgrep-15.2.0-x86_64-unknown-linux-musl/rg",
+    "license": "MIT OR UNLICENSE",
+    "homepage": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0"
+  },
+  "bwrap": {
+    "license": "LGPL-2.1-or-later",
+    "homepage": "https://github.com/containers/bubblewrap",
+    "installHints": [
+      "Debian/Ubuntu: sudo apt-get install -y bubblewrap",
+      "Fedora/RHEL: sudo dnf install -y bubblewrap",
+      "Arch: sudo pacman -S bubblewrap",
+      "openSUSE: sudo zypper install bubblewrap"
+    ]
+  }
+}

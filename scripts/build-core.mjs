@@ -1,50 +1,63 @@
 #!/usr/bin/env node
 /**
  * Build the linux-x64 dsh-core tarball into core/dist/.
- * Bundled bwrap/rg are copied from core/vendor/ when present; the tarball is
- * still produced without them (jail then fails closed until those files exist).
+ *
+ * The tarball carries ONLY the first-party core binary (ADR-0024, INFRA-15).
+ * Third-party tools are never redistributed by this repository:
+ *   - `bwrap` must come from the remote host's own package manager (the core
+ *     resolves it next to itself and then on PATH);
+ *   - `rg` is fetched from its OFFICIAL release at deploy time, verified against
+ *     the pinned sha256, cached on the host and pushed beside the core
+ *     (`src/core-vendor.ts`).
+ * A `go build` that cannot run is still a hard failure — the previous silent
+ * skip produced a tarball that could not start remotely.
  */
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { artifactName, readArtifactMeta } from './core-artifact.mjs'
 
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const coreDir = join(root, 'core')
 const staging = join(coreDir, 'dist', 'staging')
 const dist = join(coreDir, 'dist')
-const version = '0.2.0-dev'
-const artifact = `dsh-core-${version}-linux-x64.tar.gz`
+// Version/arch come from the single source (`core/artifact.json`) so the name
+// built here always matches what `coreArtifactName()` looks for at deploy time.
+const meta = readArtifactMeta()
+const version = meta.version
+const artifact = artifactName(meta)
 
 rmSync(staging, { recursive: true, force: true })
-mkdirSync(join(staging, 'bin'), { recursive: true })
+mkdirSync(staging, { recursive: true })
 mkdirSync(dist, { recursive: true })
 
-const env = { ...process.env, CGO_ENABLED: '0', GOOS: 'linux', GOARCH: 'amd64' }
+// GOTELEMETRY=off: go tries to write an upload token under the user profile
+// even for a plain build, which fails under sandboxes/CI with a locked home.
+const env = { ...process.env, CGO_ENABLED: '0', GOOS: 'linux', GOARCH: 'amd64', GOTELEMETRY: 'off' }
 const built = spawnSync('go', ['build', '-o', join(staging, 'dsh-core'), '.'], {
   cwd: coreDir,
   env,
   encoding: 'utf8',
 })
+if (built.error !== undefined) {
+  console.error(
+    `go could not be spawned: ${built.error.message}. ` +
+    'Under the DSH file sandbox process spawns are EPERM — run `npm run build:core` from a normal shell, or let CI build it.',
+  )
+  process.exit(1)
+}
 if (built.status !== 0) {
   console.error(built.stderr || built.stdout || 'go build failed')
   process.exit(built.status ?? 1)
 }
 
-const vendor = join(coreDir, 'vendor')
 const files = { 'dsh-core': shaOf(join(staging, 'dsh-core')) }
-for (const name of ['bwrap', 'rg']) {
-  const source = join(vendor, name)
-  if (existsSync(source)) {
-    copyFileSync(source, join(staging, 'bin', name))
-    files[`bin/${name}`] = shaOf(join(staging, 'bin', name))
-  }
-}
 
 writeFileSync(join(staging, 'MANIFEST.json'), `${JSON.stringify({
   version,
-  arch: 'linux-x86_64',
+  arch: meta.manifestArch,
   proto: 1,
   caps: ['fs', 'spawn', 'rg'],
   files,
@@ -55,7 +68,9 @@ if (tar.status !== 0) {
   console.error(tar.stderr || tar.stdout || 'tar failed')
   process.exit(tar.status ?? 1)
 }
-console.log(`wrote ${join(dist, artifact)}`)
+// stderr, not stdout: this runs inside `prepack` when the tarball is missing at
+// pack time, and `npm pack --json` parses stdout (see scripts/ensure-core.mjs).
+console.error(`wrote ${join(dist, artifact)}`)
 
 function shaOf(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')

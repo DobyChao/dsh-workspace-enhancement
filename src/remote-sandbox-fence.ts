@@ -86,7 +86,9 @@ export interface RemoteSandboxConnectionFace {
  * {@link module:dsh-workspace-enhancement/remote-approval-gate}'s machine face:
  * the fence needs the mode and the two configured remote directory spellings
  * used as workspace-root fallbacks. The runner path is no longer a machine
- * field (REQ-I12 ④ / REQ-I5: bundled bwrap inside the core).
+ * field (REQ-I12 ④ / REQ-I5): the core resolves `bwrap` itself — first an
+ * explicit override, then a copy deployed beside it, then the remote's own
+ * PATH (INFRA-15: bubblewrap is never redistributed by this repository).
  */
 export interface RemoteSandboxMachineFace {
   readonly id: string

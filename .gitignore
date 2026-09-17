@@ -44,7 +44,9 @@ nul
 
 # Remote core tarball (built, never committed)
 /core/dist/
-# Operator-supplied linux-x64 bwrap/rg copied into the tarball (not source)
+# Third-party tools are NEVER committed or shipped (INFRA-15, ADR-0024 §3):
+# bwrap comes from the remote host's package manager and rg is fetched from its
+# official release on demand. Anything an operator drops here stays local.
 /core/vendor/
 
 
