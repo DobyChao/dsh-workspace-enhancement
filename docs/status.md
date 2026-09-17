@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-17 12:30 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-17 16:37 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.0` |
-| npm 已发布版本 | `0.1.4` |
-| 最新 tag | `v0.1.4` |
-| 分支 / HEAD | `fix/INFRA-16-pack-staging-leak` / `cf92dae` |
-| HEAD 提交 | `feat(core): official tool sourcing, probe fixes, and the 0.2.0 release prep (#23)` (2026-09-17) |
+| npm 已发布版本 | `0.2.0` |
+| 最新 tag | `v0.2.0` |
+| 分支 / HEAD | `master` / `8074528` |
+| HEAD 提交 | `fix(pack): keep the core build staging tree out of the npm package (#24)` (2026-09-17) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -22,17 +22,17 @@
 | 单测用例（静态计数） | 561 |
 | E2E 场景文件 | 8 |
 | ADR | 26 |
-| 轮次报告 | 31 |
+| 轮次报告 | 32 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 19 |
-| `doing` | 1 |
+| `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 44 |
-| `shipped` | 6 |
+| `done` | 45 |
+| `shipped` | 7 |
 | `dropped` | 7 |
 
 ## 被挡住 / 待拍板
