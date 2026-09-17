@@ -20,6 +20,7 @@ import { createCoreHub } from '../src/core-hub.ts'
 import type { CoreHub } from '../src/core-hub.ts'
 import { coreServeCommand } from '../src/core-hub.ts'
 import { SshFileSystemEngine } from '../src/filesystem.ts'
+import { MixedFileSystem } from '../src/mixed.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps, RemoteSandboxMachineFace } from '../src/remote-sandbox-fence.ts'
@@ -228,6 +229,57 @@ test('createCoreHub: browse path does not mint a workspace-write jail', async ()
   hub.peek('c1')?.close()
 })
 
+test('BUG-4: the silent project-root probe never mints an ancestor jail', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-bug4-probe-'))
+  mkdirSync(join(root, 'work'), { recursive: true })
+  const t = transport()
+  const ctx = ctxWith(t)
+  // A confined session: this is the mode whose `resolveCoreWorkspace` call mints
+  // a jail root when it is handed a cwd outside every declared root.
+  ctx.provide('sandboxPolicy', { resolve: () => 'workspace-write' })
+  const opened: Array<string | undefined> = []
+  const clients: CoreClient[] = []
+  const hub = createCoreHub(ctx, {
+    idleMs: 0,
+    deps: deps('workspace-write', t),
+    open: async (request) => {
+      opened.push(request.workspace)
+      const client = pair(root, 'workspace-write', request.workspace)
+      clients.push(client)
+      return client
+    },
+  })
+  const exploding = new Proxy({}, {
+    get: () => () => { throw new Error('SFTP consulted on a fenced path') },
+  }) as unknown as SshFileSystemEngine
+  const routing = new CoreRoutingFileSystem(ctx, exploding, hub)
+  const mixed = new MixedFileSystem(exploding, routing, () => undefined)
+
+  // `dsh-agent-instructions` / `dsh-skill-filesystem` walk up from the session
+  // cwd asking about `<dir>/.git` and pass NO cwd (docs/host-silent-fs.md §1).
+  // Routing that probe target through `cwd` used to mint a workspace-write jail
+  // for every ancestor (`/home/uuz`, `/home`, …); it must stay a `path`.
+  // Two spellings matter: the `ssh://` one and — the shape the real probe
+  // actually produces — the local PLACEHOLDER path of the session route.
+  for (const probe of ['/home/uuz/ssh-test-lab/.git', '/home/uuz/.git', '/home/.git', '/.git']) {
+    await mixed.resolve(`ssh://c1${probe}`).catch(() => undefined)
+    await mixed.lstat(`ssh://c1${probe}`).catch(() => undefined)
+  }
+  const placeholderRoot = join(sshRoutesRoot(), 'c1', 'home', 'uuz')
+  for (const probe of [
+    join(placeholderRoot, 'ssh-test-lab', '.git'),
+    join(placeholderRoot, '.git'),
+    join(sshRoutesRoot(), 'c1', 'home', '.git'),
+    join(sshRoutesRoot(), 'c1', '.git'),
+  ]) {
+    await mixed.resolve(probe).catch(() => undefined)
+    await mixed.lstat(probe).catch(() => undefined)
+  }
+  assert.deepEqual([...new Set(opened)], ['/work'],
+    'only declared roots (machine workspace / session cwd) may be bound')
+  for (const client of clients) client.close()
+})
+
 test('createCoreHub: read-only is one serve regardless of cwd', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsw-core-ro-'))
   const t = transport()
@@ -387,4 +439,40 @@ test('createCoreHub: placeholder cwd mints a POSIX workspace-write jail', async 
   await hub.require('c1', { cwd: placeholder, policy: 'workspace-write' })
   assert.deepEqual(opened, ['/home/uuz/ssh-test-lab'])
   hub.close('c1')
+})
+
+test('BUG-6: core.status answers from the artifact, never from a live session', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-bug6-'))
+  const base = transport()
+  // The artifact probe (`~/.dsh-core/current/dsh-core version`) is driven per call.
+  let probe: { exitCode: number; signal: null; stdout: string; stderr: string } = {
+    exitCode: 0,
+    signal: null,
+    stdout: '{"version":"0.2.0-dev","arch":"linux-x86_64","proto":1,"caps":["fs"]}',
+    stderr: '',
+  }
+  const probing = { ...base, exec: async () => probe } as unknown as SshTransport
+  const hub = createCoreHub(ctxWith(probing), {
+    idleMs: 0,
+    deps: deps('workspace-write', probing),
+    open: async () => pair(root, 'workspace-write', '/work'),
+  })
+  const live = await hub.require('c1', { cwd: '/work', policy: 'workspace-write' })
+  const installed = await hub.status('c1')
+  assert.equal(installed.ok, true)
+  assert.equal(installed.sandbox, 'workspace-write')
+
+  // The operator deletes `~/.dsh-core/<version>/` while the exec'd serve is
+  // still alive (it outlives its own directory until the idle kill).
+  probe = {
+    exitCode: 127,
+    signal: null,
+    stdout: '',
+    stderr: 'bash: /home/uuz/.dsh-core/current/dsh-core: No such file or directory',
+  }
+  const after = await hub.status('c1')
+  assert.equal(after.ok, false, 'a cached serve must not report a deleted artifact as installed')
+  assert.match(String(after.detail), /No such file or directory/)
+  assert.match(String(after.detail), /cached core session is still running/)
+  live.close()
 })

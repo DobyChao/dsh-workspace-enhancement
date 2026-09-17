@@ -12,6 +12,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from './core-client.ts'
 import {
+  CORE_ARTIFACT_ARCH,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
   CORE_ERROR_SANDBOX,
@@ -44,7 +45,6 @@ import {
 } from './remote-policy.ts'
 import type { CoreServeSandbox } from './remote-policy.ts'
 import {
-  normalizeRemoteSandbox,
   REMOTE_SANDBOX_MESSAGES,
   RemoteSandboxError,
 } from './remote-sandbox.ts'
@@ -117,7 +117,7 @@ export function coreVersionCommand(): string {
 }
 
 export function coreArtifactName(): string {
-  return `dsh-core-${CORE_ARTIFACT_VERSION}-linux-x64.tar.gz`
+  return `dsh-core-${CORE_ARTIFACT_VERSION}-${CORE_ARTIFACT_ARCH}.tar.gz`
 }
 
 async function openOverSsh(request: CoreOpenRequest): Promise<CoreClient> {
@@ -375,29 +375,23 @@ export function createCoreHub(
     hold,
     status: async (connectionId, signal) => {
       if (options.statusOf !== undefined) return options.statusOf(connectionId, signal)
-      for (const session of [...live.values()]) {
-        if (session.connectionId !== connectionId) continue
-        try {
-          const hello = await session.client.hello(signal, { cached: false })
-          return {
-            ok: true,
-            version: hello.version,
-            arch: hello.arch,
-            proto: hello.proto,
-            caps: hello.caps,
-            sandbox: normalizeRemoteSandbox(hello.sandbox),
-          }
-        } catch {
-          drop(session, false)
-          session.client.close()
-        }
-      }
       const connection = deps.connection(connectionId)
       if (connection === undefined) return { ok: false, detail: 'unknown machine' }
+      // BUG-6: answer from the ON-DISK artifact, never from a running serve. A
+      // cached `dsh-core serve` outlives the directory it was exec'd from, so
+      // asking it made the panel report "installed" after the operator deleted
+      // `~/.dsh-core/<version>/` — until the idle kill. One exec cannot lie.
+      const sessionLive = peek(connectionId) !== undefined
       try {
         const outcome = await connection.exec(coreVersionCommand(), signal !== undefined ? { signal } : undefined)
         if (outcome.exitCode !== 0) {
-          return { ok: false, detail: (outcome.stderr || outcome.stdout || 'core not installed').trim() }
+          const detail = (outcome.stderr || outcome.stdout || 'core not installed').trim()
+          return {
+            ok: false,
+            detail: sessionLive
+              ? `${detail} (a cached core session is still running; it exits on idle)`
+              : detail,
+          }
         }
         const parsed = JSON.parse(outcome.stdout) as {
           version?: string
@@ -411,6 +405,7 @@ export function createCoreHub(
           arch: parsed.arch,
           proto: parsed.proto,
           caps: parsed.caps,
+          sandbox: modeOf(connectionId),
         }
       } catch (error) {
         return { ok: false, detail: error instanceof Error ? error.message : String(error) }

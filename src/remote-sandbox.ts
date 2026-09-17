@@ -66,6 +66,7 @@
  */
 
 import { posix } from 'node:path'
+import { BWRAP_VENDOR } from './core-vendor-pins.ts'
 import { quoteShellArg } from './ssh-core.ts'
 
 /* ------------------------------------------------------------------ mode */
@@ -532,6 +533,24 @@ export const REMOTE_SANDBOX_MESSAGES = {
   /** Probe failed ⇒ the fence never ran a command. `{detail}` is the stderr. */
   probeFailed:
     'Runner failure: remote sandbox probe failed; no command text was sent — {detail}',
+  /**
+   * Appended to a probe failure whose stderr says the runner is absent (INFRA-15:
+   * bubblewrap is never redistributed — there is no upstream binary release — so
+   * the remote must install it from its own package manager). `{hints}` is the
+   * per-distro command list; the last clause is the honest escape hatch.
+   */
+  runnerMissing:
+    'The remote has no bubblewrap — install it on that host ({hints}), or re-run this work with sandbox mode "danger-full-access" (the fence is then gone).',
+  /**
+   * Appended when the detail names OUR OWN binary instead of the runner: a
+   * fenced session needs the core, and `core-client` reports the remote shell's
+   * `…/dsh-core: No such file or directory` verbatim. That is a deploy problem
+   * ("install the core"), never a bubblewrap problem — the first cut of the
+   * runner hint matched on the generic not-found phrase and told the operator to
+   * apt-get bubblewrap for a core that had simply been deleted (2026-09-17).
+   */
+  coreMissing:
+    'The fenced core is not installed on the remote (or its directory was removed) — deploy it from the plugin settings (core.deploy) and retry; a core session that is still running is stale once its directory is gone.',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',
@@ -583,6 +602,46 @@ function interpolate(text: string, params: Record<string, unknown>): string {
   return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match))
 }
 
+/** Stderr shapes that mean "the runner binary is not installed at all". */
+const RUNNER_MISSING_SIGNATURES = [
+  'no such file or directory',
+  'command not found',
+  'not found',
+  'exit 127',
+  'exit code 127',
+  'exited 127',
+]
+
+/**
+ * The actionable hint for a refusal whose detail names a missing program.
+ *
+ * Two very different remedies share the generic "No such file or directory"
+ * phrasing, so the detail decides which one applies: a mention of `dsh-core` is
+ * OUR artifact (deploy it), a mention of the runner program is the third-party
+ * fence binary (install it on the remote). Anything else gets no hint — a wrong
+ * hint is worse than none.
+ *
+ * @param detail - the probe/refusal detail line.
+ * @param runnerPath - the runner program that was probed.
+ * @returns the hint sentence, or undefined when the detail names neither.
+ */
+export function fenceMissingHint(
+  detail: string | undefined,
+  runnerPath: string = DEFAULT_REMOTE_RUNNER_PATH,
+): string | undefined {
+  if (detail === undefined || detail === '') return undefined
+  const lowered = detail.toLowerCase()
+  if (!RUNNER_MISSING_SIGNATURES.some(signature => lowered.includes(signature))) return undefined
+  if (lowered.includes('dsh-core')) return REMOTE_SANDBOX_MESSAGES.coreMissing
+  const runner = posix.basename(runnerPath).toLowerCase()
+  if (runner !== '' && lowered.includes(runner)) {
+    return interpolate(REMOTE_SANDBOX_MESSAGES.runnerMissing, {
+      hints: BWRAP_VENDOR.installHints.join('; '),
+    })
+  }
+  return undefined
+}
+
 /**
  * The refusal the wiring raises when a fenced mode has no positive probe
  * verdict. Fail closed: the caller must not fall back to an unwrapped command.
@@ -595,10 +654,13 @@ export function remoteSandboxUnavailableError(
   detail?: string,
 ): RemoteSandboxError {
   const base = interpolate(REMOTE_SANDBOX_MESSAGES.unavailable, { mode })
-  const text = detail === undefined || detail === ''
-    ? base
-    : `${base} ${interpolate(REMOTE_SANDBOX_MESSAGES.probeFailed, { detail })}`
-  return new RemoteSandboxError(text)
+  const hint = fenceMissingHint(detail)
+  const parts = [base]
+  if (detail !== undefined && detail !== '') {
+    parts.push(interpolate(REMOTE_SANDBOX_MESSAGES.probeFailed, { detail }))
+  }
+  if (hint !== undefined) parts.push(hint)
+  return new RemoteSandboxError(parts.join(' '))
 }
 
 /** The tool-layer reporting shape of one mode (`sw_status`-style output). */

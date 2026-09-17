@@ -49,7 +49,7 @@ export const MODEL_PROMPTS = {
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
   envMissing:
-    'Hint: the remote is missing {missing}. Interactive terminals still need bash or pwsh on the host. Search/glob on a fenced machine uses the bundled rg inside the core — deploy the core from Settings (core.deploy); do not apt-get install ripgrep for that path.',
+    'Hint: the remote is missing {missing}. Interactive terminals still need bash or pwsh on the host. A fenced machine searches with the remote\'s own rg when it has one; otherwise the core is deployed together with a verified official ripgrep build (Settings → core.deploy), and installing ripgrep on the remote also works. bubblewrap is never shipped: a fenced machine needs it installed on the remote itself (apt/dnf/pacman/zypper), or the work runs with sandbox `danger-full-access`.',
   envCore:
     'Remote environment:\n  core: {version} ({arch})\n  caps: {caps}',
   envCoreMissing:

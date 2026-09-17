@@ -15,15 +15,15 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | doing | P1 | **主线。** 范围认 `ADR-0023` + `ADR-0024`（§6 寿命/工作区键）。权限轴认 `ADR-0025` / `REQ-I13`。与 I13 **同一 PR、同一份 UAT**：`docs/uat/R27-req-i13-remote-session-sandbox.md`（R26 脚本已作废）。lab 50599 已跑 R27；收口见该脚本 |
-| REQ-I13 | 远端权限对齐本地 sandbox 提权 | doing | P1 | 范围认 `ADR-0025`。与 `REQ-I5` 同 PR、同一份 UAT `docs/uat/R27-req-i13-remote-session-sandbox.md`。无核心+围栏档 fail-closed 与 Windows 无核心默认 workspace-write 失败都在该脚本里。lab 50599 已跑 R27 |
+| INFRA-15 | 核心分发：npm 带工件 + 第三方工具不由我们分发 | doing | P1 | 代码完成，分支 `feat/core-sourcing-and-bugfixes`（同一 PR 还带 BUG-4 / BUG-6）（[`R28`](./rounds/R28-infra15-core-artifact-distribution.md)）。① npm 包只带 `dsh-core`：`files` 加 `core/dist`、`prepack` 守卫、`check` 链加 `build:core`、release.yml 加 setup-go（用户报「有些服务器装不上核心」根因）。② **政策修订（所有者 2026-09-16 拍板）**：本仓库**不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心三层解析，缺失即拒绝该次围栏 + 给安装命令或 danger 出路），`rg` 远端优先、缺失才由宿主取官方 release 并按 pin 校验后随核心推送。③ 版本/pin 单一来源 + `check:static` 第 14 道闸门拦漂移。**待**：push → PR → CI（go test/build 权威）→ 远端四组合 UAT（有/无 bwrap × 有/无 rg）→ 合并后改 done |
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-4 | 宿主项目根探测铸出祖先 jail | todo | P1 | 静默 `ctx.fs.resolve` 逐层找 `.git` ⇒ 祖先目录（`/home`、`$HOME`…）变成可写 jail，轨迹里无 Git 卡片。事实、爆发证据与修法 [`host-silent-fs.md`](./host-silent-fs.md)；工作区键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §6.2–§6.3。验收：无 `.git` 的会话只留会话根（+ 机器登记 workspace），不得 `--bind` 祖先 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | `@deepseek-ai/dsh-subprocess@0.1.6-alpha.1` 加宽四处 ⇒ `CoreSubprocessHandle` / `SshTerminalHandle` / `SshSubprocessRuntime` 编译失配（drift run 34950619028、issue #7）。成员表与**收口注意清单** [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 通道回绿 + `check:static`/`typecheck`/`test:agent`/boot smoke 全绿；`0.1.6` 升 rc 前收口 |
+| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | todo | P2 | 现状：围栏档下**任何** fs 调用都要核心；核心起不来（未部署/缺 bwrap/被删）⇒ 会话起步的静默探测（上游 `findProjectRoot` → `fs.resolve`+`fs.stat`，无 cwd）抛穿上下文装配，**连纯聊天都进不去**（2026-09-17 lab 实测）。方案：读面（`resolve`/`lstat`/`stat`/`readText`/`streamText`/`listDir`）可见降级到 SFTP；写面（`writeText`/`editText`）与 spawn/terminal **保持 fail-closed**；降级必须可见（状态面板 + 模型提示写明「围栏未生效」）。需改 `ADR-0025` §2.1 并在 §2.9 记修订。验收：缺 bwrap 的机器上 workspace-write 会话能正常对话与读；写/bash 仍被拒且文案指向装 bwrap 或 `core.deploy` |
+| BUG-7 | 跨传输 `version` 算法不一致 ⇒ 读→写 CAS 误报 | todo | P2 | SFTP 用 `ssh:sha256([完整路径,size,mtime(ms),mode])`；Go 核心用 `basename:hex(RFC3339Nano mtime):hex(size 低 16 位,mode)` ⇒ **两条传输对同一文件算出的 version 不同**，而上游 `dsh-fs-observation-policy` 以 `replaceIfVersion(prior.version)` 做 CAS、未观察过则 `FS_NOT_OBSERVED`。后果：会话中途切模式（danger 读 → workspace-write 写）会误报「文件已变/需重读」；核心那份用 basename + 16 位 size 本身也偏弱。修法二选一统一成「完整路径 + sha256 + 毫秒 mtime」+ 跨传输回归 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | 官方在 `0.1.6-alpha.1` 首发 SSH 家族（`dsh-ssh`/`dsh-fs-ssh`/`dsh-sandbox-ssh`/`dsh-subprocess-ssh`）；事实、helper 模型、差异矩阵 [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md)。**待所有者**：§5 定位拍板（A/B/C）。代理侧：scope 新包巡检（哨兵只装固定 13 包、看不见新能力包）。验收：§5 有结论 + 巡检有落地机制（或如实写「人工 + 频率」） |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | 已有非阻断 mtime WARN。**待做**：① 改内容哈希/构建戳再升级为阻断（PR #14 已证明纯 mtime 假阳性）；② `restart-3080.ps1` 重启前 `npm run build`。证据 [`rounds/R15-infra-11-dev-build-drift.md`](./rounds/R15-infra-11-dev-build-drift.md)。验收：改 `src/` 不 build 必提示；正常重建不误报 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后决定见 `ADR-0005` |
@@ -37,6 +37,7 @@
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `showsRemoteStatus` 零调用者；渲染看 `remote-status-entry.tsx`。修法：`remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 用 `ctx.sessionPersistence` 拼带历史的新 cwd。核三件事：列表是否出现、能否 resume、标题/投影。产出 ADR（可行 → 工作区生命周期；不可行 → fork 留档 + 新会话） |
 | UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | todo | P3 | `src/client/status.tsx` 的 `CONN_STATE_COLOR` 仍是 JS 硬编码 hex（#8A8F98/#22C55E/#F25A5A）且被 `row-badges.ts` 消费（行内状态点走内联色），与 UX-3「状态点走 state-* token」不完全一致。评审证据：PR #20。验收：状态点颜色全部来自宿主语义 token，双主题核对 |
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 设计已议定（2026-09-15，本轮对话）：① 机器连接成功且围栏档≠off → 后台 job 自动 `core.status`→`core.deploy`（artifact 已随 npm 分发，秒级）；未就绪期间 fail-closed 降级审批门，不阻断功能。② 升级走版本化目录并存：新版本健康探测（version 门 + profile 探针）通过才翻 `current` symlink，不过不翻、旧目录保留回滚。③ 模型路径首次调用遇「核心未安装」→ 走 `ctx.approval` 发明确标注的安装审批（人类机器弹人 / AI 机器 answerer 放行），把 ADR-0024「不偷偷装」红线转译为显式一键同意。**红线**：无用户来源同意绝不上传执行二进制。键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §3；依赖 INFRA-15（npm 分发 artifact）与 AUDIT-6 面。排期：INFRA-15 合并后下一轮 |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | **往后排**（2026-09-13：先做核心）。走 `conversation.view`（`ADR-0016`；`ADR-0017` §7）。tab id 进 localStorage，发布后不可改名。不要改走右侧面板 Tab |
 | UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | **根因随 ADR-0025 消失**（不再钉 `{danger, ask}`）。待 lab 确认 chip 回到 Workspace write 后改 `done`。勿再补 `remote-full` 除非仍 Custom |
 
@@ -67,7 +68,9 @@
 | INFRA-10 | 上游 alpha 通道预警 | done | — | 现为 next/alpha 两通道 + 自动 issue。见 `compatibility.md` §3.1 |
 | BUG-2 | 缺 `processPathFromHostPath` → 贴图 `TRANSPORT` | done | P1 | [`R14-BUG-2-fix.md`](./rounds/R14-BUG-2-fix.md)。随 `PUB-3` 发布 |
 | BUG-3 | 本机目录接错 `workspaces` 服务 | done | P1 | 改接 `uiWorkspace`。[`R15-BUG-3-local-directory.md`](./rounds/R15-BUG-3-local-directory.md) |
+| BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 根因：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling jail ⇒ 每个祖先各成一份 `--workspace` bind。改为只传 `path`（`CoreRoutingFileSystem`），探测落回会话根 / 机器登记 workspace。事实与证据 [`host-silent-fs.md`](./host-silent-fs.md)；回归 `test/core-routing.test.ts`「BUG-4」（拿掉修复即红）。**真机尾巴**：无 `.git` 的远程会话开一次，`ps` 只该见会话根（+ 机器登记 workspace），不得出现 `/home`、`$HOME` |
 | BUG-5 | ssh2 死链打挂宿主（无 error 监听 + keepalive 默认 0） | done | P1 | 根因、修法、回归与**真机验收全在** [`R29-bug5-ssh-error-listener.md`](./rounds/R29-bug5-ssh-error-listener.md)。代码随 PR #21（squash 86f9d6f）进 master |
+| BUG-6 | 删掉核心后 `core.status` 仍显示「已安装」 | done | P2 | 根因：`CoreHub.status` 优先问**活着的** `dsh-core serve`（`hello`），只有没有活会话时才探磁盘 ⇒ 删掉 `~/.dsh-core/<ver>/` 后缓存会话仍报 installed（最长撑到 idle 回收）。改为**只以磁盘工件为准**（`dsh-core version`）；missing 且仍有活会话时在 detail 里说明。`web.ts` 的 `core.status` 不再二次探测。回归 `test/core-routing.test.ts`「BUG-6」（负向对照已跑）。**真机尾巴**：删核心后状态立即变未安装 |
 | FIX-1 | `Session.events` 移除 | done | — | 改 `ownEvents()`。`compatibility.md` §2 |
 | FIX-2 | 用户名输入溢出 13px | done | — | `machine-form.tsx` 补 `minWidth: 0` |
 | FIX-3 | pack 含 source map | done | — | `files` 加 `!**/*.map` |
@@ -85,6 +88,8 @@
 | REQ-I7 | 副工作区权限档退役 | done | P1 | `ADR-0019`。[`R20-req-i7-permission-retirement.md`](./rounds/R20-req-i7-permission-retirement.md) |
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | 代码完成，`ADR-0022`。[`R24-session-connections-and-remote-fence.md`](./rounds/R24-session-connections-and-remote-fence.md)。**待用户**：[`uat/R24-req-i9-remote-runner.md`](./uat/R24-req-i9-remote-runner.md)（G1–G3；G1 为否则该主机类退化为审批门 + 低权用户） |
 | REQ-I11 | 会话级机器连接（吸收 SEC-5） | done | P1 | 代码完成，`ADR-0021`。同上 R24 报告。**待用户**：[`uat/R24-req-i11-session-connections.md`](./uat/R24-req-i11-session-connections.md) |
+| REQ-I5 | 远端「一个核心」（执行围栏 + 远端读写） | done | P1 | 代码随 **PR #18**（squash `74e0d58`）进 master；范围认 `ADR-0023` / `ADR-0024`，权限轴认 `ADR-0025` / `REQ-I13`。验收 [`uat/R27-req-i13-remote-session-sandbox.md`](./uat/R27-req-i13-remote-session-sandbox.md)：**11/12 通过**（步骤 13 N/A、步骤 9 无 PTY 工具跳过），步骤 11–12 用户 2026-09-15 口头通过；**2026-09-17 lab 复核了步骤 11**（挪走核心 ⇒ 围栏档 fail-closed，且同轮暴露 BUG-6） |
+| REQ-I13 | 远端权限对齐本地 sandbox 提权 | done | P1 | 范围认 `ADR-0025`，与 `REQ-I5` 同 PR #18、同一份 UAT R27（同上结论）。核心 `/permission` → `--sandbox`、无核心 + 围栏档 fail-closed、危险档 SFTP 旁路都在该脚本 11–12 步验过 |
 | REQ-R6 | 运行时国际化 | done | — | [`R6-i18n.md`](./rounds/R6-i18n.md) |
 | REQ-S1 | `sw_exec` | shipped | — | v0.1.1 |
 | REQ-S2 | win32 宿主 `bash` | shipped | — | v0.1.1 |

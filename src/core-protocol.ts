@@ -17,8 +17,15 @@ export const CORE_PROTO = 1
 /** Single-frame payload cap (bytes of JSON, not including the length prefix). */
 export const CORE_MAX_FRAME = 16 * 1024 * 1024
 
-/** Artifact / hello version until the plugin itself ships 0.2.0. */
-export const CORE_ARTIFACT_VERSION = '0.2.0-dev'
+/**
+ * Artifact / hello version until the plugin itself ships 0.2.0.
+ *
+ * Single source of truth is `core/artifact.json`; `src/core-artifact.ts` is
+ * generated from it by `npm run sync:core-version`, and `npm run check:static`
+ * fails when that projection is stale (INFRA-15 drift guard). Re-exported here
+ * so every consumer keeps importing it from the protocol module.
+ */
+export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-artifact.ts'
 
 /** v1 capability names advertised by `hello`. */
 export const CORE_CAPS = ['fs', 'spawn', 'rg'] as const

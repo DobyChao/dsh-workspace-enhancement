@@ -35,7 +35,7 @@ import { channelRouteOf, isAlreadyRegistered } from './web-channel.ts'
 import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel.ts'
 import { ensureCoreHub } from './core-hub.ts'
 import type { CoreHub } from './core-hub.ts'
-import { deployCore, coreStatusViaExec } from './core-deploy.ts'
+import { deployCore } from './core-deploy.ts'
 import { isCoreMissingError } from './remote-policy.ts'
 import type { SshTransport } from './transport.ts'
 
@@ -714,10 +714,9 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const input = requirePayload(payload, isIdPayload, 'core.status')
           const id = input.id.trim()
           requireConnection(id)
-          const live = await hub().status(id, signal)
-          if (live.ok) return { ok: true, value: live }
-          const via = await coreStatusViaExec(requireConnection(id) as unknown as SshTransport, signal)
-          return { ok: true, value: { ...via, sandbox: hub().modeOf(id) } }
+          // BUG-6: one source of truth (`CoreHub.status` probes the installed
+          // artifact). Probing here as well could only disagree with itself.
+          return { ok: true, value: await hub().status(id, signal) }
         }
         case 'core.deploy': {
           const input = requirePayload(payload, isIdPayload, 'core.deploy')

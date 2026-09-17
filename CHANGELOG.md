@@ -2,15 +2,18 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
-## [0.2.0](https://github.com/DobyChao/dsh-workspace-enhancement) (unreleased)
+## [0.2.0](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-17)
 
-远端一个核心（`REQ-I5` / ADR-0023 / ADR-0024）。**不随本提交发版**；`package.json` 仍为 0.1.4。
+远端「一个核心」（`REQ-I5` / `REQ-I13`，ADR-0023 / ADR-0024 / ADR-0025）+ 核心分发与第三方工具来源
+（`INFRA-15`）+ 客户端 UI 统一到宿主设计语言（`UX-3`）+ 三个修复（`BUG-4` / `BUG-5` / `BUG-6`）。
 
 ### 新增
 
 - **Go `dsh-core` + 成帧 JSON RPC**：围栏档远程 `ctx.fs` / spawn / browse 改走核心；进程自 re-exec 捆绑 bwrap；`off` 仍 SFTP + 裸 exec。未知方法 `UNIMPLEMENTED`；`hello.caps` 为演进舱口。
 - **设置页部署**：通道 `core.deploy` / `core.status`；首次上传允许 SFTP；**不**在模型调用时偷偷安装。v1 只认 linux x86_64。
 - UAT：`docs/uat/R27-req-i13-remote-session-sandbox.md`（REQ-I5 + REQ-I13 合验；对偶 I9-1/2/3，**反转 I9-9**）。原 R26 脚本已作废。
+- **核心分发与第三方工具来源（`INFRA-15`，ADR-0024 §3 政策修订）**：npm 包只带第一方 `core/dist/dsh-core-<ver>-linux-x64.tar.gz`（`files` 加 `core/dist`、`prepack` 守卫保证打包前工件必在、`check` 链加 `build:core`、发布机加 `setup-go`）；**本仓库不再分发任何第三方二进制**——`bwrap` 由远端发行版提供（核心按 `DSH_CORE_BWRAP` → 同目录 `bin/bwrap` → 远端 `PATH` 三层解析，缺失即拒绝该次围栏并给出各发行版安装命令或 `danger-full-access` 出路，不崩宿主），`rg` 远端优先、缺失才由宿主从 **ripgrep 官方 release** 下载静态件、按 pin 的 sha256 校验后缓存到 `$DSH_HOME/cache/dsw-core-vendor/` 并随核心推送（`DSW_CORE_VENDOR_PROXY` / `_BASE_URL` / `_OFFLINE` / 开发开关 `_FORCE_MISSING`）。版本与 pin 单一来源：`core/artifact.json` + `core/vendor.json` → 生成 `src/core-artifact.ts` / `src/core-vendor-pins.ts`，`check:static` 第 14 道闸门拦漂移。
+- **客户端 UI 统一到宿主 dsh 设计语言（`UX-3`）**：四类界面全量走 `--dsw-*` token + 宿主几何；CSS module 内联进 `lib/client.js`，词典 370/370。**真机尾巴**：`docs/uat/R28-ui-design-language.md`（浅/深主题 12 步）待跑。
 
 ### 变更
 
@@ -19,7 +22,17 @@
 - **核心进程寿命与工作区键（ADR-0024 §6）**：活 `dsh-core serve` 按 `(machine, mode, workspaceRoot)` 缓存；`read-only`/`off` 每机一条，`workspace-write` 每工作区根一条（嵌套共用祖先）；browse/list 路径不再变成 `--workspace`。channel 死后驱逐；SSH 重连/删机器关掉该机全部 serve；空闲 10 分钟且无 spawn job 则杀进程（根身份记得住）。`core.status` 对活会话发不缓存的 `hello`。部署脚本给 `bin/bwrap`/`bin/rg` 也 `chmod +x`。不改 SSH keepalive 默认 0，不随连接自动安装。
 - **远端权限对齐本地提权（REQ-I13 / ADR-0025）**：取消远程会话 `danger-full-access` 钉档；远程 cwd 上 `confine` 短路本机 runner；`sandboxPolicy` 转发到核心 `--sandbox`（`danger` → `off`）；无核心+围栏档 fail-closed；核心拒写带 `FS_SANDBOX_DENIED` + `sandboxDenialMarker`。机器 `remoteSandbox` 不再当权限轴。
 - **R27 当场**：官方 Write 缺叶路径走祖先 `realpath`；禁止 workspace-write `--workspace /`（会盖掉 tmpfs 泄漏 `/tmp`）。
-- **已知未修（`BUG-4`）**：宿主静默项目根探测会把祖先目录铸成 workspace-write jail。事实 `docs/host-silent-fs.md`。
+### 修复
+
+- **宿主静默项目根探测铸出祖先 jail（`BUG-4`）**：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给核心 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling workspace-write jail ⇒ 上游 `findProjectRoot` 每上一层祖先就多一份 `--workspace` bind（`/home`、`$HOME`…）。改为只传 `path`（cwd 回落发起会话自己的 cwd），探测落回会话根/机器登记 workspace。事实与取证 `docs/host-silent-fs.md`。
+- **ssh2 死链打挂宿主进程（`BUG-5`）**：`connectReady()` 在 ready 一到就摘掉唯一的 error 监听，此后 `Client` 无任何 error 监听；keepalive 默认 0 ⇒ 空闲回收/超时以裸 `ECONNRESET` 冒出，Node 对无人监听的 `'error'` 抛未捕获异常，整个 `dsh web` 退出。改为连接前即挂 `watchChainClient`（error/close）+ `handleChainDeath`（generation/disposed 守卫）→ `invalidate` 下次自动重连；keepalive 默认 `30 000 × 3`。档案 `docs/rounds/R29-bug5-ssh-error-listener.md`。
+- **删掉核心后状态仍报「已安装」（`BUG-6`）**：`CoreHub.status` 优先问还活着的 `dsh-core serve`（`hello`），只有没有活会话时才探磁盘；serve 活得比它自己的目录久 ⇒ 手工删 `~/.dsh-core/<ver>/` 后面板继续报 installed（最长到空闲回收）。改为**只以磁盘工件为准**（`dsh-core version`），缺失且仍有活会话时在 detail 里说明。
+- **围栏拒绝文案误诊（`INFRA-15` 收口）**：runner 缺失提示只匹配 `No such file or directory` 这类通用串，把「核心被删」误报成「缺 bwrap」。改为按 detail 里出现的**程序名**分诊：`dsh-core` ⇒ 去 `core.deploy`；runner 名 ⇒ 装 bubblewrap；两者都不是 ⇒ 不给建议。
+
+### 质量
+
+- 新增回归：`test/core-vendor.test.ts`（官方取件/校验/缓存/离线 fail-closed）、`test/core-routing.test.ts`「BUG-4」「BUG-6」、`test/core-deploy.test.ts`（安装脚本与远端工具判定）、`test/remote-sandbox.test.ts`「fenceMissingHint」、`core/jail_test.go`（bwrap 三层解析 5 例）。关键用例都跑过**负向对照**（拿掉修复即红）。
+- `check:static` 新增第 14 道闸门（生成的核心清单不得漂移）；`pack-smoke` 硬要求 `core/dist` 工件、体积上限 5→15 MB。
 
 ## [0.1.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-13)
 

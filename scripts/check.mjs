@@ -347,6 +347,25 @@ if (existsSync(libDir)) {
   }
 }
 
+// ---- 14. the core artifact/vendor manifests have exactly one source ---------
+/**
+ * `core/artifact.json` (first-party tarball) and `core/vendor.json` (official
+ * third-party pins) are the single sources; `src/core-artifact.ts` and
+ * `src/core-vendor-pins.ts` are generated from them. A stale projection builds
+ * `dsh-core-<old>-linux-x64.tar.gz` while `coreArtifactName()` looks for another
+ * name, or fetches a tool the deploy path then cannot find. Cheap (no Go, no
+ * pack), so it runs here.
+ */
+try {
+  const sync = runCapture(process.execPath,
+    [resolve(ROOT, 'scripts', 'sync-core-manifest.mjs'), '--check'], { cwd: ROOT })
+  check('generated core manifests match core/artifact.json + core/vendor.json',
+    sync.status === 0,
+    sync.status === 0 ? '' : (sync.stderr.trim() || sync.stdout.trim()).slice(0, 200))
+} catch (error) {
+  check('core manifest sources readable', false, String(error.message || error))
+}
+
 // ---- result ----------------------------------------------------------------
 console.log(failures.length === 0
   ? '[check.mjs] ALL PASS'
