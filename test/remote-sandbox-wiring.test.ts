@@ -282,12 +282,12 @@ test('handle run(): preflight runs BEFORE resolveArgv, and the WRAPPED argv is s
   assert.ok(command.endsWith(`'--' 'bash' '-c' 'echo hi'`), 'the original argv survives verbatim after `--`')
 })
 
-test('handle run(): no resolveArgv is identity — an unmodified deployment sends the same bytes as before', async () => {
+test('handle run(): no resolveArgv is identity — the serialized text keeps its shape (plus the BUG-9 pid echo)', async () => {
   const transport = recordingTransport()
   const handle = new SshSubprocessHandle(transport, '/srv/work', spawnSpec(COMMAND_ARGV), mkdtempSync(join(tmpdir(), 'dsh-i9-plain-')))
   const finished = await handle.done
   assert.equal(finished.exitCode, 0)
-  assert.equal(transport.commands[0], `cd -- '/srv/work' && exec env -i -- 'PATH=/usr/bin:/bin' 'HOME=/root' 'bash' '-c' 'echo hi'`)
+  assert.equal(transport.commands[0], `cd -- '/srv/work' && echo $$ && exec env -i -- 'PATH=/usr/bin:/bin' 'HOME=/root' 'bash' '-c' 'echo hi'`)
 })
 
 test('handle run(): a rejection from resolveArgv fails done and NOTHING reaches the transport', async () => {

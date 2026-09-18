@@ -61,6 +61,12 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   private settled = false
   private job: string | undefined
   private unsub: (() => void) | undefined
+  /** BUG-9: a stop requested before the job id exists is remembered, not dropped. */
+  private terminatePending = false
+  private terminateSentFor: string | undefined
+  private terminateFailureValue: unknown
+  private watchedClient: CoreClient | undefined
+  private pendingStdin: string | undefined
 
   constructor(
     private readonly hub: CoreHub,
@@ -102,10 +108,37 @@ export class CoreSubprocessHandle implements SubprocessHandle {
       this.fallbackHandle.terminate()
       return
     }
+    // BUG-9 startup window: `spawn.start` may not have answered yet (cold
+    // core, approval gate, connection setup) — exactly when a cancel lands.
+    // Remember it; trySendTerminate fires the moment the job id appears.
+    this.terminatePending = true
+    this.trySendTerminate()
+  }
+
+  /** Last observed spawn.terminate delivery failure (test/telemetry surface, BUG-9). */
+  get lastTerminateFailure(): unknown {
+    return this.terminateFailureValue
+  }
+
+  /**
+   * Send `spawn.terminate` as soon as BOTH the request and the job id exist.
+   * A missing core client or a failed RPC is recorded (not swallowed) and the
+   * send is un-latched, so the next trigger retries instead of dying silently.
+   */
+  private trySendTerminate(): void {
+    if (!this.terminatePending || this.settled) return
     const job = this.job
-    if (job === undefined) return
+    if (job === undefined || job === this.terminateSentFor) return
     const client = this.hub.peek(this.connectionId, { cwd: this.cwd, policy: this.policy })
-    void client?.call(CORE_METHODS.spawnTerminate, { job }).catch(() => {})
+    if (client === undefined) {
+      this.terminateFailureValue = new Error('core client unavailable for spawn.terminate')
+      return
+    }
+    this.terminateSentFor = job
+    void client.call(CORE_METHODS.spawnTerminate, { job }).then(undefined, (error: unknown) => {
+      if (this.terminateSentFor === job) this.terminateSentFor = undefined
+      this.terminateFailureValue = error
+    })
   }
 
   waitForExit(signal?: AbortSignal): Promise<boolean> {
@@ -153,6 +186,8 @@ export class CoreSubprocessHandle implements SubprocessHandle {
       const job = typeof started?.job === 'string' ? started.job : ''
       if (job === '') throw new Error('core spawn.start returned no job id')
       this.job = job
+      this.trySendTerminate()
+      this.flushPendingStdin()
       return await exit
     } catch (error) {
       releaseHold()
@@ -170,13 +205,16 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   private watch(client: CoreClient): Promise<SubprocessOutcome> {
     return new Promise<SubprocessOutcome>((resolve, reject) => {
       this.unsub = client.onEvent((method, params) => {
+        // BUG-9: events can teach us the job id before spawn.start answers —
+        // a pending terminate must ride the first event that names the job.
         const rec = asRecord(params)
         if (rec === undefined) return
-        if (this.job !== undefined && rec.job !== this.job) return
         if (this.job === undefined && (method === CORE_EVENTS.spawnStdout || method === CORE_EVENTS.spawnStderr || method === CORE_EVENTS.spawnExit)) {
           if (typeof rec.job === 'string') this.job = rec.job
         }
-        if (rec.job !== this.job) return
+        this.trySendTerminate()
+        this.flushPendingStdin()
+        if (this.job !== undefined && rec.job !== this.job) return
         if (method === CORE_EVENTS.spawnStdout || method === CORE_EVENTS.spawnStderr) {
           const bytes = Buffer.from(String(rec.b64 ?? ''), 'base64')
           const which = method === CORE_EVENTS.spawnStdout ? 'stdout' : 'stderr'
@@ -204,20 +242,25 @@ export class CoreSubprocessHandle implements SubprocessHandle {
           void client.call(CORE_METHODS.spawnStdin, { job, b64 }).catch(() => {})
         })
       } else if (typeof this.spec.stdio.stdin === 'object' && this.spec.stdio.stdin !== null && 'data' in this.spec.stdio.stdin) {
-        const data = this.spec.stdio.stdin.data
-        const b64 = Buffer.from(data).toString('base64')
-        const send = (): void => {
-          const job = this.job
-          if (job === undefined) {
-            queueMicrotask(send)
-            return
-          }
-          void client.call(CORE_METHODS.spawnStdin, { job, b64 }).catch(() => {})
-        }
-        send()
+        // BUG-9: park the payload instead of spinning on queueMicrotask — a
+        // slow spawn.start used to starve the whole event loop waiting for the
+        // job id. flushPendingStdin sends it the moment the id lands.
+        this.pendingStdin = Buffer.from(this.spec.stdio.stdin.data).toString('base64')
+        this.watchedClient = client
+        this.flushPendingStdin()
       }
       void 0 as unknown as typeof reject
     })
+  }
+
+  /** Send the parked stdin payload once the job id exists (see watch()). */
+  private flushPendingStdin(): void {
+    const b64 = this.pendingStdin
+    const job = this.job
+    const client = this.watchedClient
+    if (b64 === undefined || job === undefined || client === undefined) return
+    this.pendingStdin = undefined
+    void client.call(CORE_METHODS.spawnStdin, { job, b64 }).catch(() => {})
   }
 }
 

@@ -67,6 +67,10 @@ func (h *spawnHub) start(argv []string, cwd string, env map[string]string) (stri
 	if err != nil {
 		return "", err
 	}
+	// BUG-9: the child becomes its own process-group leader, so terminate can
+	// kill the WHOLE group. Without this, kill(pid) only removes the direct
+	// child (the shell) and the user's actual task survives server-side.
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
@@ -113,7 +117,13 @@ func (h *spawnHub) terminate(job string) {
 	h.mu.Lock()
 	p := h.procs[job]
 	h.mu.Unlock()
-	if p != nil && p.cmd != nil && p.cmd.Process != nil {
+	if p == nil || p.cmd == nil || p.cmd.Process == nil {
+		return
+	}
+	// BUG-9: kill the process GROUP first (argv is usually a shell — its
+	// children are the real task); fall back to the direct child only when a
+	// group kill is impossible (non-unix build) or fails.
+	if !killProcessGroup(p.cmd.Process.Pid) {
 		_ = p.cmd.Process.Kill()
 	}
 }

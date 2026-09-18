@@ -437,6 +437,7 @@ const en: Record<DswKey, string> = {
   'tool.error.jobsUnavailable': 'background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs',
   'tool.error.backgroundDisabled': 'run_in_background is disabled for this deployment (enableRunInBackground: false)',
   'tool.error.aborted': 'tool call aborted',
+  'tool.error.stopFailed': 'the remote process did not exit after TERM/KILL — the tool call stopped waiting; check the remote host for leftover processes',
   'tool.param.error.commandEmpty': 'invalid command: expected a non-empty string',
   'tool.param.error.descriptionEmpty': 'invalid description: expected a non-empty string',
   'tool.param.error.timeoutInvalid': 'invalid timeoutMs: expected a positive number, got {v}',
