@@ -22,10 +22,6 @@ func countLiveGroupMembers(pgid int) int {
 	}
 	members := 0
 	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
-		}
 		raw, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
 		if err != nil {
 			continue // raced with exit
