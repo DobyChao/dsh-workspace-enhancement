@@ -1,6 +1,6 @@
 /** One asynchronously-started SSH command projected onto the subprocess seam. */
 
-import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { PassThrough } from 'node:stream'
 import type { Readable, Writable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
@@ -20,12 +20,30 @@ function isCollect(mode: SubprocessOutputMode): mode is SubprocessCollect {
   return mode !== 'pipe' && mode !== 'inherit'
 }
 
-/** BUG-9: longest plausible `echo $$` line before the peel gives up (bypass). */
-const PID_LINE_MAX_BYTES = 32
-/** BUG-9: a `echo $$` line is 1–10 decimal digits, no sign, no padding. */
-const PID_LINE_RE = /^[1-9][0-9]{0,9}$/
 /** BUG-9: after the KILL escalation, how long until the channel is force-closed. */
 const KILL_CLOSE_FALLBACK_MS = 2_000
+
+/**
+ * POSIX steward that owns the remote process group. SSH stdin is the stop
+ * wire only: a background `cat` waits for EOF, then `kill -TERM 0` hits every
+ * member of this SSH session's process group (sshd already `setsid`'d it).
+ * The user command reads fd 3, so a closed payload / `ignore` stdin cannot
+ * be mistaken for a stop. OS pids never leave the remote machine.
+ *
+ * `pipe` stdin cannot share that wire (the payload IS fd 0), so that shape
+ * falls back to `exec` + channel signal/close.
+ */
+const REMOTE_STOP_STEWARD = '"$@"'
+  + ' <&3 &'
+  + ' job=$!;'
+  + ' exec 3<&-;'
+  + ' (cat >/dev/null; kill -TERM 0) &'
+  + ' watch=$!;'
+  + ' wait $job;'
+  + ' status=$?;'
+  + ' kill $watch >/dev/null 2>&1;'
+  + ' wait $watch >/dev/null 2>&1;'
+  + ' exit $status'
 
 /** Normalize an SSH signal name into the `SIG…` vocabulary the seam carries. */
 function normalizeSignal(signal: string | null | undefined): NodeJS.Signals | null {
@@ -34,19 +52,33 @@ function normalizeSignal(signal: string | null | undefined): NodeJS.Signals | nu
 }
 
 /**
- * Build the remote command text: change to the working directory, print the
- * shell's pid, then replace the environment with the scrubbed remote base plus
- * explicit entries and exec the argv. `env -i` prevents credential-shaped
- * remote names from leaking into the child; the scrubbed base restores PATH
- * and HOME.
+ * Pick a here-doc delimiter that does not occur in `data`, so the payload
+ * cannot close the document early. The token is hex; expanding the prefix
+ * is only for the astronomical collision case.
+ */
+function stdinDelimiter(data: string): string {
+  const digest = createHash('sha256').update(data).digest('hex')
+  for (let n = 16; n <= 64; n += 8) {
+    const token = `DSW_STDIN_${digest.slice(0, n)}`
+    if (!data.includes(token)) return token
+  }
+  return `DSW_STDIN_${digest}`
+}
+
+function hereDocFd3(data: string): string {
+  const delim = stdinDelimiter(data)
+  const body = data.length === 0 ? '' : (data.endsWith('\n') ? data : `${data}\n`)
+  return `3<<'${delim}'\n${body}${delim}`
+}
+
+/**
+ * Build the remote command text: change to the working directory, then run
+ * argv under a scrubbed `env -i`. `env -i` prevents credential-shaped remote
+ * names from leaking into the child; the scrubbed base restores PATH and HOME.
  *
- * BUG-9: `echo $$` is the FIRST stdout bytes the command ever produces, and the
- * `exec` that follows keeps that pid — so the line both survives into the
- * exec'd argv[0] and gives us the remote pid to kill through an independent
- * channel on servers whose sshd rejects signal requests (OpenSSH < 7.9 without
- * a PTY, Dropbear). The handle peels the line back off stdout
- * ({@link SshSubprocessHandle.takeStdoutChunk}); a non-numeric first line
- * simply bypasses the peel, so the completion path is unchanged.
+ * BUG-9: except for live `stdin: 'pipe'`, the argv is launched by a steward
+ * that kills its process group when the SSH stdin pipe EOFs. The host never
+ * learns a remote pid — `handle.pid` stays `-1` (architecture.md §5).
  *
  * `argv` is passed in rather than read from `spec.argv` because the startup
  * sequence may have replaced it (REQ-I9: the remote sandbox fence wraps the
@@ -68,12 +100,18 @@ async function buildCommand(
   const remote = await readRemoteEnvironment(ssh)
   const environment = serializeEnvironment(scrubRemoteEnvironment(remote), spec.env)
   const serialized = argv.map(quoteShellArg).join(' ')
-  return `cd -- ${quoteShellArg(cwd)} && echo $$ && exec env -i -- ${environment} ${serialized}`
+  const prefix = `cd -- ${quoteShellArg(cwd)} && env -i -- ${environment}`
+  if (spec.stdio.stdin === 'pipe') {
+    return `${prefix} exec ${serialized}`
+  }
+  const steward = `${prefix} sh -c ${quoteShellArg(REMOTE_STOP_STEWARD)} _ ${serialized}`
+  if (spec.stdio.stdin === 'ignore') return `${steward} 3</dev/null`
+  return `${steward} ${hereDocFd3(spec.stdio.stdin.data)}`
 }
 
 /**
- * SSH-backed subprocess handle. The remote pid is learned from the `echo $$`
- * prefix line once it arrives (BUG-9); until then `pid` is `-1`.
+ * SSH-backed subprocess handle. Remote pids stay on the remote: this handle
+ * reports {@link SshSubprocessHandle.pid} as `-1` for the life of the call.
  */
 export class SshSubprocessHandle implements SubprocessHandle {
   readonly stdin: Writable | undefined
@@ -81,6 +119,8 @@ export class SshSubprocessHandle implements SubprocessHandle {
   readonly stderr: Readable | undefined
   readonly collected: SubprocessHandle['collected']
   readonly done: Promise<SubprocessOutcome>
+  /** Remote OS pids are not a local-process identity; the seam's sentinel. */
+  readonly pid = -1
 
   private readonly terminationController = new AbortController()
   private readonly stdoutCollector: SshOutputCollector | undefined
@@ -89,11 +129,6 @@ export class SshSubprocessHandle implements SubprocessHandle {
   private graceTimer: NodeJS.Timeout | undefined
   private closeTimer: NodeJS.Timeout | undefined
   private settled = false
-  /** BUG-9: pid echo state — `pending` buffers stdout until the first newline. */
-  private pidState: 'pending' | 'captured' | 'bypassed' = 'pending'
-  private pidBuffer: Buffer = Buffer.alloc(0)
-  private remotePid: number | undefined
-  private readonly remoteKillSent = new Set<'TERM' | 'KILL'>()
 
   /**
    * Start the SSH command without blocking the synchronous spawn call.
@@ -142,11 +177,6 @@ export class SshSubprocessHandle implements SubprocessHandle {
     if (spec.signal?.aborted === true) this.terminate()
   }
 
-  /** Remote process id once the `echo $$` line arrived; `-1` before that. */
-  get pid(): number {
-    return this.remotePid ?? -1
-  }
-
   /** @inheritdoc */
   terminate(): void {
     if (this.settled || this.terminationController.signal.aborted) return
@@ -183,20 +213,19 @@ export class SshSubprocessHandle implements SubprocessHandle {
   }
 
   /**
-   * BUG-9 termination chain: the `channel.signal` request stays the first hop,
-   * but it is a silent single point on OpenSSH < 7.9 / Dropbear (no PTY ⇒ the
-   * server rejects signal requests and ssh2 swallows the failure). So the same
-   * escalation ALSO fires a `kill` through an independent exec channel — group
-   * first, bare pid as fallback — and if even that leaves the channel open
-   * past the grace, the channel is closed locally so `done` cannot hang the
-   * tool call forever.
+   * BUG-9 termination chain: EOF on the steward's stop wire (stdin), then the
+   * SSH signal request (OpenSSH ≥ 7.9), then a local close so `done` cannot
+   * hang the tool call on a server that ignores both.
    */
   private beginTermination(channel: ClientChannel): void {
+    try {
+      channel.end()
+    } catch (_alreadyClosed) {
+      // The steward may already have exited; close still runs below.
+    }
     this.fireSignal(channel, 'TERM')
-    this.dispatchRemoteKill('TERM')
     this.graceTimer = setTimeout(() => {
       this.fireSignal(channel, 'KILL')
-      this.dispatchRemoteKill('KILL')
       this.closeTimer = setTimeout(() => {
         if (this.settled) return
         try {
@@ -206,45 +235,6 @@ export class SshSubprocessHandle implements SubprocessHandle {
         }
       }, KILL_CLOSE_FALLBACK_MS)
     }, this.spec.graceMs)
-  }
-
-  /** Remember the stop request for the pid line that has not arrived yet. */
-  private onRemotePid(pid: number): void {
-    this.remotePid = pid
-    if (this.terminationController.signal.aborted) this.dispatchRemoteKill('TERM')
-  }
-
-  /**
-   * Fire `kill -<sig> -- -PID` (process group) with a bare-pid fallback on the
-   * same connection but a fresh channel, so a server that rejects signal
-   * requests still loses the process. `pid` is a validated decimal from the
-   * `echo $$` peel — never caller text — so no shell metacharacters can ride
-   * along (AGENTS.md §5.6).
-   */
-  private dispatchRemoteKill(name: 'TERM' | 'KILL'): void {
-    const pid = this.remotePid
-    if (pid === undefined || this.settled || this.remoteKillSent.has(name)) return
-    this.remoteKillSent.add(name)
-    const command = `kill -${name} -- -${pid} 2>/dev/null; kill -${name} ${pid} 2>/dev/null; true`
-    void this.runtime.getClient().then(async (client) => {
-      await new Promise<void>((resolve) => {
-        let finished = false
-        const done = (): void => { if (!finished) { finished = true; resolve() } }
-        try {
-          client.exec(command, { pty: false }, (error, stream) => {
-            if (error !== undefined) { done(); return }
-            stream.on('data', () => {}) // drain: a stalled kill channel must not leak backpressure
-            stream.stderr.on('data', () => {})
-            stream.on('close', done)
-            stream.on('error', done)
-          })
-        } catch (_clientDied) {
-          done()
-        }
-      })
-    }).catch(() => {
-      // The signal hop and the close fallback remain; nothing else to do here.
-    })
   }
 
   private settle(): void {
@@ -297,79 +287,27 @@ export class SshSubprocessHandle implements SubprocessHandle {
     this.wireStderr(channel)
     if (this.stdin !== undefined) {
       this.stdin.pipe(channel)
-    } else if (typeof this.spec.stdio.stdin === 'object') {
-      channel.end(this.spec.stdio.stdin.data)
     }
+    // `{ data }` is inlined as fd 3 on the steward; `ignore` is `3</dev/null`.
+    // SSH stdin stays open as the stop wire until terminate() or natural exit.
 
     return await new Promise<SubprocessOutcome>((resolve, reject) => {
       channel.on('close', (code: number | null, signal: string | null) => {
-        this.flushPendingPidLine()
         this.settle()
         resolve({ exitCode: code, signal: normalizeSignal(signal) })
       })
       channel.on('error', (error: Error) => {
-        this.flushPendingPidLine()
         this.settle()
         reject(error)
       })
     })
   }
 
-  /**
-   * Peel the `echo $$` prefix line off stdout (BUG-9). Buffers while the first
-   * line is incomplete; a numeric line captures the remote pid and only the
-   * remainder reaches the stream, any other first line bypasses the peel and
-   * streams verbatim — so a server that somehow drops our echo loses nothing
-   * but the independent-kill hop.
-   */
-  private takeStdoutChunk(chunk: Buffer): Buffer[] {
-    if (this.pidState !== 'pending') return [chunk]
-    this.pidBuffer = this.pidBuffer.length === 0 ? chunk : Buffer.concat([this.pidBuffer, chunk])
-    const newline = this.pidBuffer.indexOf(0x0a)
-    if (newline < 0) {
-      if (this.pidBuffer.length > PID_LINE_MAX_BYTES) {
-        this.pidState = 'bypassed'
-        const pending = this.pidBuffer
-        this.pidBuffer = Buffer.alloc(0)
-        return [pending]
-      }
-      return []
-    }
-    const line = this.pidBuffer.subarray(0, newline).toString('latin1')
-    const rest = this.pidBuffer.subarray(newline + 1)
-    const whole = this.pidBuffer
-    this.pidBuffer = Buffer.alloc(0)
-    if (PID_LINE_RE.test(line) === true) {
-      this.pidState = 'captured'
-      this.onRemotePid(Number(line))
-      return rest.length > 0 ? [rest] : []
-    }
-    this.pidState = 'bypassed'
-    return [whole]
-  }
-
-  /** A channel that closed mid-first-line must not swallow buffered bytes. */
-  private flushPendingPidLine(): void {
-    if (this.pidState !== 'pending') return
-    this.pidState = 'bypassed'
-    const pending = this.pidBuffer
-    this.pidBuffer = Buffer.alloc(0)
-    if (pending.length > 0) this.routeStdout(pending)
-  }
-
-  private routeStdout(chunk: Buffer): void {
-    const mode = this.spec.stdio.stdout
-    if (mode === 'pipe') (this.stdout as PassThrough | undefined)?.write(chunk)
-    else if (mode === 'inherit') process.stdout.write(chunk)
-    else this.stdoutCollector?.push(chunk)
-  }
-
   private wireStdout(channel: ClientChannel): void {
-    // Routed by hand (not channel.pipe) so every byte passes the pid peel
-    // first; a remote exec channel is window-flow-controlled by ssh2 anyway.
-    channel.on('data', (data: Buffer) => {
-      for (const chunk of this.takeStdoutChunk(data)) this.routeStdout(chunk)
-    })
+    const mode = this.spec.stdio.stdout
+    if (mode === 'pipe') channel.pipe(this.stdout as PassThrough)
+    else if (mode === 'inherit') channel.pipe(process.stdout)
+    else channel.on('data', (data: Buffer) => { this.stdoutCollector?.push(data) })
   }
 
   private wireStderr(channel: ClientChannel): void {

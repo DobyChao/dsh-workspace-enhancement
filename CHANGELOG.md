@@ -2,6 +2,12 @@
 
 所有显著改动记录在此文件，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)（版本：语义化版本）。
 
+## Unreleased
+
+### 修复
+
+- **远端任务停止（`BUG-9`）**：核心腿组杀 + pending-abort 保留。直连腿不再把远端 pid 交给宿主（去掉 `echo $$` 与二次 `kill <pid>`）；改由远端 steward 在 SSH stdin EOF 时 `kill -TERM 0`，宿主只 signal + 关 channel。`handle.pid` 恒为 `-1`。有核心时 `danger-full-access` 仍走核心（`--sandbox off`）。
+
 ## [0.2.0](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-17)
 
 远端「一个核心」（`REQ-I5` / `REQ-I13`，ADR-0023 / ADR-0024 / ADR-0025）+ 核心分发与第三方工具来源

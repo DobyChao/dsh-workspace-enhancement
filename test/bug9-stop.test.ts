@@ -1,9 +1,9 @@
 /**
  * BUG-9 regression suite: remote tasks must actually stop.
  *
- * Covers the three legs from rounds/R31:
- *  - direct ssh2 leg: pid echo + peel, independent-channel group kill,
- *    KILL→close fallback, startup-window abort;
+ * Covers the three legs from rounds/R31, with the direct-leg steward correction:
+ *  - direct ssh2 leg: remote stdin-EOF steward (no pid over the wire),
+ *    signal + close fallback, startup-window abort;
  *  - core leg: pending-abort across the spawn.start window, non-silent
  *    spawn.terminate delivery failures;
  *  - tool layer: `awaitOutcomeOrStop` never waits forever.
@@ -31,20 +31,25 @@ import { awaitOutcomeOrStop, UnsettledStopError } from '../src/exec-tools.ts'
 function fakeChannel(): ClientChannel & {
   signals: string[]
   closed: boolean
+  ended: boolean
   emitData: (chunk: string) => void
   emitClose: (code: number | null) => void
 } {
   const channel = new EventEmitter() as unknown as ClientChannel & {
     signals: string[]
     closed: boolean
+    ended: boolean
     emitData: (chunk: string) => void
     emitClose: (code: number | null) => void
   }
   channel.signals = []
   channel.closed = false
+  channel.ended = false
   channel.stderr = new PassThrough()
+  channel.writable = true
+  channel.write = (): boolean => true
   channel.signal = (name: string): void => { channel.signals.push(name) }
-  channel.end = (): void => {}
+  channel.end = (): void => { channel.ended = true }
   channel.close = (): void => { channel.closed = true }
   channel.emitData = (chunk: string): void => { channel.emit('data', Buffer.from(chunk)) }
   channel.emitClose = (code: number | null): void => { channel.emit('close', code, null) }
@@ -52,18 +57,18 @@ function fakeChannel(): ClientChannel & {
 }
 
 /**
- * Transport whose client distinguishes the SPAWN exec (handed to the test via
- * `deliver()`) from KILL execs (recorded and closed immediately).
+ * Transport that hands the SPAWN exec to the test via `deliver()` and records
+ * every extra exec (a host-side `kill <pid>` must not appear).
  */
 function directHarness(): {
   transport: SshTransport
   channel: ReturnType<typeof fakeChannel>
-  killCommands: string[]
+  extraCommands: string[]
   deliver: () => Promise<void>
   mainCommand: () => string | undefined
 } {
   const channel = fakeChannel()
-  const killCommands: string[] = []
+  const extraCommands: string[] = []
   let spawnCallback: ((error: undefined, stream: ClientChannel) => void) | undefined
   let mainCommand: string | undefined
   const transport: SshTransport = {
@@ -71,12 +76,12 @@ function directHarness(): {
     cwd: '/srv/work',
     getClient: async () => ({
       exec(command: string, _options: unknown, callback: (error: undefined, stream: ClientChannel) => void) {
-        if (command.startsWith('kill ') === true) {
-          killCommands.push(command)
-          const killer = fakeChannel()
+        if (spawnCallback !== undefined || mainCommand !== undefined) {
+          extraCommands.push(command)
+          const extra = fakeChannel()
           setImmediate(() => {
-            callback(undefined, killer)
-            setImmediate(() => { killer.emit('close', 0, null) })
+            callback(undefined, extra)
+            setImmediate(() => { extra.emit('close', 0, null) })
           })
           return
         }
@@ -92,7 +97,7 @@ function directHarness(): {
   return {
     transport,
     channel,
-    killCommands,
+    extraCommands,
     // The startup chain (env read → client → exec) runs on microtasks; poll
     // until the spawn callback is armed instead of assuming a tick count.
     deliver: async () => {
@@ -131,92 +136,84 @@ async function withTimeout<T>(promise: Promise<T>, label: string, ms = 5_000): P
   }
 }
 
-/* ---------------------------------------------------- direct leg: the peel */
+/* ------------------------------------------ direct leg: the steward */
 
-test('BUG-9 direct: the serialized command prefixes the pid echo', async () => {
+test('BUG-9 direct: the serialized command wraps argv in a stdin-EOF steward', async () => {
   const h = directHarness()
   const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(), spill())
   await h.deliver()
-  h.channel.emitData('4242\n')
-  h.channel.emitClose(0)
-  await withTimeout(handle.done, 'done' )
-  assert.match(h.mainCommand() ?? '', /cd -- '\/srv\/work' && echo \$\$ && exec env -i --/, 'pid echo rides at the head of the command')
-})
-
-test('BUG-9 direct: pid line is peeled off stdout, split chunks included', async () => {
-  const h = directHarness()
-  const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(), spill())
-  await h.deliver()
-  h.channel.emitData('424')
-  h.channel.emitData('2\n')
   h.channel.emitData('hello')
   h.channel.emitClose(0)
-  const outcome = await withTimeout(handle.done, 'done' )
-  assert.equal(outcome.exitCode, 0)
-  assert.equal(handle.pid, 4242, 'the remote pid is exposed once the line lands')
-  assert.equal(collectedOf(handle), 'hello', 'the pid line never reaches the collected stream')
+  await withTimeout(handle.done, 'done')
+  const command = h.mainCommand() ?? ''
+  assert.match(command, /^cd -- '\/srv\/work' && env -i -- /, 'cwd + scrubbed env stay the outer shape')
+  assert.match(
+    command,
+    / sh -c '[^']*kill -TERM 0[^']*' _ 'bash' '-c' 'echo hi' 3<<'DSW_STDIN_/,
+    'kill -TERM 0 lives inside the quoted sh -c script; argv and the fd-3 here-doc follow',
+  )
+  assert.doesNotMatch(command, /echo \$\$/, 'no remote pid is printed for the host')
+  assert.doesNotMatch(command, /echo \$\$/, 'no remote pid is printed for the host')
+  assert.equal(handle.pid, -1, 'the handle never exposes a remote pid')
+  assert.equal(collectedOf(handle), 'hello', 'stdout is not peeled')
 })
 
-test('BUG-9 direct: a non-numeric first line bypasses the peel and streams verbatim', async () => {
+test('BUG-9 direct: ignore stdin uses /dev/null on fd 3', async () => {
+  const h = directHarness()
+  const handle = new SshSubprocessHandle(h.transport, '/srv/work', {
+    ...spec(),
+    stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } },
+  }, spill())
+  await h.deliver()
+  h.channel.emitClose(0)
+  await withTimeout(handle.done, 'done')
+  assert.match(h.mainCommand() ?? '', / 3<\/dev\/null$/)
+})
+
+test('BUG-9 direct: live pipe stdin is exec, not a steward (fd 0 is the payload)', async () => {
+  const h = directHarness()
+  const handle = new SshSubprocessHandle(h.transport, '/srv/work', {
+    ...spec(),
+    stdio: { stdin: 'pipe', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } },
+  }, spill())
+  await h.deliver()
+  h.channel.emitClose(0)
+  await withTimeout(handle.done, 'done')
+  const command = h.mainCommand() ?? ''
+  assert.match(command, / exec 'bash' '-c' 'echo hi'$/)
+  assert.doesNotMatch(command, /kill -TERM 0/)
+})
+
+test('BUG-9 direct: a numeric first stdout line is user output, not a pid', async () => {
   const h = directHarness()
   const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(), spill())
   await h.deliver()
-  h.channel.emitData('not-a-pid\nhello')
+  h.channel.emitData('4242\nhello')
   h.channel.emitClose(0)
-  await withTimeout(handle.done, 'done' )
+  await withTimeout(handle.done, 'done')
   assert.equal(handle.pid, -1)
-  assert.equal(collectedOf(handle), 'not-a-pid\nhello')
-})
-
-test('BUG-9 direct: a channel closed mid-first-line flushes the buffered bytes', async () => {
-  const h = directHarness()
-  const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(), spill())
-  await h.deliver()
-  h.channel.emitData('partial-without-newline')
-  h.channel.emitClose(0)
-  await withTimeout(handle.done, 'done' )
-  assert.equal(collectedOf(handle), 'partial-without-newline', 'nothing is swallowed on early close')
+  assert.equal(collectedOf(handle), '4242\nhello')
 })
 
 /* --------------------------------------------- direct leg: the stop chain */
 
-test('BUG-9 direct: terminate escalates signal + independent-channel group kill, then closes', async () => {
+test('BUG-9 direct: terminate EOFs the steward, signals, then closes — no kill exec', async () => {
   const h = directHarness()
   const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(500), spill())
   await h.deliver()
-  h.channel.emitData('31337\n')
   handle.terminate()
+  assert.equal(h.channel.ended, true, 'stdin EOF is the steward\'s stop wire')
   assert.deepEqual(h.channel.signals, ['TERM'], 'signal request stays the first hop')
-  await sleep(40)
-  assert.equal(h.killCommands.length, 1, 'a kill went out on an independent channel')
-  assert.match(h.killCommands[0] ?? '', /^kill -TERM -- -31337 2>\/dev\/null; kill -TERM 31337 2>\/dev\/null; true$/)
+  assert.deepEqual(h.extraCommands, [], 'the host never execs kill <pid>')
   await sleep(700) // past the 500ms grace
   assert.deepEqual(h.channel.signals, ['TERM', 'KILL'], 'grace escalates to KILL')
-  assert.equal(h.killCommands.length, 2, 'the escalation repeats through the kill channel')
-  assert.match(h.killCommands[1] ?? '', /^kill -KILL -- -31337/)
-  // Nothing settles the channel, so the close fallback must fire (grace 500ms
-  // + KILL_CLOSE_FALLBACK_MS). Poll instead of sleeping a fixed 2.5s.
+  assert.deepEqual(h.extraCommands, [], 'still no second-channel kill')
   const deadline = Date.now() + 5_000
   while (h.channel.closed !== true && Date.now() < deadline) await sleep(50)
   assert.equal(h.channel.closed, true, 'the channel is force-closed so `done` cannot hang')
   h.channel.emitClose(null)
   const outcome = await withTimeout(handle.done, 'escalation done')
   assert.equal(outcome.exitCode, null)
-})
-
-test('BUG-9 direct: a pid line arriving AFTER terminate still triggers the kill', async () => {
-  const h = directHarness()
-  const handle = new SshSubprocessHandle(h.transport, '/srv/work', spec(4_000), spill())
-  await h.deliver()
-  handle.terminate() // before any stdout: no pid yet
-  await sleep(20)
-  assert.deepEqual(h.killCommands, [], 'nothing to kill without a pid')
-  h.channel.emitData('999\n') // late pid — the pending stop must ride it
-  await sleep(50)
-  assert.equal(h.killCommands.length, 1)
-  assert.match(h.killCommands[0] ?? '', /^kill -TERM -- -999 /)
-  h.channel.emitClose(null)
-  await withTimeout(handle.done, 'done' )
 })
 
 test('BUG-9 direct: an abort in the startup window never starts the remote command', async () => {
@@ -228,7 +225,7 @@ test('BUG-9 direct: an abort in the startup window never starts the remote comma
   ;(releasePreflight as NonNullable<typeof releasePreflight>)()
   await assert.rejects(() => handle.done, /terminated/)
   assert.equal(h.mainCommand(), undefined, 'the command never reached the client')
-  assert.deepEqual(h.killCommands, [], 'and no kill round-trip was needed')
+  assert.deepEqual(h.extraCommands, [], 'and no kill round-trip was needed')
 })
 
 /* ------------------------------------------------------------- core leg */

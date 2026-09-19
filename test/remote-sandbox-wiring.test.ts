@@ -279,15 +279,19 @@ test('handle run(): preflight runs BEFORE resolveArgv, and the WRAPPED argv is s
   assert.equal(transport.commands.length, 1)
   const command = transport.commands[0] as string
   assert.match(command, /'bwrap' '--ro-bind' '\/' '\/'/, 'the wrapped vector was serialized')
-  assert.ok(command.endsWith(`'--' 'bash' '-c' 'echo hi'`), 'the original argv survives verbatim after `--`')
+  assert.match(command, /'--' 'bash' '-c' 'echo hi'/, 'the original argv survives verbatim after `--`')
 })
 
-test('handle run(): no resolveArgv is identity — the serialized text keeps its shape (plus the BUG-9 pid echo)', async () => {
+test('handle run(): no resolveArgv is identity — the serialized text keeps its shape (BUG-9 steward, no pid echo)', async () => {
   const transport = recordingTransport()
   const handle = new SshSubprocessHandle(transport, '/srv/work', spawnSpec(COMMAND_ARGV), mkdtempSync(join(tmpdir(), 'dsh-i9-plain-')))
   const finished = await handle.done
   assert.equal(finished.exitCode, 0)
-  assert.equal(transport.commands[0], `cd -- '/srv/work' && echo $$ && exec env -i -- 'PATH=/usr/bin:/bin' 'HOME=/root' 'bash' '-c' 'echo hi'`)
+  const command = transport.commands[0] as string
+  assert.match(command, /^cd -- '\/srv\/work' && env -i -- 'PATH=\/usr\/bin:\/bin' 'HOME=\/root' sh -c /)
+  assert.match(command, / 'bash' '-c' 'echo hi'/)
+  assert.match(command, /kill -TERM 0/)
+  assert.doesNotMatch(command, /echo \$\$/)
 })
 
 test('handle run(): a rejection from resolveArgv fails done and NOTHING reaches the transport', async () => {

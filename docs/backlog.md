@@ -21,7 +21,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-9 | 远端任务停止不了：直连腿 signal 单点 + 核心腿无进程组/中止窗丢失 | doing | P1 | 修复已落地（R32：Go 组杀 `Setpgid`/`kill(-pgid)`、JS pending-abort、直连腿 pid 回捕 + 独立 channel kill + close 兜底、前台有界等待，13 例 JS 单测 + unix 组杀集成测试）。**待**：lab UAT（[`uat/R32-bug9-stop-uat.md`](./uat/R32-bug9-stop-uat.md)）过后改 done。验收：远端长任务前台中止/后台 cancel 后远端 `ps` 无残留；老 OpenSSH（<7.9）直连腿可停；启动窗中止不丢；正常完成路径不回退 |
+| BUG-9 | 远端任务停止不了：直连腿 signal 单点 + 核心腿无进程组/中止窗丢失 | doing | P1 | 核心腿组杀 + pending-abort。直连腿：**不再** `echo $$` / 宿主持有远端 pid；远端 steward（stdin EOF → `kill -TERM 0`）+ signal + close，`handle.pid` 恒 `-1`。**待**：lab UAT 一份 [`uat/R32-bug9-stop-uat.md`](./uat/R32-bug9-stop-uat.md)（B 区是「无核心」不是「danger 跳过核心」）过后改 done。验收：远端长任务前台中止/后台 cancel 后远端 `ps` 无残留；无核心直连腿可停；启动窗中止不丢；正常完成路径不回退；有核心的 danger 仍走核心腿 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 设计已议定（2026-09-15）：① 连接成功且围栏档≠off → 后台自动 `core.status`→`core.deploy`，未就绪期间 fail-closed 审批门不阻断；② 升级走版本化目录并存，健康探测通过才翻 `current` symlink；③ 模型首用遇「核心未安装」→ `ctx.approval` 显式安装审批（`ADR-0024`「不偷偷装」红线的转译）。**红线：无用户来源同意绝不上传执行二进制**。键 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §3；依赖 INFRA-15（done）。排期：下一轮 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | `@deepseek-ai/dsh-subprocess@0.1.6-alpha.1` 加宽四处 ⇒ 三个实现类编译失配（drift run 34950619028、issue #7）。成员表与**收口注意清单** [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 通道回绿 + `check` 全绿；`0.1.6` 升 rc 前收口 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | 官方 `0.1.6-alpha` 首发 SSH 家族；事实、helper 模型、两头门槛 [`ADR-0026`](./decisions/ADR-0026-upstream-ssh-runtime.md)（§5 含 2026-09-18 补充：与 BUG-9 解耦判断 + 重估触发条件；§1.1 修订：alpha.2 已出）。**待所有者**：§5 定位拍板（A/B/C）。代理侧：scope 新包巡检落地机制。验收：§5 有结论 + 巡检「会响」 |
