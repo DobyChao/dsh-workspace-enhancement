@@ -63,7 +63,7 @@
 | 通过项 / 总项 | `11/12`（步骤 13 为 N/A；步骤 9 用户跳过） |
 | 证据链接 | lab 50599；会话 `ssh-test-lab`；截图 `r27-step1-settings.png` / `r27-step2-chip.png` / `r27-step3-write-inside.png` / `r27-step4-denied-step5-card.png` |
 | 未通过项 | 步骤 9 跳过（Flash 无 PTY 工具，非失败）。11–12 用户 2026-09-15 口头通过；**2026-09-17 lab 复核了步骤 11**（手工删核心 ⇒ 围栏档 fail-closed；同轮暴露 `BUG-6` 与拒绝文案误诊，均已修） |
-| 是否阻塞发布 | 步骤 9 不挡合入。`BUG-4`（祖先 jail）当时记录未修，**已于 2026-09-17 修复**（`docs/host-silent-fs.md`，随 0.2.0）。 |
+| 是否阻塞发布 | 步骤 9 不挡合入。`BUG-4`（祖先 jail）当时记录未修，**已于 2026-09-17 修复**（`docs/notes/host-silent-fs.md`，随 0.2.0）。 |
 | 用户签字 | |
 
 ## 4. 环境指纹
@@ -97,7 +97,7 @@
   - 步骤 9：Flash 工具集无交互终端/PTY 工具。头栏「在 Git Bash 中打开工作目录」未弹出含 terminal/sandbox 的页内错误。**用户跳过。**
   - 步骤 10：chip「完全权限」（产品确认框「我已了解风险」）。官方 Write 同一 `/tmp/dsw-r27-out-20260914.txt`：**无新提权卡**。第一次被 read-before-overwrite 拦住（非 sandbox）；读后 Write `+1 -1` 成功，读回 `R27-d10`。
   - 步骤 11–12：用户 2026-09-15 口头通过。挪走 `current` 不会杀已 exec 的 serve（要 pkill / 重连 / 重启 50599）。无核心时围栏档 fail-closed；danger 走 SFTP。
-  - 同日：进会话会静默 `ctx.fs.resolve` 往上找 `.git`，铸出 `/home`、`$HOME` 等祖先 jail（`BUG-4`，本轮只记录不修）。每个 jail 的 3 个 PID 是 `--unshare-pid` 常驻树，不是每次 RPC 新起三份。见 `docs/host-silent-fs.md`。
+  - 同日：进会话会静默 `ctx.fs.resolve` 往上找 `.git`，铸出 `/home`、`$HOME` 等祖先 jail（`BUG-4`，本轮只记录不修）。每个 jail 的 3 个 PID 是 `--unshare-pid` 常驻树，不是每次 RPC 新起三份。见 `docs/notes/host-silent-fs.md`。
 - 验收后恢复核心目录、删测试文件、确认 50599 已停。不要把机器档位拨回去——已经没有这个下拉。
 
 来源：`docs/uat/README.md`；`docs/decisions/ADR-0023-one-remote-core.md`；`docs/decisions/ADR-0024-remote-core-protocol.md`；`docs/decisions/ADR-0025-remote-session-sandbox.md`

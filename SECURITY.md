@@ -65,7 +65,7 @@
 - **宿主静默项目根探测会铸出比会话更宽的 workspace-write jail**（`BUG-4`，2026-09-15 R27）：
   `dsh-agent-instructions` 等在组上下文时沿目录 `resolve(…/.git)`，轨迹不可见。插件把探测路径当
   `cwd` 后会对 `/home`、`$HOME` 做 `--bind`。官方 Write 打进会话 jail 时工作区外拒绝仍可能成立；
-  多出来的宽 serve 是另一份可写面。事实 [`docs/host-silent-fs.md`](./docs/host-silent-fs.md)；
+  多出来的宽 serve 是另一份可写面。事实 [`docs/notes/host-silent-fs.md`](./docs/notes/host-silent-fs.md)；
   修完本条从这里删掉。
 
 如果你发现**上面之外的**绕过路径，请按下面的方式报告。

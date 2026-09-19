@@ -20,7 +20,7 @@
  *  9. README.md and README.zh.md keep the same top-level structure.
  * 10. HEAD commit subject follows Conventional Commits.
  * 11. No stray build/test artifacts in the repository root.
- * 12. Every docs/backlog.md row carries an id and a status.
+ * 12. docs/backlog.md: id + status, section↔status, §2 P0→P3, note length cap.
  *
  * Plus one non-fatal diagnostic (never fails the run):
  *
@@ -31,6 +31,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { runCapture } from './lib/run.mjs'
+import { auditBacklog } from './lib/backlog.mjs'
 
 const ROOT = dirname(fileURLToPath(new URL('.', import.meta.url)))
 const HAN = /[\p{Script=Han}]/u
@@ -304,17 +305,17 @@ const rootEntries = new Set(readdirSync(ROOT))
 const stray = FORBIDDEN_ROOT.filter(name => rootEntries.has(name))
 check('repository root has no stray artifacts', stray.length === 0, stray.join(', '))
 
-// ---- 12. backlog rows carry an id, a status and exactly five columns --------
+// ---- 12. backlog layout (section ↔ status, note cap, §2 priority order) ----
 // A literal `|` inside the note cell (it must be written `\|`) silently splits
-// the row into extra columns: the table renders wrong and every consumer that
-// reads `cells[4]` as the note truncates it without complaining.
+// the row into extra columns. Rules live in scripts/lib/backlog.mjs so
+// `npm run status` and this gate cannot drift.
 try {
-  const backlog = read('docs/backlog.md')
-  const rows = backlog.split(/\r?\n/).filter(line => /^\|\s*`?[A-Z][A-Z]*(?:-[A-Za-z0-9]+)+\s*\|/.test(line))
-  const bad = rows.filter(line => !/\|\s*(todo|doing|done|blocked|dropped|shipped)\s*\|/i.test(line)
-    || line.split(/(?<!\\)\|/).length - 2 !== 5)
-  check('docs/backlog.md rows carry a status', rows.length > 0 && bad.length === 0,
-    `${rows.length} row(s), ${bad.length} malformed`)
+  const result = auditBacklog(read('docs/backlog.md'))
+  check(
+    'docs/backlog.md layout',
+    result.ok && result.rows > 0,
+    result.ok ? `${result.rows} row(s)` : result.errors.slice(0, 4).join('; '),
+  )
 } catch (error) {
   check('docs/backlog.md readable', false, String(error.message || error))
 }

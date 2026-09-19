@@ -256,7 +256,7 @@ test('BUG-4: the silent project-root probe never mints an ancestor jail', async 
   const mixed = new MixedFileSystem(exploding, routing, () => undefined)
 
   // `dsh-agent-instructions` / `dsh-skill-filesystem` walk up from the session
-  // cwd asking about `<dir>/.git` and pass NO cwd (docs/host-silent-fs.md §1).
+  // cwd asking about `<dir>/.git` and pass NO cwd (docs/notes/host-silent-fs.md §1).
   // Routing that probe target through `cwd` used to mint a workspace-write jail
   // for every ancestor (`/home/uuz`, `/home`, …); it must stay a `path`.
   // Two spellings matter: the `ssh://` one and — the shape the real probe

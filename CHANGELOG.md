@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 文档
+
+- **待办表可执行**：`docs/backlog.md` 分区必须等于状态列（`doing` 只在 §1），§2 按 P0→P3，备注限长；规则在 `scripts/lib/backlog.mjs`，`check:static` 与 `npm run status` 共用。专题附录迁到 `docs/notes/`（`host-silent-fs` 不再占文档根）。
+
 ### 修复
 
 - **远端任务停止（`BUG-9`）**：核心腿组杀 + pending-abort 保留。直连腿不再把远端 pid 交给宿主（去掉 `echo $$` 与二次 `kill <pid>`）；改由远端 steward 在 SSH stdin EOF 时 `kill -TERM 0`，宿主只 signal + 关 channel。`handle.pid` 恒为 `-1`。有核心时 `danger-full-access` 仍走核心（`--sandbox off`）。
@@ -30,7 +34,7 @@
 - **R27 当场**：官方 Write 缺叶路径走祖先 `realpath`；禁止 workspace-write `--workspace /`（会盖掉 tmpfs 泄漏 `/tmp`）。
 ### 修复
 
-- **宿主静默项目根探测铸出祖先 jail（`BUG-4`）**：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给核心 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling workspace-write jail ⇒ 上游 `findProjectRoot` 每上一层祖先就多一份 `--workspace` bind（`/home`、`$HOME`…）。改为只传 `path`（cwd 回落发起会话自己的 cwd），探测落回会话根/机器登记 workspace。事实与取证 `docs/host-silent-fs.md`。
+- **宿主静默项目根探测铸出祖先 jail（`BUG-4`）**：`resolve`/`lstat` 把**探测目标**当 `cwd` 交给核心 hub，而 `resolveCoreWorkspace` 对不在已声明根里的 cwd 会铸 sibling workspace-write jail ⇒ 上游 `findProjectRoot` 每上一层祖先就多一份 `--workspace` bind（`/home`、`$HOME`…）。改为只传 `path`（cwd 回落发起会话自己的 cwd），探测落回会话根/机器登记 workspace。事实与取证 `docs/notes/host-silent-fs.md`。
 - **ssh2 死链打挂宿主进程（`BUG-5`）**：`connectReady()` 在 ready 一到就摘掉唯一的 error 监听，此后 `Client` 无任何 error 监听；keepalive 默认 0 ⇒ 空闲回收/超时以裸 `ECONNRESET` 冒出，Node 对无人监听的 `'error'` 抛未捕获异常，整个 `dsh web` 退出。改为连接前即挂 `watchChainClient`（error/close）+ `handleChainDeath`（generation/disposed 守卫）→ `invalidate` 下次自动重连；keepalive 默认 `30 000 × 3`。档案 `docs/rounds/R29-bug5-ssh-error-listener.md`。
 - **删掉核心后状态仍报「已安装」（`BUG-6`）**：`CoreHub.status` 优先问还活着的 `dsh-core serve`（`hello`），只有没有活会话时才探磁盘；serve 活得比它自己的目录久 ⇒ 手工删 `~/.dsh-core/<ver>/` 后面板继续报 installed（最长到空闲回收）。改为**只以磁盘工件为准**（`dsh-core version`），缺失且仍有活会话时在 detail 里说明。
 - **围栏拒绝文案误诊（`INFRA-15` 收口）**：runner 缺失提示只匹配 `No such file or directory` 这类通用串，把「核心被删」误报成「缺 bwrap」。改为按 detail 里出现的**程序名**分诊：`dsh-core` ⇒ 去 `core.deploy`；runner 名 ⇒ 装 bubblewrap；两者都不是 ⇒ 不给建议。

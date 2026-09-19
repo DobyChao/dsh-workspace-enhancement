@@ -7,7 +7,7 @@
 
 | 层 | 内容 | 命令 | 运行者 | 失败含义 |
 |---|---|---|---|---|
-| L0 静态闸门 | 词典键集、CJK 硬编码、密钥/真实主机泄漏、版本一致性、peer 家族一致性、CHANGELOG/状态不漂移、提交信息规范、仓库根残留物 | `npm run check:static` | 代理 / CI | 契约被破坏，先修再谈 |
+| L0 静态闸门 | 词典键集、CJK 硬编码、密钥/真实主机泄漏、版本一致性、peer 家族、CHANGELOG/状态不漂移、提交信息、仓库根残留物、**backlog 分区=状态 + 备注限长** | `npm run check:static` | 代理 / CI | 契约被破坏，先修再谈 |
 | L1 类型 | `tsc --noEmit` | `npm run typecheck` | 代理 / CI | 类型面不成立 |
 | L2 单测 | `test/**/*.test.ts`（`node --test`） | `npm test` | CI / 本地 shell | 逻辑回归 |
 | L3 组合层 | 挂载树与补丁语义：`dsh --profile <scratch> --dump-config` 断言 bundle 行、工具、槽位注入齐全 | 见 `scripts/boot-smoke.sh` 与 `upstream.yml` | CI | 组合层没挂上（Cordis 特有，最廉价的一层） |

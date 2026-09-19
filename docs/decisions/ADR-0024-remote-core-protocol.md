@@ -28,7 +28,7 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
    `PATH` 上的 `bwrap`（见 §3）。`--unshare-pid`
    让宿主 `ps` 上每条 serve 显示 **3 个 PID**（外层 bwrap / PID-ns 内层 bwrap /
    `dsh-core serve`）；这是 bubblewrap 的固定树，不是每次 RPC 新起三份。见
-   [`../host-silent-fs.md`](../host-silent-fs.md)。
+   [`../notes/host-silent-fs.md`](../notes/host-silent-fs.md)。
 3. 之后 `spawn` 不再包 bwrap：子进程在同一 mount namespace。`bin/rg`（只在远端本来
    没有 `rg`、且宿主成功取回官方件时才存在）靠 `PATH` 前置 `.../bin`，否则回退到
    远端自己的 `rg`。
@@ -149,4 +149,4 @@ flowchart TB
 
 上游会在**对话轨迹之外**对 `ctx.fs` 做项目根探测（沿目录找 `.git`，给 `AGENTS.md` / skills 定根）。调用几乎只有 `resolve(path)`，不带会话 cwd。这仍是操作路径，适用 §6.2「不得变成 `--workspace`」——与 browse 列出目录同一条规则。
 
-现状缺口：混合门面把这次路径（或 `dirname`）填进 hub 的 `cwd`，`resolveCoreWorkspace` 就会为每个祖先铸一条 workspace-write serve。事实、谁在走、R27 现场进程见 [`../host-silent-fs.md`](../host-silent-fs.md)。修法跟踪 **`BUG-4`**。
+探测路径只当 `path`（`BUG-4`，2026-09-17）：`resolve` / `lstat` 不再把被查路径填进 hub 的 `cwd`。事实、谁在走、R27 现场进程见 [`../notes/host-silent-fs.md`](../notes/host-silent-fs.md)。无 `.git` 的远程会话实机尾巴仍待验。

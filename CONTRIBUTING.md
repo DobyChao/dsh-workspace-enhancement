@@ -14,8 +14,8 @@
 **分支模型**：`master` 只收经过 CI 的提交。改动一律走短分支 + PR + **squash merge**
 （全历史保持线性，当前 0 个 merge 提交）。
 
-1. **入账**：在 `docs/backlog.md` 加一行（ID + `todo`），写清目标与验收标准。
-2. **开工**：状态改 `doing`；从 `master` 拉短分支 `feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
+1. **入账**：在 `docs/backlog.md` 加一行（ID + `todo`，放进 §2 对应优先级块），写清目标与验收标准。备注只留未做动作 + 指针（调查进 `docs/rounds/` / `docs/decisions/`）。
+2. **开工**：状态改 `doing` 时**整行挪到 §1**；从 `master` 拉短分支 `feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。分区必须等于状态列，否则 `check:static` 会拦。
 3. **实现**：小步提交，Conventional Commits；提交信息尾行写 `Refs: <ID>`。
 4. **验证**：`npm run check`；UI 改动加 `npm run e2e`；组合改动跑 `--dump-config` 断言。
 5. **交付**：代理 push 分支、开 PR 并盯 CI 到绿（2026-09-09 用户授权）。
@@ -34,7 +34,7 @@
    > PR 绿、合并后 master 红：squash 标题是分支名）。
 
 6. **验收**：涉及用户可见行为时，随 PR 附 `docs/uat/` 脚本，由用户走查并回填反馈。
-7. **收口**：状态改 `done`/`shipped`，`npm run status` 刷新看板，`docs/rounds/` 写一份报告。
+7. **收口**：整行挪到 §4，状态改 `done`/`shipped`，`npm run status` 刷新看板，`docs/rounds/` 写一份报告。
 
 > 例外：错别字、一行文案、纯注释这类不可能改变行为的改动可直接提交到 `master`；
 > 但第 4 步不能跳。**分支上永远不要直接 push 到 `master`。**
