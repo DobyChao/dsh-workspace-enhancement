@@ -8,12 +8,12 @@
  */
 
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { packGzipTar } from '../src/gzip-tar.ts'
 import {
   cachedVendor,
   ensureVendor,
@@ -25,27 +25,13 @@ import {
   type VendorSource,
 } from '../src/core-vendor.ts'
 
-/** Run one command with stdout/stderr on file descriptors (the sandbox denies pipes). */
-function run(command: string, args: string[], log: string): number | null {
-  const fd = openSync(log, 'w')
-  try {
-    return spawnSync(command, args, { stdio: ['ignore', fd, fd] }).status
-  } finally {
-    closeSync(fd)
-  }
-}
-
 /**
- * Build a real gzip tarball holding `pkg/rg` and return its path + sha256.
- * @param root - a temp directory to build in.
+ * Build a gzip tarball holding `pkg/rg` without spawning PATH tar (BUG-8).
+ * @param root - a temp directory to write into.
  */
 function buildTarball(root: string): { archive: string; sha256: string } {
-  const stage = join(root, 'stage')
-  mkdirSync(join(stage, 'pkg'), { recursive: true })
-  writeFileSync(join(stage, 'pkg', 'rg'), '#!/bin/sh\necho fake-rg\n')
   const archive = join(root, 'rg-test.tar.gz')
-  const status = run('tar', ['-czf', archive, '-C', stage, 'pkg'], join(root, 'tar.log'))
-  assert.equal(status, 0, 'tar must build the fixture archive')
+  writeFileSync(archive, packGzipTar({ 'pkg/rg': '#!/bin/sh\necho fake-rg\n' }))
   return { archive, sha256: fileSha256(archive) }
 }
 

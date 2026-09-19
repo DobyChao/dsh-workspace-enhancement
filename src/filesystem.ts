@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-fs-ssh
  */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { posix } from 'node:path'
 import type { Readable } from 'node:stream'
@@ -24,6 +24,7 @@ import type {
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
 import { quoteShellArg } from './ssh-core.ts'
+import { fileContentVersion, statsVersionMtimeMs } from './fs-version.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 
@@ -85,7 +86,7 @@ function entryType(stats: Stats): FsInfo['type'] {
 }
 
 function entryVersion(stats: Stats, path: string): ReturnType<typeof FsVersion> {
-  return FsVersion(`ssh:${createHash('sha256').update(JSON.stringify([path, stats.size, stats.mtime, stats.mode])).digest('hex')}`)
+  return FsVersion(fileContentVersion(path, Number(stats.size), statsVersionMtimeMs(stats)))
 }
 
 function mapError(error: unknown, operation: string, displayPath: string, signal?: AbortSignal): FsError {

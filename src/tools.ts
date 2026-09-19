@@ -1,15 +1,15 @@
 /**
  * `sw_*` workspace tools and the per-session remote-context system-prompt
- * section of dsh-workspace-enhancement, riding the machine registry. Three
- * management tools only: status/connect/pick-workspace. The registry's own
- * `connections.*` RPC surface stays separate; tools are the model's control
- * plane and never enumerate the file/execution tools (those belong to the
- * seam engine).
+ * section of dsh-workspace-enhancement, riding the machine registry. Two
+ * management tools only: status/connect. `sw_pick_workspace` was removed
+ * (REQ-I10 / ADR-0027); the workspace directory is the session cwd. The
+ * registry's own `connections.*` RPC surface stays separate; tools are the
+ * model's control plane and never enumerate the file/execution tools (those
+ * belong to the seam engine).
  * @module dsh-workspace-enhancement/tools
  */
 
-import { basename, posix } from 'node:path'
-import type { Stats } from 'ssh2'
+import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ParameterSchemaSpec, ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -397,11 +397,6 @@ const swConnectParams = (tr: TranslateFn): ParameterSchemaSpec => ({
   },
 })
 
-/** sw_pick_workspace parameter spec builder. */
-const swPickWorkspaceParams = (tr: TranslateFn): ParameterSchemaSpec => ({
-  path: { type: 'string', required: true, description: tr('tool.sw_pick_workspace.param.path') },
-})
-
 /** REQ-I11: the session id of one tool run (leaf read; `undefined` ⇒ fail closed). */
 function sessionIdOfExec(exec: ToolRunContext): string | undefined {
   return sessionIdOf(exec.agent !== undefined ? { scope: exec.agent as object } : {})
@@ -414,8 +409,8 @@ function sessionCwdOfExec(exec: ToolRunContext): string | undefined {
 }
 
 /**
- * Register the three sw_* tools plus the per-session workspace prompt
- * contributions on the given context. All side effects are effect-bound, so an
+ * Register the sw_status / sw_connect tools plus the per-session workspace
+ * prompt contributions on the given context. All side effects are effect-bound, so an
  * unloaded row removes every tool, section and runtime-context entry.
  * @param ctx - the mounting context.
  * @param registry - the machine registry accessor.
@@ -549,41 +544,6 @@ export function registerWorkspaceTools(
     }), locale, {
       descriptionKey: 'tool.sw_connect.description',
       buildParams: swConnectParams,
-    }),
-    localizeTool(defineTool({
-      name: 'sw_pick_workspace',
-      description: ZH_T('tool.sw_pick_workspace.description'),
-      parameters: swPickWorkspaceParams(ZH_T),
-      output: {
-        schema: textOutSchema,
-        render: (_args, value): Array<{ type: 'text'; text: string }> => [{ type: 'text', text: value.text }],
-      },
-      async execute(args: { path: string }): Promise<{ text: string }> {
-        const path = String(args.path ?? '').trim()
-        if (path === '' || !posix.isAbsolute(path)) {
-          throw new Error(t('tool.sw_pick_workspace.error.invalidPath', { path: JSON.stringify(path) }))
-        }
-        const instance = registry()
-        const active = instance.getActive()
-        if (active === null) {
-          throw new Error(t('tool.sw_pick_workspace.error.noActive'))
-        }
-        const sftp = await active.connection.getSftp()
-        const stats = await new Promise<Stats>((resolvePromise, reject) => {
-          sftp.stat(path, (error, value) => {
-            if (error !== undefined) reject(error)
-            else resolvePromise(value)
-          })
-        })
-        if (!stats.isDirectory()) {
-          throw new Error(t('tool.sw_pick_workspace.error.notDir', { path }))
-        }
-        instance.setActiveWorkspace(path)
-        return { text: t('tool.sw_pick_workspace.output', { path, u: active.spec.username, h: active.spec.host }) }
-      },
-    }), locale, {
-      descriptionKey: 'tool.sw_pick_workspace.description',
-      buildParams: swPickWorkspaceParams,
     }),
   ]
 

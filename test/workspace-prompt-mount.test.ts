@@ -1,7 +1,7 @@
 /**
- * REQ-I6 ② + REQ-I11 的**整体接线**回归：真实挂载 `registerWorkspaceTools`（三个 sw_* 工具 +
- * `sw-remote` section + `dsw-session-workspace` runtime context + `tool:sw-exec` / `tool:bash`
- * 两段），按会话上下文逐段求值，断言验收原句：
+ * REQ-I6 ② + REQ-I11 的**整体接线**回归：真实挂载 `registerWorkspaceTools`（`sw_status` /
+ * `sw_connect` + `sw-remote` section + `dsw-session-workspace` runtime context；`sw_exec` /
+ * `tool:bash` 由 exec-tools 另挂），按会话上下文逐段求值，断言验收原句：
  *
  *   「本地会话系统提示不出现本插件文案；远程会话文案全英文且仅在远程事实成立时出现」
  *
@@ -124,11 +124,12 @@ function injectedTexts(entries: CapturedEntry[], context: { scope?: object }): s
 const BASE_SECTIONS = ['sw-remote', 'tool:sw-exec']
 const EXPECTED_SECTIONS = process.platform === 'win32' ? [...BASE_SECTIONS, 'tool:bash'] : BASE_SECTIONS
 
-test('mount: the three sw_* tools are always registered (tools are not session-scoped)', () => {
+test('mount: sw_status and sw_connect are always registered (tools are not session-scoped)', () => {
   const mounted = mount()
-  for (const name of ['sw_status', 'sw_connect', 'sw_pick_workspace']) {
+  for (const name of ['sw_status', 'sw_connect']) {
     assert.ok(mounted.toolNames.includes(name), `${name} must always be registered`)
   }
+  assert.equal(mounted.toolNames.includes('sw_pick_workspace'), false)
 })
 
 test('mount: the volatile-state contribution is registered as dsw-session-workspace', () => {

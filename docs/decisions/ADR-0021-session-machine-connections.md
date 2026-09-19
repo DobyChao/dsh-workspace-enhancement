@@ -8,7 +8,7 @@
   `src/client/`（面板 → 会话工作区驾驶舱）、`src/locale/`（词典增删）、`SECURITY.md`、`test/`
 - 关联: 实现 **REQ-I11**、吸收 **SEC-5**（凭据面）；与 **ADR-0020**（远程命令审批门）正交分层；
   承接 **ADR-0019**（副根薄声明）的同一条「把权限叙事收缩到诚实边界」的路线；
-  强制执行面的强围栏留给 **ADR-0022 / REQ-I9**；`sw_pick_workspace` 日落是独立的 `REQ-I10`
+  强制执行面的强围栏留给 **ADR-0022 / REQ-I9**；`sw_pick_workspace` 日落见 **ADR-0027 / REQ-I10**
 
 ## 0. 结论
 

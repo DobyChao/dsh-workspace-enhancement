@@ -25,11 +25,8 @@
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5（A/B/C）。代理：新包巡检要会响 |
 | REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | todo | P2 | 读面降 SFTP，写/spawn fail-closed 且可见。改 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) §2.1。验收：缺 bwrap 能聊天能读，写/bash 仍拒 |
-| BUG-7 | 跨传输 `version` 算法不一致 ⇒ 读→写 CAS 误报 | todo | P2 | 统一 SFTP 与核心 `version` 为「完整路径 + sha256 + 毫秒 mtime」+ 跨传输回归 |
-| BUG-8 | `core.deploy` 解压依赖 PATH 的 `tar`：MSYS 损坏 MANIFEST + stderr 被吞 | todo | P2 | 先查两条 tar 失败与 stderr 丢弃点。验收：仅 MSYS tar 时 deploy 成功；失败信息含 tar stderr |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | ① 内容哈希升阻断 ② `restart-3080.ps1` 前 `build`。证据 [R15](./rounds/R15-infra-11-dev-build-drift.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后见 `ADR-0005` |
-| REQ-I10 | 日落 `sw_pick_workspace` | todo | P2 | 删工具 + 8 个词典键；`sw_connect`/`sw_status` 改诚实。短 ADR 取代 `ADR-0001` |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | todo | P2 | 分组容器改**后代**扫描。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。勿与 F2、`AUDIT-4` 同 PR |
 | UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | 根因随 ADR-0025 消失。lab 确认 chip 回到 Workspace write 后改 `done`。勿补 `remote-full` |
 | REQ-I16 | bash 工具按工作区自主注入 | todo | P3 | Win 本地不注入，连 Linux 后出现。先 spike 上游 tool update 接缝；`ADR-0014` 需修订。win32 错键随本项收 |
@@ -75,6 +72,8 @@
 | BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 只传 `path`。附录 [notes/host-silent-fs.md](./notes/host-silent-fs.md)。尾巴：无 `.git` 远程会话看 `ps` |
 | BUG-5 | ssh2 死链打挂宿主 | done | P1 | 全在 [R29](./rounds/R29-bug5-ssh-error-listener.md)。PR #21 |
 | BUG-6 | 删掉核心后 `core.status` 仍显示「已安装」 | done | P2 | 只以磁盘工件为准。回归 `core-routing` BUG-6。尾巴：删核心后立即未安装 |
+| BUG-7 | 跨传输 `version` 算法不一致 ⇒ 读→写 CAS 误报 | done | P2 | 共享 [fs-version.ts](../src/fs-version.ts)（路径 + size + 秒量化 mtimeMs 的 sha256）。Go 同式 |
+| BUG-8 | `core.deploy` 解压依赖 PATH 的 `tar` | done | P2 | 宿主 [gzip-tar.ts](../src/gzip-tar.ts)，不 spawn PATH tar；失败带原因。远端仍 GNU tar |
 | BUG-9 | 远端任务停止不了 | done | P1 | PR #26。档案 [R32](./rounds/R32-bug9-remote-task-stop-fix.md)；UAT [R32-bug9-stop-uat](./uat/R32-bug9-stop-uat.md) A/B 通过、C N/A |
 | FIX-1 | `Session.events` 移除 | done | — | 改 `ownEvents()`。`compatibility.md` §2 |
 | FIX-2 | 用户名输入溢出 13px | done | — | `machine-form.tsx` 补 `minWidth: 0` |
@@ -89,6 +88,7 @@
 | REQ-I3 | 会话副工作区 | done | — | R5；权限档已随 `REQ-I7` 退役 |
 | REQ-I4 | 远程焦点时模型认知 | done | — | R4 |
 | REQ-I6 | 系统提示英文 + 按需注入 | done | P2 | `ADR-0014`。[R13](./rounds/R13-req-i6-and-recon.md) |
+| REQ-I10 | 日落 `sw_pick_workspace` | done | P2 | [ADR-0027](./decisions/ADR-0027-sunset-sw-pick-workspace.md)。删工具 + 6 个词典键；status/connect 改诚实 |
 | UX-3 | 客户端 UI 统一到宿主 dsh 设计语言 | done | P2 | PR #20。尾巴：[uat/R28-ui-design-language.md](./uat/R28-ui-design-language.md) |
 | REQ-I7 | 副工作区权限档退役 | done | P1 | `ADR-0019`。[R20](./rounds/R20-req-i7-permission-retirement.md) |
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | `ADR-0022`。[R24](./rounds/R24-session-connections-and-remote-fence.md)。尾巴：[uat/R24-req-i9](./uat/R24-req-i9-remote-runner.md) |

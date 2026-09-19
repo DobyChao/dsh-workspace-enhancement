@@ -8,9 +8,15 @@
 
 - **待办表可执行**：`docs/backlog.md` 分区必须等于状态列（`doing` 只在 §1），§2 按 P0→P3，备注限长；规则在 `scripts/lib/backlog.mjs`，`check:static` 与 `npm run status` 共用。专题附录迁到 `docs/notes/`（`host-silent-fs` 不再占文档根）。
 
+### 变更
+
+- **日落 `sw_pick_workspace`（`REQ-I10`，ADR-0027）**：模型工具只留 `sw_status` / `sw_connect` / `sw_exec`。工作区目录是会话 cwd / 添加工作区目录流，不是工具。`sw_status` / `sw_connect` 文案不再指向已删工具。ADR-0001 的工具清单被取代。
+
 ### 修复
 
 - **远端任务停止（`BUG-9`）**：核心腿组杀 + pending-abort 保留。直连腿不再把远端 pid 交给宿主（去掉 `echo $$` 与二次 `kill <pid>`）；改由远端 steward 在 SSH stdin EOF 时 `kill -TERM 0`，宿主只 signal + 关 channel。`handle.pid` 恒为 `-1`。有核心时 `danger-full-access` 仍走核心（`--sandbox off`）。
+- **跨传输 `version` 误报 CAS（`BUG-7`）**：SFTP 与核心共用 `fileContentVersion`——完整 POSIX 路径 + size + 秒量化 `mtimeMs` 的 sha256。SFTP attrs 只有秒级 mtime，量化后两边一致。
+- **`core.deploy` 解压（`BUG-8`）**：宿主读 MANIFEST / 抽 `rg` 不再 spawn PATH `tar`（MSYS GNU tar 会弄坏 `-xzOf` 且 stderr 被丢）。改 Node gzip/ustar；失败信息带档案名与原因。远端 Linux 安装脚本仍用 GNU `tar -xzf`。
 
 ## [0.2.0](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-17)
 

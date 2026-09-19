@@ -351,12 +351,12 @@ export const zh = {
 
   /* -------------------------------------------------------- tool: sw_status */
   'tool.sw_status.description':
-    '显示当前远程机器（主机/用户/端口）、连接健康（ping）、当前远程工作区与主机指纹策略/状态。先调用它以了解现状，或在某个 sw_* 调用失败时检查连通性。',
+    '显示当前远程机器（主机/用户/端口）、连接健康（ping）、当前远程工作区（来自会话 cwd / 机器登记，不是模型工具）与主机指纹策略/状态。先调用它以了解现状，或在某个 sw_* 调用失败时检查连通性。',
   'tool.sw_status.ping.ok': 'Ping: 正常 — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: 失败 — {detail}',
   'tool.sw_status.outputs.host': '远程主机：{u}@{h}:{p}{source}',
   'tool.sw_status.outputs.workspace': '当前远程工作区：{ws}',
-  'tool.sw_status.outputs.workspaceNone': '当前远程工作区：（无——调用 sw_pick_workspace 设置）',
+  'tool.sw_status.outputs.workspaceNone': '当前远程工作区：（无——在「添加工作区」目录流里打开一个远程目录）',
   'tool.sw_status.outputs.connected': '已连接：{yesno}',
   // REQ-I11（ADR-0021 §2.5）：本会话已连接的机器（id + user@host），与注册表级事实并列。
   'tool.sw_status.outputs.connList': '本会话已连接机器：{items}',
@@ -366,7 +366,7 @@ export const zh = {
 
   /* ------------------------------------------------------- tool: sw_connect */
   'tool.sw_connect.description':
-    '设置本会话可以连接并在其上执行命令的已注册机器。每次调用都**替换**整个集合（不是并集）：`machines: []` 断开全部。机器必须是已注册机器的 id；未注册的 id 会报错并列出已知 id。随后对每台机器做一次有界 ping：可达者记录为已连接，不可达者如实报告但不加入集合；全部不可达时调用失败且不改动既有连接。',
+    '设置本会话可以连接并在其上执行命令的已注册机器。每次调用都**替换**整个集合（不是并集）：`machines: []` 断开全部。不选择工作区目录（工作区由会话 cwd / 添加工作区目录流决定）。机器必须是已注册机器的 id；未注册的 id 会报错并列出已知 id。随后对每台机器做一次有界 ping：可达者记录为已连接，不可达者如实报告但不加入集合；全部不可达时调用失败且不改动既有连接。',
   'tool.sw_connect.param.machines':
     '要连接的已注册机器 id 数组。空数组断开本会话的全部连接。',
   'tool.sw_connect.output.cleared': '本会话已断开全部机器连接。',
@@ -379,15 +379,6 @@ export const zh = {
   'tool.sw_connect.error.noKnownMachines': '（注册表中没有机器——请先在设置页添加）',
   'tool.sw_connect.error.allUnreachable': 'sw_connect: 没有一台机器可达，本会话连接保持不变。\n{details}',
   'tool.sw_connect.error.noDetail': '无错误详情',
-
-  /* ---------------------------------------------------- tool: sw_pick_workspace */
-  'tool.sw_pick_workspace.description':
-    '设置本会话在已连接远程上视为工作根目录的远程工作区目录。会校验其存在且为目录；并持久化到活动机器（recentWorkspaces 保留最近 8 个）。',
-  'tool.sw_pick_workspace.param.path': '远程目录绝对路径，如 /home/dev/code/project',
-  'tool.sw_pick_workspace.output': '工作区已设置为 {path}（活动机器：{u}@{h}）。',
-  'tool.sw_pick_workspace.error.invalidPath': 'sw_pick_workspace: path 必须是远程目录绝对路径：{path}',
-  'tool.sw_pick_workspace.error.noActive': 'sw_pick_workspace: 没有活动机器——请先调用 sw_connect',
-  'tool.sw_pick_workspace.error.notDir': 'sw_pick_workspace: {path} 不是目录',
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.description':

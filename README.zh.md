@@ -17,7 +17,7 @@
 | 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话提示里写明远程 / 副工作区上下文 |
 | 跨服务器执行 | `sw_exec(server, command)` 在**已注册的指定机器**上执行命令（缺省=当前会话机器）。目标 OS 每次连接探测一次（POSIX 跑 `bash -c`，win32 跑 `pwsh -Command`）。win32 宿主另注册 `bash` 工具供远程 Linux 工作区使用 |
 | 远程命令审批门 | 可选的逐机器审批门（**默认关闭**）：每条 shell 形状的远程命令与每个远程终端在执行前先问——`human` 每条都问人，`ai` 对只读白名单（`pwd`、`ls`、`git status` 等）自动放行、其余问人 |
-| 模型工具 | `sw_status`、`sw_connect`（把本会话接到你已经注册的机器）、`sw_pick_workspace`、`sw_exec` |
+| 模型工具 | `sw_status`、`sw_connect`（把本会话接到你已经注册的机器）、`sw_exec` |
 | 运行时国际化 | UI 文案、工具描述/错误与路由错误跟随设置页 **Language** 选项（zh/en）；UI 默认跟随浏览器语言。仅协议层 `bad-request:` 诊断保留英文 |
 
 ## 工作原理

@@ -4,7 +4,7 @@
 
 | ADR | 一句话 | 状态 |
 |---|---|---|
-| [0001](./ADR-0001-package-name-and-tool-prefix.md) | 包名 `dsh-workspace-enhancement`，工具前缀 `sw_` | accepted |
+| [0001](./ADR-0001-package-name-and-tool-prefix.md) | 包名 `dsh-workspace-enhancement`，工具前缀 `sw_` | **superseded by 0027** |
 | [0002](./ADR-0002-fork-dsh-ssh-and-merge-dsh-remote.md) | 以 dsh-ssh 为 base 二次开发、合并 dsh-remote | accepted |
 | [0003](./ADR-0003-drop-mirror-and-sync.md) | 镜像/同步明确不做 | accepted |
 | [0004](./ADR-0004-drop-audit-log.md) | 审计日志砍掉（会话轨迹替代） | accepted |
@@ -29,4 +29,4 @@
 | [0023](./ADR-0023-one-remote-core.md) | 远端一个核心：围栏执行 + 远端读写共用可校验产物 | accepted |
 | [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
 | [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |
-| [0026](./ADR-0026-upstream-ssh-runtime.md) | 上游官方 SSH 运行时（`0.1.6-alpha.1`）事实、helper 模型与我方定位 | proposed |
+| [0027](./ADR-0027-sunset-sw-pick-workspace.md) | 日落 `sw_pick_workspace`；工具面只留 status/connect/exec | accepted |
