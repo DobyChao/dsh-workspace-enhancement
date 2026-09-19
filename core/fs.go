@@ -2,14 +2,15 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // fsRealpath matches local dsh-fs-local: EvalSymlinks the path when it exists,
@@ -101,7 +102,7 @@ func statFromInfo(path string, info os.FileInfo) *statOK {
 		Type:    kind,
 		Mode:    uint32(info.Mode().Perm()),
 		MtimeMs: info.ModTime().UnixMilli(),
-		Version: versionOf(path, info.Size(), info.ModTime(), info.Mode()),
+		Version: versionOf(path, info.Size(), info.ModTime().UnixMilli()),
 	}
 	if info.Mode().IsRegular() {
 		size := info.Size()
@@ -110,10 +111,15 @@ func statFromInfo(path string, info os.FileInfo) *statOK {
 	return ok
 }
 
-func versionOf(path string, size int64, mtime time.Time, mode os.FileMode) string {
-	return filepath.Base(path) + ":" + hex.EncodeToString([]byte(mtime.UTC().Format(time.RFC3339Nano))) + ":" + hex.EncodeToString([]byte{
-		byte(size), byte(size >> 8), byte(mode),
-	})
+func versionOf(path string, size int64, mtimeMs int64) string {
+	posix := filepath.ToSlash(path)
+	quantized := (mtimeMs / 1000) * 1000
+	payload, err := json.Marshal([]any{posix, size, quantized})
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }
 
 func fsRead(path string, offset, length int64) ([]byte, error) {

@@ -17,6 +17,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { runCapture } from './lib/run.mjs'
+import { parseBacklog } from './lib/backlog.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(new URL('.', import.meta.url))))
 const OUT = join(ROOT, 'docs', 'status.md')
@@ -79,24 +80,14 @@ const testCases = testFiles.reduce((total, name) => {
   return total + (matches?.length ?? 0)
 }, 0)
 
-// Backlog roll-up.
-const backlog = read('docs/backlog.md')
+// Backlog roll-up — same parser as check.mjs gate 12 (scripts/lib/backlog.mjs).
 const STATUSES = ['todo', 'doing', 'blocked', 'done', 'shipped', 'dropped']
 const counts = Object.fromEntries(STATUSES.map(status => [status, 0]))
 const blockedRows = []
-for (const line of backlog.split(/\r?\n/)) {
-  // The id is `<FAMILY>-<suffix>`; the suffix is NOT always numeric (`REQ-DEP`,
-  // `INFRA-8a`), so matching `\d` at the end silently dropped three real rows
-  // from every count and from the blocked list. Require the hyphen instead.
-  const match = line.match(/^\|\s*`?([A-Z][A-Z]*(?:-[A-Za-z0-9]+)+)\s*\|(.*)$/)
-  if (!match) continue
-  const status = STATUSES.find(candidate => new RegExp(`\\|\\s*${candidate}\\s*\\|`).test(line))
-  if (!status) continue
-  counts[status] += 1
-  if (status === 'blocked') {
-    const title = match[2].split('|')[0].trim()
-    blockedRows.push(`${match[1]} — ${title}`)
-  }
+for (const row of parseBacklog(read('docs/backlog.md')).rows) {
+  if (!STATUSES.includes(row.status)) continue
+  counts[row.status] += 1
+  if (row.status === 'blocked') blockedRows.push(`${row.id} — ${row.title}`)
 }
 
 const decisions = listDir('docs/decisions').filter(name => /^ADR-\d+.*\.md$/.test(name)).sort()

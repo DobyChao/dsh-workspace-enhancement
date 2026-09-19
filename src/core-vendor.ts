@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { BWRAP_VENDOR, RG_VENDOR } from './core-vendor-pins.ts'
+import { extractGzipTarMemberToFile } from './gzip-tar.ts'
 import { dshHome } from './hostkey.ts'
 
 /** Root of the host-side vendor cache. */
@@ -185,25 +186,12 @@ function readFileSafe(path: string): string {
 }
 
 /**
- * Extract one member of a gzip tarball to `target` with the system `tar`.
- * Stdout goes to a file descriptor: the DSH sandbox denies piped stdio.
+ * Extract one member of a gzip tarball to `target` without spawning PATH `tar`
+ * (BUG-8: MSYS GNU tar corrupts `-xzOf` and used to hide stderr).
  * @returns undefined on success, else a short error detail.
  */
 function extractMember(archive: string, member: string, target: string): string | undefined {
-  const log = `${target}.tar.log`
-  const fd = openSync(log, 'w')
-  const out = openSync(target, 'w')
-  try {
-    const run = spawnSync('tar', ['-xzOf', archive, member], { stdio: ['ignore', out, fd] })
-    const detail = readFileSafe(log).trim()
-    if (run.error !== undefined) return `tar could not run (${run.error.message})`
-    if (run.status !== 0) return detail === '' ? `tar exited ${String(run.status)}` : detail
-    return undefined
-  } finally {
-    closeSync(out)
-    closeSync(fd)
-    rmSync(log, { force: true })
-  }
+  return extractGzipTarMemberToFile(archive, member, target)
 }
 
 /** Actionable text for a failed fetch (official address + manual escape hatch). */

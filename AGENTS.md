@@ -26,6 +26,9 @@
 | 某一轮做了什么 | `docs/rounds/`（**档案，不是现状**） |
 | 测试 / 兼容 / 验收 | `docs/testing.md` · `docs/compatibility.md` · `docs/uat/` |
 
+`docs/backlog.md`：**分区 = 状态列**（`doing` 只在 §1，不得留在 §2）；§2 按 P0→P3；
+备注只写未做动作 + 指针（闸门限长）。调查进 `docs/rounds/` / `docs/decisions/`。
+
 `drafts/`、`.agent-teams/`、`.workbuddy/`、`.tmp/` 是**本地素材**（不入库、可能含机器专属数据）。
 任何结论一旦拍板，必须搬进 `docs/README.md` 点名的那些文件——否则下一个 clone 的人看不到。
 
@@ -138,8 +141,8 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 **分支模型**：`master` 只接受经过 CI 的提交；改动走短分支 + PR，**squash merge** 保持线性历史
 （当前全历史 0 个 merge 提交，不要破坏它）。
 
-1. 在 `docs/backlog.md` 加行（ID + `todo`），写清目标与验收标准。
-2. 状态改 `doing`，从 `master` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
+1. 在 `docs/backlog.md` 加行（ID + `todo`，放进 §2 对应优先级块），写清目标与验收标准。
+2. 状态改 `doing` 时**整行挪到 §1**，从 `master` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. 小步提交，Conventional Commits，尾行 `Refs: <ID>`。
 4. 验证：`npm run check`（或沙箱内 `check:static` + `typecheck` + `test:agent`）。
 5. **代理 push + 开 PR + 盯 CI 到绿**（改测试/跨平台代码前先跑 §3 的 WSL Linux 复验）：
@@ -159,7 +162,7 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    > **PR 标题必须是 Conventional Commit**：squash 合并把它当作 master 上的提交标题，
    > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 master 必红）。
 
-6. 合并后：状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
+6. 合并后：整行挪到 §4，状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
 
 7. **发布只由仓库所有者决定**：合并进 `master` 不会发布。`release.yml` 只在 `v*` tag 上跑，且
    publish 作业挂在 `npm-publish` environment 上——**推 tag 只是排队，真正的 `npm publish` 要

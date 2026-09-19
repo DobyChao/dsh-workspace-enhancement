@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-18 09:53 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-19 12:18 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.2.0` |
 | npm 已发布版本 | `0.2.0` |
 | 最新 tag | `v0.2.0` |
-| 分支 / HEAD | `master` / `0f100ae` |
-| HEAD 提交 | `docs(release): record the 0.2.0 release round and the lab tarball install (#25)` (2026-09-18) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `chore/docs-backlog-hygiene` / `54cc3b4` |
+| HEAD 提交 | `chore(docs): enforce backlog layout and park specialty notes off the entry layer` (2026-09-19) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 44 |
-| 单测用例（静态计数） | 561 |
+| 单测文件 | 48 |
+| 单测用例（静态计数） | 584 |
 | E2E 场景文件 | 8 |
-| ADR | 26 |
-| 轮次报告 | 33 |
+| ADR | 27 |
+| 轮次报告 | 35 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 23 |
+| `todo` | 19 |
 | `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 45 |
+| `done` | 49 |
 | `shipped` | 7 |
 | `dropped` | 7 |
 

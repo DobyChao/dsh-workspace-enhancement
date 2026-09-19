@@ -1,8 +1,8 @@
 # ADR-0015: 远程会话 composer 权限预设显示 `Custom` —— 部署预制表补一组 `remote-full`
 
-- 状态: proposed
+- 状态: superseded（推荐的部署表补 `remote-full` **不做**。远程钉档已由 ADR-0025 取消；composer Custom 是否消失留给 backlog `UX-1` 在 lab 确认）
 - 日期: 2026-09-09（用户复现记录；本轮 scout-ux 磁盘权威源侦察 + 会话日志实锤）
-- 关联: `docs/backlog.md` UX-1、`docs/architecture.md` §7-5、`drafts/CONTEXT.md` §7（原始记录）
+- 关联: `docs/backlog.md` UX-1、`ADR-0025`、`drafts/CONTEXT.md` §7（原始记录）
 - 范围: **只写结论与片段，不改产品代码、不改 `$DSH_HOME/profiles/**`**（`AGENTS.md` §5 红线 2/3）
 
 ## 背景

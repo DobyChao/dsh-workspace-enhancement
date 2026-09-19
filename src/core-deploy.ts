@@ -13,13 +13,13 @@
  * @module dsh-workspace-enhancement/core-deploy
  */
 
-import { closeSync, existsSync, openSync, readFileSync, rmSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SFTPWrapper } from 'ssh2'
 import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
 import { coreArtifactName, type CoreStatusView } from './core-hub.ts'
+import { extractGzipTarMember } from './gzip-tar.ts'
 import { bwrapInstallHints, ensureRgVendor } from './core-vendor.ts'
 import { RG_VENDOR } from './core-vendor-pins.ts'
 import { quoteShellArg } from './ssh-core.ts'
@@ -66,27 +66,13 @@ export function manifestIssues(manifest: unknown): string[] {
 }
 
 /**
- * Read MANIFEST.json out of the tarball via the system tar. Stdout is captured
- * through a file descriptor on purpose: the DSH file sandbox denies piped
- * stdio, and this runs in tests as well as at deploy time.
- * @returns the parsed manifest, or null when it cannot be read.
+ * Read MANIFEST.json out of the tarball with the in-process gzip/ustar
+ * extractor (BUG-8: never spawn PATH `tar` on the host). Throws with a
+ * message that already names the archive — callers surface it as-is.
  */
 export function readTarballManifest(artifact: string): unknown {
-  const out = `${artifact}.manifest.tmp`
-  const fd = openSync(out, 'w')
-  try {
-    const tar = spawnSync('tar', ['-xzOf', artifact, 'MANIFEST.json'], { stdio: ['ignore', fd, 'ignore'] })
-    if (tar.status !== 0) return null
-  } finally {
-    closeSync(fd)
-  }
-  try {
-    return JSON.parse(readFileSync(out, 'utf8')) as unknown
-  } catch {
-    return null
-  } finally {
-    rmSync(out, { force: true })
-  }
+  const data = extractGzipTarMember(artifact, 'MANIFEST.json')
+  return JSON.parse(data.toString('utf8')) as unknown
 }
 
 export function assertLinuxAmd64(unameS: string, unameM: string): void {
@@ -181,7 +167,14 @@ export async function deployCore(
   if (!existsSync(artifact)) {
     return { ok: false, detail: `core artifact missing: ${artifact}` }
   }
-  const issues = manifestIssues(readTarballManifest(artifact))
+  let manifest: unknown
+  try {
+    manifest = readTarballManifest(artifact)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return { ok: false, detail: `cannot read MANIFEST.json from ${artifact}: ${detail}` }
+  }
+  const issues = manifestIssues(manifest)
   if (issues.length > 0) {
     return { ok: false, detail: `core artifact incomplete (${artifact}): ${issues.join('; ')}` }
   }

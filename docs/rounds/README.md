@@ -40,6 +40,7 @@
 | R30 | 发布 npm `v0.2.0` | [R30-v0.2.0-release.md](./R30-v0.2.0-release.md) |
 | R31 | BUG-9 调查：远端任务停止不了 | [R31-bug9-remote-task-stop.md](./R31-bug9-remote-task-stop.md) |
 | R32 | BUG-9 修复：核心腿组杀 + 直连腿停止链 | [R32-bug9-remote-task-stop-fix.md](./R32-bug9-remote-task-stop-fix.md) |
+| R34 | REQ-I10 日落 pick + BUG-7 version + BUG-8 tar | [R34-req-i10-bug7-bug8.md](./R34-req-i10-bug7-bug8.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 

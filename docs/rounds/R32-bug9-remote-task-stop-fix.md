@@ -71,10 +71,10 @@
 
 ## 遗留 / UAT
 
-- 直连腿初版 `echo $$` / 宿主持有远端 pid 已否：UAT 与现码是远端 steward（stdin EOF →
+- 直连腿初版 `echo $$` / 宿主持有远端 pid 已否：现码是远端 steward（stdin EOF →
   `kill -TERM 0`）+ signal + close，`handle.pid` 恒 `-1`。仍是 **BUG-9**，不另开轮次。
-- 真远端验收（长任务前台中止、后台 cancel、老 OpenSSH、正常完成不回退）在 lab 进行：
-  **一份**脚本 [`uat/R32-bug9-stop-uat.md`](../uat/R32-bug9-stop-uat.md)。
+- 2026-09-19 squash [#26](https://github.com/DobyChao/dsh-workspace-enhancement/pull/26) 进
+  `master`。lab UAT [`uat/R32-bug9-stop-uat.md`](../uat/R32-bug9-stop-uat.md) A/B 通过、C N/A。
 - systemd scope + 进程树跟踪（官方第二保险）未跟进，维持 R31 结论：第一期不做。
 - `SshTerminalHandle`（PTY 路径）未动——PTY 的信号经 line discipline 必达，不在 BUG-9 范围。
 

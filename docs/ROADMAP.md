@@ -7,21 +7,18 @@
 
 ## 现在在哪
 
-已发布 **v0.1.4**（npm 已上）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` / `ctx.fs`、
-多机注册表、`ssh://<id>/<path>` 路由、TOFU 与 OS 钥匙串、会话级机器连接、副工作区薄声明清单、
-可选审批门、远端围栏（围栏档走核心 RPC；`off` 仍 SFTP）、运行时 zh/en。宿主只支持 `0.1.5` 家族。
-
-**主线 `REQ-I5` 已在 `feat/REQ-I5-remote-core` 落地**：部署一个可校验核心（Go + 成帧 RPC），
-围栏执行和远端读写进同一个产物。预定随 **0.2.0** 发布。宣称「已围栏」仍以 UAT 反转 I9-9 为准。
+已发布 **v0.2.0**（npm `latest`）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` /
+`ctx.fs`、多机注册表、`ssh://<id>/<path>` 路由、TOFU 与 OS 钥匙串、会话级机器连接、
+副工作区薄声明清单、可选审批门、远端一个核心（围栏档走 RPC；`danger` 有核心仍走核心
+`--sandbox off`；无核心才 SFTP/SSH）、运行时 zh/en。宿主窗口是 `0.1.5` 家族。
 
 ## 接下来
 
-按 [`backlog.md`](./backlog.md) §2 的优先级。`REQ-I5` / `REQ-I13` 在 `feat/REQ-I5-remote-core`（PR #18）上等 0.2.0。
-`REQ-I1` 已往后排。R24 真机 UAT 仍待仓库所有者跑；R27 合验进行中。
+只看 [`backlog.md`](./backlog.md) §2 / §3。本文件不另列 ID。
 
 ## 已完成轮次
 
-索引在 [`rounds/README.md`](./rounds/README.md)。最近一轮是 R24（会话连接 + 远端围栏，真机待验）。
+索引在 [`rounds/README.md`](./rounds/README.md)。最近合入：R32（`BUG-9` 远端任务停止，PR #26）。
 
 ## 已关闭 / 撤销
 

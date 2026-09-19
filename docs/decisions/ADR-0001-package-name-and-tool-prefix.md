@@ -1,5 +1,5 @@
 # ADR-0001: 包名 `dsh-workspace-enhancement` 与工具前缀 `sw_`
-- 状态: accepted
+- 状态: **superseded by [ADR-0027](./ADR-0027-sunset-sw-pick-workspace.md)**（包名与 `sw_` 前缀仍成立；工具清单以 0027 为准）
 - 日期: 2026-08（用户会话拍板；具体日来源未明确）
 
 ## 背景

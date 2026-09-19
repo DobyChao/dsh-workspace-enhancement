@@ -1,6 +1,7 @@
 # 宿主静默 `ctx.fs`：项目根探测
 
-> 事实，不是待办。待修项是 backlog **`BUG-4`**。工作区键认 [`ADR-0024`](./decisions/ADR-0024-remote-core-protocol.md) §6.2–§6.3。
+> 专题附录，不是入口、也不是待办。代码侧 **`BUG-4` 已修**。工作区键认 [`ADR-0024`](../decisions/ADR-0024-remote-core-protocol.md) §6.2–§6.3。
+> 入口：[`architecture.md`](../architecture.md) §5.9。
 
 对话轨迹里看不到 Git / Bash，不等于宿主没碰文件系统。远程会话一开（组第一条上下文、扫 skills），上游会**自己**沿目录往上问「这里是不是项目根」。默认标记是目录里有没有名为 `.git` 的条目。这不是模型工具，用户点不着、卡片上也不出现。
 

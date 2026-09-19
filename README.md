@@ -17,7 +17,7 @@ English | [中文](README.zh.md)
 | Session awareness | Remote marker + online tri-state + reconnect in the sidebar; the session prompt states the remote / extra-workspace context |
 | Cross-server execution | `sw_exec(server, command)` runs a command on a **named registered machine** (defaults to the session's machine). The target OS is probed once per connection (`bash -c` on POSIX, `pwsh -Command` on win32). Windows hosts also get a `bash` tool for remote-Linux workspaces |
 | Remote approval gate | Optional per-machine gate (**default off**): every shell-shaped remote command and every remote terminal asks before it runs — `human` asks you each time, `ai` auto-grants a short read-only whitelist (`pwd`, `ls`, `git status`, …) and asks for the rest |
-| Model tools | `sw_status`, `sw_connect` (attach this session to machines you already registered), `sw_pick_workspace`, `sw_exec` |
+| Model tools | `sw_status`, `sw_connect` (attach this session to machines you already registered), `sw_exec` |
 | Runtime localization | UI copy, tool descriptions/errors, and routing errors follow the settings-page **Language** option (`zh`/`en`); the UI defaults to the browser language. Protocol-layer `bad-request:` diagnostics stay English |
 
 ## How it works

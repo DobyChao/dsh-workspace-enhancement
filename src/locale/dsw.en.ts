@@ -342,12 +342,12 @@ const en: Record<DswKey, string> = {
 
   /* -------------------------------------------------------- tool: sw_status */
   'tool.sw_status.description':
-    'Show the current remote machine (host/user/port), connection health (ping), the current remote workspace, and the host-key policy/state. Call this first to orient, or when an sw_* call fails to check connectivity.',
+    'Show the current remote machine (host/user/port), connection health (ping), the current remote workspace (from the session cwd / machine record, not a model tool), and the host-key policy/state. Call this first to orient, or when an sw_* call fails to check connectivity.',
   'tool.sw_status.ping.ok': 'Ping: OK — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: FAILED — {detail}',
   'tool.sw_status.outputs.host': 'Remote host: {u}@{h}:{p}{source}',
   'tool.sw_status.outputs.workspace': 'Current remote workspace: {ws}',
-  'tool.sw_status.outputs.workspaceNone': 'Current remote workspace: (none — call sw_pick_workspace to set one)',
+  'tool.sw_status.outputs.workspaceNone': 'Current remote workspace: (none — open a remote directory in the add-workspace flow)',
   'tool.sw_status.outputs.connected': 'Connected: {yesno}',
   // REQ-I11 (ADR-0021 §2.5): the session's own connected machines (id + user@host).
   'tool.sw_status.outputs.connList': 'Machines connected to this session: {items}',
@@ -357,7 +357,7 @@ const en: Record<DswKey, string> = {
 
   /* ------------------------------------------------------- tool: sw_connect */
   'tool.sw_connect.description':
-    'Set which registered machines this session may connect to and run commands on. Every call REPLACES the whole set (it is not a union): `machines: []` disconnects everything. Machines must be ids of registered machines; an unknown id errors with the known list. Each requested machine is then pinged within a bounded budget: reachable ones are recorded as connected, unreachable ones are reported honestly and left out; when none is reachable the call fails and the existing connections stay unchanged.',
+    'Set which registered machines this session may connect to and run commands on. Every call REPLACES the whole set (it is not a union): `machines: []` disconnects everything. Does not choose a workspace directory (that is the session cwd / add-workspace flow). Machines must be ids of registered machines; an unknown id errors with the known list. Each requested machine is then pinged within a bounded budget: reachable ones are recorded as connected, unreachable ones are reported honestly and left out; when none is reachable the call fails and the existing connections stay unchanged.',
   'tool.sw_connect.param.machines':
     'Array of registered machine ids to connect. An empty array disconnects every machine from this session.',
   'tool.sw_connect.output.cleared': 'Disconnected every machine from this session.',
@@ -370,15 +370,6 @@ const en: Record<DswKey, string> = {
   'tool.sw_connect.error.noKnownMachines': '(no machines registered — add one in the settings page first)',
   'tool.sw_connect.error.allUnreachable': 'sw_connect: no requested machine was reachable, so this session\'s connections are unchanged.\n{details}',
   'tool.sw_connect.error.noDetail': 'no failure detail',
-
-  /* ---------------------------------------------------- tool: sw_pick_workspace */
-  'tool.sw_pick_workspace.description':
-    'Set the remote workspace directory this session should treat as its working root on the connected remote. Verifies it exists (a directory); persists it on the active machine (recentWorkspaces keeps the last 8).',
-  'tool.sw_pick_workspace.param.path': 'Absolute remote directory path, e.g. /home/dev/code/project',
-  'tool.sw_pick_workspace.output': 'Workspace set to {path} (active machine: {u}@{h}).',
-  'tool.sw_pick_workspace.error.invalidPath': 'sw_pick_workspace: path must be an absolute remote directory path: {path}',
-  'tool.sw_pick_workspace.error.notDir': 'sw_pick_workspace: {path} is not a directory',
-  'tool.sw_pick_workspace.error.noActive': 'sw_pick_workspace: no active machine — call sw_connect first',
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.description':

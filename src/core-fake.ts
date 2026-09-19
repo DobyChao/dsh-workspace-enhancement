@@ -7,7 +7,6 @@
  * @module dsh-workspace-enhancement/core-fake
  */
 
-import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, readdirSync, lstatSync, existsSync, type Stats } from 'node:fs'
 import { dirname, join, posix, resolve, sep } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
@@ -31,6 +30,7 @@ import {
   type CoreMessage,
   type CoreStatOk,
 } from './core-protocol.ts'
+import { fileContentVersion } from './fs-version.ts'
 
 export interface FakeCoreOptions {
   /** Host directory that maps onto POSIX `/`. */
@@ -82,9 +82,6 @@ function realpathAllowMissingHost(root: string, posixPath: string): string {
   }
 }
 
-function versionOf(path: string, size: number, mtimeMs: number, mode: number): string {
-  return createHash('sha256').update(JSON.stringify([path, size, mtimeMs, mode])).digest('hex')
-}
 
 function writable(options: FakeCoreOptions, posixPath: string): boolean {
   if (options.sandbox === 'off' || options.sandbox === undefined) return true
@@ -106,7 +103,7 @@ function statOk(posixPath: string, stats: Stats, extra?: { symlink?: boolean }):
     type,
     mode,
     mtimeMs,
-    version: versionOf(posixPath, size, mtimeMs, mode),
+    version: fileContentVersion(posixPath, size, mtimeMs),
   }
   if (stats.isFile()) ok.size = size
   return ok

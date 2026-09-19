@@ -169,13 +169,13 @@ test('localizeTool：description/parameters getter 每次访问按当前语言�
   const localized = localizeTool(tool, locale, {
     descriptionKey: 'tool.sw_connect.description',
     buildParams: t => ({
-      path: { type: 'string', required: true, description: t('tool.sw_pick_workspace.param.path') },
+      machines: { type: 'array', items: { type: 'string' }, required: true, description: t('tool.sw_connect.param.machines') },
     }),
   })
   assert.equal(localized.description, zh['tool.sw_connect.description'])
-  assert.equal(localized.parameters.properties?.path?.description, '远程目录绝对路径，如 /home/dev/code/project')
+  assert.equal(localized.parameters.properties?.machines?.description, zh['tool.sw_connect.param.machines'])
   settings.preference = 'en'
   assert.equal(localized.description, en['tool.sw_connect.description'])
-  const params = localized.parameters as { properties: { path: { description: string } } }
-  assert.equal(params.properties.path.description, 'Absolute remote directory path, e.g. /home/dev/code/project')
+  const params = localized.parameters as { properties: { machines: { description: string } } }
+  assert.equal(params.properties.machines.description, en['tool.sw_connect.param.machines'])
 })
