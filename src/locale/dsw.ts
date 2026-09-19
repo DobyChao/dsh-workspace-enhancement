@@ -247,7 +247,7 @@ export const zh = {
   'form.remoteSandbox.off': 'off（遗留字段，忽略）',
   'form.remoteSandbox.readOnly': 'read-only（遗留字段，忽略）',
   'form.remoteSandbox.workspaceWrite': 'workspace-write（遗留字段，忽略）',
-  'form.remoteSandbox.hint': '远端权限跟会话 /permission 走（与本地同一套提权卡）。请在设置页部署 Linux 核心；围栏档且核心不可用会拒绝，不会退回 SFTP。机器上的围栏下拉已不再作为权限开关。审批门仍可选、默认关闭——两门同时开会弹两张卡。',
+  'form.remoteSandbox.hint': '远端权限跟会话 /permission 走（与本地同一套提权卡）。请在设置页部署 Linux 核心；围栏档且核心不可用时写与 bash 会拒绝，读仍走 SFTP。机器上的围栏下拉已不再作为权限开关。审批门仍可选、默认关闭——两门同时开会弹两张卡。',
   'form.label.jump': '跳板链（可选）',
   'form.placeholder.jump': 'bastion 或 user@bastion.example.com:2202，多台用逗号分隔',
   'form.jump.clear': '清除',
@@ -405,7 +405,7 @@ export const zh = {
 
   /* ------------------------------------------------------------- tool: bash */
   'tool.bash.description':
-    '在会话的远程 Linux 工作区上执行 bash 命令（`bash -c`）并返回其 stdout/stderr。本主机是 Windows 且没有本地 bash：命令始终在会话路由到的远程服务器上运行，本地（Windows）会话会报错——请在那里使用 pwsh。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
+    '在会话的远程 Linux 工作区上执行 bash 命令（`bash -c`）并返回其 stdout/stderr。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
   'tool.bash.param.workdir':
     '该命令的工作目录。缺省为会话工作区；相对路径基于它解析；`ssh://<id>/<path>` 显式指定机器与目录。',
   'tool.bash.output.background': '已启动后台任务 {jobId}',

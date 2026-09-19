@@ -238,7 +238,7 @@ const en: Record<DswKey, string> = {
   'form.remoteSandbox.off': 'off (legacy field, ignored)',
   'form.remoteSandbox.readOnly': 'read-only (legacy field, ignored)',
   'form.remoteSandbox.workspaceWrite': 'workspace-write (legacy field, ignored)',
-  'form.remoteSandbox.hint': 'Remote permission follows this session\'s /permission (same official escalation card as local). Deploy the Linux core from Settings. A confined session without a core is refused — never falls back to SFTP. The per-machine fence dropdown is no longer a permission switch. The approval gate stays optional and off by default; turning both on shows two cards.',
+  'form.remoteSandbox.hint': 'Remote permission follows this session\'s /permission (same official escalation card as local). Deploy the Linux core from Settings. A confined session without a core still allows reads over SFTP; writes and bash are refused. The per-machine fence dropdown is no longer a permission switch. The approval gate stays optional and off by default; turning both on shows two cards.',
   'form.label.jump': 'Jump chain (optional)',
   'form.placeholder.jump': 'bastion or user@bastion.example.com:2202; separate multiple with commas',
   'form.jump.clear': 'Clear',
@@ -396,7 +396,7 @@ const en: Record<DswKey, string> = {
 
   /* ------------------------------------------------------------- tool: bash */
   'tool.bash.description':
-    "Execute a bash command (`bash -c`) on the session's remote Linux workspace and return its stdout/stderr. This host is Windows and has no local bash: the command always runs on the remote server the session routes to, and a local (Windows) session errors — use pwsh there. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.",
+    "Execute a bash command (`bash -c`) on the session's remote Linux workspace and return its stdout/stderr. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.",
   'tool.bash.param.workdir':
     'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it; `ssh://<id>/<path>` names a machine and directory explicitly.',
   'tool.bash.output.background': 'started background job {jobId}',

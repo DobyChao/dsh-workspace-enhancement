@@ -33,7 +33,7 @@
   远程会话内同机任意绝对路径本就可达，逐根限权是 advisory 且挡不住 shell（旧门的已知绕过记录见
   `ADR-0012`，已作废）。真正的隔离手段是每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
   远程命令围栏在 `AUDIT-6` / `REQ-I9` 线上推进。
-- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 核心时，围栏档（read-only / workspace-write）fail-closed，不退 SFTP；`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
+- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 核心时，围栏档的**写与 spawn** fail-closed、不退 SFTP；**读**可见降级到 SFTP（`REQ-I15`，否则宿主项目根探测会挡住纯聊天）。`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
   shell 形状的远程命令与远程终端执行前经平台审批服务决定。该门**明确不覆盖**（诚实边界，`ADR-0020` D1）：
   1. **审批门不覆盖 fs 写**——围栏档的写由核心 jail 覆盖；danger 且无核心时仍是 SFTP；
   2. **插件自有固定探针**不设门（注册表 `probe`/`reconnect`、`sw_status` 环境自检、`sw_exec` 的

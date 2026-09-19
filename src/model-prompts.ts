@@ -53,7 +53,7 @@ export const MODEL_PROMPTS = {
   envCore:
     'Remote environment:\n  core: {version} ({arch})\n  caps: {caps}',
   envCoreMissing:
-    'Remote environment:\n  core: not installed ({detail})\n  Deploy the fenced core from Settings (core.deploy) before using a fenced machine.',
+    'Remote environment:\n  core: not installed ({detail})\n  Reads still use SFTP. Writes and bash refuse until you deploy the fenced core from Settings (core.deploy), or switch the session to danger-full-access.',
   /**
    * `tool:sw-exec` section (order 105) — injected only in a remote-context
    * session. REQ-I11 adds the session gate: `sw_exec` names a machine that is
@@ -62,16 +62,16 @@ export const MODEL_PROMPTS = {
    */
   sectionSwExec:
     "sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
-  /** `tool:bash` section (order 105, win32 hosts) — injected only in a remote-context session. */
-  sectionWin32Bash:
-    'The bash tool targets remote Linux workspaces; use pwsh for local (Windows) sessions. Check the [exit code: N] marker of each result.',
+  /** `tool:bash` section (order 105, win32 hosts) — empty unless this session has a remote workspace. */
+  sectionBash:
+    'The bash tool runs `bash -c` on this session\'s remote Linux workspace. Check the [exit code: N] marker of each result.',
   /**
    * REQ-I13 / ADR-0025: remote fs/spawn follow this session's `/permission`
    * (and official `sandbox_permissions` escalation) via the Linux core.
    * Missing core + confined mode fails closed; danger keeps SFTP/SSH.
    */
   remoteNoSandbox:
-    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined modes FAIL CLOSED if that core is missing (no SFTP fallback). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
+    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined writes and bash FAIL CLOSED if that core is missing. Reads then fall back to unfenced SFTP so chat and official Read still work (visible: the write/bash refusal names the missing core or bwrap). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
   /**
    * AUDIT-6 gate-expectation sentence (`sw-remote` section): injected only
    * when the session's main-workspace machine has `remoteApproval !== 'off'`.

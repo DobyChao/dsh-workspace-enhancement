@@ -17,7 +17,7 @@
 | [0011](./ADR-0011-withdraw-upstream-pr.md) | 上游 PR 撤销；行级徽标改 DOM 增辉层 | accepted |
 | [0012](./ADR-0012-fs-readonly-with-exec-on-bypass.md) | 副根 `fs:只读 + exec:开` 已知绕过 | **作废**（对象随 0019 退役） |
 | [0013](./ADR-0013-local-root-keys-are-realpath-canonical.md) | 本地副根键按 realpath 规范化 | accepted |
-| [0014](./ADR-0014-model-facing-prompts-are-english.md) | model-facing 文案统一英文，不进 i18n | accepted |
+| [0014](./ADR-0014-model-facing-prompts-are-english.md) | model-facing 文案统一英文；win32 bash 按会话 cwd 注入 | accepted |
 | [0015](./ADR-0015-remote-composer-permission-preset.md) | 远程会话 composer 显示 Custom：部署表补 `remote-full` | **superseded**（勿补预设；见 ADR-0025 / UX-1） |
 | [0016](./ADR-0016-conversation-panel-tab-slot.md) | 对话/轨迹区可扩展 Tab 的槽位契约（REQ-I1 前置） | proposed |
 | [0017](./ADR-0017-rc2-client-slot-recon.md) | rc.2 客户端槽位侦察与 REQ-I1 路线 | proposed |

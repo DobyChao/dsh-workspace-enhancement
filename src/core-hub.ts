@@ -3,8 +3,9 @@
  *
  * Key is `(machineId, confinementMode, workspaceRoot?)` — not "one process
  * per SSH connection". `off` (session danger-full-access) is one unjailed
- * serve per machine. A dead session is fail-closed for confined modes;
- * danger may fall back to SFTP via {@link CoreMissingError}.
+ * serve per machine. A dead session is fail-closed for confined **writes and
+ * spawn**; REQ-I15 lets confined **reads** fall back to SFTP. danger may fall
+ * back to SFTP via {@link CoreMissingError}.
  *
  * @module dsh-workspace-enhancement/core-hub
  */
@@ -170,11 +171,13 @@ export function createCoreHub(
   const live = new Map<string, LiveSession>()
   const known = new Map<string, Set<string>>()
   const opening = new Map<string, Promise<CoreClient>>()
+  /** Confined open failures (missing binary/cap). Cleared by close/deploy. */
+  const blocked = new Map<string, Error>()
 
   const modeOf = (connectionId: string | undefined): RemoteSandboxMode =>
     effectiveModeOf(deps, connectionId)
 
-    const remember = (connectionId: string, workspace: string | undefined): void => {
+  const remember = (connectionId: string, workspace: string | undefined): void => {
     if (workspace === undefined || workspace === '/') return
     let set = known.get(connectionId)
     if (set === undefined) {
@@ -182,6 +185,13 @@ export function createCoreHub(
       known.set(connectionId, set)
     }
     set.add(workspace)
+  }
+
+  const clearBlocked = (connectionId: string): void => {
+    const prefix = `${connectionId}\0`
+    for (const key of [...blocked.keys()]) {
+      if (key.startsWith(prefix)) blocked.delete(key)
+    }
   }
 
   const knownRootsOf = (connectionId: string): string[] => {
@@ -266,6 +276,8 @@ export function createCoreHub(
       scheduleIdle(existing)
       return existing.client
     }
+    const cached = blocked.get(key)
+    if (cached !== undefined) throw cached
     const pending = opening.get(key)
     if (pending !== undefined) return pending
 
@@ -302,15 +314,21 @@ export function createCoreHub(
         }
       } catch (error) {
         client?.close()
-        if (error instanceof RemoteSandboxError) throw error
+        if (error instanceof RemoteSandboxError) {
+          if (confined) blocked.set(key, error)
+          throw error
+        }
         const detail = error instanceof Error ? error.message : String(error)
         if (!confined) throw new CoreMissingError(detail)
-        throw remoteSandboxUnavailable(refuseMode, detail)
+        const refusal = remoteSandboxUnavailable(refuseMode, detail)
+        blocked.set(key, refusal)
+        throw refusal
       }
       if (client === undefined) {
         throw remoteSandboxUnavailable(refuseMode, 'core session opened without a client')
       }
       remember(connectionId, workspace)
+      blocked.delete(key)
       const session: LiveSession = {
         key,
         connectionId,
@@ -359,12 +377,14 @@ export function createCoreHub(
       if (session.connectionId === connectionId) drop(session, true)
     }
     known.delete(connectionId)
+    clearBlocked(connectionId)
   }
 
   if (typeof ctx.effect === 'function') {
     ctx.effect(() => () => {
       for (const session of [...live.values()]) drop(session, true)
       known.clear()
+      blocked.clear()
     }, 'dsw core hub sessions')
   }
 

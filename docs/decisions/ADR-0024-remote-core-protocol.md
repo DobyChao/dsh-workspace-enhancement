@@ -32,8 +32,9 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 3. 之后 `spawn` 不再包 bwrap：子进程在同一 mount namespace。`bin/rg`（只在远端本来
    没有 `rg`、且宿主成功取回官方件时才存在）靠 `PATH` 前置 `.../bin`，否则回退到
    远端自己的 `rg`。
-4. 核心挂了且档位不是 `off`：fs（含 browse）与 spawn **一起**
-   `SANDBOX_UNAVAILABLE`，禁止读面退回 SFTP。
+4. 核心挂了且档位不是 `off`：spawn 与 **写面** `SANDBOX_UNAVAILABLE`。
+   **读面**降到 SFTP（REQ-I15 / ADR-0025 §2.1，2026-09-19 修订；本条原「禁止读面退回
+   SFTP」已由那次修订取代）。
 5. 审批门仍看**未包装** argv（ADR-0022 §2.2）。插件侧围栏从「包装 argv」变成
    「确保核心会话活着」，返回原 argv。
 6. 交互终端在围栏档仍拒绝（ADR-0022 §2.4）。

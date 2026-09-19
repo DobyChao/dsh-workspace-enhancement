@@ -563,7 +563,7 @@ export const REMOTE_SANDBOX_MESSAGES = {
     'remote sandbox refuses to open an interactive terminal: mode "{mode}" cannot fence a PTY session, and an unfenced terminal would be dishonest',
   /** The two coverage boundaries, quoted verbatim into tool/status output. */
   boundaryFsWrites:
-    'the remote sandbox fences commands and file tools through one jailed core; SFTP is used only when remoteSandbox is off',
+    'the remote sandbox fences commands and file writes through one jailed core; reads fall back to SFTP when that core is missing (writes and spawn still refuse)',
   boundaryFileEffects:
     'the remote sandbox profile is file effects only: no network isolation, no environment scrubbing, no syscall filtering',
 } as const

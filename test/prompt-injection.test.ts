@@ -154,7 +154,7 @@ test('tool:bash section: win32 registers it; zero injection locally, English tex
   const section = fake.sections.find(entry => entry.name === 'tool:bash')
   assert.equal(textOf(section, assemblyContext('C:\\Users\\me\\proj', 's1')), '')
   const remote = textOf(section, assemblyContext('ssh://c1/srv', 's1'))
-  assert.ok(remote.startsWith('The bash tool targets remote Linux workspaces'))
+  assert.ok(remote.startsWith('The bash tool runs `bash -c` on this session\'s remote Linux workspace'))
   assert.ok(remote.includes('[exit code: N]'))
   assert.ok(!remote.includes('面向远程'))
 })

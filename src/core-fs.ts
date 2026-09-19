@@ -27,9 +27,10 @@ import { RemoteSandboxError } from './remote-sandbox.ts'
 import {
   initiatorSessionOf,
   isConfinedSandboxMode,
-  isCoreMissingError,
   resolveRemoteSessionMode,
+  sftpFallbackForCoreGap,
 } from './remote-policy.ts'
+import type { RemoteFsFace } from './remote-policy.ts'
 import type { CoreHub } from './core-hub.ts'
 import { SshFileSystemEngine } from './filesystem.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
@@ -420,8 +421,10 @@ export class CoreFileSystem implements FileSystemBranch {
 }
 
 /**
- * Remote-world filesystem: core RPC when a Linux core is up; SFTP only for
- * danger-full-access when the core is missing. Confined modes fail closed.
+ * Remote-world filesystem: core RPC when a Linux core is up.
+ * REQ-I15: confined + missing core → **reads** fall back to SFTP (so host
+ * project-root probes and official Read still work); writes stay fail-closed.
+ * danger-full-access with no core stays today's SFTP for every face.
  */
 export class CoreRoutingFileSystem implements FileSystemBranch {
   constructor(
@@ -437,6 +440,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
   private async delegate(
     connectionId: string | undefined,
     opts?: { signal?: AbortSignal; path?: string; cwd?: string; sandboxPolicy?: unknown },
+    face: RemoteFsFace = 'read',
   ): Promise<FileSystemBranch> {
     const policy = resolveRemoteSessionMode(this.ctx, opts?.sandboxPolicy)
     if (connectionId === undefined) return this.sftp
@@ -450,7 +454,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
       })
       return new CoreFileSystem(this.ctx, client, policy)
     } catch (error) {
-      if (!isConfinedSandboxMode(policy) && isCoreMissingError(error)) return this.sftp
+      if (sftpFallbackForCoreGap(policy, face, error)) return this.sftp
       throw mapRpc(error, 'use fenced core', connectionId, opts?.signal, policy)
     }
   }
@@ -549,7 +553,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsWriteOutcome> {
-    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy))
+    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy), 'write')
     return branch.writeText(target, content, expected, signal, sandboxPolicy)
   }
 
@@ -560,7 +564,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
-    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy))
+    const branch = await this.delegate(this.idOfTarget(target), this.targetOpts(target, signal, sandboxPolicy), 'write')
     return branch.editText(target, edit, expected, signal, sandboxPolicy)
   }
 }
