@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-17 16:37 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-18 09:53 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.0` |
 | npm 已发布版本 | `0.2.0` |
 | 最新 tag | `v0.2.0` |
-| 分支 / HEAD | `master` / `8074528` |
-| HEAD 提交 | `fix(pack): keep the core build staging tree out of the npm package (#24)` (2026-09-17) |
+| 分支 / HEAD | `master` / `0f100ae` |
+| HEAD 提交 | `docs(release): record the 0.2.0 release round and the lab tarball install (#25)` (2026-09-18) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -22,13 +22,13 @@
 | 单测用例（静态计数） | 561 |
 | E2E 场景文件 | 8 |
 | ADR | 26 |
-| 轮次报告 | 32 |
+| 轮次报告 | 33 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 19 |
+| `todo` | 23 |
 | `doing` | 0 |
 | `blocked` | 6 |
 | `done` | 45 |

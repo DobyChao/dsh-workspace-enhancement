@@ -40,6 +40,10 @@
 （默认组合仍装 `dsh-fs-local` / `dsh-subprocess-local`）⇒ 它们是**自定义 profile 的 opt-in 能力**，
 不是默认装配。
 
+> **2026-09-18 修订**：四包现已各发 **`0.1.6-alpha.2`**（`npm view` 核实），上游在持续推进；
+> 这正是 §5「哨兵盲区处置」想要的信号形态。本 ADR 其余行号仍属 alpha.1 解包产物；
+> alpha.2 的增量diff未做（无收口需要，`UPSTREAM-5` 动 pin 时再补）。
+
 ### 1.2 同批接缝加宽（这就是 `UPSTREAM-5`）
 
 `@deepseek-ai/dsh-subprocess@0.1.6-alpha.1` 相对 `0.1.5-rc.2` 的差异（解包 `lib/types/*.d.ts` 比对）：
@@ -137,6 +141,28 @@
    `UPSTREAM-5` 的"绿"只证明接缝兼容，**不证明上游没换赛道**（本次就是例证）。
 
 ## 5. 我方定位与哨兵盲区（待拍板）
+
+> **2026-09-18 补充（调查事实，替选项拍板供料；由 BUG-9 调查带出）**
+>
+> **两头门槛是独立的，都要过才算可用**：
+>
+> | | 宿主（跑 DSH 的机器） | 远端（被连机器） |
+> |---|---|---|
+> | 官方 `dsh-ssh` | **硬卡 POSIX**：`lib/index.js:46`（alpha.2 同）`process.platform !== linux/darwin` 即抛 `SSH runtime requires a POSIX client`。根因是结构性的：连接模型依赖 OpenSSH ControlMaster（`ssh -T -M -S`）与 Unix socket 本地转发（`ssh -O forward -L <socket-path>`），两者在 Windows OpenSSH 上**不存在** | 预装 node + helper + 整棵依赖 + SHA-256 pin |
+> | 本插件 | ssh2 纯 JS，Windows 主场 | 零预装；围栏档才要核心 |
+>
+> **解耦判断**：切 helper 与修 BUG-9 无关——helper 换不掉 ssh2 直连腿（零预装机器仍走它），
+> 也上不了 Windows 宿主 ⇒ 无论 §5 拍成什么，两条腿的停止缺陷都要自修（→ backlog `BUG-9`）。
+>
+> **重估触发条件（任一命中即开新 spike 复评 B）**：① 官方支持 Windows 宿主；② 进 rc/正式通道
+> 且接入 Web 路径；③ 我方维护 core + ssh2 直连的成本明显超过切换成本（如接缝再漂移两三代）；
+> ④ 需要官方沙箱/LSP/PTC 全家桶覆盖。在那之前 `UPSTREAM-6` 巡检负责让信号「会响」
+> （alpha.2 的出现即首次实绩，见 §1.1 修订）。
+>
+> **helper 实现状态（2026-09-18 解包核实）**：`dsh-ssh@0.1.6-alpha.2` `lib/helper.js`（834 行）为
+> **完整实现**（prepare/start/terminate RPC、逐进程租约、断连/租约过期清理、TLS 流端点、PSK），
+> 非占位。其 terminate 转调远端 `dsh-subprocess-local`：`detached` 组长 + `process.kill(-pid)` 组杀，
+> Linux 再叠 systemd 瞬态 scope + 进程树跟踪——组杀是官方与我们核心（`BUG-9` 修法）共同的底线形态。
 
 - **选项 A（暂推荐）**：差异化主线 = **Windows 宿主 + 浏览器化（面板/目录选择/审批门）+ 多机注册表 +
   免远端预装**；与官方 SSH 家族**并存不竞争**，`UPSTREAM-5` 按官方抽象对齐但**不引入**其依赖。

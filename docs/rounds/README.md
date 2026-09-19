@@ -34,6 +34,12 @@
 | R24 | 会话连接（REQ-I11）+ 远端围栏（REQ-I9） | [R24-session-connections-and-remote-fence.md](./R24-session-connections-and-remote-fence.md) |
 | R25 | 发布 npm `v0.1.4` | [R25-v0.1.4-release.md](./R25-v0.1.4-release.md) |
 | R26 | REQ-I5 远端一个核心 | [R26-req-i5-remote-core.md](./R26-req-i5-remote-core.md) |
+| R27 | REQ-I13 远端会话沙箱 UAT | [../uat/R27-req-i13-remote-session-sandbox.md](../uat/R27-req-i13-remote-session-sandbox.md) |
+| R28 | INFRA-15 核心工件分发 | [R28-infra15-core-artifact-distribution.md](./R28-infra15-core-artifact-distribution.md) |
+| R29 | BUG-5 ssh2 死链打挂宿主 | [R29-bug5-ssh-error-listener.md](./R29-bug5-ssh-error-listener.md) |
+| R30 | 发布 npm `v0.2.0` | [R30-v0.2.0-release.md](./R30-v0.2.0-release.md) |
+| R31 | BUG-9 调查：远端任务停止不了 | [R31-bug9-remote-task-stop.md](./R31-bug9-remote-task-stop.md) |
+| R32 | BUG-9 修复：核心腿组杀 + 直连腿停止链 | [R32-bug9-remote-task-stop-fix.md](./R32-bug9-remote-task-stop-fix.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 

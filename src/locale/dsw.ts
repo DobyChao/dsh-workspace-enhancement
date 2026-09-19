@@ -446,6 +446,7 @@ export const zh = {
   'tool.error.jobsUnavailable': '后台任务不可用：请加载 @deepseek-ai/dsh-jobs 与 @deepseek-ai/dsh-tool-jobs',
   'tool.error.backgroundDisabled': '该部署禁用 run_in_background（enableRunInBackground: false）',
   'tool.error.aborted': 'tool call aborted',
+  'tool.error.stopFailed': '远端进程在 TERM/KILL 后仍未退出，工具调用已停止等待——请在远端检查残留进程',
   'tool.param.error.commandEmpty': '无效命令：应为非空字符串',
   'tool.param.error.descriptionEmpty': '无效描述：应为非空字符串',
   'tool.param.error.timeoutInvalid': '无效 timeoutMs：应为正数，实际为 {v}',

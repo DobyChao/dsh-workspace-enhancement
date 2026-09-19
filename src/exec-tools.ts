@@ -564,6 +564,58 @@ export function toolAbortError(): HarnessError {
   return error
 }
 
+/* ------------------------------------------------- BUG-9: stop the waiting */
+
+/** How long a terminated subprocess may take to settle `done` before the tool
+ * call stops waiting: TERM→KILL grace + close-fallback + round-trip slack. */
+export const STOP_SETTLE_WINDOW_MS = SW_EXEC_KILL_GRACE_MS + 5_000
+
+/** Marker rejection: the handle ignored TERM/KILL and never settled (BUG-9). */
+export class UnsettledStopError extends Error {
+  constructor() {
+    super('subprocess did not settle after termination')
+    this.name = 'UnsettledStopError'
+  }
+}
+
+/**
+ * Await a handle's outcome, but never forever. Once the merged deadline signal
+ * aborts (caller stop or timeout), the handle gets {@link STOP_SETTLE_WINDOW_MS}
+ * to settle; only then does this reject with {@link UnsettledStopError} so the
+ * tool call surfaces a failure instead of hanging on a remote that swallowed
+ * both the signal request and the kill channel (BUG-9: the old code awaited
+ * `handle.done` with no escape — one unresponsive server hung the tool call).
+ * @param done - the subprocess outcome promise.
+ * @param signal - the merged spawn signal (caller abort + timeout).
+ * @param windowMs - settle window after the abort (tests shrink it).
+ */
+export async function awaitOutcomeOrStop(
+  done: Promise<SubprocessOutcome>,
+  signal: AbortSignal | undefined,
+  windowMs: number = STOP_SETTLE_WINDOW_MS,
+): Promise<SubprocessOutcome> {
+  if (signal === undefined) return done
+  return new Promise<SubprocessOutcome>((resolve, reject) => {
+    let timer: NodeJS.Timeout | undefined
+    const cleanup = (): void => {
+      signal.removeEventListener('abort', onAbort)
+      if (timer !== undefined) clearTimeout(timer)
+    }
+    const onAbort = (): void => {
+      timer = setTimeout(() => {
+        cleanup()
+        reject(new UnsettledStopError())
+      }, windowMs)
+    }
+    if (signal.aborted === true) onAbort()
+    else signal.addEventListener('abort', onAbort, { once: true })
+    void done.then(
+      (outcome) => { cleanup(); resolve(outcome) },
+      (error) => { cleanup(); reject(error) },
+    )
+  })
+}
+
 /* ------------------------------------------------------------------- spawn */
 
 /** Read one collected stream after settlement (batch result; lossy = truncated). */
@@ -643,9 +695,15 @@ export async function swExecCore(
   }
   let outcome: SubprocessOutcome
   try {
-    outcome = await handle.done
+    // BUG-9: never await a remote handle unboundedly — a server that ignores
+    // the whole stop chain must fail the call, not hang it.
+    outcome = await awaitOutcomeOrStop(handle.done, deadline.signal)
   } catch (error) {
     deadline.dispose()
+    if (error instanceof UnsettledStopError) {
+      if (signal?.aborted === true) throw toolAbortError()
+      throw new Error(tr('tool.error.stopFailed'))
+    }
     throw new Error(tr('tool.sw_exec.error.spawnFailed', { detail: error instanceof Error ? error.message : String(error) }))
   }
   const stdout = streamOf(handle.collected?.stdout)
@@ -1196,9 +1254,14 @@ export function registerWin32Bash(
       }
       let outcome: SubprocessOutcome
       try {
-        outcome = await handle.done
+        // BUG-9: bounded stop window — see swExecCore.
+        outcome = await awaitOutcomeOrStop(handle.done, deadline.signal)
       } catch (error) {
         deadline.dispose()
+        if (error instanceof UnsettledStopError) {
+          if (exec.signal.aborted === true) throw toolAbortError()
+          throw new Error(t('tool.error.stopFailed'))
+        }
         throw new Error(t('tool.bash.error.spawnFailed', { detail: error instanceof Error ? error.message : String(error) }))
       }
       const stdout = streamOf(handle.collected?.stdout)

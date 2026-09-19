@@ -106,7 +106,7 @@
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
 3. **副根无权限语义**（ADR-0019）。真正隔离是本地 `sandbox/mode`、审批门、远端核心 jail、操作者信任边界。
 4. **远端前置**：围栏档要先从设置页部署核心（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 核心。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
-5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。
+5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`），不把 OS pid 交给宿主；有核心时 danger 仍走核心 RPC（`--sandbox off`）。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。正式 ADR 化仍是 `AUDIT-2`。
 7. **远程会话 composer Custom**：钉档已取消（ADR-0025）；待 lab 确认 chip 回到 Workspace write（UX-1）。
 8. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。
