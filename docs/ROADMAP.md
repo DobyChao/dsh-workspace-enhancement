@@ -7,10 +7,11 @@
 
 ## 现在在哪
 
-已发布 **v0.2.0**（npm `latest`）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` /
+已发布 **v0.2.0**；**v0.2.1** 在准备中（tag 归所有者）。本地/远程工作区收在一个插件里：混合 `ctx.subprocess` /
 `ctx.fs`、多机注册表、`ssh://<id>/<path>` 路由、TOFU 与 OS 钥匙串、会话级机器连接、
-副工作区薄声明清单、可选审批门、远端一个核心（围栏档走 RPC；`danger` 有核心仍走核心
-`--sandbox off`；无核心才 SFTP/SSH）、运行时 zh/en。宿主窗口是 `0.1.5` 家族。
+副工作区薄声明清单、可选审批门、远端一个核心（围栏档走 RPC；无核心时读面降 SFTP、写/spawn
+仍拒；`danger` 有核心仍走核心 `--sandbox off`）、模型工具只留 `sw_status` / `sw_connect` /
+`sw_exec`、运行时 zh/en。宿主窗口是 `0.1.5` 家族。
 
 ## 接下来
 
@@ -18,7 +19,7 @@
 
 ## 已完成轮次
 
-索引在 [`rounds/README.md`](./rounds/README.md)。最近合入：R32（`BUG-9` 远端任务停止，PR #26）。
+索引在 [`rounds/README.md`](./rounds/README.md)。最近合入：R35（`REQ-I15` / `REQ-I16`，PR #28）、R36（`PUB-6` 0.2.1）。
 
 ## 已关闭 / 撤销
 
