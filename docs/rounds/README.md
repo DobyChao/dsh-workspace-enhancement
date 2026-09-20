@@ -42,6 +42,7 @@
 | R32 | BUG-9 修复：核心腿组杀 + 直连腿停止链 | [R32-bug9-remote-task-stop-fix.md](./R32-bug9-remote-task-stop-fix.md) |
 | R34 | REQ-I10 日落 pick + BUG-7 version + BUG-8 tar | [R34-req-i10-bug7-bug8.md](./R34-req-i10-bug7-bug8.md) |
 | R35 | REQ-I15 读面降级 + REQ-I16 bash 按工作区注入 | [R35-req-i15-i16.md](./R35-req-i15-i16.md) |
+| R36 | 发布 npm `v0.2.1` | [R36-v0.2.1-release.md](./R36-v0.2.1-release.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 

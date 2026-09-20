@@ -9,7 +9,7 @@ import (
 
 const (
 	coreProto           = 1
-	coreArtifactVersion = "0.2.0-dev"
+	coreArtifactVersion = "0.2.1"
 	maxFrame            = 16 * 1024 * 1024
 	errUnimplemented    = "UNIMPLEMENTED"
 	errSandbox          = "SANDBOX_UNAVAILABLE"

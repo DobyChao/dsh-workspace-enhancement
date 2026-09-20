@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-19 14:17 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-20 14:50 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.0` |
+| package.json 版本 | `0.2.1` |
 | npm 已发布版本 | `0.2.0` |
 | 最新 tag | `v0.2.0` |
-| 分支 / HEAD | `feat/REQ-I15-I16-read-degrade-bash-inject` / `c607760` |
-| HEAD 提交 | `chore(docs): enforce backlog layout and park specialty notes off the entry layer (#27)` (2026-09-19) |
+| 分支 / HEAD | `chore/PUB-6-v0.2.1` / `a67196e` |
+| HEAD 提交 | `feat(remote): degrade confined reads to SFTP and inject win32 bash per workspace (#28)` (2026-09-20) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -22,17 +22,17 @@
 | 单测用例（静态计数） | 585 |
 | E2E 场景文件 | 8 |
 | ADR | 27 |
-| 轮次报告 | 36 |
+| 轮次报告 | 37 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 17 |
-| `doing` | 2 |
+| `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 49 |
-| `shipped` | 7 |
+| `done` | 51 |
+| `shipped` | 8 |
 | `dropped` | 7 |
 
 ## 被挡住 / 待拍板

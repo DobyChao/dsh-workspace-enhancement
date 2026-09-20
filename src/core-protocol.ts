@@ -18,12 +18,14 @@ export const CORE_PROTO = 1
 export const CORE_MAX_FRAME = 16 * 1024 * 1024
 
 /**
- * Artifact / hello version until the plugin itself ships 0.2.0.
+ * Artifact / hello version. Keep in lockstep with `core/artifact.json`.
  *
  * Single source of truth is `core/artifact.json`; `src/core-artifact.ts` is
- * generated from it by `npm run sync:core-version`, and `npm run check:static`
- * fails when that projection is stale (INFRA-15 drift guard). Re-exported here
- * so every consumer keeps importing it from the protocol module.
+ * generated from it by `npm run sync:core-manifest`, and `npm run check:static`
+ * fails when that projection is stale (INFRA-15 drift guard). The Go const
+ * `coreArtifactVersion` in `core/protocol.go` must match (hello / `dsh-core
+ * version`). Re-exported here so every consumer keeps importing it from the
+ * protocol module.
  */
 export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-artifact.ts'
 

@@ -16,8 +16,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | doing | P2 | 读面降 SFTP，写/spawn fail-closed 且可见。改 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) §2.1。验收：缺 bwrap 能聊天能读，写/bash 仍拒 |
-| REQ-I16 | bash 工具按工作区自主注入 | doing | P3 | Win 本地不注入，连 Linux 后出现。接缝是 `agent/created` + `agent.ctx.tools.register`（无 `tools.update`）。[ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) 需修订。win32 描述错键随本项收 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -89,6 +87,8 @@
 | REQ-I4 | 远程焦点时模型认知 | done | — | R4 |
 | REQ-I6 | 系统提示英文 + 按需注入 | done | P2 | `ADR-0014`。[R13](./rounds/R13-req-i6-and-recon.md) |
 | REQ-I10 | 日落 `sw_pick_workspace` | done | P2 | [ADR-0027](./decisions/ADR-0027-sunset-sw-pick-workspace.md)。删工具 + 6 个词典键；status/connect 改诚实 |
+| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | done | P2 | PR #28。[R35](./rounds/R35-req-i15-i16.md)。lab UAT 通过 |
+| REQ-I16 | bash 工具按工作区自主注入 | done | P3 | 同 PR #28 / R35。Win 本地不注入；远程 Linux 才出现 |
 | UX-3 | 客户端 UI 统一到宿主 dsh 设计语言 | done | P2 | PR #20。尾巴：[uat/R28-ui-design-language.md](./uat/R28-ui-design-language.md) |
 | REQ-I7 | 副工作区权限档退役 | done | P1 | `ADR-0019`。[R20](./rounds/R20-req-i7-permission-retirement.md) |
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | `ADR-0022`。[R24](./rounds/R24-session-connections-and-remote-fence.md)。尾巴：[uat/R24-req-i9](./uat/R24-req-i9-remote-runner.md) |
@@ -104,6 +104,7 @@
 | PUB-3 | 发布 0.1.3 | shipped | P1 | OIDC；`dependencies` 仅 `ssh2` |
 | PUB-4 | 发布 0.1.4 | shipped | P1 | tag `v0.1.4`。档案 [R25](./rounds/R25-v0.1.4-release.md) |
 | PUB-5 | 发布 0.2.0 | shipped | P1 | tag `v0.2.0`。档案 [R30](./rounds/R30-v0.2.0-release.md) |
+| PUB-6 | 发布 0.2.1 | shipped | P1 | tag `v0.2.1` 待所有者推。档案 [R36](./rounds/R36-v0.2.1-release.md) |
 | INFRA-16 | npm 包泄漏 `build:core` staging | done | P1 | PR #24：`files` 收窄 `core/dist/*.tar.gz` + pack-smoke 闸门 |
 | UPSTREAM-1 | `readByteRange` | done | P1 | [R16](./rounds/R16-upstream-1-byte-range.md)。窗口随后被 `UPSTREAM-4` 收窄 |
 | UPSTREAM-2 | rc.2 槽位重排侦察 | done | P2 | `ADR-0017`。读取器 `npm run slots` |
