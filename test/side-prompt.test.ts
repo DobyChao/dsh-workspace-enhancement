@@ -106,6 +106,7 @@ test('composeWorkspacePrompt: REQ-I13 — every remote session states session sa
   const off = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'off' }, [])
   assert.ok(off.includes('follow this session\'s /permission sandbox'))
   assert.ok(off.includes('FAIL CLOSED'))
+  assert.ok(off.includes('Reads then fall back to unfenced SFTP'))
   const readOnly = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'read-only' }, [])
   assert.equal(readOnly.includes('remote sandbox fence (`read-only`)'), false, 'machine fence sentence is gone')
   const write = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'workspace-write' }, [])

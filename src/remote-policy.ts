@@ -10,6 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { CORE_ERROR_SANDBOX } from './core-protocol.ts'
 
 /** `dsh-core serve --sandbox` tokens, including unjailed `off`. */
 export type CoreServeSandbox = 'off' | 'read-only' | 'workspace-write'
@@ -37,6 +38,30 @@ export function isSandboxMode(raw: unknown): raw is SandboxMode {
 /** Confined session modes fail closed when the core is missing. */
 export function isConfinedSandboxMode(mode: SandboxMode): boolean {
   return mode !== 'danger-full-access'
+}
+
+/** One remote `ctx.fs` call is either a read face or a mutating write face (REQ-I15). */
+export type RemoteFsFace = 'read' | 'write'
+
+/** Fence / core refusals carry `SANDBOX_UNAVAILABLE` (RemoteSandboxError, CoreRpcError). */
+export function isSandboxUnavailableError(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: string }).code === CORE_ERROR_SANDBOX
+}
+
+/**
+ * REQ-I15: when the Linux core cannot open, which fs face may use SFTP.
+ *
+ * - danger-full-access: every face, on {@link CoreMissingError} (today's SFTP).
+ * - confined: **reads only**, and only on `SANDBOX_UNAVAILABLE`. Writes stay
+ *   fail-closed so a missing bwrap/core cannot silently mutate the remote.
+ */
+export function sftpFallbackForCoreGap(
+  mode: SandboxMode,
+  face: RemoteFsFace,
+  error: unknown,
+): boolean {
+  if (!isConfinedSandboxMode(mode)) return isCoreMissingError(error)
+  return face === 'read' && isSandboxUnavailableError(error)
 }
 
 /** Local `danger-full-access` is remote `--sandbox off` (same RPC, no bwrap). */
@@ -70,7 +95,8 @@ export function initiatorSessionOf(ctx: Context): { header?: { cwd?: string } } 
  *
  * Order: explicit per-call policy (escalation overlay) → `ctx.sandboxPolicy`
  * with the initiator session → fail-safe `read-only` (confined, so a missing
- * core refuses instead of opening SFTP).
+ * core refuses writes/spawn instead of opening SFTP; REQ-I15 still lets reads
+ * degrade).
  */
 export function resolveRemoteSessionMode(ctx: Context, explicit?: unknown): SandboxMode {
   const fromExplicit = sandboxModeFromPolicy(explicit)

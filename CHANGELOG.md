@@ -11,6 +11,8 @@
 ### 变更
 
 - **日落 `sw_pick_workspace`（`REQ-I10`，ADR-0027）**：模型工具只留 `sw_status` / `sw_connect` / `sw_exec`。工作区目录是会话 cwd / 添加工作区目录流，不是工具。`sw_status` / `sw_connect` 文案不再指向已删工具。ADR-0001 的工具清单被取代。
+- **围栏档读/写面拆分（`REQ-I15`，ADR-0025 §2.1）**：核心不可用时官方 Read / 宿主项目根探测走 SFTP，聊天能进；Write / bash 仍 `SANDBOX_UNAVAILABLE`。提示 `remoteNoSandbox` 写明这条拆分。
+- **win32 `bash` 按工作区注入（`REQ-I16`，ADR-0014 ③）**：本地 Windows 会话工具清单不再出现 `bash`。打开远程 Linux 工作区时 `agent/created` 在 `agent.ctx` 上注册。词典描述去掉「本地会报错」那段错键。
 
 ### 修复
 

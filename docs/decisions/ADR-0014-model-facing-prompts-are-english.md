@@ -65,7 +65,26 @@ R6 的运行时国际化（ADR-0010）把三面文案统一进 `src/locale/` 的
 - 代价 ④（t6 评审 F2 补充，便于 UAT 认可）：**本地会话（含 Windows 本地会话）不再收到
   `sw_exec` / win32 bash 两段提示**——模型在纯本地会话里只能从工具清单发现 `sw_exec`，
   不再被提示「可指定服务器执行」。这是按需注入的直接后果，行为符合 REQ-I6 ②（有意的降噪）；
-  工具本身仍注册、仍可显式调用，调用时的错误文案不变。
+  `sw_exec` 本身仍全局注册、仍可显式调用。
+
+### ③ 2026-09-19 修订（REQ-I16）
+
+上游 **没有** `tools.update()`。工具面接缝是 `ToolRuntime.register` / `restrict` +
+`tools/change`；`Agent` 在运行时暴露 `readonly ctx: Context`（`dsh-agent` runtime-types），
+`agent/created` 在首次 prompt assembly 之前发布这个 scoped ctx。
+
+因此 win32 上的 `bash` 不再全局注册：
+
+- 纯本地 Windows 会话：**工具清单里没有 `bash`**（提示段仍为空）。
+- 会话 cwd 是远程路由（添加 Linux 工作区）时：`agent/created` 在 `agent.ctx` 上
+  `tools.register('bash')`，下一轮 assembly 看见它。
+- `sw_connect` 给本地会话挂一台 Linux 机器**不会**注入 `bash`（工作区仍是 Windows；用 `sw_exec`）。
+- 词典 `tool.bash.description` 去掉「本地会话会报错」那段（那是错把全局注册写进模型可见描述）。
+  `tool.bash.error.localSession` 仍留给执行期 workdir 守卫。
+- model-facing 键 `sectionWin32Bash` 更名为 `sectionBash`。
+
+ADR-0021 §3「宿主组合行拿不到 `agent.ctx`」对 **setup 回调** 仍成立；对 **发布后的
+`agent/created`** 不再成立。`restrict({deny:['sw_exec']})` 仍然不用——`sw_exec` 保持全局注册 + 执行侧门。
 - `scripts/check.mjs` **不需要改**：CJK 闸门本就只禁 `src/locale/**` 之外的**中文字面量**，
   英文常量天然合规；词典闸门继续保证 zh/en 键集相等。
 

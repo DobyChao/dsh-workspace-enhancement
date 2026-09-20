@@ -605,14 +605,12 @@ export function registerWorkspaceTools(
   })
   ctx.effect(() => contextDisposer, 'dsw-session-workspace runtime context')
 
-  // S1+S2: sw_exec always (server-parameterized remote execution), win32 bash
-  // seam on Windows hosts only (the official bash tool owns `bash` + its
-  // `tool:bash` section on POSIX; a duplicate registration would fail).
+  // S1+S2 + REQ-I16: sw_exec always (server-parameterized remote execution);
+  // win32 bash is injected per remote-cwd session (not globally).
   // `sides`/`connections` are passed on so both tools can decide per session
   // (REQ-I6 ② prompt zero-injection + REQ-I11 server gate).
   registerSwExec(ctx, registry, { sides, connections })
-  // REQ-I11: the win32 `bash` seam is OUR exec face, so it carries the session
-  // gate too (the GLM-5.3 review found it ungated while `SECURITY.md` named only
-  // the OFFICIAL tools as bypassable — ours need not be).
+  // REQ-I16: scoped onto agent.ctx when the session cwd is a remote Linux
+  // workspace. The session gate still applies at execute time.
   registerWin32Bash(ctx, registry, { sides, connections })
 }

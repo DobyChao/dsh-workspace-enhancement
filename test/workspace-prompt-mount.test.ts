@@ -160,7 +160,7 @@ test('mount: a REMOTE session gets every section, in English only', () => {
   assert.ok(joined.includes('remote SSH workspace'))
   assert.ok(joined.includes('sw_exec executes a command on the specified server'))
   if (process.platform === 'win32') {
-    assert.ok(joined.includes('The bash tool targets remote Linux workspaces'))
+    assert.ok(joined.includes('The bash tool runs `bash -c` on this session\'s remote Linux workspace'))
   }
   // No Chinese may reach the model on any of the three surfaces.
   assert.ok(!/[\p{Script=Han}]/u.test(joined), `model-facing text must be English only: ${joined}`)

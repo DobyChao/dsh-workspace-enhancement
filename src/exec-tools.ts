@@ -12,10 +12,12 @@
  *   through the MIXED subprocess provider with an `ssh://<id>/<path>` cwd, so
  *   the machine routing is the same one every other spawn uses. Non-zero exits
  *   are reported, not errored.
- * - win32 bash: on a Windows host (no local bash, the official bash executor
- *   is not composed) a `bash` tool is registered that runs the session's
- *   REMOTE-Linux command through the same mixed provider; a local session gets
- *   a clear error instead of silently degrading.
+ * - win32 bash (REQ-I16): on a Windows host the official bash executor is
+ *   absent. The tool is **not** registered globally. `agent/created` injects
+ *   it onto `agent.ctx` when the session cwd is a remote (Linux) workspace.
+ *   A local Windows session never sees `bash` in the tool list (use pwsh /
+ *   `sw_exec`). Execute-time still refuses a local workdir if the scoped tool
+ *   is called with one.
  *
  * Everything testable is a pure function or takes a small faceted env
  * (`SwExecEnv`) so unit tests never touch the network.
@@ -1126,18 +1128,18 @@ export function resolveWin32BashWorkdir(modelWorkdir: string | undefined, sessio
 }
 
 /**
- * Register the win32 bash seam tool plus its `tool:bash` prompt section (S2).
+ * Register the win32 bash seam plus its `tool:bash` prompt section (S2 / REQ-I16).
  * NO-OP on POSIX hosts — the official bash tool owns the `bash` name and the
- * `tool:bash` section there. On Windows (official bash executor absent) the
- * tool is registered; at execution time `worldOfCwd` decides honestly: a
- * remote (Linux) world runs `bash -c` on the server through the mixed
- * provider, a local Windows session errors instead of silently degrading.
+ * `tool:bash` section there. On Windows the section is global (empty unless the
+ * session has a remote workspace). The **tool** is injected per agent when
+ * `agent/created` reports a remote cwd — local Windows sessions do not see it.
  * @param ctx - the mounting context.
  * @param registry - reserved: routing is cwd-based; the accessor keeps the
  *   calling convention uniform with `registerSwExec`.
  * @param options - `platform` injectable for tests; `enableRunInBackground`
  *   mirrors the official bash flag (`?? true`); `sides` is the side-workspace
- *   store accessor used by the REQ-I6 ② injection decision.
+ *   store accessor used by the REQ-I6 ② injection decision; `forceRegister`
+ *   is the test harness that binds the tool on `ctx` immediately.
  */
 export function registerWin32Bash(
   ctx: Context,
@@ -1154,6 +1156,11 @@ export function registerWin32Bash(
      * structural; ours need not be).
      */
     connections?: () => SessionConnectionsFace | undefined
+    /**
+     * Test harness: bind the tool on `ctx` immediately. Production injects
+     * via `agent/created` onto `agent.ctx` when the session cwd is remote.
+     */
+    forceRegister?: boolean
   } = {},
 ): void {
   if ((options.platform ?? process.platform) !== 'win32') return
@@ -1288,15 +1295,34 @@ export function registerWin32Bash(
   Object.defineProperty(tool, 'parameters', {
     get: () => parameterSchemaSpecToJsonSchema(bashParams(locale.t, backgroundEnabled)) as unknown as Record<string, unknown>,
   })
-  const disposer = ctx.tools.register(tool)
-  ctx.effect(() => disposer, 'win32 bash tool')
+  const inject = (target: Context): void => {
+    try {
+      const disposer = target.tools.register(tool)
+      if (typeof target.effect === 'function') target.effect(() => disposer, 'win32 bash tool')
+    } catch {
+      // Duplicate name or a disposed agent scope must never veto `agent/created`.
+    }
+  }
+  if (options.forceRegister === true) {
+    inject(ctx)
+  } else if (typeof ctx.on === 'function' && typeof ctx.effect === 'function') {
+    const onCreated = (payload: {
+      agent?: { ctx?: Context; session?: { header?: { cwd?: string } } }
+    }): void => {
+      const cwd = payload.agent?.session?.header?.cwd
+      if (cwd === undefined || worldOfCwd(cwd) !== 'remote') return
+      const agentCtx = payload.agent?.ctx
+      if (agentCtx === undefined) return
+      inject(agentCtx)
+    }
+    ctx.effect(() => ctx.on('agent/created' as never, onCreated as never), 'win32 bash session inject')
+  }
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'tool:bash',
     order: 105,
-    // REQ-I6: model-facing, ENGLISH ONLY (ADR-0014) and injected only for a
-    // remote-context session — a local Windows session gets zero bash prompt
-    // text (the tool itself stays registered and errors honestly if called).
-    text: (context) => (hasRemoteWorkspaceContext(context, options.sides) ? modelPrompt('sectionWin32Bash') : ''),
+    // REQ-I6 + REQ-I16: English only (ADR-0014). Empty on a local Windows
+    // session; the tool itself is also absent there (scoped register).
+    text: (context) => (hasRemoteWorkspaceContext(context, options.sides) ? modelPrompt('sectionBash') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:bash system prompt section')
 }

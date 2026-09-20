@@ -16,6 +16,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | doing | P2 | 读面降 SFTP，写/spawn fail-closed 且可见。改 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) §2.1。验收：缺 bwrap 能聊天能读，写/bash 仍拒 |
+| REQ-I16 | bash 工具按工作区自主注入 | doing | P3 | Win 本地不注入，连 Linux 后出现。接缝是 `agent/created` + `agent.ctx.tools.register`（无 `tools.update`）。[ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) 需修订。win32 描述错键随本项收 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -24,12 +26,10 @@
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5（A/B/C）。代理：新包巡检要会响 |
-| REQ-I15 | 围栏档拆「读面/写面」：核心不可用时读可见降级 | todo | P2 | 读面降 SFTP，写/spawn fail-closed 且可见。改 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) §2.1。验收：缺 bwrap 能聊天能读，写/bash 仍拒 |
 | INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | ① 内容哈希升阻断 ② `restart-3080.ps1` 前 `build`。证据 [R15](./rounds/R15-infra-11-dev-build-drift.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后见 `ADR-0005` |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | todo | P2 | 分组容器改**后代**扫描。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。勿与 F2、`AUDIT-4` 同 PR |
 | UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | 根因随 ADR-0025 消失。lab 确认 chip 回到 Workspace write 后改 `done`。勿补 `remote-full` |
-| REQ-I16 | bash 工具按工作区自主注入 | todo | P3 | Win 本地不注入，连 Linux 后出现。先 spike 上游 tool update 接缝；`ADR-0014` 需修订。win32 错键随本项收 |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | todo | P3 | 剩余：`sw_status` 报档位/探针；徽标接 live `conn.status` |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |

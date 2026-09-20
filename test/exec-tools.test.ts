@@ -168,9 +168,11 @@ function fakeToolContext(options: { subprocess?: { spawn(spec: SubprocessSpawnSp
   ctx: Context
   registered: CapturedTool[]
   sections: CapturedSection[]
+  emit: (name: string, payload: unknown) => void
 } {
   const registered: CapturedTool[] = []
   const sections: CapturedSection[] = []
+  const listeners = new Map<string, (payload: unknown) => void>()
   const ctx = {
     get: (name: string) => {
       if (name === 'subprocess') return options.subprocess
@@ -179,9 +181,18 @@ function fakeToolContext(options: { subprocess?: { spawn(spec: SubprocessSpawnSp
     },
     tools: { register: (definition: CapturedTool) => { registered.push(definition); return () => {} } },
     systemPrompt: { section: (section: CapturedSection) => { sections.push(section); return () => {} } },
-    effect: () => {},
+    on: (name: string, handler: (payload: unknown) => void) => {
+      listeners.set(name, handler)
+      return () => { listeners.delete(name) }
+    },
+    effect: (fn: () => unknown) => { fn() },
   }
-  return { ctx: ctx as unknown as Context, registered, sections }
+  return {
+    ctx: ctx as unknown as Context,
+    registered,
+    sections,
+    emit: (name, payload) => { listeners.get(name)?.(payload) },
+  }
 }
 
 /** The ToolRunContext face the tools read: `signal` + `agent.session.header.cwd`. */
@@ -521,7 +532,7 @@ test('registerSwExec: an aborted call throws the official HarnessError (ABORTED/
 test('registerWin32Bash: an aborted call throws the official HarnessError before registering a job', async () => {
   const started: unknown[] = []
   const fake = fakeToolContext({ subprocess: { spawn: () => fakeHandle(undefined) }, jobs: { start: spec => { started.push(spec); return 'bash-1' } } })
-  registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32' })
+  registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32', forceRegister: true })
   await assert.rejects(
     () => fake.registered[0]?.execute?.({ command: 'make', description: 'Build', run_in_background: true }, abortedExecFace(remotePlaceholder('c1'))),
     assertAborted,
@@ -531,16 +542,20 @@ test('registerWin32Bash: an aborted call throws the official HarnessError before
 
 /* ---------------------------------------------------- 7) win32 bash 工具 */
 
-test('registerWin32Bash: POSIX host is a no-op; win32 registers bash + tool:bash section', () => {
+test('registerWin32Bash: POSIX host is a no-op; win32 injects bash on remote agent/created', () => {
   const posix = fakeToolContext({})
   registerWin32Bash(posix.ctx, fakeRegistry({}), { platform: 'linux' })
   assert.deepEqual(posix.registered, [])
   assert.deepEqual(posix.sections, [])
   const win = fakeToolContext({})
   registerWin32Bash(win.ctx, fakeRegistry({}), { platform: 'win32' })
-  assert.deepEqual(win.registered.map(tool => tool.name), ['bash'])
+  assert.deepEqual(win.registered, [], 'REQ-I16: local/global ctx does not own bash')
   assert.deepEqual(win.sections.map(section => section.name), ['tool:bash'])
   assert.equal(win.sections[0]?.order, 105)
+  win.emit('agent/created', { agent: { ctx: win.ctx, session: { header: { cwd: 'C:\\Users\\me\\proj' } } } })
+  assert.deepEqual(win.registered, [], 'local Windows cwd does not inject bash')
+  win.emit('agent/created', { agent: { ctx: win.ctx, session: { header: { cwd: remotePlaceholder('c1') } } } })
+  assert.deepEqual(win.registered.map(tool => tool.name), ['bash'])
 })
 
 test('registerWin32Bash execute: a local Windows session errors instead of silently degrading', async () => {
@@ -549,7 +564,7 @@ test('registerWin32Bash execute: a local Windows session errors instead of silen
   // EN wording — a design-rule unification with every other model-facing
   // message, not a regression (zh preference users still read the Chinese copy).
   const fake = fakeToolContext({})
-  registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32' })
+  registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32', forceRegister: true })
   await assert.rejects(
     () => fake.registered[0]?.execute?.({ command: 'ls', description: 'List' }, execFace('C:\\Users\\me\\proj')),
     /The bash tool targets remote Linux workspaces \(this host is Windows and has no local bash\); use pwsh or the terminal panel/,
@@ -559,7 +574,7 @@ test('registerWin32Bash execute: a local Windows session errors instead of silen
 test('registerWin32Bash execute: a remote session runs bash -c through the mixed provider', async () => {
   const spawned: SubprocessSpawnSpec[] = []
   const fake = fakeToolContext({ subprocess: { spawn: spec => { spawned.push(spec); return fakeHandle(spec, { stdout: 'from remote' }) } } })
-  registerWin32Bash(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'win32' })
+  registerWin32Bash(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'win32', forceRegister: true })
   const result = await fake.registered[0]?.execute?.({ command: 'uname -a', description: 'Show kernel' }, execFace(remotePlaceholder('c1')))
   assert.equal((result as { kind: string }).kind, 'foreground')
   assert.equal((result as { stdout: { text: string } }).stdout.text, 'from remote')
@@ -568,7 +583,7 @@ test('registerWin32Bash execute: a remote session runs bash -c through the mixed
   // A relative workdir resolves against the session workspace (official semantics).
   const spawned2: SubprocessSpawnSpec[] = []
   const fake2 = fakeToolContext({ subprocess: { spawn: spec => { spawned2.push(spec); return fakeHandle(spec) } } })
-  registerWin32Bash(fake2.ctx, fakeRegistry({}), { platform: 'win32' })
+  registerWin32Bash(fake2.ctx, fakeRegistry({}), { platform: 'win32', forceRegister: true })
   await fake2.registered[0]?.execute?.({ command: 'pwd', description: 'Print dir', workdir: 'src' }, execFace(remotePlaceholder('c1')))
   assert.equal(spawned2[0]?.cwd, join(remotePlaceholder('c1'), 'src'))
 })
@@ -589,6 +604,7 @@ test('REQ-I11: the win32 bash seam carries the session gate (our own exec face)'
   }
   registerWin32Bash(fake.ctx, fakeRegistry({ c1: fakeConnection(), c2: fakeConnection({ id: 'c2' }) }), {
     platform: 'win32',
+    forceRegister: true,
     connections: () => store,
   })
   const face = {

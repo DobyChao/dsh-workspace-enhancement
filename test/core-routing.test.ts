@@ -1,6 +1,6 @@
 /**
  * REQ-I5: fenced remote fs routes to core RPC; `off` stays SFTP; a down core
- * fails closed (no SFTP fallback).
+ * fails closed on writes (REQ-I15: reads may fall back to SFTP).
  * @module test/core-routing
  */
 
@@ -24,6 +24,7 @@ import { MixedFileSystem } from '../src/mixed.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps, RemoteSandboxMachineFace } from '../src/remote-sandbox-fence.ts'
+import { isSandboxUnavailableError, sftpFallbackForCoreGap, CoreMissingError } from '../src/remote-policy.ts'
 import { sshRoutesRoot, type SshTransport } from '../src/transport.ts'
 
 function pair(root: string, sandbox: 'read-only' | 'workspace-write' = 'read-only', workspace?: string): CoreClient {
@@ -64,6 +65,56 @@ function ctxWith(t: SshTransport): Context {
 function target(path = '/work/a.txt'): FsTarget {
   return { targetKey: FsTargetKey(`ssh://c1${path}`), displayPath: `ssh://c1${path}` }
 }
+
+function trackingSftp(): {
+  sftp: Record<string, unknown>
+  reads: string[]
+  writes: string[]
+} {
+  const reads: string[] = []
+  const writes: string[] = []
+  const sftp = {
+    processPathFromHostPath: () => undefined,
+    processPath: (item: FsTarget) => String(item.targetKey),
+    fileUrl: () => 'file:///',
+    contains: () => true,
+    resolve: async () => {
+      reads.push('resolve')
+      return target()
+    },
+    stat: async () => {
+      reads.push('stat')
+      return { type: 'file' as const, size: 1, version: 'sftp' }
+    },
+    lstat: async () => undefined,
+    readText: async () => {
+      reads.push('readText')
+      return 'from-sftp'
+    },
+    streamText: async () => (async function* () { yield '' })(),
+    readBytes: async () => new Uint8Array(),
+    listDir: async () => [],
+    writeText: async () => {
+      writes.push('writeText')
+      return { operation: 'create', version: 'sftp', before: null, after: 'x' }
+    },
+    editText: async () => {
+      writes.push('editText')
+      return { version: 'sftp', before: '', after: '' }
+    },
+  }
+  return { sftp, reads, writes }
+}
+
+test('sftpFallbackForCoreGap: confined reads on SANDBOX_UNAVAILABLE; writes never', () => {
+  const unavailable = new RemoteSandboxError('no core', REMOTE_SANDBOX_UNAVAILABLE)
+  assert.equal(sftpFallbackForCoreGap('workspace-write', 'read', unavailable), true)
+  assert.equal(sftpFallbackForCoreGap('read-only', 'write', unavailable), false)
+  assert.equal(sftpFallbackForCoreGap('danger-full-access', 'write', unavailable), false)
+  assert.equal(sftpFallbackForCoreGap('danger-full-access', 'write', new CoreMissingError('gone')), true)
+  assert.equal(sftpFallbackForCoreGap('workspace-write', 'read', new CoreMissingError('gone')), false)
+  assert.equal(isSandboxUnavailableError(unavailable), true)
+})
 
 test('CoreRoutingFileSystem: danger-full-access with no core delegates writes to SFTP', async () => {
   const t = transport()
@@ -119,21 +170,30 @@ test('CoreRoutingFileSystem: fenced write uses core RPC (I9-1 dual: outside work
   client.close()
 })
 
-test('CoreRoutingFileSystem: fenced + dead core refuses fs (no SFTP fallback)', async () => {
+test('REQ-I15: fenced + dead core reads via SFTP; writes stay fail-closed', async () => {
   const t = transport()
   const ctx = ctxWith(t)
+  let opens = 0
   const hub = createCoreHub(ctx, {
     deps: deps('workspace-write', t),
     open: async () => {
+      opens += 1
       throw new Error('core binary missing')
     },
   })
-  const exploding = new Proxy({}, { get: () => () => { throw new Error('SFTP fallback is forbidden') } }) as unknown as SshFileSystemEngine
-  const fs = new CoreRoutingFileSystem(ctx, exploding, hub)
+  const tracked = trackingSftp()
+  const fs = new CoreRoutingFileSystem(ctx, tracked.sftp as unknown as SshFileSystemEngine, hub)
+  const info = await fs.stat(target('/work/a.txt'))
+  assert.equal(info?.type, 'file')
+  const afterStat = opens
+  assert.equal(await fs.readText(target('/work/a.txt')), 'from-sftp')
+  assert.equal(opens, afterStat, 'second read uses the blocked-core cache')
+  assert.deepEqual(tracked.reads, ['stat', 'readText'])
   await assert.rejects(
-    () => fs.stat(target('/work/a.txt')),
+    () => fs.writeText(target('/work/a.txt'), 'nope', undefined, undefined, { mode: 'workspace-write' }),
     (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
   )
+  assert.deepEqual(tracked.writes, [])
 })
 
 test('createCoreHub.require: missing cap is SANDBOX_UNAVAILABLE, not SFTP', async () => {
