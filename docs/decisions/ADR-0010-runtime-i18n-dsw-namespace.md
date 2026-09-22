@@ -23,6 +23,8 @@ R6 需要把三面（客户端 UI 文案 / 宿主「远程认知」系统提示 
   （无缓存、无订阅；`settings` 为可选服务，缺失定格 `en`）。
 - **工具描述/参数 getter 化**（路线 B）：`defineTool` 之后用 `Object.defineProperty` 把 `description` /
   `parameters` 覆盖为 getter（官方 `run_code` 自证范式）；输出渲染与错误在执行时取词。
+  **2026-09-21（`UX-6`）**：schema 拟改为固定英文，与官方 bash/pwsh 对齐；getter 只留给执行错误。
+  落地前路线 B 仍生效。
 - 客户端 `inject` 加 `'locale'`（硬依赖）；row-badges 用 `CONN_STATE_LABEL_KEY` 单一键源 + 切语言就地重绘。
 - **运行时零新增依赖**（`dsh-client-locale` 仅 devDep 类型源；不进 tsdown EXTERNALS）。
 

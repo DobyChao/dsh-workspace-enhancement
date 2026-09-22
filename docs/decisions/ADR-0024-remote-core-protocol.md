@@ -94,6 +94,12 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 - 远端：`~/.dsh-core/<version>/` + `current` 符号链接。不需要 root。
 - 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`，**不**在模型
   第一次调用时偷偷装。
+- **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
+  `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
+  对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
+  **禁止默默跑旧核心**（组杀、`version` 算法都在核心里，旧二进制等于没修）。
+  读面仍走 REQ-I15（SFTP）。`danger` / `off` 不走核心，不挡。无感升级仍是
+  `REQ-I14`——本条是升级完成前的 fail-closed。
 - v1 只认 `linux` + `x86_64`/`amd64`（`uname`）。aarch64 是第二架构，本轮不做。
 - Windows 远端与 `off`：今天的 SFTP + 审批门；健康面写「无围栏核心」。
 

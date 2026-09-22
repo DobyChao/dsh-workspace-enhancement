@@ -21,18 +21,17 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3 |
+| REQ-I18 | 远程 spawn 一次提权 | todo | P1 | 2026-09-21。I13 只收 fs overlay。spawn 无 per-call policy；win32 bash 缺提权两参；官方 bash/pwsh/`sw_exec` 同洞。修 spawn overlay + 补两参 + 拒绝标记；修订 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md)。验收：bash 越界 hint → allowed-once 走 `--sandbox off` → 下一命令仍围栏 |
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
+| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
-| UPSTREAM-6 | 官方 SSH 运行时定位拍板 + 新包巡检 | todo | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5（A/B/C）。代理：新包巡检要会响 |
-| INFRA-11 | `link:` 安装的 `lib/` 漂移 | todo | P2 | ① 内容哈希升阻断 ② `restart-3080.ps1` 前 `build`。证据 [R15](./rounds/R15-infra-11-dev-build-drift.md) |
-| REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P2 | 移植 dsh-remote forwards。延后见 `ADR-0005` |
-| AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | todo | P2 | 分组容器改**后代**扫描。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。勿与 F2、`AUDIT-4` 同 PR |
-| UX-1 | 远程会话 composer 显示 `Custom` | todo | P2 | 根因随 ADR-0025 消失。lab 确认 chip 回到 Workspace write 后改 `done`。勿补 `remote-full` |
+| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P2 | 从 UPSTREAM-6 拆出。独立能力包不在 `upstream.yml` 家族清单里，通道红绿都看不见。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵或 issue 会响 |
+| UX-6 | 工具 schema 与官方统一英文 | todo | P2 | 2026-09-21。官方 bash/pwsh schema 写死英文；win32 bash/`sw_*` 跟 Language，zh 时模型看到中文。对齐 [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md)：description/parameters 固定英文；执行错误仍宿主语言。修订 ADR-0010 路线 B。验收：Language=zh 时 bash/`sw_*` schema 英文，工具错误仍中文 |
+| REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
-| REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | todo | P3 | 剩余：`sw_status` 报档位/探针；徽标接 live `conn.status` |
+| UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
 | AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 防基类新增方法后门面漏实现。证据 R14 审计 O2 |
-| AUDIT-2 | 把 `resolveExecutable`「恒本地」写成 ADR | todo | P3 | `architecture.md` §4 已点到；还差 ADR 一句话。证据 R14 O1 |
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
@@ -43,10 +42,10 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| SEC-3 | `remote-full` 无二次确认 | blocked | P1 | 上游按 preset **id** 判确认门。`ADR-0011` 已否上游 PR。等 `UX-1` lab 确认 Custom 消失 |
+| REQ-I19 | 主/副工作区区域权限：工具绑世界 | blocked | P2 | 2026-09-22。等 `REQ-I18`。本机副根 2/9 维持 WW 不可写；远程 4/7 按已有每根一条 serve 视为 WW，不改核心协议。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
+| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。新包巡检拆到 `UPSTREAM-7` |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
-| UX-2 | 副工作区面板「浏览」输入框去留 | blocked | P3 | 等用户用几天再定 |
-| BUG-1 | 设置页顶部空白边框条 | blocked | P3 | lab 未复现。要浏览器/视口/缩放/主题/语言指纹 |
+| AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
 
 ## 4. 已完成（done / shipped，ID 留作追溯）
 
@@ -94,7 +93,7 @@
 | REQ-I9 | 远端沙箱围栏（runner 原型） | done | P1 | `ADR-0022`。[R24](./rounds/R24-session-connections-and-remote-fence.md)。尾巴：[uat/R24-req-i9](./uat/R24-req-i9-remote-runner.md) |
 | REQ-I11 | 会话级机器连接（吸收 SEC-5） | done | P1 | `ADR-0021`。同上 R24。尾巴：[uat/R24-req-i11](./uat/R24-req-i11-session-connections.md) |
 | REQ-I5 | 远端「一个核心」 | done | P1 | PR #18。范围 ADR-0023/0024，权限 ADR-0025。[uat/R27](./uat/R27-req-i13-remote-session-sandbox.md) 11/12 通过 |
-| REQ-I13 | 远端权限对齐本地 sandbox 提权 | done | P1 | 同 PR #18 / 同一份 UAT R27 |
+| REQ-I13 | 远端权限对齐本地 sandbox 提权 | done | P1 | 同 PR #18 / UAT R27（Write）。spawn 一次提权见 `REQ-I18` |
 | REQ-R6 | 运行时国际化 | done | — | [R6](./rounds/R6-i18n.md) |
 | REQ-S1 | `sw_exec` | shipped | — | v0.1.1 |
 | REQ-S2 | win32 宿主 `bash` | shipped | — | v0.1.1 |
@@ -123,6 +122,13 @@
 | REQ-X2 | 审计日志 | dropped | — | `ADR-0004` |
 | REQ-X3 | 更新检查 | dropped | — | 上游节奏太快 |
 | REQ-X4 | 内嵌侧边栏 | dropped | — | `ADR-0006` |
+| SEC-3 | `remote-full` 无二次确认 | dropped | — | 预设不做（ADR-0015）。没有 `remote-full` 就没有确认门可补 |
+| UX-1 | 远程会话 composer 显示 `Custom` | dropped | — | 钉档已取消（ADR-0025）。不再单列 lab 确认 |
+| INFRA-11 | `link:` 安装的 `lib/` 漂移 | dropped | — | 3080 不装本插件；lab 用 tarball。WARN 已在。见 R15 |
+| AUDIT-2 | `resolveExecutable` 恒本地写成 ADR | dropped | — | `architecture.md` §4 已写。不再单独立 ADR |
+| BUG-1 | 设置页顶部空白边框条 | dropped | — | lab 未复现，无复现步骤 |
+| UX-2 | 副工作区面板「浏览」输入框去留 | dropped | — | 无验收标准，不再等 |
+| REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | dropped | — | 死字段已不读。审批下拉另见 `UX-7` |
 | SEC-1 | 副根 `fs:r + exec:on` 绕过 | dropped | — | 随 `REQ-I7` 失去对象。调查留 `ADR-0012`（作废） |
 | SEC-2 | 主 workdir 写删只读副根 | dropped | — | 同上；围栏改由 `AUDIT-6` / `REQ-I9` 线 |
 

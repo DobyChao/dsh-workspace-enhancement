@@ -16,6 +16,9 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 `danger-full-access`，不进 bwrap）。无核心且本次仍是围栏档 → **写面与 spawn fail-closed**，读面**可见降级**到 SFTP
 （REQ-I15）。无核心且本次是 danger → 今天的 SFTP + 裸 SSH。
 
+**写面 overlay 已通**（R27 官方 Write）。**spawn 一次提权尚未接上**（2026-09-21，`REQ-I18`）：
+`subprocess.spawn` 只读会话档，win32 `bash` 无 `sandbox_permissions`；官方 bash/pwsh 即使弹卡，allowed-once 后核心仍跟 sticky `/permission`。会话级 danger 仍有效。
+
 机器字段 `remoteSandbox` **不再当权限或切流开关**（可读可忽略，不必强制迁移）。
 
 ## 1. 为什么要改
@@ -62,6 +65,13 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
    REQ-I15 改为：读面降 SFTP（项目根能找到、官方 Read 能用）；写 / bash 仍
    `SANDBOX_UNAVAILABLE`，拒绝文案继续点名缺失物（`fenceMissingHint`）。
    模型提示 `remoteNoSandbox` 写明这条拆分，避免「看起来已围栏其实读面未围」。
+10. **远程 spawn 一次提权（2026-09-21，`REQ-I18`）**。写接口把 per-call
+    `sandboxPolicy` 传进 `requireSession`；`SshSubprocessEngine.spawn` 只调
+    `resolveRemoteSessionMode(this.ctx)`，没有 overlay。win32 注入的 `bash`
+    也不广告 `sandbox_permissions` / `justification`。官方 bash/pwsh / `sw_exec`
+    同走 spawn，同洞。本条跟踪 I18，不在 I13 验收范围内。区域矩阵
+    （工具绑世界、远程副根按根多开 WW）是 **REQ-I19**，等 I18 完成再做，见
+    [ADR-0028](./ADR-0028-region-permission-matrix.md)。
 
 ## 3. 不做
 
@@ -73,3 +83,4 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 
 见 `docs/uat/R27-req-i13-remote-session-sandbox.md`（与 REQ-I5 **合验**；原 R26 脚本已作废）。关键：工作区外官方 write 失败且
 带提权标记；提权允许后成功；无核心 + workspace-write **写 / bash 不走 SFTP**；无核心时官方 Read 与聊天仍可用（REQ-I15，`docs/uat/R35-req-i15-i16.md`）。
+bash / `sw_exec` / 官方 pwsh 的 allowed-once 不在 R27 范围内，见 `REQ-I18`。

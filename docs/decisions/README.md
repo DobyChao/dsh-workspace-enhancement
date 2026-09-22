@@ -18,7 +18,7 @@
 | [0012](./ADR-0012-fs-readonly-with-exec-on-bypass.md) | 副根 `fs:只读 + exec:开` 已知绕过 | **作废**（对象随 0019 退役） |
 | [0013](./ADR-0013-local-root-keys-are-realpath-canonical.md) | 本地副根键按 realpath 规范化 | accepted |
 | [0014](./ADR-0014-model-facing-prompts-are-english.md) | model-facing 文案统一英文；win32 bash 按会话 cwd 注入 | accepted |
-| [0015](./ADR-0015-remote-composer-permission-preset.md) | 远程会话 composer 显示 Custom：部署表补 `remote-full` | **superseded**（勿补预设；见 ADR-0025 / UX-1） |
+| [0015](./ADR-0015-remote-composer-permission-preset.md) | 远程会话 composer 显示 Custom：部署表补 `remote-full` | **superseded**（勿补预设；钉档已由 ADR-0025 取消） |
 | [0016](./ADR-0016-conversation-panel-tab-slot.md) | 对话/轨迹区可扩展 Tab 的槽位契约（REQ-I1 前置） | proposed |
 | [0017](./ADR-0017-rc2-client-slot-recon.md) | rc.2 客户端槽位侦察与 REQ-I1 路线 | proposed |
 | [0018](./ADR-0018-browser-channel-on-shared-api.md) | 浏览器通道改走官方共享 `/api` 精确 Fetch 路由 | accepted |
@@ -30,3 +30,4 @@
 | [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
 | [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |
 | [0027](./ADR-0027-sunset-sw-pick-workspace.md) | 日落 `sw_pick_workspace`；工具面只留 status/connect/exec | accepted |
+| [0028](./ADR-0028-region-permission-matrix.md) | 主/副工作区区域权限：工具绑世界；远程副根按根多开 WW | proposed（等 REQ-I18） |

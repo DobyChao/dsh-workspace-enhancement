@@ -37,7 +37,7 @@
 | 2026-09-10（**F1 启动崩溃**） | `dsh-client-connection@0.1.5-*` 把自己的 `const inject` 从 `["webServer","credentials"]` 收紧为 `["credentials"]`（0.1.2-rc.1 是前者）；其 `register(owner, …)` 末行**恒读** `owner.webServer`，而 `owner` 是 **Connection 服务自己的 ctx** | 插件在 **0.1.5-rc.1 与 rc.2 上启动即崩**：抛 `cannot get property "webServer" without inject`，整棵 plugin tree 加载失败（`web.ts` 的 `apply()` 在插件根上下文调 `connection.rpc.handle`）。**编译级与单测级全绿**（typecheck 不报错、240 例通过）⇒ 自动化**完全没拦住** | **已修（t11）**：挂载搬进 `ctx.inject(['webServer'], webCtx => …)`（与上游自己挂 `/api` 同形状）。真 boot 矩阵：rc.2 / 真·rc.1 / legacy **三家族 SMOKE PASS**；**负向对照**（pre-fix 挂载）**FAIL exit 1** 且复现同样的 `without inject` | **`scripts/boot-smoke.mjs`（新增）+ `upstream.yml` 三通道都加 `npm run build` + boot smoke** —— 这是本轮补上的**唯一**能拦住 F1 的机制（`UPSTREAM-3` ③ F3） |
 | 2026-09-11（**F2 修复 + 0.1.2 退场**，`R19`） | F1 的修法只把失败装进子 fiber ⇒ `/dsw` 静默不存在；且 `rpc.intercept('/api')` 这条官方扩展点被**单占位**的 `dsh-api-gateway` 占死 | rc.2 上 `/dsw` 的 `POST` → **405**（空 body）、`GET` → **404**（SPA 兜底位，含义是「没有具名路由匹配」），数据面（连接列表/状态/重连/browse）全部不可用 | **已修（`ADR-0018`）**：通道改挂**官方共享 `/api` 的精确 Fetch 路由**（`connection.fetch.register`，先于拦截器被分发、不读 `owner.webServer`，`dsh-client-file-upload` 同款）；客户端改 `rpc.call('/api', 'dsw/<endpoint>')`，信封不变。真机实证：lab profile + 0.1.5-rc.2 ⇒ `POST /api/dsw/connections.list → 200, result.ok=true`（修前同一探针 405）。**所有者同日拍板 0.1.2 家族退场**（`UPSTREAM-4`） | **`scripts/boot-smoke.mjs` 强断言**（`POST /api/dsw/connections.list` 必须 200 + `result.ok=true`，`--channel-warn` 降级口已删）+ `test/web-channel.test.ts`（信封/路径/重载/端点清单锁定）+ `upstream.yml` next/alpha 每通道都跑 |
 | 2026-09-10（**rc.2 客户端槽位重排**） | `0.1.5-rc.2` 的客户端槽位目录 `CLIENT_SLOT_API` 从 **52 → 61**：**新增 12**、**删除 3**（`conversation`、`details`、`conversation.details.tool`，被 `main`/`rightbar` 体系取代） | 占用**被删 3 槽**的插件在 rc.2 上**静默**失去挂载点 —— 槽未声明 ⇒ `slots.inject` 的回调**永不执行且不报错**（不是异常，是"什么都没发生"）。**已核查现网 5 个第三方包无一占用**该 3 槽；**我方 5 个槽逐字节未变**（详见 `UPSTREAM-2`） | 本次为**上游重排**，我方无需改动；已把「槽位/服务目录 diff」资产化为 `npm run slots -- --list\|--key\|--diff`（`scripts/slot-catalog.mjs`，入库） | **目前无自动闸门**：槽位目录**没有**任何守卫，靠 `upstream.yml` 三通道哨兵 + **人工比对**（哨兵只跑编译/单测/boot，不会发现槽位消失）。判定该风险是否成立需人工执行 `npm run slots -- --diff` |
-| 2026-09-15（**`0.1.6-alpha.1` 新世代**） | ① `@deepseek-ai/dsh-subprocess` 加宽：`SubprocessHandle.control`（`Duplex \| undefined`，fd 7 继承型控制通道）、`SubprocessTerminalSpawnSpec.terminalType`（**必填**）、`SubprocessTerminalHandle.resize(cols, rows)`、`SubprocessRuntime.terminalEnvironment()`；② **同批首发官方 SSH 家族**：`@deepseek-ai/dsh-ssh` / `dsh-fs-ssh` / `dsh-sandbox-ssh` / `dsh-subprocess-ssh`——四者都**只有** `0.1.6-alpha.1` 一个版本（2026-09-15T03:25Z 起，无 rc、无旧版），默认组合（`dsh` CLI / `dsh-base`）**不含**它们 | `drift (alpha)` 红 = **编译错**：`CoreSubprocessHandle`（`src/core-process.ts:47`）/ `SshTerminalHandle`（`src/terminal.ts:28`）/ `SshSubprocessRuntime`（`src/subprocess.ts:338`）三处实现失配。**SSH 家族本身零运行时影响**（未安装、未依赖） | 登记为 **`UPSTREAM-5`**（`0.1.6` 升 rc 前收口；实现注意清单见 `ADR-0026` §4）。家族事实、helper 部署模型与差异矩阵见 `ADR-0026`；定位拍板 + 新包巡检 = **`UPSTREAM-6`** | 目前**只有 alpha 通道**会红（`next` 仍是 `0.1.5-rc.2`）。**新包不在哨兵家族清单里 ⇒ 哨兵看不见它们**：如实记「目前无自动闸门」，靠人工 `npm view` 比对（§6） |
+| 2026-09-15（**`0.1.6-alpha.1` 新世代**） | ① `@deepseek-ai/dsh-subprocess` 加宽：`SubprocessHandle.control`（`Duplex \| undefined`，fd 7 继承型控制通道）、`SubprocessTerminalSpawnSpec.terminalType`（**必填**）、`SubprocessTerminalHandle.resize(cols, rows)`、`SubprocessRuntime.terminalEnvironment()`；② **同批首发官方 SSH 家族**：`@deepseek-ai/dsh-ssh` / `dsh-fs-ssh` / `dsh-sandbox-ssh` / `dsh-subprocess-ssh`——四者都**只有** `0.1.6-alpha.1` 一个版本（2026-09-15T03:25Z 起，无 rc、无旧版），默认组合（`dsh` CLI / `dsh-base`）**不含**它们 | `drift (alpha)` 红 = **编译错**：`CoreSubprocessHandle`（`src/core-process.ts:47`）/ `SshTerminalHandle`（`src/terminal.ts:28`）/ `SshSubprocessRuntime`（`src/subprocess.ts:338`）三处实现失配。**SSH 家族本身零运行时影响**（未安装、未依赖） | 登记为 **`UPSTREAM-5`**（`0.1.6` 升 rc 前收口；实现注意清单见 `ADR-0026` §4）。家族事实见 `ADR-0026`；定位拍板 = **`UPSTREAM-6`**（待所有者）；新包巡检 = **`UPSTREAM-7`** | 目前**只有 alpha 通道**会红（`next` 仍是 `0.1.5-rc.2`）。**新包不在哨兵家族清单里 ⇒ 哨兵看不见它们**：如实记「目前无自动闸门」，靠人工 `npm view` 比对（§6） |
 
 > 第二个案例是建立 CI 的直接动因：**依赖升级能悄悄弄坏测试，而当时没有任何机制会喊一声。**
 
@@ -85,7 +85,7 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
 > 而 `0.1.6-alpha.1` 首发的 `@deepseek-ai/dsh-ssh` / `dsh-fs-ssh` / `dsh-sandbox-ssh` /
 > `dsh-subprocess-ssh` 是**独立能力包**——它们既不进 seam 家族清单（`upstream.yml` 只装固定 13 包），
 > 也不被家族成员的依赖带进来 ⇒ **通道红/绿都不会提到它们**。本次发现纯属人工翻 registry。
-> 事实与差异矩阵见 `ADR-0026`；「scope 新包巡检」列为 `UPSTREAM-6` 的代理侧待办。
+> 事实与差异矩阵见 `ADR-0026`；「scope 新包巡检」是 `UPSTREAM-7`。定位拍板是 `UPSTREAM-6`。
 
 > 历史坑：旧版哨兵 `npm install --no-save <pkg>` 不带版本，装的是 `latest` 标签（`0.0.1-rc.1`），
 > 比 `next` 还旧——等于每周测了一个更老的家族。现在按 dist-tag 显式解析、并打印实际解析结果。
@@ -155,7 +155,7 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
 1. **不要因为上游做了 SSH 就改我方路线。** 官方形态是「一 profile 一别名 = 一个远端世界」、headless 优先、
    要求远端预装 helper + 整棵依赖 + SHA-256 pin，且**硬拒非 POSIX 宿主**
    （`dsh-ssh@0.1.6-alpha.1` `lib/index.js:46`）。我方的机器注册表 / `ssh://` 路由 / 浏览器面 /
-   免远端预装都不在它的覆盖里（`ADR-0026` §3）。定位拍板是 `UPSTREAM-6`。
+   免远端预装都不在它的覆盖里（`ADR-0026` §3）。定位拍板是 `UPSTREAM-6`；新包巡检是 `UPSTREAM-7`。
 2. **接缝加宽按官方抽象对齐**，别自造私有扩展：`UPSTREAM-5` 的四个成员是通用抽象，
    实现前读 `ADR-0026` §4（含 `control` 声明为 `undefined`、`resize(cols, rows)` 与 ssh2
    `setWindow(rows, cols)` 顺序相反、`terminalEnvironment` 必须报远端事实等）。
