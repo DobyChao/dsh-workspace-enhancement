@@ -6,3 +6,4 @@
 | 附录 | 关于 |
 |---|---|
 | [host-silent-fs.md](./host-silent-fs.md) | 宿主静默 `ctx.fs` 项目根探测（`BUG-4` 已修；实机无 `.git` 尾巴仍待验） |
+| [prompt-section-order.md](./prompt-section-order.md) | 系统提示段 order 对照（`REQ-I20`；90/105 落在身份行与官方工具段之间） |

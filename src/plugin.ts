@@ -45,6 +45,7 @@ import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 import { ensureCoreHub } from './core-hub.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
 import { installRemoteConfinePassthrough } from './remote-confine.ts'
+import { installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -129,6 +130,7 @@ export function installMixedProviders(ctx: Context): void {
 export function apply(ctx: Context, config: Config): void {
   ctx.plugin(SshRuntime, config)
   installRemoteConfinePassthrough(ctx)
+  installRemoteSpawnPolicyBridge(ctx)
   // AUDIT-6 (ADR-0020 D4): the AI answerer — a prepend `approval/request`
   // waterfall listener that auto-grants only whitelisted commands on
   // `remoteApproval: 'ai'` machines and delegates everything else (including

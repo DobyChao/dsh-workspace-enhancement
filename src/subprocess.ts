@@ -38,6 +38,7 @@ import type { RemoteSandboxFence, RemoteSandboxTerminalGuard } from './remote-sa
 import type { CoreHub } from './core-hub.ts'
 import { CoreSubprocessHandle } from './core-process.ts'
 import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
+import { currentRemoteSpawnPolicy, installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
 import type { SshTerminalHandle } from './terminal.ts'
 
 /**
@@ -240,7 +241,9 @@ export class SshSubprocessEngine {
     // (explicit dep or context-derived) is the later stage that turns that same
     // argv into the executed one.
     const fence = this.sandboxFence()
-    const policy = resolveRemoteSessionMode(this.ctx)
+    // REQ-I18: a one-shot grant (shell spec, or our own tool) outranks the
+    // sticky session mode. Absent store → session `/permission`.
+    const policy = resolveRemoteSessionMode(this.ctx, currentRemoteSpawnPolicy())
     if (this.hub !== undefined && route.connectionId !== undefined) {
       const connectionId = route.connectionId
       const hub = this.hub
@@ -349,6 +352,7 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
     hub?: CoreHub,
   ) {
     super(ctx)
+    installRemoteSpawnPolicyBridge(ctx)
     this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, terminalGuard, hub)
   }
 

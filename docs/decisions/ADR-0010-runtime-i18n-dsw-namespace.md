@@ -16,15 +16,13 @@ R6 需要把三面（客户端 UI 文案 / 宿主「远程认知」系统提示 
 
 - **复用框架 locale 体系与设置页 Language 行**，不发明语言存储、不新增语言 UI、不写 preference。
 - **单一共享词典 `src/locale/`**：`dsw.ts`（zh = 键集真源）、`dsw.en.ts`（`Record<DswKey, string>`，
-  缺/多键即编译错）、`index.ts`（出口 + 纯 `lookup`）、`host.ts`（宿主语言与 `localizeTool`）。
+  缺/多键即编译错）、`index.ts`（出口 + 纯 `lookup`）、`host.ts`（宿主语言）。
 - **命名空间 `dsw`**（不可用 `workspace`）；键命名 `<surface>.<scope>.<item>`，
   surface ∈ {flow, form, side, settings, status, rpc, prompt, tool, permission}；禁止字符串拼接键名。
 - **宿主语言**：`ctx.get('settings')?.get('locale')?.preference ?? 'en'`，**每次求值即时读**
   （无缓存、无订阅；`settings` 为可选服务，缺失定格 `en`）。
-- **工具描述/参数 getter 化**（路线 B）：`defineTool` 之后用 `Object.defineProperty` 把 `description` /
-  `parameters` 覆盖为 getter（官方 `run_code` 自证范式）；输出渲染与错误在执行时取词。
-  **2026-09-21（`UX-6`）**：schema 拟改为固定英文，与官方 bash/pwsh 对齐；getter 只留给执行错误。
-  落地前路线 B 仍生效。
+- **工具 schema 固定英文**（`UX-6`，取代路线 B 的 schema getter）：`description` /
+  `parameters` 写在 `src/tool-schema.ts`，不跟 Language。输出渲染与执行错误仍在执行时按宿主语言取词。
 - 客户端 `inject` 加 `'locale'`（硬依赖）；row-badges 用 `CONN_STATE_LABEL_KEY` 单一键源 + 切语言就地重绘。
 - **运行时零新增依赖**（`dsh-client-locale` 仅 devDep 类型源；不进 tsdown EXTERNALS）。
 
@@ -45,6 +43,7 @@ R6 需要把三面（客户端 UI 文案 / 宿主「远程认知」系统提示 
 - **两份镜像词典（宿主一份、客户端一份）**：会漂移——`prompt` 与 UI 共享 `permission.*` 词条，拆分即双写
   （`drafts/i18n-design.md` §1）。
 - **非类型化 `register(ns, locale, dict)`**：放弃「防漏译 + 键名防拼错」的类型收益（§3.4）。
-- **工具描述路线 A（静态）**：无法随语言变化；**路线 C（unregister + re-register）**：触发
+- **工具描述路线 A（静态、随 UI 语言各一份）**：当时无法随语言变化。`UX-6` 把 schema
+  收成**一份英文**（不是两份静态译文），执行错误仍走词典。**路线 C（unregister + re-register）**：触发
   `tools/change`、客户端工具目录 churn 与注册时机竞态（§6.2）。
 - **宿主侧缓存语言 / 仿浏览器探测 / 持久化 provisional**：越权改框架行为且无信息来源（§4.1、§8）。

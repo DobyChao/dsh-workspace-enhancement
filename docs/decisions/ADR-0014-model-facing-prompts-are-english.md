@@ -34,11 +34,10 @@ R6 的运行时国际化（ADR-0010）把三面文案统一进 `src/locale/` 的
   `renderRemoteEnvProbe(probe)` 不再接受 `TranslateFn` 参数——**没有任何开关能改它们的语言**，
   这是刻意的：参数一旦存在，下一个人就会把 UI 语言接回去。
 
-**边界**（2026-09-21 修订意向，`UX-6`）：系统提示与远端工具箱提示已是英文常量。
-`tool.*` 的 **schema**（`description` / `parameters`）目前仍跟设置页 Language
-（R6 路线 B / ADR-0010），Language=zh 时模型看到中文 schema，和官方 bash/pwsh 不一致。
-拍板：schema 与官方统一英文；**执行时错误/输出渲染**仍按宿主语言（用户能读）。
-落地前本条仍是意向，跟踪 `UX-6`。
+**边界**（2026-09-22 用户 lab 简验，`UX-6`）：系统提示、远端工具箱提示，以及 `bash` / `sw_*`
+的 **schema**（`description` / `parameters`）都是英文常量（`src/tool-schema.ts`）。
+Language=zh 时模型看到的 schema 与官方 bash/pwsh 一样是英文。**执行时错误和输出渲染**
+仍按宿主语言（用户能读）。提权协议错误（`sandbox_permissions` 配对）沿用官方英文原文。
 
 ### ② 远程段按会话事实按需注入
 

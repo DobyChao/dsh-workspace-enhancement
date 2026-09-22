@@ -94,7 +94,7 @@ read/write/edit/glob/grep + `ssh://<id>/` **注册表级**路由；该路由是*
 | preset-scoped 注册（`dsh-agent-presets` 的 `createScope({agentPreset})`） | 需要拿到**会话的** `agent.ctx` 才能注册进该作用域，而宿主组合行拿不到它（A1 未知 #1）；且 preset 一经产出即固定，本地/远程会话同 preset 时无法区分 |
 | 每 agent `ctx.tools.restrict({deny:['sw_exec']})` | 同上依赖 `agent.ctx`；`restrict` 在无作用域 ctx 上直接抛错 |
 | `systemPrompt.tools` / `system-prompt/assemble` 装配期过滤 | 只影响**模型看到的清单**，不阻止调用；必须再配执行侧拒绝，复杂度换不来保证 |
-| `parameters` getter 动态 enum（只列已连机器） | getter **没有 scope 参数**，只能靠「当前作用域」模块级耦合（脆弱、顺序未验证）；改为**执行侧校验 + 诚实报错列出已连 id**。getter 保留给纯展示用途（本仓库已在 `localizeTool` 上依赖「每 assembly 重读」这一事实） |
+| `parameters` getter 动态 enum（只列已连机器） | getter **没有 scope 参数**，只能靠「当前作用域」模块级耦合（脆弱、顺序未验证）；改为**执行侧校验 + 诚实报错列出已连 id**。当时 getter 还承担 schema 随语言重读；`UX-6` 起 schema 改为固定英文，不再 getter |
 | 保留 `save:false` 临时连任意主机 | 用户拍板砍掉：凭据只能来自注册表/钥匙串/`~/.ssh/config`，临时路径绕开用户域且无法在设置页可见 |
 
 ## 4. 代价与风险

@@ -3,17 +3,16 @@
  * 键完整性（所有键在中英双语下均为非空字符串）、语言解析回退链
  * （settings.locale.preference ?? en，settings 可选、非法值防御性收窄）、
  * 纯 lookup（`dsw-active → dsw-en → 键本身` + {name} 模板插值）、
- * hostLocaleOf 每次求值即时读（无缓存无订阅）、localizeTool 描述/参数 getter
- * 随语言切换取词（路线 B 的机制层验证）。
+ * hostLocaleOf 每次求值即时读（无缓存无订阅）。工具 schema 是固定英文
+ * （UX-6），不再随 Language 取词。
  * @module test/locale-host
  */
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { zh, en, lookup, type DswKey } from '../src/locale/index.ts'
-import { hostLocaleOf, localeOf, localizeTool } from '../src/locale/host.ts'
+import { hostLocaleOf, localeOf } from '../src/locale/host.ts'
 
 /* ------------------------------------------------------ 1) 双语键集严格相等 */
 
@@ -154,28 +153,3 @@ test('hostLocaleOf：只读 ctx.settings 可选服务（ctx.get 判空、非 inj
   assert.deepEqual(ctx.reads, [['settings', false]], 'hostLocaleOf 只能通过 ctx.get("settings", false) 访问，且不读其他服务')
 })
 
-/* --------------------------------------------- 4) localizeTool：getter 机制层 */
-
-test('localizeTool：description/parameters getter 每次访问按当前语言取词', () => {
-  const settings: FakeSettings = { preference: 'zh' }
-  const locale = hostLocaleOf(fakeContext(settings))
-  const tool = {
-    name: 'sw_test',
-    description: 'baseline zh',
-    parameters: {},
-    output: { schema: { type: 'string', required: true }, render: () => [{ type: 'text', text: '' }] },
-    execute: async () => ({}),
-  } as unknown as ToolDefinition
-  const localized = localizeTool(tool, locale, {
-    descriptionKey: 'tool.sw_connect.description',
-    buildParams: t => ({
-      machines: { type: 'array', items: { type: 'string' }, required: true, description: t('tool.sw_connect.param.machines') },
-    }),
-  })
-  assert.equal(localized.description, zh['tool.sw_connect.description'])
-  assert.equal(localized.parameters.properties?.machines?.description, zh['tool.sw_connect.param.machines'])
-  settings.preference = 'en'
-  assert.equal(localized.description, en['tool.sw_connect.description'])
-  const params = localized.parameters as { properties: { machines: { description: string } } }
-  assert.equal(params.properties.machines.description, en['tool.sw_connect.param.machines'])
-})

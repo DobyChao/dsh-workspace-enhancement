@@ -345,13 +345,8 @@ export const zh = {
 
   /* ------------------------------------------------ tool: shared fragments */
   'tool.common.noActive': '没有活动的机器——请先在设置页注册机器，再用 sw_connect 把它连到本会话。',
-  'tool.common.backgroundSentence':
-    '长时间运行命令请设置 `run_in_background: true`：调用会立即返回任务 id；用 `job_output` 读取输出、`job_kill` 停止。',
-  'tool.common.backgroundUnavailable': '后台执行不可用；长时间运行的命令必须在超时内完成。',
 
   /* -------------------------------------------------------- tool: sw_status */
-  'tool.sw_status.description':
-    '显示当前远程机器（主机/用户/端口）、连接健康（ping）、当前远程工作区（来自会话 cwd / 机器登记，不是模型工具）与主机指纹策略/状态。先调用它以了解现状，或在某个 sw_* 调用失败时检查连通性。',
   'tool.sw_status.ping.ok': 'Ping: 正常 — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: 失败 — {detail}',
   'tool.sw_status.outputs.host': '远程主机：{u}@{h}:{p}{source}',
@@ -365,10 +360,6 @@ export const zh = {
   'tool.sw_status.outputs.backend': '密码后端：{backend}',
 
   /* ------------------------------------------------------- tool: sw_connect */
-  'tool.sw_connect.description':
-    '设置本会话可以连接并在其上执行命令的已注册机器。每次调用都**替换**整个集合（不是并集）：`machines: []` 断开全部。不选择工作区目录（工作区由会话 cwd / 添加工作区目录流决定）。机器必须是已注册机器的 id；未注册的 id 会报错并列出已知 id。随后对每台机器做一次有界 ping：可达者记录为已连接，不可达者如实报告但不加入集合；全部不可达时调用失败且不改动既有连接。',
-  'tool.sw_connect.param.machines':
-    '要连接的已注册机器 id 数组。空数组断开本会话的全部连接。',
   'tool.sw_connect.output.cleared': '本会话已断开全部机器连接。',
   'tool.sw_connect.output.heading': '本会话已连接机器：',
   'tool.sw_connect.output.reachable': '- {id}（{endpoint}）：可达，已连接',
@@ -381,12 +372,6 @@ export const zh = {
   'tool.sw_connect.error.noDetail': '无错误详情',
 
   /* -------------------------------------------------------------- tool: sw_exec */
-  'tool.sw_exec.description':
-    '在本会话已连接的已注册 SSH 服务器上执行命令并返回其 stdout/stderr。`server` id 选择机器——必须是本会话已连接的注册表 id（见 sw_status 的连接行，或先用 sw_connect 连接）；缺省为本会话主工作区所在机器。目标 OS 每次连接探测一次并记录在第一行：POSIX 运行 `bash -c`，Windows 运行 `pwsh -Command`，unknown 时诚实使用 bash。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
-  'tool.sw_exec.param.workdir':
-    '目标服务器上的工作目录。缺省为该服务器主工作区；相对路径基于会话工作区解析；`ssh://<id>/<path>` 显式指定机器与目录。',
-  'tool.sw_exec.param.server':
-    '目标服务器 id：本会话已连接的注册表机器 id（c1、c2…）。缺省为本会话主工作区所在机器。已注册但未连接到本会话的 id 会报错并列出已连接 id；未知 id 报错并列出已知 id。',
   'tool.sw_exec.output.background': '已在 {server}（{endpoint}）上启动后台任务 {jobId}',
   'tool.sw_exec.output.header': '服务器：{id}（{endpoint}）· 系统：{os}',
   'tool.sw_exec.error.workdirEmpty': 'sw_exec: workdir 不能为空',
@@ -404,21 +389,9 @@ export const zh = {
   'tool.sw_exec.error.notConnected': 'sw_exec: 服务器 "{id}" 未连接到本会话（本会话已连接：{ids}）',
 
   /* ------------------------------------------------------------- tool: bash */
-  'tool.bash.description':
-    '在会话的远程 Linux 工作区上执行 bash 命令（`bash -c`）并返回其 stdout/stderr。每次调用都在全新 shell 中运行：调用之间不保留状态（cwd、变量、函数）——请传 `workdir` 而不是用 `cd`。非 0 退出以 `[exit code: N]` 报告——先排查再继续。长输出截断到尾部；完整输出保存到文件并在可用时报告路径。',
-  'tool.bash.param.workdir':
-    '该命令的工作目录。缺省为会话工作区；相对路径基于它解析；`ssh://<id>/<path>` 显式指定机器与目录。',
   'tool.bash.output.background': '已启动后台任务 {jobId}',
   'tool.bash.error.localSession': 'bash 工具面向远程 Linux 工作区（本机 Windows 无 bash）；请使用 pwsh 或终端面板',
   'tool.bash.error.spawnFailed': 'bash: 启动失败：{detail}',
-
-  /* ------------------------------------------- tool: shared parameter props */
-  'tool.param.command': '在目标服务器上执行的命令。',
-  'tool.param.description':
-    '简要、主动语态地描述该命令的作用，5-10 个词（界面中显示）。示例："ls" → "List files in current directory"；"git status" → "Show working tree status"；"npm install" → "Install package dependencies"。',
-  'tool.param.timeout':
-    '毫秒级超时（执行器默认 120 秒，上限 600 秒——超出会被钳制）。超时后工具会终止命令并报告 [timed out after Nms]。',
-  'tool.param.runInBackground': '后台运行并立即返回任务 id（用 job_output 收集、job_kill 停止）。后台任务无超时。',
 
   /* --------------------------------------------- tool: output markers/errors */
   'tool.job.detail.killed': '退出前被终止',

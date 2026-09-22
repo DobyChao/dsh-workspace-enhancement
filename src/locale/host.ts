@@ -1,13 +1,15 @@
 /**
- * Host-side i18n face: the host language resolution rule, the stateless
- * `HostLocale` translator, and the tool-localization helper.
+ * Host-side i18n face: the host language resolution rule and the stateless
+ * `HostLocale` translator. Tool schemas are English constants (UX-6); this
+ * face is for execution errors and rendered output.
  *
  * Design (drafts/i18n-design.md §4.1, §6.2-§6.3): the host reads the persisted
  * language live from the optional `settings` service — `ctx.get('settings')?
  * .get('locale')?.preference ?? 'en'` — on EVERY evaluation, with no cache and
  * no subscription. The client is the only writer of that preference (the
  * settings page Language row), so a language switch is picked up by the next
- * prompt assembly / tool schema projection / error render without restart.
+ * prompt assembly / error render without restart. Tool schemas are fixed English
+ * (UX-6); only execution errors re-read this preference.
  *
  * `settings` stays OPTIONAL: a composition without the service (or without the
  * `locale` namespace registered) falls back to 'en' — the framework's own
@@ -19,9 +21,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { ParameterSchemaSpec, ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { parameterSchemaSpecToJsonSchema } from '@deepseek-ai/dsh-tools'
-import { lookup, type DswKey, type LocaleId, type TranslateFn } from './index.ts'
+import { lookup, type DswKey, type LocaleId } from './index.ts'
 
 /** Minimal structural face of the optional `settings` service (dsh-settings). */
 export interface HostLocaleSettings {
@@ -65,41 +65,3 @@ export function hostLocaleOf(ctx: Context): HostLocale {
   }
 }
 
-/** Localization spec for one tool: the description key plus a parameter-spec builder. */
-export interface LocalizeToolSpec {
-  /** Dictionary key of the tool-level description. */
-  descriptionKey: DswKey
-  /**
-   * Rebuild the author-facing parameter schema (per-property descriptions
-   * translated) for the CURRENT language. The framework's `defineTool`
-   * compiles `parameters` once at registration; this builder feeds the
-   * recompiled JSON Schema into the getter on every `schemas()` projection.
-   */
-  buildParams(t: TranslateFn): ParameterSchemaSpec
-}
-
-/**
- * Route-B localization (drafts/i18n-design.md §6.2): after `defineTool`, turn
- * `description` and `parameters` into getters that re-read the host language
- * on every access. `ctx.tools.register` holds the definition object by
- * reference and `schemas()` re-projects `description`/`parameters` per
- * assembly step — getters are the framework-recognized runtime-text mechanism
- * (official run_code precedent). Language is resolved at getter evaluation
- * time, so a switch takes effect on the next step without re-registration.
- *
- * Validation keeps the registration-time baseline schema (constraints and
- * types unchanged — only description text is localized).
- * @param tool - a `defineTool` result.
- * @param locale - the host locale face (getters re-check on each access).
- * @param spec - description key + parameter-spec builder.
- * @returns the same tool definition (mutated in place), ready for `ctx.tools.register`.
- */
-export function localizeTool(tool: ToolDefinition, locale: HostLocale, spec: LocalizeToolSpec): ToolDefinition {
-  Object.defineProperty(tool, 'description', {
-    get: () => locale.t(spec.descriptionKey),
-  })
-  Object.defineProperty(tool, 'parameters', {
-    get: () => parameterSchemaSpecToJsonSchema(spec.buildParams(locale.t)) as unknown as Record<string, unknown>,
-  })
-  return tool
-}

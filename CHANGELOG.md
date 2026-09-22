@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### 变更
+
+- **远程 spawn 一次提权（`REQ-I18`，ADR-0025）**：官方 bash/pwsh 的 `sandboxPolicy` 经 shell 桥进入这一次 `subprocess.spawn`；`danger-full-access` 的允许一次让该次核心 `--sandbox off`，下一次仍跟会话档。win32 `bash` 与 `sw_exec` 补上 `sandbox_permissions` / `justification`。远程 `confine` 短路仍不包本机 runner，并带上 bwrap 的 `read-only file system` 拒绝方言，越界结果才有官方提权 hint。
+- **工具 schema 固定英文（`UX-6`，ADR-0014）**：`bash` / `sw_*` 的 description 与 parameters 不再跟设置页 Language。执行错误和工具输出仍按宿主语言。
+
 ## [0.2.1](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-20)
 
 0.2.0 之后的修口：日落 `sw_pick_workspace`、围栏档读面降级、win32 bash 按工作区注入，

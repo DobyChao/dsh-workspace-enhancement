@@ -1,15 +1,15 @@
 # ADR-0028: 主/副工作区区域权限（工具绑世界）
 
-- 状态: proposed（**REQ-I19**；实现等 **REQ-I18** 完成。本文只记录已拍板的预期，不是现状）
+- 状态: proposed（**REQ-I19**；`REQ-I18` 已于 2026-09-22 简验。本文仍是预期，不是现状）
 - 日期: 2026-09-22
 - 范围: 会话主根 / 副根 × 本机 Win·Linux / 远程 Linux × `bash` / `pwsh` / `sw_exec` / 官方 Read·Write，在 `/permission` 三档下的路由与 workspace-write 可写集
 - 关联: 承接 **ADR-0019**（本机副根无权限档）、**ADR-0024** §6.2（WW 每根一条 serve）、**ADR-0025** / **REQ-I18**（spawn 一次提权）、**ADR-0027**（无 `sw_pick_workspace`，主根 = 会话 cwd）
 
 ## 0. 为什么先记、先不做
 
-区域预期和今天的实现不一致（Win 远程会话的 pwsh 会跟会话 cwd 送到 Linux；Linux 远程主会话没有本机 exec；未声明 spawn cwd 会新开一条 WW serve）。一次提权还没接上 spawn（I18）：官方 bash/pwsh 弹卡之后远端仍跟 sticky `/permission`，win32 bash / `sw_exec` 没有 `sandbox_permissions`。
+区域预期和今天的实现不一致（Win 远程会话的 pwsh 会跟会话 cwd 送到 Linux；Linux 远程主会话没有本机 exec；未声明 spawn cwd 会新开一条 WW serve）。spawn 一次提权在 `REQ-I18`，用户已于 2026-09-22 简验。
 
-区域矩阵里「WW 拒写之后如何 allowed-once」依赖 I18 的 overlay 与拒绝标记。I18 未完成时先改路由，会把「打不到 / 可跑不可写 / 可写」和「提权洞」缠在一起。**REQ-I19 等 I18 落地再开工。**
+区域矩阵里「WW 拒写之后如何 allowed-once」依赖 I18 的 overlay 与拒绝标记。**REQ-I19 可以开工。**
 
 不改核心协议，不升 `CORE_ARTIFACT_VERSION`。WW 多根已经是多进程，不是一个 `serve` 里重复 `--workspace`。
 
@@ -67,7 +67,7 @@
 
 read-only：能跑、各格都不能写（本机 `/tmp` 的官方例外另计）。danger-full-access：该世界内不围栏（远端 `--sandbox off`；无核心则裸 SSH）。无核心 + 围栏档：4/5/6/7/8 的 spawn 与写 fail-closed。
 
-sticky WW 下 5/8（以及非子孙的 2/9）要写，走 danger，或等 I18 的 spawn allowed-once。Write 的 fs overlay 已在 I13。
+sticky WW 下 5/8（以及非子孙的 2/9）要写，走 danger，或用 I18 的 spawn allowed-once。Write 的 fs overlay 已在 I13。
 
 ## 6. 不做
 
@@ -77,4 +77,4 @@ sticky WW 下 5/8（以及非子孙的 2/9）要写，走 danger，或等 I18 �
 - 不在 Win 上做 `sw_exec(local)`。
 - 不改官方 Read/Write/bash/pwsh 的 schema。
 - 不做本机/远端两套 `/permission`。
-- I18 完成前不改路由与 `resolveCoreWorkspace` 的 mint 行为。
+- 本文不改路由与 `resolveCoreWorkspace` 的 mint 行为；那是 `REQ-I19` 开工时的事。

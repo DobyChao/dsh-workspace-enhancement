@@ -21,12 +21,12 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I18 | 远程 spawn 一次提权 | todo | P1 | 2026-09-21。I13 只收 fs overlay。spawn 无 per-call policy；win32 bash 缺提权两参；官方 bash/pwsh/`sw_exec` 同洞。修 spawn overlay + 补两参 + 拒绝标记；修订 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md)。验收：bash 越界 hint → allowed-once 走 `--sandbox off` → 下一命令仍围栏 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
 | UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P2 | 从 UPSTREAM-6 拆出。独立能力包不在 `upstream.yml` 家族清单里，通道红绿都看不见。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵或 issue 会响 |
-| UX-6 | 工具 schema 与官方统一英文 | todo | P2 | 2026-09-21。官方 bash/pwsh schema 写死英文；win32 bash/`sw_*` 跟 Language，zh 时模型看到中文。对齐 [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md)：description/parameters 固定英文；执行错误仍宿主语言。修订 ADR-0010 路线 B。验收：Language=zh 时 bash/`sw_*` schema 英文，工具错误仍中文 |
+| REQ-I19 | 主/副工作区区域权限：工具绑世界 | todo | P2 | 2026-09-22。`REQ-I18` 已简验，可以开工。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
+| REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
@@ -42,7 +42,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I19 | 主/副工作区区域权限：工具绑世界 | blocked | P2 | 2026-09-22。等 `REQ-I18`。本机副根 2/9 维持 WW 不可写；远程 4/7 按已有每根一条 serve 视为 WW，不改核心协议。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。新包巡检拆到 `UPSTREAM-7` |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
@@ -94,6 +93,8 @@
 | REQ-I11 | 会话级机器连接（吸收 SEC-5） | done | P1 | `ADR-0021`。同上 R24。尾巴：[uat/R24-req-i11](./uat/R24-req-i11-session-connections.md) |
 | REQ-I5 | 远端「一个核心」 | done | P1 | PR #18。范围 ADR-0023/0024，权限 ADR-0025。[uat/R27](./uat/R27-req-i13-remote-session-sandbox.md) 11/12 通过 |
 | REQ-I13 | 远端权限对齐本地 sandbox 提权 | done | P1 | 同 PR #18 / UAT R27（Write）。spawn 一次提权见 `REQ-I18` |
+| REQ-I18 | 远程 spawn 一次提权 | done | P1 | 2026-09-22 用户 lab 简验。单测 `test/req-i18-ux-6.test.ts`。见 [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) |
+| UX-6 | 工具 schema 与官方统一英文 | done | P2 | 2026-09-22 用户 lab 简验。Language=zh 时 schema 英文、执行错误仍中文。见 [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
 | REQ-R6 | 运行时国际化 | done | — | [R6](./rounds/R6-i18n.md) |
 | REQ-S1 | `sw_exec` | shipped | — | v0.1.1 |
 | REQ-S2 | win32 宿主 `bash` | shipped | — | v0.1.1 |

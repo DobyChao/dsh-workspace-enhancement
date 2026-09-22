@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-22 03:12 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-22 11:07 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.1` |
 | npm 已发布版本 | `0.2.1` |
 | 最新 tag | `v0.2.1` |
-| 分支 / HEAD | `master` / `ad9f71f` |
-| HEAD 提交 | `chore(release): prepare npm v0.2.1 (#29)` (2026-09-20) |
+| 分支 / HEAD | `feat/req-i18-ux-6-spawn-schema` / `aedbeae` |
+| HEAD 提交 | `docs: record region permissions and prune stale backlog` (2026-09-22) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 48 |
-| 单测用例（静态计数） | 585 |
+| 单测文件 | 49 |
+| 单测用例（静态计数） | 593 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
 | 轮次报告 | 37 |
@@ -30,14 +30,13 @@
 |---|---|
 | `todo` | 16 |
 | `doing` | 0 |
-| `blocked` | 6 |
-| `done` | 51 |
+| `blocked` | 5 |
+| `done` | 53 |
 | `shipped` | 8 |
 | `dropped` | 14 |
 
 ## 被挡住 / 待拍板
 
-- REQ-I19 — 主/副工作区区域权限：工具绑世界
 - UPSTREAM-6 — 官方 SSH 运行时定位拍板
 - INFRA-8 — AgentTeams 标准 profile 注册
 - AUDIT-5 — 分组视图下会话子行拿不到 compact 徽标

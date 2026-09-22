@@ -27,8 +27,11 @@
 import { isAbsolute, posix, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { TOOL_ABORTED, defineTool, parameterSchemaSpecToJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ParameterSchemaSpec, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { approveEscalation, escalationHintMarker, sandboxDenialMarker, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
+import type { EscalationApprover } from '@deepseek-ai/dsh-sandbox'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { TOOL_ABORTED, defineTool } from '@deepseek-ai/dsh-tools'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {
   SubprocessHandle,
   SubprocessOutcome,
@@ -41,8 +44,12 @@ import type { SshRegistry } from './registry.ts'
 import type { SshConnectionSpec } from './connection.ts'
 import type { ExecOutcome } from './ssh-core.ts'
 import { worldOfCwd } from './mixed.ts'
-import { lookup, type DswKey, type TranslateFn } from './locale/index.ts'
+import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
+import { isRemoteCommandDenial } from './remote-confine.ts'
+import { resolveRemoteSessionMode } from './remote-policy.ts'
+import { runWithRemoteSpawnPolicy } from './remote-spawn-policy.ts'
+import { bashDescription, bashParams, swExecDescription, swExecParams } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { hasRemoteSessionContext, hasRemoteWorkspaceContext, sessionIdOf } from './session-remote-context.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
@@ -54,14 +61,6 @@ import type { SessionSideWorkspaceStore } from './session-workspaces.ts'
  * The tool registration paths pass the live host-language translator instead.
  */
 const EN_T: TranslateFn = (key, params) => lookup('en', key, params)
-
-/**
- * Fixed-ZH translator — the baseline compiled into `defineTool` at
- * registration (the validation closure keeps the ZH-spelled descriptions;
- * description fields carry no validation meaning, so the baseline language is
- * irrelevant to checking — ZH key set is the source of truth).
- */
-const ZH_T: TranslateFn = (key, params) => lookup('zh', key, params)
 
 /** The operating-system fact a probed server gets. */
 export type RemoteOs = 'linux' | 'win32' | 'unknown'
@@ -114,6 +113,8 @@ export interface SwExecForeground {
   timeoutMs: number
   stdout: SwExecStream
   stderr: SwExecStream
+  /** Set only when this run was a remote sandbox denial (REQ-I18). */
+  sandbox?: { mode: SandboxMode; denied: true }
 }
 
 /** One collected stream: tail text plus truncation facts. */
@@ -141,6 +142,8 @@ export interface BashForeground {
   timeoutMs: number
   stdout: SwExecStream
   stderr: SwExecStream
+  /** Set only when this run was a remote sandbox denial (REQ-I18). */
+  sandbox?: { mode: SandboxMode; denied: true }
 }
 
 /** The canonical background value of the win32 bash tool. */
@@ -157,15 +160,19 @@ export interface SwExecArgs {
   workdir?: string
   server?: string
   run_in_background?: boolean
+  sandbox_permissions?: string
+  justification?: string
 }
 
-/** The parameter face of the win32 bash tool (official bash parameters, no escalation). */
+/** The parameter face of the win32 bash tool (official bash parameters plus escalation). */
 export interface Win32BashArgs {
   command: string
   description: string
   timeoutMs?: number
   workdir?: string
   run_in_background?: boolean
+  sandbox_permissions?: string
+  justification?: string
 }
 
 /* ------------------------------------------------------------------ OS probe */
@@ -782,6 +789,7 @@ export function renderStreamBody(parts: {
   timeoutMs: number
   stdout: SwExecStream
   stderr: SwExecStream
+  sandbox?: { mode: SandboxMode; denied: true }
 }, tr: TranslateFn = EN_T): string {
   const streamText = (stream: SwExecStream): string =>
     stream.truncated
@@ -796,6 +804,10 @@ export function renderStreamBody(parts: {
   }
   if (body.length === 0) body = tr('tool.output.empty')
   const markers: string[] = []
+  if (parts.sandbox?.denied === true) {
+    markers.push(sandboxDenialMarker(parts.sandbox.mode))
+    markers.push(escalationHintMarker('command'))
+  }
   if (parts.timedOut) markers.push(tr('tool.output.timedOut', { ms: parts.timeoutMs }))
   if (parts.signal !== null) markers.push(tr('tool.output.killedSignal', { sig: parts.signal }))
   else if (parts.exitCode !== 0) markers.push(tr('tool.output.exitCode', { code: parts.exitCode }))
@@ -848,6 +860,14 @@ const foregroundSchema = {
     timeoutMs: { type: 'number', required: true },
     stdout: streamSchema,
     stderr: streamSchema,
+    sandbox: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        mode: { type: 'string', required: true },
+        denied: { type: 'boolean', required: true },
+      },
+    },
   },
 } as const
 
@@ -874,29 +894,18 @@ const bashForegroundSchema = {
     timeoutMs: { type: 'number', required: true },
     stdout: streamSchema,
     stderr: streamSchema,
+    sandbox: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        mode: { type: 'string', required: true },
+        denied: { type: 'boolean', required: true },
+      },
+    },
   },
 } as const
 
 const bashOutputSchema = { oneOf: [bashBackgroundSchema, bashForegroundSchema] } as const
-
-/** sw_exec parameter spec builder (descriptions localized per language). */
-const swExecParams = (tr: TranslateFn, backgroundEnabled: boolean): ParameterSchemaSpec => ({
-  command: { type: 'string', required: true, description: tr('tool.param.command') },
-  description: { type: 'string', required: true, description: tr('tool.param.description') },
-  timeoutMs: { type: 'number', description: tr('tool.param.timeout') },
-  workdir: { type: 'string', description: tr('tool.sw_exec.param.workdir') },
-  server: { type: 'string', description: tr('tool.sw_exec.param.server') },
-  ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: tr('tool.param.runInBackground') } } : {}),
-})
-
-/** win32 bash parameter spec builder (descriptions localized per language). */
-const bashParams = (tr: TranslateFn, backgroundEnabled: boolean): ParameterSchemaSpec => ({
-  command: { type: 'string', required: true, description: tr('tool.param.command') },
-  description: { type: 'string', required: true, description: tr('tool.param.description') },
-  timeoutMs: { type: 'number', description: tr('tool.param.timeout') },
-  workdir: { type: 'string', description: tr('tool.bash.param.workdir') },
-  ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: tr('tool.param.runInBackground') } } : {}),
-})
 
 /* --------------------------------------------------------------- validation */
 
@@ -907,15 +916,63 @@ export function validateSwExecArgs(args: SwExecArgs, tr: TranslateFn = EN_T): vo
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new Error(tr('tool.param.error.timeoutInvalid', { v: JSON.stringify(args.timeoutMs) }))
   }
+  validateEscalationArgs(args.sandbox_permissions, args.justification)
 }
 
-/** The win32 bash tool mirrors the official bash validation (no escalation args). */
+/** The win32 bash tool mirrors the official bash validation, including escalation pairing. */
 export function validateBashToolArgs(args: Win32BashArgs, tr: TranslateFn = EN_T): void {
   if (args.command.trim().length === 0) throw new Error(tr('tool.param.error.commandEmpty'))
   if (args.description.trim().length === 0) throw new Error(tr('tool.param.error.descriptionEmpty'))
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new Error(tr('tool.param.error.timeoutInvalid', { v: JSON.stringify(args.timeoutMs) }))
   }
+  validateEscalationArgs(args.sandbox_permissions, args.justification)
+}
+
+/**
+ * Approve a one-shot wider mode before anything runs. Absent arguments keep
+ * the session mode (the spawn overlay stays unset).
+ */
+async function grantedModeOf(
+  ctx: Context,
+  args: { sandbox_permissions?: string; justification?: string },
+  exec: ToolRunContext,
+  toolName: string,
+): Promise<SandboxMode | undefined> {
+  if (args.sandbox_permissions === undefined || args.justification === undefined) return undefined
+  const granted = await approveEscalation({
+    requestedMode: args.sandbox_permissions,
+    justification: args.justification,
+    effectiveMode: resolveRemoteSessionMode(ctx),
+    subject: 'command',
+  }, {
+    approver: ctx.get('approval', false) as EscalationApprover | undefined,
+    agent: exec.agent,
+    callId: exec.callId,
+    toolName,
+    ...(exec.signal !== undefined ? { signal: exec.signal } : {}),
+  })
+  return granted
+}
+
+/** Spawn under a one-shot mode. No grant → the engine reads the session mode. */
+function spawnUnder(
+  spawn: (spec: SubprocessSpawnSpec) => SubprocessHandle,
+  spec: SubprocessSpawnSpec,
+  mode: SandboxMode | undefined,
+): SubprocessHandle {
+  if (mode === undefined) return spawn(spec)
+  return runWithRemoteSpawnPolicy({ mode }, () => spawn(spec))
+}
+
+function stampDenial<T extends { exitCode: number | null; stderr: SwExecStream; sandbox?: { mode: SandboxMode; denied: true } }>(
+  value: T,
+  mode: SandboxMode,
+): T {
+  if (isRemoteCommandDenial(value.exitCode, value.stderr.text)) {
+    value.sandbox = { mode, denied: true }
+  }
+  return value
 }
 
 /** The session cwd the tools need for server derivation and relative workdirs. */
@@ -982,22 +1039,10 @@ export function registerSwExec(
   const locale = hostLocaleOf(ctx)
   const t = locale.t
   const osCache = createRemoteOsCache()
-  const backgroundSentenceKey: DswKey = backgroundEnabled ? 'tool.common.backgroundSentence' : 'tool.common.backgroundUnavailable'
-  const describe = (tr: TranslateFn): string => `${tr('tool.sw_exec.description')} ${tr(backgroundSentenceKey)}`
   const tool = defineTool({
     name: 'sw_exec',
-    description: describe(ZH_T),
-    // Baseline parameter spec (ZH descriptions): inline so defineTool's
-    // precise generic inference (args typing + validation closure) is
-    // preserved; the localized spec lives in the `parameters` getter below.
-    parameters: {
-      command: { type: 'string', required: true, description: ZH_T('tool.param.command') },
-      description: { type: 'string', required: true, description: ZH_T('tool.param.description') },
-      timeoutMs: { type: 'number', description: ZH_T('tool.param.timeout') },
-      workdir: { type: 'string', description: ZH_T('tool.sw_exec.param.workdir') },
-      server: { type: 'string', description: ZH_T('tool.sw_exec.param.server') },
-      ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: ZH_T('tool.param.runInBackground') } } : {}),
-    },
+    description: swExecDescription(backgroundEnabled),
+    parameters: swExecParams(backgroundEnabled),
     output: {
       schema: swExecOutputSchema,
       render: (_args, value) => {
@@ -1048,6 +1093,8 @@ export function registerSwExec(
           requireConnectedServer(connected, workdirRoute.id, env.listMachines().machines.map(machine => machine.id), t)
         }
       }
+      const granted = await grantedModeOf(ctx, args, exec, 'sw_exec')
+      const ranMode = granted ?? resolveRemoteSessionMode(ctx)
       if (args.run_in_background === true) {
         if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))
         const jobs = jobsOf(ctx, t)
@@ -1068,12 +1115,12 @@ export function registerSwExec(
           label: `${connection.id}: ${args.command}`,
           ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
           run: () => {
-            const handle = env.spawn({
+            const handle = spawnUnder(env.spawn, {
               argv,
               cwd,
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
-            })
+            }, granted)
             const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),
@@ -1085,19 +1132,13 @@ export function registerSwExec(
         })
         return { kind: 'background', jobId, server: connection.id, endpoint: connection.endpoint }
       }
-      const foreground = await swExecCore(env, serverId, args.command, workdir, args.timeoutMs, exec.signal, osCache, t)
+      const bound = granted === undefined
+        ? env
+        : { ...env, spawn: (spec: SubprocessSpawnSpec) => spawnUnder(env.spawn, spec, granted) }
+      const foreground = await swExecCore(bound, serverId, args.command, workdir, args.timeoutMs, exec.signal, osCache, t)
       if (exec.signal.aborted === true) throw toolAbortError()
-      return foreground
+      return stampDenial(foreground, ranMode)
     },
-  })
-  // Route-B localization (drafts/i18n-design.md §6.2): the description is
-  // composed (base + background sentence) and both properties re-read the
-  // host language on every schemas() projection — see note on localizeTool.
-  Object.defineProperty(tool, 'description', {
-    get: () => describe(locale.t),
-  })
-  Object.defineProperty(tool, 'parameters', {
-    get: () => parameterSchemaSpecToJsonSchema(swExecParams(locale.t, backgroundEnabled)) as unknown as Record<string, unknown>,
   })
   const disposer = ctx.tools.register(tool)
   ctx.effect(() => disposer, 'sw-exec tool')
@@ -1167,19 +1208,10 @@ export function registerWin32Bash(
   const backgroundEnabled = options.enableRunInBackground ?? true
   const locale = hostLocaleOf(ctx)
   const t = locale.t
-  const backgroundSentenceKey: DswKey = backgroundEnabled ? 'tool.common.backgroundSentence' : 'tool.common.backgroundUnavailable'
-  const describe = (tr: TranslateFn): string => `${tr('tool.bash.description')} ${tr(backgroundSentenceKey)}`
   const tool = defineTool({
     name: 'bash',
-    description: describe(ZH_T),
-    // Baseline parameter spec (ZH descriptions), see registerSwExec.
-    parameters: {
-      command: { type: 'string', required: true, description: ZH_T('tool.param.command') },
-      description: { type: 'string', required: true, description: ZH_T('tool.param.description') },
-      timeoutMs: { type: 'number', description: ZH_T('tool.param.timeout') },
-      workdir: { type: 'string', description: ZH_T('tool.bash.param.workdir') },
-      ...(backgroundEnabled ? { run_in_background: { type: 'boolean', description: ZH_T('tool.param.runInBackground') } } : {}),
-    },
+    description: bashDescription(backgroundEnabled),
+    parameters: bashParams(backgroundEnabled),
     output: {
       schema: bashOutputSchema,
       render: (_args, value) => {
@@ -1216,6 +1248,8 @@ export function registerWin32Bash(
         )
         requireConnectedServer(connected, route.connectionId, registry().listMachines().machines.map(machine => machine.id), t)
       }
+      const granted = await grantedModeOf(ctx, args, exec, 'bash')
+      const ranMode = granted ?? resolveRemoteSessionMode(ctx)
       if (args.run_in_background === true) {
         if (!backgroundEnabled) throw new Error(t('tool.error.backgroundDisabled'))
         const jobs = jobsOf(ctx, t)
@@ -1227,12 +1261,12 @@ export function registerWin32Bash(
           label: args.command,
           ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
           run: () => {
-            const handle = spawnerOf(ctx, t).spawn({
+            const handle = spawnUnder(spec => spawnerOf(ctx, t).spawn(spec), {
               argv: ['bash', '-c', args.command],
               cwd,
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
-            })
+            }, granted)
             const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),
@@ -1248,13 +1282,13 @@ export function registerWin32Bash(
       const deadline = makeSwExecDeadline(effectiveTimeoutMs, exec.signal)
       let handle: SubprocessHandle
       try {
-        handle = spawnerOf(ctx, t).spawn({
+        handle = spawnUnder(spec => spawnerOf(ctx, t).spawn(spec), {
           argv: ['bash', '-c', args.command],
           cwd,
           stdio: COLLECT_STDIO,
           graceMs: SW_EXEC_KILL_GRACE_MS,
           signal: deadline.signal,
-        })
+        }, granted)
       } catch (error) {
         deadline.dispose()
         throw error
@@ -1276,7 +1310,7 @@ export function registerWin32Bash(
       const timedOut = deadline.timedOut()
       deadline.dispose()
       if (exec.signal.aborted === true) throw toolAbortError()
-      return {
+      const foreground: BashForeground = {
         kind: 'foreground',
         exitCode: outcome.exitCode,
         signal: outcome.signal,
@@ -1286,14 +1320,8 @@ export function registerWin32Bash(
         stdout,
         stderr,
       }
+      return stampDenial(foreground, ranMode)
     },
-  })
-  // Route-B localization (composed description, see registerSwExec).
-  Object.defineProperty(tool, 'description', {
-    get: () => describe(locale.t),
-  })
-  Object.defineProperty(tool, 'parameters', {
-    get: () => parameterSchemaSpecToJsonSchema(bashParams(locale.t, backgroundEnabled)) as unknown as Record<string, unknown>,
   })
   const inject = (target: Context): void => {
     try {
