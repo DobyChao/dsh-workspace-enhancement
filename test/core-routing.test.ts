@@ -230,7 +230,7 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => { setTimeout(resolve, ms) })
 }
 
-test('createCoreHub: workspace-write sibling cwds open two serves', async () => {
+test('createCoreHub: an undeclared sibling cwd reuses the current jail', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsw-core-sib-'))
   const t = transport()
   const opened: Array<string | undefined> = []
@@ -247,8 +247,8 @@ test('createCoreHub: workspace-write sibling cwds open two serves', async () => 
   })
   const a = await hub.require('c1', { cwd: '/a', policy: 'workspace-write' })
   const b = await hub.require('c1', { cwd: '/b', policy: 'workspace-write' })
-  assert.notEqual(a, b)
-  assert.deepEqual(opened, ['/a', '/b'])
+  assert.equal(a, b)
+  assert.deepEqual(opened, ['/work'])
   hub.close('c1')
   for (const client of clients) client.close()
 })
@@ -482,7 +482,7 @@ test('createCoreHub: workspace-write with no usable root does not open serve', a
   assert.deepEqual(opened, [])
 })
 
-test('createCoreHub: placeholder cwd mints a POSIX workspace-write jail', async () => {
+test('createCoreHub: an undeclared placeholder cwd stays on the machine workspace', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsw-core-ph-'))
   const t = transport()
   const opened: Array<string | undefined> = []
@@ -497,7 +497,7 @@ test('createCoreHub: placeholder cwd mints a POSIX workspace-write jail', async 
   })
   const placeholder = join(sshRoutesRoot(), 'c1', 'home', 'uuz', 'ssh-test-lab')
   await hub.require('c1', { cwd: placeholder, policy: 'workspace-write' })
-  assert.deepEqual(opened, ['/home/uuz/ssh-test-lab'])
+  assert.deepEqual(opened, ['/work'])
   hub.close('c1')
 })
 

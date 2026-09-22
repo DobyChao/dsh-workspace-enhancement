@@ -35,7 +35,10 @@
 
 - 钉远程的 bash：本机盘符、UNC、非占位宿主路径 → 拒。`workdir=ssh://<其他机>` → 拒，改 `sw_exec`。
 - Win 上 `pwsh`：`ssh://`、POSIX 绝对、占位树 → 不送到远端；省略 workdir 时 cwd 改成本机默认根（见 §4），不 throw。
-- `sw_exec`：`server` 省略或注册表 id → 远程。`server: "local"` 仅 Linux 且主根在远程时合法。Win 上 `local` 拒，文案指向 `pwsh`。
+- `sw_exec` 的远程目标：
+  - 情况 1（主在本机）：`server` 省略或注册表 id → 该远程（4 可写，5 只读可提权，见 §5）。无本会话连接、未知 id、workdir 非法 → 拒绝并提示（先 `sw_connect`、列出已知 id、或路径形状），不执行。
+  - 情况 2（主已在该远程）：目标落在 6/7/8（省略 `server`、该机 id、该机路径）→ 拒绝，提示改用已注入的 `bash`。另一台已连接机器仍用 `sw_exec`。Linux 同样：该机远程用官方 `bash`，`sw_exec` 不重复执行 6/7/8。
+- `server: "local"` 仅 Linux 且主根在远程时合法，用来跑 9/10（本机 `bash -c`，仍受宿主沙箱）。Win 上 `local`、以及任何打到 9/10 的 `sw_exec`：拒绝并提示用 `pwsh`，不把参数改写成一次 pwsh 调用。
 - `local` 是保留 id，不得登记为机器。已有同名机器则 add/load 失败。
 
 ## 3. 官方 Read / Write（不改 schema）
@@ -55,7 +58,9 @@
 
 ## 5. workspace-write 可写集
 
-本机副根 **维持现状**（ADR-0019）：**2、9 不是可写集**。cwd 可以到那里，写应 sandbox denied（2 是 1 的子孙时除外）。本机另加官方 `/tmp` 与 `os.tmpdir()`。情况 1 的本机可写根是 **1**。
+本机副根 **维持现状**（ADR-0019）：**2、9 不是可写集**。cwd 可以到那里，写应 sandbox denied（2 是 1 的子孙时除外）。本机另加官方 `/tmp` 与 `os.tmpdir()`（Windows 上真正能写的是 `%TEMP%`）。情况 1 的本机可写根是 **1**。3 与 10 同样要提权。
+
+本机 9（以及非子孙的 2）没有不提权的做法。上游 `writableRoots`（`@deepseek-ai/dsh-sandbox`）只含 `policy.workspaceRoot`（来自 `session.header.cwd`）、`/tmp`、`os.tmpdir()`。远程主会话的 cwd 是 `dsw-routes/<id>/…` 占位目录，9 在其外。插件不拥有这份允许列表；把会话 cwd 改成 9 会换掉主根。WW 下写 9 被拒，I18 一次提权（或 sticky danger）是出路。Linux 本机副根相同。
 
 远程副根 **4、7 视为 WW**，机制是 ADR-0024 §6.2 已有的 **每根一条 serve**（`coreSessionKey` 含根；`sideRootsOf` 已把该机远程副根放进 declared）。一次 `serve` 仍只有一个 `--workspace`。
 
@@ -64,6 +69,7 @@
 - 7 与 6 是兄弟 → 两条 serve。cwd 在 6 的 bash **写不了 7**；`workdir` 或 Write 路径指到 7 才开 7 的 serve。
 - 情况 1：登记根一条；4 是兄弟则另一条。`sw_exec` 默认 cwd 是登记根，不自动可写兄弟 4。
 - **5、8 禁止再铸 WW serve。** 今天未声明 cwd 会 `gitWorkingTreeOf` 新开可写 jail；I19 改为只改 cwd，写由当前 jail 拒绝。
+- 远程 WW 的 shell 写 `/tmp` **已经放行**，不用再加挂载。`core/profile.json` 的 `workspaceWriteExtra` 是 `--tmpfs /tmp`，`jail.go` 在 `--bind <根>` 之前拼上。这是 jail 内一块空 tmpfs，不是宿主 `/tmp`，serve 重启即丢。官方 Read/Write 仍按 `canWrite` 拒绝工作区外路径（R27）。`/var/tmp` 没有额外挂载，不放行。read-only 档没有这块 tmpfs。所以 5 与 8：shell 写 `/tmp` 不用提权；其它路径走 I18。
 
 read-only：能跑、各格都不能写（本机 `/tmp` 的官方例外另计）。danger-full-access：该世界内不围栏（远端 `--sandbox off`；无核心则裸 SSH）。无核心 + 围栏档：4/5/6/7/8 的 spawn 与写 fail-closed。
 
@@ -74,7 +80,7 @@ sticky WW 下 5/8（以及非子孙的 2/9）要写，走 danger，或用 I18 �
 - 不把本机副根 2/9 加进 `writableRoots`。
 - 不把多个根绑进同一个 bwrap，不升核心版本。
 - 不恢复 `sw_pick_workspace`。
-- 不在 Win 上做 `sw_exec(local)`。
+- 不在 Win 上做 `sw_exec(local)`，也不把这类调用静默映射成 `pwsh`。
 - 不改官方 Read/Write/bash/pwsh 的 schema。
 - 不做本机/远端两套 `/permission`。
-- 本文不改路由与 `resolveCoreWorkspace` 的 mint 行为；那是 `REQ-I19` 开工时的事。
+- 路由与「未声明 cwd 不新铸 jail」在 REQ-I19 的实现里，不在本文。

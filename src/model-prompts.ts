@@ -34,7 +34,7 @@ export const MODEL_PROMPTS = {
   sideHeading: '**Extra workspaces linked to this session (side directories the model can operate on directly)**:',
   /** Side-workspace boundary note, tier-free since REQ-I7 (ADR-0019). */
   sideNote:
-    'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default; to run a command on another server use `sw_exec(server, command)`.',
+    'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default. When the main workspace is remote, bash runs there; sw_exec is for a different server. Local commands use pwsh on Windows, or sw_exec with server "local" on Linux.',
   /**
    * REQ-I11: heading of the per-session CONNECTED-MACHINE list (`sw-remote`
    * section). The list is the session's coarse gate made visible: the store
@@ -61,10 +61,10 @@ export const MODEL_PROMPTS = {
    * copy states the precondition instead of leaving the model to discover it.
    */
   sectionSwExec:
-    "sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. workdir defaults to that server's primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.",
+    'sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. If this session\'s main workspace is already that server, use bash instead. On Windows, local paths use pwsh, not sw_exec. On Linux, server "local" runs on this host only while the main workspace is remote. workdir defaults to that server\'s primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.',
   /** `tool:bash` section (order 105, win32 hosts) — empty unless this session has a remote workspace. */
   sectionBash:
-    'The bash tool runs `bash -c` on this session\'s remote Linux workspace. Check the [exit code: N] marker of each result.',
+    'The bash tool runs `bash -c` on this session\'s remote Linux workspace. It does not run on the local machine or on a different server: use pwsh for local Windows commands and sw_exec for another server. Check the [exit code: N] marker of each result.',
   /**
    * REQ-I13 / ADR-0025: remote fs/spawn follow this session's `/permission`
    * (and official `sandbox_permissions` escalation) via the Linux core.

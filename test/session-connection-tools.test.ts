@@ -426,10 +426,18 @@ test('sw_exec tool: refuses a registered-but-not-connected server and lists the 
   )
 })
 
-test('sw_exec tool: the implicit main machine counts as connected (gate passes to the spawn seam)', async () => {
+test('sw_exec tool: the session remote machine is refused in favour of bash', async () => {
   const mounted = mountSwExec(readOnlyStore({}), { subprocessMarker: 'SPAWN-REACHED' })
   await assert.rejects(
     runTool(toolOf(mounted, 'sw_exec'), { command: 'ls', description: 'list' }, runContext(SESSION, 'ssh://c1/srv/work')),
+    /uses the bash tool/,
+  )
+})
+
+test('sw_exec tool: another connected machine still reaches the spawn seam', async () => {
+  const mounted = mountSwExec(readOnlyStore({ [SESSION]: ['c2'] }), { subprocessMarker: 'SPAWN-REACHED' })
+  await assert.rejects(
+    runTool(toolOf(mounted, 'sw_exec'), { command: 'ls', description: 'list', server: 'c2' }, runContext(SESSION, 'ssh://c1/srv/work')),
     /SPAWN-REACHED/,
   )
 })

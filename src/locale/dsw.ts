@@ -163,6 +163,7 @@ export const zh = {
   // registry.ts / transport.ts / session-workspaces.ts 的协议/数据校验与
   // 路由错误（t15-r2 拍板：host 可触发面全部键化，见 i18n-design.md §13-9 已移除）
   'rpc.hostEmpty': 'host 必须是非空字符串',
+  'rpc.machineIdReserved': '机器 id「{id}」是保留名',
   'rpc.usernameEmpty': 'username 必须是非空字符串',
   'rpc.portInvalid': 'port 必须是 1..65535 的整数：{port}',
   'rpc.cwdShape': 'cwd 必须是 POSIX 绝对路径：{cwd}',

@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I19 | 主/副工作区区域权限：工具绑世界 | doing | P2 | 2026-09-22。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。5/8 不新铸 jail。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -25,7 +26,6 @@
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
 | UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P2 | 从 UPSTREAM-6 拆出。独立能力包不在 `upstream.yml` 家族清单里，通道红绿都看不见。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵或 issue 会响 |
-| REQ-I19 | 主/副工作区区域权限：工具绑世界 | todo | P2 | 2026-09-22。`REQ-I18` 已简验，可以开工。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |

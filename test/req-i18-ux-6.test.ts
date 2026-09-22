@@ -174,19 +174,19 @@ test('REQ-I18: sw_exec denial hint, then allowed-once is only that spawn', async
     approval: { request: async () => { approvalCalls.push('asked'); return 'allowed-once' } },
   })
   const registry = () => ({
-    get: (id: string) => id === 'c1' ? {
-      id: 'c1',
+    get: (id: string) => (id === 'c1' || id === 'c2') ? {
+      id,
       endpoint: 'root@10.0.0.5',
-      spec: { id: 'c1', label: 'c1', host: '10.0.0.5', port: 22, username: 'root', workspace: '/srv/c1' },
+      spec: { id, label: id, host: '10.0.0.5', port: 22, username: 'root', workspace: '/srv/c1' },
       exec: async () => ({ exitCode: 0, signal: null, stdout: 'Linux\n', stderr: '' }),
     } : undefined,
     getActive: () => null,
-    listMachines: () => ({ machines: [{ id: 'c1' }], currentId: null }),
+    listMachines: () => ({ machines: [{ id: 'c1' }, { id: 'c2' }], currentId: null }),
   }) as unknown as SshRegistry
   registerSwExec(host.ctx, registry)
   const tool = host.tools[0]
   assert.ok(tool !== undefined)
-  const denied = await tool.execute({ command: 'mkdir /etc/x', description: 'Make a directory' }, remoteExec()) as SwExecForeground
+  const denied = await tool.execute({ command: 'mkdir /etc/x', description: 'Make a directory', server: 'c2' }, remoteExec()) as SwExecForeground
   assert.equal(denied.sandbox?.mode, 'workspace-write')
   assert.equal(denied.sandbox?.denied, true)
   const rendered = tool.output.render({}, denied)[0]?.text ?? ''
@@ -198,10 +198,11 @@ test('REQ-I18: sw_exec denial hint, then allowed-once is only that spawn', async
   await tool.execute({
     command: 'mkdir /etc/x',
     description: 'Make a directory',
+    server: 'c2',
     sandbox_permissions: 'danger-full-access',
     justification: 'the directory is outside the workspace',
   }, remoteExec())
-  await tool.execute({ command: 'pwd', description: 'Print directory' }, remoteExec())
+  await tool.execute({ command: 'pwd', description: 'Print directory', server: 'c2' }, remoteExec())
   assert.equal(approvalCalls.length, 1)
   assert.equal(policies[0], undefined)
   assert.deepEqual(policies[1], { mode: 'danger-full-access' })
@@ -210,6 +211,7 @@ test('REQ-I18: sw_exec denial hint, then allowed-once is only that spawn', async
     () => tool.execute({
       command: 'pwd',
       description: 'Print directory',
+      server: 'c2',
       sandbox_permissions: 'danger-full-access',
     }, remoteExec()),
     /sandbox_permissions requires a justification/,

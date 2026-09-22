@@ -434,18 +434,18 @@ test('makeSwExecDeadline: no timeout never fires; caller abort is forwarded', as
 
 /* ------------------------------------------------- 6) 工具注册 + 执行 */
 
-test('registerSwExec: registers sw_exec + tool:sw-exec; server derives from the session cwd', async () => {
+test('registerSwExec: the session remote machine is bash, not sw_exec', async () => {
   const spawned: SubprocessSpawnSpec[] = []
   const fake = fakeToolContext({ subprocess: { spawn: spec => { spawned.push(spec); return fakeHandle(spec, { stdout: 'built' }) } } })
   registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }))
   assert.deepEqual(fake.registered.map(tool => tool.name), ['sw_exec'])
   assert.deepEqual(fake.sections.map(section => section.name), ['tool:sw-exec'])
   assert.equal(fake.sections[0]?.order, 105)
-  const result = await fake.registered[0]?.execute?.({ command: 'make', description: 'Build' }, execFace('ssh://c1/srv'))
-  assert.ok(result !== undefined && (result as { kind: string }).kind === 'foreground')
-  assert.equal((result as { server: string }).server, 'c1')
-  assert.deepEqual(spawned[0]?.argv, ['bash', '-c', 'make'])
-  assert.equal(spawned[0]?.cwd, 'ssh://c1/srv/c1')
+  await assert.rejects(
+    () => fake.registered[0]?.execute?.({ command: 'make', description: 'Build' }, execFace('ssh://c1/srv')),
+    /uses the bash tool/,
+  )
+  assert.equal(spawned.length, 0)
 })
 
 test('registerSwExec: explicit server wins; a local session without one errors', async () => {
@@ -464,17 +464,22 @@ test('registerSwExec: explicit server wins; a local session without one errors',
   const result = await execute({ command: 'whoami', description: 'Print user', server: 'c2' }, execFace('C:\\Users\\me\\proj'))
   assert.equal((result as { server: string }).server, 'c2')
   assert.deepEqual(spawned[0]?.cwd, 'ssh://c2/srv/c2')
-  // Relative workdir resolves against the REMOTE session route.
-  const resultRel = await execute({ command: 'ls', description: 'List', workdir: 'src' }, execFace('ssh://c1/srv'))
+  // Relative workdir on the session's own remote machine is bash, not sw_exec.
+  await assert.rejects(
+    () => execute({ command: 'ls', description: 'List', workdir: 'src' }, execFace('ssh://c1/srv')),
+    /uses the bash tool/,
+  )
+  // The same relative path on another server still resolves against the session route.
+  const resultRel = await execute({ command: 'ls', description: 'List', server: 'c2', workdir: 'src' }, execFace('ssh://c1/srv'))
   assert.equal((resultRel as { cwd?: never }).kind, 'foreground')
-  assert.equal(spawned[1]?.cwd, 'ssh://c1/srv/src')
+  assert.equal(spawned[1]?.cwd, 'ssh://c2/srv/src')
 })
 
 test('registerSwExec: run_in_background errors honestly without ctx.jobs', async () => {
   const fake = fakeToolContext({ subprocess: { spawn: () => fakeHandle(undefined) } })
   registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }))
   await assert.rejects(
-    () => fake.registered[0]?.execute?.({ command: 'make', description: 'Build', run_in_background: true }, execFace('ssh://c1/srv')),
+    () => fake.registered[0]?.execute?.({ command: 'make', description: 'Build', server: 'c1', run_in_background: true }, execFace('C:\\Users\\me\\proj')),
     /background jobs unavailable: load @deepseek-ai\/dsh-jobs and @deepseek-ai\/dsh-tool-jobs/,
   )
 })
@@ -490,9 +495,9 @@ test('registerSwExec: run_in_background registers via ctx.jobs (kind/label/owner
   const spawned: SubprocessSpawnSpec[] = []
   const fake = fakeToolContext({ subprocess: { spawn: spec => { spawned.push(spec); return fakeHandle(spec, { stdout: 'bg done' }) } }, jobs })
   registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }))
-  const agent = { session: { header: { cwd: 'ssh://c1/srv' } } }
+  const agent = { session: { header: { cwd: 'C:\\Users\\me\\proj' } } }
   const result = await fake.registered[0]?.execute?.(
-    { command: 'make', description: 'Build', run_in_background: true },
+    { command: 'make', description: 'Build', server: 'c1', run_in_background: true },
     { signal: new AbortController().signal, agent },
   )
   assert.deepEqual(result, { kind: 'background', jobId: 'sw-exec-1', server: 'c1', endpoint: 'root@10.0.0.5' })
@@ -611,9 +616,11 @@ test('REQ-I11: the win32 bash seam carries the session gate (our own exec face)'
     signal: new AbortController().signal,
     agent: { session: { header: { id: 's1', cwd: remotePlaceholder('c1') } } },
   }
+  // Another machine is bash's refusal (use sw_exec). sw_exec then applies the
+  // session connection gate, so this face must not spawn either.
   await assert.rejects(
     () => fake.registered[0]?.execute?.({ command: 'uname -a', description: 'Show kernel', workdir: remotePlaceholder('c2') }, face),
-    /is not connected to this session/u,
+    /Use sw_exec for that server/u,
   )
   assert.deepEqual(spawned, [], 'an unconnected machine must not spawn anything')
 

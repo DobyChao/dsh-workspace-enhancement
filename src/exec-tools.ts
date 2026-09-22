@@ -25,6 +25,15 @@
  */
 
 import { isAbsolute, posix, resolve } from 'node:path'
+import {
+  BASH_USE_SW_EXEC,
+  BASH_USE_SW_EXEC_LOCAL_SESSION,
+  SW_EXEC_LOCAL_SHELL_MISSING,
+  SW_EXEC_LOCAL_WORKDIR,
+  decideSwExec,
+  isLocalWorkdirSpelling,
+  sessionLocalCwd,
+} from './region-exec.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { approveEscalation, escalationHintMarker, sandboxDenialMarker, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -47,7 +56,7 @@ import { worldOfCwd } from './mixed.ts'
 import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { isRemoteCommandDenial } from './remote-confine.ts'
-import { resolveRemoteSessionMode } from './remote-policy.ts'
+import { isSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
 import { runWithRemoteSpawnPolicy } from './remote-spawn-policy.ts'
 import { bashDescription, bashParams, swExecDescription, swExecParams } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
@@ -975,6 +984,11 @@ function stampDenial<T extends { exitCode: number | null; stderr: SwExecStream; 
   return value
 }
 
+/** Read the flag without narrowing it for the rest of the function (it can flip during await). */
+function signalAborted(signal: AbortSignal): boolean {
+  return signal.aborted
+}
+
 /** The session cwd the tools need for server derivation and relative workdirs. */
 function sessionCwdOf(exec: ToolRunContext): string | undefined {
   const agent = exec.agent as { readonly session?: { readonly header?: { readonly cwd?: string } } } | undefined
@@ -1011,6 +1025,87 @@ function jobsOf(ctx: Context, tr: TranslateFn = EN_T): BackgroundJobs {
 
 /* --------------------------------------------------------- tool registration */
 
+/** One stream from a host-shell result. Missing streams are empty, not truncated. */
+function shellStream(value: { text?: string; truncated?: boolean; spillPath?: string } | undefined): SwExecStream {
+  const stream: SwExecStream = { text: value?.text ?? '', truncated: value?.truncated === true }
+  if (typeof value?.spillPath === 'string') stream.spillPath = value.spillPath
+  return stream
+}
+
+/**
+ * `sw_exec(server: "local")` on a Linux host whose main workspace is remote.
+ * Runs through `ctx.shell` so the host sandbox still applies (region 9/10).
+ * The `dswLocalExec` flag tells the shell bridge not to pin this call back
+ * onto the remote workspace.
+ */
+async function runLocalSwExec(
+  ctx: Context,
+  sides: (() => SessionSideWorkspaceStore | undefined) | undefined,
+  args: { command: string; workdir?: string; timeoutMs?: number; run_in_background?: boolean; sandbox_permissions?: string; justification?: string },
+  exec: ToolRunContext,
+  _tr: TranslateFn,
+): Promise<SwExecForeground> {
+  if (args.run_in_background === true) {
+    throw new Error('sw_exec: server "local" does not run in the background. Omit run_in_background.')
+  }
+  const explicit = args.workdir?.trim()
+  if (explicit !== undefined && explicit !== '' && !isLocalWorkdirSpelling(explicit, 'linux')) {
+    throw new Error(SW_EXEC_LOCAL_WORKDIR)
+  }
+  const sessionId = sessionIdOf({ ...(exec.agent !== undefined ? { scope: exec.agent as object } : {}) })
+  const items = sessionId === undefined ? [] : sides?.()?.listFor(sessionId) ?? []
+  const workdir = explicit !== undefined && explicit !== ''
+    ? explicit
+    : sessionLocalCwd(items.filter(item => item.kind === 'local').map(item => item.rootKey))
+  const shell = ctx.get('shell', false) as {
+    resolve?: (request: Record<string, unknown>) => Record<string, unknown>
+    run?: (spec: Record<string, unknown>) => Promise<{
+      exitCode?: number | null
+      signal?: string | null
+      timedOut?: boolean
+      stdout?: { text?: string; truncated?: boolean; spillPath?: string }
+      stderr?: { text?: string; truncated?: boolean; spillPath?: string }
+      sandbox?: { mode?: string; denied?: boolean }
+    }>
+  } | undefined
+  if (shell?.run === undefined) throw new Error(SW_EXEC_LOCAL_SHELL_MISSING)
+  const granted = await grantedModeOf(ctx, args, exec, 'sw_exec')
+  const policyService = ctx.get('sandboxPolicy', false) as {
+    resolve?: (request?: { session?: unknown }) => { mode?: SandboxMode; workspaceRoot?: string }
+  } | undefined
+  const standing = policyService?.resolve?.({
+    ...(exec.agent !== undefined ? { session: (exec.agent as { session?: unknown }).session } : {}),
+  })
+  const mode = granted ?? standing?.mode
+  const sandboxPolicy = mode !== undefined ? { ...standing, mode } : standing
+  const request: Record<string, unknown> = {
+    command: args.command,
+    workdir,
+    ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
+    ...(exec.signal !== undefined ? { signal: exec.signal } : {}),
+    ...(sandboxPolicy !== undefined ? { sandboxPolicy } : {}),
+  }
+  const resolved = typeof shell.resolve === 'function' ? shell.resolve(request) : request
+  const result = await shell.run({ ...resolved, dswLocalExec: true })
+  const foreground: SwExecForeground = {
+    kind: 'foreground',
+    server: 'local',
+    endpoint: 'local',
+    os: 'linux',
+    exitCode: result.exitCode ?? null,
+    signal: result.signal ?? null,
+    timedOut: result.timedOut === true,
+    aborted: false,
+    timeoutMs: args.timeoutMs ?? SW_EXEC_DEFAULT_TIMEOUT_MS,
+    stdout: shellStream(result.stdout),
+    stderr: shellStream(result.stderr),
+  }
+  if (result.sandbox?.denied === true && isSandboxMode(result.sandbox.mode)) {
+    foreground.sandbox = { mode: result.sandbox.mode, denied: true }
+  }
+  return foreground
+}
+
 /**
  * Register the `sw_exec` tool plus its `tool:sw-exec` prompt section (S1).
  * The tool is registered on every platform — the server makes it remote-only.
@@ -1033,9 +1128,12 @@ export function registerSwExec(
     enableRunInBackground?: boolean
     sides?: () => SessionSideWorkspaceStore | undefined
     connections?: () => SessionConnectionsFace | undefined
+    /** Host platform for the world decision. Tests pass `'linux'` on Windows. */
+    platform?: NodeJS.Platform
   } = {},
 ): void {
   const backgroundEnabled = opts.enableRunInBackground ?? true
+  const platform = opts.platform ?? process.platform
   const locale = hostLocaleOf(ctx)
   const t = locale.t
   const osCache = createRemoteOsCache()
@@ -1059,10 +1157,22 @@ export function registerSwExec(
     },
     async execute(args, exec: ToolRunContext): Promise<SwExecBackground | SwExecForeground> {
       validateSwExecArgs(args, t)
+      if (signalAborted(exec.signal)) throw toolAbortError()
       const env = swExecEnvOf(ctx, registry, t)
       const sessionCwd = sessionCwdOf(exec)
       const route = remoteRouteFromCwd(sessionCwd)
-      // REQ-I11 / ADR-0021 §2.5: the session gate runs FIRST and fails closed.
+      const requested = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : undefined
+      const decision = decideSwExec({
+        platform,
+        sessionMachineId: route?.connectionId,
+        requestedServer: requested,
+        workdir: args.workdir,
+      })
+      if (decision.action === 'refuse') throw new Error(decision.message)
+      if (decision.action === 'local') {
+        return runLocalSwExec(ctx, opts.sides, args, exec, t)
+      }
+      // REQ-I11 / ADR-0021 §2.5: the session gate runs before any remote spawn.
       // The store accessor is OPTIONAL only for compositions that never mount
       // it (the tool then behaves as it did before REQ-I11).
       const connections = opts.connections
@@ -1075,7 +1185,6 @@ export function registerSwExec(
           registry(),
         )
       }
-      const requested = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : undefined
       const serverId = requested ?? route?.connectionId
       if (connected !== null) {
         requireConnectedServer(connected, requested, env.listMachines().machines.map(machine => machine.id), t)
@@ -1225,6 +1334,12 @@ export function registerWin32Bash(
     async execute(args, exec: ToolRunContext): Promise<BashBackground | BashForeground> {
       validateBashToolArgs(args, t)
       const cwd = resolveWin32BashWorkdir(args.workdir, sessionCwdOf(exec))
+      const sessionRoute = remoteRouteFromCwd(sessionCwdOf(exec))
+      const targetRoute = cwd === undefined ? null : remoteRouteFromCwd(cwd)
+      if (sessionRoute === null && targetRoute !== null) throw new Error(BASH_USE_SW_EXEC_LOCAL_SESSION)
+      if (sessionRoute !== null && targetRoute !== null && targetRoute.connectionId !== sessionRoute.connectionId) {
+        throw new Error(BASH_USE_SW_EXEC)
+      }
       if (cwd === undefined || worldOfCwd(cwd) === 'local') {
         // t15-r2 (captain decision F4): the guard follows the SAME host-language
         // rule as every other model-facing message (settings preference ?? en;
