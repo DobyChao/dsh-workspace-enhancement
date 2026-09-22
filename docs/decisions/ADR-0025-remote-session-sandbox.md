@@ -16,8 +16,8 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 `danger-full-access`，不进 bwrap）。无核心且本次仍是围栏档 → **写面与 spawn fail-closed**，读面**可见降级**到 SFTP
 （REQ-I15）。无核心且本次是 danger → 今天的 SFTP + 裸 SSH。
 
-**写面 overlay 已通**（R27 官方 Write）。**spawn 一次提权尚未接上**（2026-09-21，`REQ-I18`）：
-`subprocess.spawn` 只读会话档，win32 `bash` 无 `sandbox_permissions`；官方 bash/pwsh 即使弹卡，allowed-once 后核心仍跟 sticky `/permission`。会话级 danger 仍有效。
+**写面 overlay 已通**（R27 官方 Write）。**spawn 一次提权已接上**（2026-09-22，`REQ-I18`，用户 lab 简验）：
+`subprocess.spawn` 先读本次 overlay（官方 bash/pwsh 经 `ctx.shell` 的 `sandboxPolicy`；win32 `bash` / `sw_exec` 自己批准后写入），没有 overlay 才跟会话档。allowed-once 的 `danger-full-access` 让这一次核心 `--sandbox off`；下一次命令仍是会话围栏。
 
 机器字段 `remoteSandbox` **不再当权限或切流开关**（可读可忽略，不必强制迁移）。
 
@@ -65,12 +65,13 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
    REQ-I15 改为：读面降 SFTP（项目根能找到、官方 Read 能用）；写 / bash 仍
    `SANDBOX_UNAVAILABLE`，拒绝文案继续点名缺失物（`fenceMissingHint`）。
    模型提示 `remoteNoSandbox` 写明这条拆分，避免「看起来已围栏其实读面未围」。
-10. **远程 spawn 一次提权（2026-09-21，`REQ-I18`）**。写接口把 per-call
-    `sandboxPolicy` 传进 `requireSession`；`SshSubprocessEngine.spawn` 只调
-    `resolveRemoteSessionMode(this.ctx)`，没有 overlay。win32 注入的 `bash`
-    也不广告 `sandbox_permissions` / `justification`。官方 bash/pwsh / `sw_exec`
-    同走 spawn，同洞。本条跟踪 I18，不在 I13 验收范围内。区域矩阵
-    （工具绑世界、远程副根按根多开 WW）是 **REQ-I19**，等 I18 完成再做，见
+10. **远程 spawn 一次提权（2026-09-22，`REQ-I18`）**。`SubprocessSpawnSpec` 没有
+    policy 字段，danger 授予也不走 `confine`。`ctx.shell.run` / `start` 把 spec 上的
+    `sandboxPolicy` 放进一次调用的存储，`SshSubprocessEngine.spawn` 用它覆盖会话档。
+    win32 `bash` 与 `sw_exec` 广告 `sandbox_permissions` / `justification`，批准后只包住
+    这一次 spawn。远程 `confine` 短路仍不包本机 runner，但带上 bwrap 的
+    `read-only file system` 拒绝方言，官方 bash/pwsh 才能打出提权 hint。区域矩阵
+    （工具绑世界、远程副根按根多开 WW）是 **REQ-I19**，见
     [ADR-0028](./ADR-0028-region-permission-matrix.md)。
 
 ## 3. 不做
@@ -83,4 +84,4 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 
 见 `docs/uat/R27-req-i13-remote-session-sandbox.md`（与 REQ-I5 **合验**；原 R26 脚本已作废）。关键：工作区外官方 write 失败且
 带提权标记；提权允许后成功；无核心 + workspace-write **写 / bash 不走 SFTP**；无核心时官方 Read 与聊天仍可用（REQ-I15，`docs/uat/R35-req-i15-i16.md`）。
-bash / `sw_exec` / 官方 pwsh 的 allowed-once 不在 R27 范围内，见 `REQ-I18`。
+bash / `sw_exec` / 官方 pwsh 的 allowed-once 由 `REQ-I18` 覆盖：越界结果带官方拒绝标记与 hint；允许一次后该次 spawn 为 `--sandbox off`，下一次仍跟会话档。

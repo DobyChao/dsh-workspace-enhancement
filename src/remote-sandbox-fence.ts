@@ -69,6 +69,7 @@ import {
   isCoreMissingError,
   resolveRemoteSessionMode,
 } from './remote-policy.ts'
+import { currentRemoteSpawnPolicy } from './remote-spawn-policy.ts'
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -552,7 +553,7 @@ export function createRemoteSandboxFence(
 
   return async (input: RemoteSandboxFenceInput): Promise<readonly string[]> => {
     if (hub !== undefined) {
-      const policy = resolveRemoteSessionMode(ctx)
+      const policy = resolveRemoteSessionMode(ctx, currentRemoteSpawnPolicy())
       const connectionId = input.connectionId
       if (connectionId === undefined) {
         if (!isConfinedSandboxMode(policy)) return input.argv ?? []

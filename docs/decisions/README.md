@@ -30,4 +30,4 @@
 | [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
 | [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |
 | [0027](./ADR-0027-sunset-sw-pick-workspace.md) | 日落 `sw_pick_workspace`；工具面只留 status/connect/exec | accepted |
-| [0028](./ADR-0028-region-permission-matrix.md) | 主/副工作区区域权限：工具绑世界；远程副根按根多开 WW | proposed（等 REQ-I18） |
+| [0028](./ADR-0028-region-permission-matrix.md) | 主/副工作区区域权限：工具绑世界；远程副根按根多开 WW | proposed（REQ-I19） |

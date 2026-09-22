@@ -336,13 +336,8 @@ const en: Record<DswKey, string> = {
 
   /* ------------------------------------------------ tool: shared fragments */
   'tool.common.noActive': 'No active machine — register one in settings, then connect it to this session with sw_connect.',
-  'tool.common.backgroundSentence':
-    'Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.',
-  'tool.common.backgroundUnavailable': 'Background execution is not available; long-running commands must finish within the timeout.',
 
   /* -------------------------------------------------------- tool: sw_status */
-  'tool.sw_status.description':
-    'Show the current remote machine (host/user/port), connection health (ping), the current remote workspace (from the session cwd / machine record, not a model tool), and the host-key policy/state. Call this first to orient, or when an sw_* call fails to check connectivity.',
   'tool.sw_status.ping.ok': 'Ping: OK — {prefix} ({outcome})',
   'tool.sw_status.ping.failed': 'Ping: FAILED — {detail}',
   'tool.sw_status.outputs.host': 'Remote host: {u}@{h}:{p}{source}',
@@ -356,10 +351,6 @@ const en: Record<DswKey, string> = {
   'tool.sw_status.outputs.backend': 'Password backend: {backend}',
 
   /* ------------------------------------------------------- tool: sw_connect */
-  'tool.sw_connect.description':
-    'Set which registered machines this session may connect to and run commands on. Every call REPLACES the whole set (it is not a union): `machines: []` disconnects everything. Does not choose a workspace directory (that is the session cwd / add-workspace flow). Machines must be ids of registered machines; an unknown id errors with the known list. Each requested machine is then pinged within a bounded budget: reachable ones are recorded as connected, unreachable ones are reported honestly and left out; when none is reachable the call fails and the existing connections stay unchanged.',
-  'tool.sw_connect.param.machines':
-    'Array of registered machine ids to connect. An empty array disconnects every machine from this session.',
   'tool.sw_connect.output.cleared': 'Disconnected every machine from this session.',
   'tool.sw_connect.output.heading': 'Machines connected to this session:',
   'tool.sw_connect.output.reachable': '- {id} ({endpoint}): reachable, connected',
@@ -372,12 +363,6 @@ const en: Record<DswKey, string> = {
   'tool.sw_connect.error.noDetail': 'no failure detail',
 
   /* -------------------------------------------------------------- tool: sw_exec */
-  'tool.sw_exec.description':
-    'Execute a command on a registered SSH server connected to this session and return its stdout/stderr. The `server` id selects the machine — it must be a registry id connected to this session (see the connection line of sw_status, or call sw_connect first); it defaults to the machine of this session\'s main workspace. The target OS is probed once per connection and reported in the first line: POSIX runs `bash -c`, Windows runs `pwsh -Command`, unknown runs bash honestly. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.',
-  'tool.sw_exec.param.workdir':
-    "Working directory on the target server. Defaults to that server's primary workspace; a relative path is resolved against the session workspace; `ssh://<id>/<path>` names a machine and directory explicitly.",
-  'tool.sw_exec.param.server':
-    'Target server id: a registry machine id (c1, c2, …) connected to this session. Defaults to the machine of this session\'s main workspace. A registered id that is not connected to this session errors with the connected ids; an unknown id errors with the known list.',
   'tool.sw_exec.output.background': 'started background job {jobId} on {server} ({endpoint})',
   'tool.sw_exec.output.header': 'server: {id} ({endpoint}) · OS: {os}',
   'tool.sw_exec.error.workdirEmpty': 'sw_exec: workdir must not be empty',
@@ -395,22 +380,9 @@ const en: Record<DswKey, string> = {
   'tool.sw_exec.error.notConnected': 'sw_exec: server "{id}" is not connected to this session (connected here: {ids})',
 
   /* ------------------------------------------------------------- tool: bash */
-  'tool.bash.description':
-    "Execute a bash command (`bash -c`) on the session's remote Linux workspace and return its stdout/stderr. Each call runs in a fresh shell: no state (cwd, variables, functions) persists between calls — pass `workdir` instead of using `cd`. Non-zero exits are reported as `[exit code: N]` — investigate failures before moving on. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available.",
-  'tool.bash.param.workdir':
-    'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it; `ssh://<id>/<path>` names a machine and directory explicitly.',
   'tool.bash.output.background': 'started background job {jobId}',
   'tool.bash.error.localSession': 'The bash tool targets remote Linux workspaces (this host is Windows and has no local bash); use pwsh or the terminal panel',
   'tool.bash.error.spawnFailed': 'bash: spawn failed: {detail}',
-
-  /* ------------------------------------------- tool: shared parameter props */
-  'tool.param.command': 'The command to execute on the target server.',
-  'tool.param.description':
-    'Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies".',
-  'tool.param.timeout':
-    'Timeout in milliseconds (executor default 120s, cap 600s — overrides are clamped). The tool kills the command on expiry and reports [timed out after Nms].',
-  'tool.param.runInBackground':
-    'Run in the background and return a job id immediately (collect with job_output, stop with job_kill). No timeout applies.',
 
   /* --------------------------------------------- tool: output markers/errors */
   'tool.job.detail.killed': 'killed before exit',

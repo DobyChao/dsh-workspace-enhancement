@@ -19,13 +19,29 @@ interface ConfineHost {
 
 const patched = new WeakSet<object>()
 
-/** Identity confine result: the caller's argv, claimed as fully enforced. */
+/**
+ * Remote core jail is bubblewrap. Official bash classifies a denial only when
+ * `confine` advertises this dialect (`Read-only file system` on stderr).
+ */
+export const REMOTE_CORE_DENIAL_SIGNATURE = 'read-only file system'
+
+/** Non-zero exit whose stderr matches the remote bwrap denial dialect. */
+export function isRemoteCommandDenial(exitCode: number | null, stderr: string): boolean {
+  if (exitCode === null || exitCode === 0) return false
+  return stderr.toLowerCase().includes(REMOTE_CORE_DENIAL_SIGNATURE)
+}
+
+/**
+ * Identity argv for a remote session: the host runner must not wrap the
+ * command, but the denial dialect stays the remote core's bwrap text so
+ * official bash/pwsh still append the escalation hint.
+ */
 export function passthroughConfinedArgv(argv: readonly string[]): ConfinedArgv {
   return {
     argv: [...argv],
     enforcement: 'full',
-    denialSignatures: [],
-    runnerFailureRules: [],
+    denialSignatures: [REMOTE_CORE_DENIAL_SIGNATURE],
+    runnerFailureRules: [{ fatalSignatures: ['bwrap: '] }],
   }
 }
 

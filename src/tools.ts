@@ -12,11 +12,12 @@
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ParameterSchemaSpec, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { probeMachines, registerSwExec, registerWin32Bash } from './exec-tools.ts'
 import type { MachineProbeResult, ProbeRegistryFace } from './exec-tools.ts'
-import { lookup, type TranslateFn } from './locale/index.ts'
-import { hostLocaleOf, localizeTool } from './locale/host.ts'
+import { type TranslateFn } from './locale/index.ts'
+import { hostLocaleOf } from './locale/host.ts'
+import { SW_CONNECT_DESCRIPTION, SW_CONNECT_PARAMS, SW_STATUS_DESCRIPTION } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from './session-remote-context.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
@@ -35,13 +36,6 @@ const textOutSchema = {
   additionalProperties: false,
   properties: { text: { type: 'string', required: true } },
 } as const
-
-/**
- * Fixed-ZH translator — the baseline compiled into `defineTool` at
- * registration (the `tool.*` faces keep their per-language dictionary copy;
- * the model-facing prompt copy of this module does NOT — see ADR-0014).
- */
-const ZH_T: TranslateFn = (key, params) => lookup('zh', key, params)
 
 /** The machine facts the prompt reads (leaf fields only, no live objects). */
 export interface PromptMachineFace {
@@ -380,22 +374,10 @@ async function remoteEnvLine(registry: SshRegistry, hub?: CoreHub): Promise<stri
 }
 
 /**
- * sw_connect parameter spec builder (descriptions localized per language).
  * REQ-I11 / ADR-0021 §2.1: EXACTLY one property — an array of registry machine
- * ids. The former `host/username/port/password/privateKeyPath/save` face is gone
- * for two structural reasons: credential material must never be a model tool
- * parameter (`tool/call` arguments are persisted verbatim into the session log —
- * SEC-5), and the machine universe is the user's registry, so the model cannot
- * silently add machines to the user's domain.
+ * ids (`SW_CONNECT_PARAMS`). Credential material must never be a model tool
+ * parameter, and the machine universe is the user's registry.
  */
-const swConnectParams = (tr: TranslateFn): ParameterSchemaSpec => ({
-  machines: {
-    type: 'array',
-    items: { type: 'string' },
-    required: true,
-    description: tr('tool.sw_connect.param.machines'),
-  },
-})
 
 /** REQ-I11: the session id of one tool run (leaf read; `undefined` ⇒ fail closed). */
 function sessionIdOfExec(exec: ToolRunContext): string | undefined {
@@ -443,9 +425,9 @@ export function registerWorkspaceTools(
   const connectedFactsOf = (sessionId: string | undefined, cwd: string | undefined): ConnectedMachineFact[] =>
     connectedIdsOf(sessionId, cwd).map(id => connectedMachineFact(id, machineFaceOf(id)))
   const tools = [
-    localizeTool(defineTool({
+    defineTool({
       name: 'sw_status',
-      description: ZH_T('tool.sw_status.description'),
+      description: SW_STATUS_DESCRIPTION,
       parameters: {},
       output: {
         schema: textOutSchema,
@@ -480,11 +462,11 @@ export function registerWorkspaceTools(
         lines.push(await remoteEnvLine(instance, coreHubOf(ctx)))
         return { text: lines.join('\n') }
       },
-    }), locale, { descriptionKey: 'tool.sw_status.description', buildParams: () => ({}) }),
-    localizeTool(defineTool({
+    }),
+    defineTool({
       name: 'sw_connect',
-      description: ZH_T('tool.sw_connect.description'),
-      parameters: swConnectParams(ZH_T),
+      description: SW_CONNECT_DESCRIPTION,
+      parameters: SW_CONNECT_PARAMS,
       output: {
         schema: textOutSchema,
         render: (_args, value): Array<{ type: 'text'; text: string }> => [{ type: 'text', text: value.text }],
@@ -541,9 +523,6 @@ export function registerWorkspaceTools(
         }
         return { text: lines.join('\n') }
       },
-    }), locale, {
-      descriptionKey: 'tool.sw_connect.description',
-      buildParams: swConnectParams,
     }),
   ]
 

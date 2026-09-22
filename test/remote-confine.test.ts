@@ -16,6 +16,7 @@ test('passthroughConfinedArgv: identity argv, full enforcement', () => {
   const out = passthroughConfinedArgv(['bash', '-c', 'echo'])
   assert.deepEqual(out.argv, ['bash', '-c', 'echo'])
   assert.equal(out.enforcement, 'full')
+  assert.deepEqual(out.denialSignatures, ['read-only file system'])
 })
 
 test('shouldPassthroughRemoteConfine: no initiator stays local', () => {
