@@ -164,7 +164,23 @@ interface CapturedSection {
   text: unknown
 }
 
-function fakeToolContext(options: { subprocess?: { spawn(spec: SubprocessSpawnSpec): SubprocessHandle }; jobs?: BackgroundJobs } = {}): {
+function fakeToolContext(options: {
+  subprocess?: { spawn(spec: SubprocessSpawnSpec): SubprocessHandle }
+  jobs?: BackgroundJobs
+  shell?: {
+    resolve?: (request: Record<string, unknown>) => Record<string, unknown>
+    run?: (spec: Record<string, unknown>) => Promise<Record<string, unknown>>
+    start?: (spec: Record<string, unknown>) => {
+      status: string
+      exitCode: number | null
+      signal: string | null
+      done: Promise<unknown>
+      readOutput(): { delta: string; lossy: boolean; stdoutSpillPath?: string; stderrSpillPath?: string }
+      kill(): boolean
+      sandbox?: { mode?: string; denied?: boolean; runnerFailed?: boolean }
+    }
+  }
+} = {}): {
   ctx: Context
   registered: CapturedTool[]
   sections: CapturedSection[]
@@ -177,6 +193,7 @@ function fakeToolContext(options: { subprocess?: { spawn(spec: SubprocessSpawnSp
     get: (name: string) => {
       if (name === 'subprocess') return options.subprocess
       if (name === 'jobs') return options.jobs
+      if (name === 'shell') return options.shell
       return undefined
     },
     tools: { register: (definition: CapturedTool) => { registered.push(definition); return () => {} } },
@@ -510,6 +527,92 @@ test('registerSwExec: run_in_background registers via ctx.jobs (kind/label/owner
   assert.ok(hooks !== undefined)
   assert.deepEqual(spawned[0]?.argv, ['bash', '-c', 'make'])
   assert.deepEqual(await hooks.done, { status: 'completed', detail: 'exit code: 0' })
+})
+
+test('registerSwExec: server "local" background registers a host-shell job', async () => {
+  const started: { kind: string; label: string; owner?: unknown; run(): { cancel: (reason?: string) => void; done: Promise<unknown>; readOutput?: () => string } }[] = []
+  const startedSpecs: Record<string, unknown>[] = []
+  let settled: (value?: unknown) => void = () => {}
+  const proc = {
+    status: 'running',
+    exitCode: null as number | null,
+    signal: null as string | null,
+    done: new Promise<unknown>(resolve => { settled = resolve }),
+    readOutput: () => ({ delta: 'hi\n', lossy: false }),
+    kill: () => {
+      proc.status = 'killed'
+      return true
+    },
+    sandbox: undefined as { mode?: string; denied?: boolean } | undefined,
+  }
+  const jobs: BackgroundJobs = {
+    start(spec) {
+      started.push(spec)
+      return 'sw-exec-1'
+    },
+  }
+  const fake = fakeToolContext({
+    jobs,
+    shell: {
+      resolve: request => ({ ...request, resolved: true }),
+      run: () => Promise.reject(new Error('foreground')),
+      start: spec => {
+        startedSpecs.push(spec)
+        return proc
+      },
+    },
+  })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  const agent = { session: { header: { cwd: 'ssh://c1/srv' } } }
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', server: 'local', workdir: '/home/me', run_in_background: true },
+    { signal: new AbortController().signal, agent },
+  )
+  assert.deepEqual(result, { kind: 'background', jobId: 'sw-exec-1', server: 'local', endpoint: 'local' })
+  assert.equal(started[0]?.kind, 'sw-exec')
+  assert.equal(started[0]?.label, 'local: make')
+  assert.equal(started[0]?.owner, agent)
+  const hooks = started[0]?.run()
+  assert.ok(hooks !== undefined)
+  assert.equal(startedSpecs[0]?.dswLocalExec, true)
+  assert.equal(startedSpecs[0]?.workdir, '/home/me')
+  assert.equal(startedSpecs[0]?.command, 'make')
+  assert.equal(hooks.readOutput?.(), 'hi\n')
+  proc.sandbox = { mode: 'workspace-write', denied: true }
+  assert.match(hooks.readOutput?.() ?? '', /file access denied under workspace-write mode/)
+  proc.status = 'completed'
+  proc.exitCode = 0
+  settled()
+  assert.deepEqual(await hooks.done, { status: 'completed', detail: 'exit code: 0' })
+  hooks.cancel()
+  assert.equal(proc.status, 'killed')
+})
+
+test('registerSwExec: server "local" background refuses a missing shell start or jobs service', async () => {
+  const shell = {
+    resolve: (request: Record<string, unknown>) => request,
+    run: () => Promise.resolve({ exitCode: 0 }),
+  }
+  const noStart = fakeToolContext({ shell, jobs: { start: () => 'sw-exec-1' } })
+  registerSwExec(noStart.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  await assert.rejects(
+    () => noStart.registered[0]?.execute?.(
+      { command: 'make', description: 'Build', server: 'local', workdir: '/home/me', run_in_background: true },
+      execFace('ssh://c1/srv'),
+    ),
+    /host shell start, which is not mounted/,
+  )
+  const noJobs = fakeToolContext({
+    shell: { ...shell, start: () => { throw new Error('start should not run') } },
+  })
+  registerSwExec(noJobs.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  await assert.rejects(
+    () => noJobs.registered[0]?.execute?.(
+      { command: 'make', description: 'Build', server: 'local', workdir: '/home/me', run_in_background: true },
+      execFace('ssh://c1/srv'),
+    ),
+    /background jobs unavailable/,
+  )
 })
 
 test('registerSwExec: an aborted call throws the official HarnessError (ABORTED/AbortError)', async () => {

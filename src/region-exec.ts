@@ -31,6 +31,9 @@ export const SW_EXEC_LOCAL_WORKDIR =
 export const SW_EXEC_LOCAL_SHELL_MISSING =
   'sw_exec: local execution needs the host bash shell, which is not mounted.'
 
+export const SW_EXEC_LOCAL_START_MISSING =
+  'sw_exec: local background needs the host shell start, which is not mounted.'
+
 export const BASH_USE_SW_EXEC =
   'bash: workdir names another machine. Use sw_exec for that server.'
 

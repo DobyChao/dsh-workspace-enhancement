@@ -29,6 +29,7 @@ import {
   BASH_USE_SW_EXEC,
   BASH_USE_SW_EXEC_LOCAL_SESSION,
   SW_EXEC_LOCAL_SHELL_MISSING,
+  SW_EXEC_LOCAL_START_MISSING,
   SW_EXEC_LOCAL_WORKDIR,
   decideSwExec,
   isLocalWorkdirSpelling,
@@ -1032,22 +1033,80 @@ function shellStream(value: { text?: string; truncated?: boolean; spillPath?: st
   return stream
 }
 
+/** Host `ctx.shell.start` handle. Background local exec registers this with `ctx.jobs`. */
+interface LocalShellProcess {
+  status: string
+  exitCode: number | null
+  signal: string | null
+  done: Promise<unknown>
+  readOutput(): { delta: string; lossy: boolean; stdoutSpillPath?: string; stderrSpillPath?: string }
+  kill(): boolean
+  sandbox?: { mode?: string; denied?: boolean; runnerFailed?: boolean }
+}
+
+interface LocalShell {
+  resolve?: (request: Record<string, unknown>) => Record<string, unknown>
+  run?: (spec: Record<string, unknown>) => Promise<{
+    exitCode?: number | null
+    signal?: string | null
+    timedOut?: boolean
+    stdout?: { text?: string; truncated?: boolean; spillPath?: string }
+    stderr?: { text?: string; truncated?: boolean; spillPath?: string }
+    sandbox?: { mode?: string; denied?: boolean }
+  }>
+  start?: (spec: Record<string, unknown>) => LocalShellProcess
+}
+
+/** Settled host-shell process → the `ctx.jobs` outcome vocabulary. */
+function localShellOutcome(proc: LocalShellProcess, tr: TranslateFn): { status: 'completed' | 'killed'; detail: string } {
+  if (proc.status === 'killed') {
+    return {
+      status: 'killed',
+      detail: proc.signal !== null ? tr('tool.job.detail.signal', { sig: proc.signal }) : tr('tool.job.detail.killed'),
+    }
+  }
+  return { status: 'completed', detail: tr('tool.job.detail.exit', { code: proc.exitCode ?? 0 }) }
+}
+
+/**
+ * One `job_output` delta from a host-shell process. The shell already folds
+ * stderr into `delta`; this adds the lossy notice and the sandbox markers
+ * official bash appends for a confined background process.
+ */
+function localShellRead(proc: LocalShellProcess, tr: TranslateFn): string {
+  const read = proc.readOutput()
+  const notices: string[] = []
+  if (read.lossy) {
+    const paths = [read.stdoutSpillPath, read.stderrSpillPath].filter((path): path is string => path !== undefined)
+    notices.push(tr('tool.output.dropped', { path: paths.length > 0 ? paths.join(', ') : '(unavailable)' }))
+  }
+  const sandbox = proc.sandbox
+  if (sandbox?.runnerFailed === true && typeof sandbox.mode === 'string') {
+    notices.push(`[sandbox: the sandbox runner itself failed under ${sandbox.mode} mode — the command did not run; this is a sandbox problem, not a command failure]`)
+  } else if (sandbox?.denied === true && isSandboxMode(sandbox.mode)) {
+    notices.push(sandboxDenialMarker(sandbox.mode))
+    notices.push(escalationHintMarker('command'))
+  }
+  if (notices.length === 0) return read.delta
+  const gap = read.delta.length > 0 && !read.delta.endsWith('\n') ? '\n' : ''
+  return `${read.delta}${gap}${notices.join('\n')}`
+}
+
 /**
  * `sw_exec(server: "local")` on a Linux host whose main workspace is remote.
  * Runs through `ctx.shell` so the host sandbox still applies (region 9/10).
  * The `dswLocalExec` flag tells the shell bridge not to pin this call back
- * onto the remote workspace.
+ * onto the remote workspace. Background uses `shell.start` and `ctx.jobs`,
+ * the same job id `job_output` / `job_kill` already understand.
  */
 async function runLocalSwExec(
   ctx: Context,
   sides: (() => SessionSideWorkspaceStore | undefined) | undefined,
   args: { command: string; workdir?: string; timeoutMs?: number; run_in_background?: boolean; sandbox_permissions?: string; justification?: string },
   exec: ToolRunContext,
-  _tr: TranslateFn,
-): Promise<SwExecForeground> {
-  if (args.run_in_background === true) {
-    throw new Error('sw_exec: server "local" does not run in the background. Omit run_in_background.')
-  }
+  tr: TranslateFn,
+  backgroundEnabled: boolean,
+): Promise<SwExecForeground | SwExecBackground> {
   const explicit = args.workdir?.trim()
   if (explicit !== undefined && explicit !== '' && !isLocalWorkdirSpelling(explicit, 'linux')) {
     throw new Error(SW_EXEC_LOCAL_WORKDIR)
@@ -1057,19 +1116,10 @@ async function runLocalSwExec(
   const workdir = explicit !== undefined && explicit !== ''
     ? explicit
     : sessionLocalCwd(items.filter(item => item.kind === 'local').map(item => item.rootKey))
-  const shell = ctx.get('shell', false) as {
-    resolve?: (request: Record<string, unknown>) => Record<string, unknown>
-    run?: (spec: Record<string, unknown>) => Promise<{
-      exitCode?: number | null
-      signal?: string | null
-      timedOut?: boolean
-      stdout?: { text?: string; truncated?: boolean; spillPath?: string }
-      stderr?: { text?: string; truncated?: boolean; spillPath?: string }
-      sandbox?: { mode?: string; denied?: boolean }
-    }>
-  } | undefined
+  const shell = ctx.get('shell', false) as LocalShell | undefined
   if (shell?.run === undefined) throw new Error(SW_EXEC_LOCAL_SHELL_MISSING)
   const granted = await grantedModeOf(ctx, args, exec, 'sw_exec')
+  if (signalAborted(exec.signal)) throw toolAbortError()
   const policyService = ctx.get('sandboxPolicy', false) as {
     resolve?: (request?: { session?: unknown }) => { mode?: SandboxMode; workspaceRoot?: string }
   } | undefined
@@ -1082,10 +1132,37 @@ async function runLocalSwExec(
     command: args.command,
     workdir,
     ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-    ...(exec.signal !== undefined ? { signal: exec.signal } : {}),
     ...(sandboxPolicy !== undefined ? { sandboxPolicy } : {}),
   }
-  const resolved = typeof shell.resolve === 'function' ? shell.resolve(request) : request
+  if (args.run_in_background === true) {
+    if (!backgroundEnabled) throw new Error(tr('tool.error.backgroundDisabled'))
+    if (typeof shell.start !== 'function') throw new Error(SW_EXEC_LOCAL_START_MISSING)
+    const jobs = jobsOf(ctx, tr)
+    if (signalAborted(exec.signal)) throw toolAbortError()
+    const jobId = jobs.start({
+      kind: SW_EXEC_JOB_KIND,
+      label: `local: ${args.command}`,
+      ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
+      run: () => {
+        const resolved = typeof shell.resolve === 'function' ? shell.resolve(request) : request
+        const proc = shell.start!({ ...resolved, dswLocalExec: true })
+        return {
+          cancel: () => { proc.kill() },
+          done: proc.done.then(
+            () => localShellOutcome(proc, tr),
+            error => ({ status: 'failed' as const, detail: error instanceof Error ? error.message : String(error) }),
+          ),
+          readOutput: () => localShellRead(proc, tr),
+        }
+      },
+    })
+    return { kind: 'background', jobId, server: 'local', endpoint: 'local' }
+  }
+  const foregroundRequest: Record<string, unknown> = {
+    ...request,
+    ...(exec.signal !== undefined ? { signal: exec.signal } : {}),
+  }
+  const resolved = typeof shell.resolve === 'function' ? shell.resolve(foregroundRequest) : foregroundRequest
   const result = await shell.run({ ...resolved, dswLocalExec: true })
   const foreground: SwExecForeground = {
     kind: 'foreground',
@@ -1170,7 +1247,7 @@ export function registerSwExec(
       })
       if (decision.action === 'refuse') throw new Error(decision.message)
       if (decision.action === 'local') {
-        return runLocalSwExec(ctx, opts.sides, args, exec, t)
+        return runLocalSwExec(ctx, opts.sides, args, exec, t, backgroundEnabled)
       }
       // REQ-I11 / ADR-0021 §2.5: the session gate runs before any remote spawn.
       // The store accessor is OPTIONAL only for compositions that never mount

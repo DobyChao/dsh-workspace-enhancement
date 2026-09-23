@@ -38,7 +38,7 @@
 - `sw_exec` 的远程目标：
   - 情况 1（主在本机）：`server` 省略或注册表 id → 该远程（4 可写，5 只读可提权，见 §5）。无本会话连接、未知 id、workdir 非法 → 拒绝并提示（先 `sw_connect`、列出已知 id、或路径形状），不执行。
   - 情况 2（主已在该远程）：目标落在 6/7/8（省略 `server`、该机 id、该机路径）→ 拒绝，提示改用已注入的 `bash`。另一台已连接机器仍用 `sw_exec`。Linux 同样：该机远程用官方 `bash`，`sw_exec` 不重复执行 6/7/8。
-- `server: "local"` 仅 Linux 且主根在远程时合法，用来跑 9/10（本机 `bash -c`，仍受宿主沙箱）。Win 上 `local`、以及任何打到 9/10 的 `sw_exec`：拒绝并提示用 `pwsh`，不把参数改写成一次 pwsh 调用。
+- `server: "local"` 仅 Linux 且主根在远程时合法，用来跑 9/10（本机 `bash -c`，仍受宿主沙箱）。`run_in_background` 走 `ctx.shell.start`，登记进 `ctx.jobs`，读输出和停止仍是 `job_output` / `job_kill`。Win 上 `local`、以及任何打到 9/10 的 `sw_exec`：拒绝并提示用 `pwsh`，不把参数改写成一次 pwsh 调用。
 - `local` 是保留 id，不得登记为机器。已有同名机器则 add/load 失败。
 
 ## 3. 官方 Read / Write（不改 schema）

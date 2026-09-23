@@ -121,7 +121,7 @@ Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标
 
 主工作区在远程时：`sw_exec` `server` 为 `local`、workdir 为本机绝对路径，命令在本机执行；对这台远程机器再调 `sw_exec` 应被拒绝，原文含 `uses the bash tool`。主工作区在本机时：`sw_exec` `server` 为 `local` 被拒绝，原文含 `use the bash tool`。
 
-`sw_exec(server: "local")` 不支持 `run_in_background`，带上应直接拒绝。
+`sw_exec(server: "local")` 带 `run_in_background: true` 应立刻返回 job id（`server` / `endpoint` 都是 `local`）。`job_output` 能读到增量输出，`job_kill` 能停掉它。工作区外的写仍被宿主沙箱拒绝，拒绝标记出现在 `job_output` 里。
 
 ## 6. 备注
 
