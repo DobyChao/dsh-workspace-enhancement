@@ -11,7 +11,7 @@
 | 验收对象 | 命令落在该落的世界上；打错世界被英文拒绝；未声明的远程路径不新开可写 jail |
 | 需求 / 缺陷 ID | REQ-I19 / ADR-0028 |
 | 脚本作者 / 日期 | agent / 2026-09-23 |
-| 预期耗时 | 40–60 分钟 |
+| 预期耗时 | Windows 已走完。Linux 宿主另计 40–60 分钟 |
 
 ## 1. 前置条件
 
@@ -27,7 +27,7 @@
 | 主题 | 浅色 |
 | 语言 | 中文（工具拒绝仍是英文） |
 | 缩放 | 100% |
-| 其他前置 | Windows 宿主。一台 linux x86_64 远端，lab 机器 id `c1`，核心已部署。审批门 `remoteApproval` 为 off。会话权限 workspace-write。准备三个远端目录：登记根 `W`、与 `W` 平级且未挂为副根的 `S`、两者之外的未声明目录 `U` |
+| 其他前置 | §2 是 Windows 宿主走查，已勾完。§5 换一台 Linux 宿主重跑，分开计分。两边都要一台 linux x86_64 远端（机器 id `c1`，核心已部署），审批门 `remoteApproval` 为 off，会话权限 workspace-write。准备三个远端目录：登记根 `W`、与 `W` 平级且未挂为副根的 `S`、两者之外的未声明目录 `U`。`c1` 的登记根不要设成本机会话目录 |
 
 **禁止**：在 3080 上执行；改产品 profile；把真实凭据写进仓库或本脚本。
 
@@ -45,7 +45,7 @@ dsh web --port 50599 --no-open
 
 看工具结果的原文，不要只看模型的转述。要求它调用指定工具；它若换了工具，这一步记不通过。
 
-Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标 N/A，不进分母。文末 Linux 附录在 Windows 上整段 N/A。
+Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标 N/A，不进分母。§5 只在 Linux 宿主上计分，Windows 上整段 N/A。
 
 ## 2. 步骤
 
@@ -98,7 +98,7 @@ Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标
 | 项 | 值 |
 |---|---|
 | 结论 | ☑ 通过 |
-| 通过项 / 总项 | 18 / 18（步骤 13 N/A，不进分母） |
+| 通过项 / 总项 | Windows 18 / 18（步骤 13 N/A，不进分母）。Linux §5 未跑，不并入这个分数 |
 | 证据链接 | `C:\Users\Admin\.dsh-lab\e2e\R37\uat-evidence.md`；截图（本地素材，不入库）`.tmp/r37-uat/` |
 | 未通过项 | 无 |
 | 是否阻塞发布 | ☐ 是 ☑ 否 |
@@ -117,16 +117,60 @@ Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标
 | 主题 / 语言 | 浅色 / 中文 |
 | 相关机器 id | `c1`（`c3` 见步骤 13 备注） |
 
-## 5. Linux 宿主附录（Windows 上不跑）
+## 5. Linux 宿主（Windows 上整段 N/A）
 
-主工作区在远程时：`sw_exec` `server` 为 `local`、workdir 为本机绝对路径，命令在本机执行；对这台远程机器再调 `sw_exec` 应被拒绝，原文含 `uses the bash tool`。主工作区在本机时：`sw_exec` `server` 为 `local` 被拒绝，原文含 `use the bash tool`。
+Linux 上本机命令是官方 `bash`，没有 Windows 那套 `pwsh`。主工作区已经在远程时，本机命令改走 `sw_exec(server: "local")`，前台用宿主 shell 的 `run`，后台用 `start` 登记成 job。裸 POSIX `/…` 在 Linux 上是本机路径，不是远程。
 
-`sw_exec(server: "local")` 带 `run_in_background: true` 应立刻返回 job id（`server` / `endpoint` 都是 `local`）。`job_output` 能读到增量输出，`job_kill` 能停掉它。工作区外的写仍被宿主沙箱拒绝，拒绝标记出现在 `job_output` 里。
+装包后手动起 lab（不要用会把安装换回仓库路径的 `plugin add <repo>`）：
+
+```bash
+npm run build
+npm pack --pack-destination .tmp
+export DSH_HOME=<lab home>   # 不要指到产品 home
+dsh plugin --profile web remove dsh-workspace-enhancement
+dsh plugin --profile web add .tmp/dsh-workspace-enhancement-0.2.1.tgz
+dsh web --port 50599 --no-open
+```
+
+计分 L1–L11、L13–L16。没有第二台机器时 L12 标 N/A，不进分母。结果列留空，跑完再勾。
+
+### 情况 1：主工作区在本机
+
+开一个本机目录会话。
+
+| # | 操作 | 期望 | 观察点 | 结果 |
+|---|---|---|---|---|
+| L1 | 看工具清单 | 有官方 `bash`、`sw_exec` | 工具名 | ☐ 通过 ☐ 不通过 |
+| L2 | `bash` 省略 workdir，打印当前目录 | 成功，目录是本机会话目录（区域 1） | stdout 里的路径 | ☐ 通过 ☐ 不通过 |
+| L3 | `bash` 在该目录写一个新文件 | 成功 | 文件内容 | ☐ 通过 ☐ 不通过 |
+| L4 | `bash` 在该目录之外、且不是 `/tmp` 的路径写文件（区域 3） | 拒绝；文件不存在 | sandbox denied；该路径无新文件 | ☐ 通过 ☐ 不通过 |
+| L5 | 本会话连上 `c1`。`sw_exec` `server` 为 `c1`，在登记根 `W` 里写文件；再往未声明的平级目录 `S` 写另一个文件 | `W` 成功（区域 4）；`S` 拒绝且文件不存在（区域 5，不新开可写 jail） | 远端两个路径的 `ls` | ☐ 通过 ☐ 不通过 |
+| L6 | `sw_exec` `server` 为 `c1`：`touch /tmp/r37-i19-linux` | 成功，不弹提权卡。这是远端 jail 里的 tmpfs，不是这台 Linux 宿主的 `/tmp` | 工具 stdout / 退出码；无提权卡 | ☐ 通过 ☐ 不通过 |
+| L7 | 断开 `c1`，或 `server` 填一个不存在的 id，再 `echo hi` | 拒绝，命令没有在远端执行 | 工具错误（先连接 / 未知 id）；没有 `hi` 的远端 stdout | ☐ 通过 ☐ 不通过 |
+| L8 | `sw_exec` `server` 为 `local`，或 workdir 填本机绝对路径 | 拒绝，且没有改去跑 `bash` | 错误含 `use the bash tool`；结果不是 bash 的 stdout | ☐ 通过 ☐ 不通过 |
+| L9 | `bash` 的 workdir 写成 `ssh://c1/…` | 拒绝 | 错误含 `this session is local. Remote commands use sw_exec` | ☐ 通过 ☐ 不通过 |
+
+### 情况 2：主工作区在 `c1`
+
+新开 `c1` 的远程会话。权限仍是 workspace-write。
+
+| # | 操作 | 期望 | 观察点 | 结果 |
+|---|---|---|---|---|
+| L10 | `bash` 省略 workdir：`echo hi` | 成功，在远端登记根（区域 6） | stdout `hi` | ☐ 通过 ☐ 不通过 |
+| L11 | `sw_exec` 省略 `server`，或 `server` 填 `c1`：`echo hi` | 拒绝，不执行 | 错误含 `uses the bash tool` | ☐ 通过 ☐ 不通过 |
+| L12 | 若另有已连接机器 `c2`：`sw_exec` `server` 为 `c2`，`echo hi` | 成功，在 `c2` 上 | stdout `hi`；无 L11 的拒绝 | ☐ 通过 ☐ 不通过 ☐ N/A |
+| L13 | `bash` 的 workdir 写成另一台机器的 `ssh://…`；再把 workdir 写成本机绝对路径 | 两次都拒绝 | 前者含 `Use sw_exec for that server`；后者含 `local paths use sw_exec with server "local"` | ☐ 通过 ☐ 不通过 |
+| L14 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，打印当前目录。再省略 workdir 打一次。再把 workdir 写成相对路径打一次 | 显式绝对路径：成功，目录就是那个路径，不是远端、也不是 `dsw-routes` 占位。省略 workdir：恰好一个本机副根时是那个目录，否则是用户主目录。相对路径：拒绝 | 两次 stdout 的路径；相对路径的错误含 `a local workdir must be an absolute path` | ☐ 通过 ☐ 不通过 |
+| L15 | 标题栏「工作区」挂一个本机目录（区域 9）。workspace-write 下用官方 Write，或 `sw_exec` `server` 为 `local`、workdir 指到该目录，写一个新文件。另外用 `sw_exec(server: "local")` 写宿主 `/tmp` 下一个新文件 | 区域 9 拒绝，文件不存在。宿主 `/tmp` 那条成功（官方可写例外，不是远端 tmpfs） | sandbox denied；区域 9 无新文件；宿主 `/tmp` 上该文件存在 | ☐ 通过 ☐ 不通过 |
+| L16 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，`run_in_background: true`，命令里先输出一行再 `sleep`。接着 `job_output`，再 `job_kill`。另起一条后台，往本机工作区外且不是 `/tmp` 的路径写文件 | 调用立刻返回，不等 sleep 结束。job id 的 `server` 和 `endpoint` 都是 `local`。`job_output` 读到那一行，`job_kill` 能停掉。工作区外的写在 `job_output` 里被拒，文件不存在 | 返回时刻；job 字段；`job_output` 原文；目标路径不存在 | ☐ 通过 ☐ 不通过 |
+
+区域 7/8 的 jail 规则与 Windows 步骤 18、19 相同，Linux 上执行工具是官方 `bash` 而不是注入的 bash：workdir 指到已挂的平级副根 `S` 时可写，停在 `W` 时写 `S` 被拒；workdir 指到未声明目录 `U` 时写被拒，`touch /tmp/r37-i19-linux-8` 成功且无提权卡。Windows 已按注入 bash 通过，这里不单列、不进分母。有余力可以再走一遍。
 
 ## 6. 备注
 
 - 机器 id `local` 不能登记。设置页不会让人填写 id，这一条由单测覆盖，本脚本不跑。
 - 区域 2/9 不能靠本插件变成可写根。要写只能走已有的一次提权。
-- 验收后删掉 `W`/`S`/`U` 里的探针文件，确认 50599 已停止。
+- §5 由 Linux 宿主的验收人填写。勾完后把通过项写进 §3，不要改 §2 里已经勾过的 Windows 结果。
+- 验收后删掉 `W`/`S`/`U`、本机探针和宿主 `/tmp` 里的探针文件，确认 50599 已停止。
 
 来源：`docs/uat/README.md`；`docs/decisions/ADR-0028-region-permission-matrix.md`
