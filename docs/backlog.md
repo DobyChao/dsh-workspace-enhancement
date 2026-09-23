@@ -16,7 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I19 | 主/副工作区区域权限：工具绑世界 | doing | P2 | 2026-09-22。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。5/8 不新铸 jail。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md) |
+| REQ-I19 | 主/副工作区区域权限：工具绑世界 | doing | P2 | 2026-09-22。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。5/8 不新铸 jail。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。验收 [R37](./uat/R37-req-i19-region-permissions.md) |
 
 ## 2. 已排期（todo，按优先级）
 

@@ -103,6 +103,7 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | [R26-req-i5-remote-core.md](./R26-req-i5-remote-core.md) | **已作废**（曾按机器 `remoteSandbox` 写；勿跑） |
 | [R27-req-i13-remote-session-sandbox.md](./R27-req-i13-remote-session-sandbox.md) | R27 REQ-I5 + REQ-I13 合验（核心运输 + 会话 `/permission`） |
 | [R28-ui-design-language.md](./R28-ui-design-language.md) | R28 `UX-3` 客户端 UI 对齐宿主设计语言（12 步，浅/深各走一遍） |
+| [R37-req-i19-region-permissions.md](./R37-req-i19-region-permissions.md) | R37 `REQ-I19` 工具绑世界（Windows 19 步；Linux 附录） |
 | [FEEDBACK.md](./FEEDBACK.md) | 用户反馈模板 |
 
 来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`docs/README.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）
