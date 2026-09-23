@@ -22,6 +22,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-10 | 远程项目 skill 目录包发现失败（win32 join 反斜杠） | todo | P1 | 2026-09-23 lab 实证。上游 `join(dir, "SKILL.md")` 在 Windows 宿主产出 `\` 拼接的 `ssh://` 路径，远端 stat 落空静默跳过；平铺 `.md` 不受影响。修法候选：`ssh://` 拼写进 resolve/lstat 前归一分隔符。复现与证据 [notes/host-silent-fs.md](./notes/host-silent-fs.md) §6 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
@@ -65,7 +66,7 @@
 | INFRA-10 | 上游 alpha 通道预警 | done | — | next/alpha 两通道 + 自动 issue。见 `compatibility.md` §3.1 |
 | BUG-2 | 缺 `processPathFromHostPath` → 贴图 `TRANSPORT` | done | P1 | [R14](./rounds/R14-BUG-2-fix.md)。随 `PUB-3` 发布 |
 | BUG-3 | 本机目录接错 `workspaces` 服务 | done | P1 | 改接 `uiWorkspace`。[R15](./rounds/R15-BUG-3-local-directory.md) |
-| BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 只传 `path`。附录 [notes/host-silent-fs.md](./notes/host-silent-fs.md)。尾巴：无 `.git` 远程会话看 `ps` |
+| BUG-4 | 宿主项目根探测铸出祖先 jail | done | P1 | 只传 `path`。附录 [notes/host-silent-fs.md](./notes/host-silent-fs.md)。尾巴已清：2026-09-23 无 `.git` 远程会话实机 `ps` 只见会话根（§6） |
 | BUG-5 | ssh2 死链打挂宿主 | done | P1 | 全在 [R29](./rounds/R29-bug5-ssh-error-listener.md)。PR #21 |
 | BUG-6 | 删掉核心后 `core.status` 仍显示「已安装」 | done | P2 | 只以磁盘工件为准。回归 `core-routing` BUG-6。尾巴：删核心后立即未安装 |
 | BUG-7 | 跨传输 `version` 算法不一致 ⇒ 读→写 CAS 误报 | done | P2 | 共享 [fs-version.ts](../src/fs-version.ts)（路径 + size + 秒量化 mtimeMs 的 sha256）。Go 同式 |

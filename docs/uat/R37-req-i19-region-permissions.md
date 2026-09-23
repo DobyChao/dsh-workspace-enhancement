@@ -112,7 +112,7 @@ Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标
 | 插件版本 | `0.2.1`（tarball 安装） |
 | commit | `fd96c66`（feat/req-i19-region-permissions） |
 | 宿主 OS / 版本 | Windows 10.0.26200 x64 |
-| 远端 | linux x86_64（`c1` = uuz@127.0.0.1） |
+| 远端 | linux x86_64（`c1`，127.0.0.1 上的 WSL lab 用户） |
 | 浏览器 / 视口 / 缩放 | ZCode 内嵌浏览器（Chromium）/ 1440×900 / 100% |
 | 主题 / 语言 | 浅色 / 中文 |
 | 相关机器 id | `c1`（`c3` 见步骤 13 备注） |

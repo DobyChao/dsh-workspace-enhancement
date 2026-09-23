@@ -90,11 +90,30 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
 
 `resolve` / `lstat` 与 write/stat 一样：铸根只认会话 cwd / 已声明根；探测路径只当 `path`。祖先目录不得成为 workspace-write `--workspace`。验收：无 `.git` 的远程会话开一次，远端只该有会话根（外加机器登记工作区若有独立 `require`），不得出现 `/home`、`$HOME` 这种更宽的 bind。
 
-已落地的是**宿主侧这一半**（探测不再铸根）；**远端实机那一半仍待验**：远程会话开一次，
-`ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'` 只该见会话根 + 机器登记 workspace。
-lab 现有机器都带 `.git` 的会话根，需造一个无 `.git` 的目录来复现原症状。
+已落地的是**宿主侧这一半**（探测不再铸根）；**远端实机那一半已验**（2026-09-23，见 §6）。
 
 **核心缺失时这条探测会拒绝整轮**（不是静默降级）：围栏档下 `fs.resolve`/`fs.stat` 同样走核心，
 核心不在就 fail-closed，宿主在会话起步（首条上下文、还没有任何事件落盘）就会失败。这是
 `ADR-0025` §2.9 的**拍板行为**（所有者 2026-09-17，选项 A：降级会让项目根识别静默失效），
 拒绝文案由 `fenceMissingHint` 分诊到「去 `core.deploy`」，而不是「装 bubblewrap」。
+
+## 6. 远程项目 skill 实测（2026-09-23，lab `c1` / WSL，会话 `/home/uuz/eee`）
+
+§5 欠的实机验证顺手补上，并首次端到端验证 `dsh-skill-filesystem` 与远程 `ctx.fs` 的配合：
+
+- **链路通**：`/home/uuz/eee`（无 `.git`）放 `.dsh/skills/flat-remote-skill.md`，浏览器开新会话，
+  `/` 指令选择器**列出该 skill**（冷读 `sessionSkillCatalog` → 注册表 → `ctx.fs` → 远端）。
+  即找根（占位树拼写路由远端）→ `listDir` 枚举 → `readText` 读正文全链可用。
+- **BUG-4 实机半边通过**：会话开后远端 `ps` 只有**一条** serve 树（标准 3 PID），
+  `--workspace` 仅 `/home/uuz/eee`——无 `.git` 逐层上探（`/home/uuz/.git`、`/home/.git`、`/.git`）
+  **没有**铸出任何祖先宽 jail。
+- **发现 BUG-10（目录包失败）**：`.dsh/skills/demo-remote-skill/SKILL.md`（目录包）**不出现**，
+  平铺才出现。根因：上游 `discoverRoot` 用 `node:path.join(entry.path, "SKILL.md")` 拼
+  目录包路径——Windows 宿主上是 win32 join，把我们的 `ssh://` displayPath 拼成
+  `ssh://c1/…/demo-remote-skill\SKILL.md`；`parseSshRoute` 照单放行（`posix.isAbsolute` 只看开头），
+  远端拿到带字面 `\` 的文件名，stat 落空，`parseSkillFile` 静默返回 undefined。
+  **实锤**：在远端 `.dsh/skills/` 造一个字面名 `demo-remote-skill\SKILL.md` 的文件 + 重启宿主
+  （注册表 `collectCache` 按 cwd 缓存，远端变更不触发失效，宿主不重启清单不刷新），
+  该 skill 立即出现——说明送到远端的路径拼写就是反斜杠形式。
+- 复现（约 5 分钟）：远端放目录包 skill → lab 开远程会话 → `/` 选择器只见平铺。
+  排查缓存因素时重启 lab 宿主再看一次。
