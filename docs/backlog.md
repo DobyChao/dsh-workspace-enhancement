@@ -21,7 +21,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-24。next 已是 0.1.7-rc.1，latest 仍 0.1.5-rc.3，peer 不改。代码补了五处接缝。验收：对该 rc typecheck + boot smoke。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
+| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-25 drift 红：`next` 已是 0.1.7-rc.2，`dsh-fs-local` 新增 `watch`（第 15 个接缝方法），反射契约正确点名。门面已补（local 委托转发/remote 诚实拒/老委托 `FS_IO_ERROR`）；subprocess 基类仍 4 成员已核齐。待 drift 复跑绿后收口。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
 | BUG-10 | 远程项目 skill 目录包发现失败（win32 join 反斜杠） | todo | P1 | 2026-09-23 lab 实证。上游 `join(dir, "SKILL.md")` 在 Windows 宿主产出 `\` 拼接的 `ssh://` 路径，远端 stat 落空静默跳过；平铺 `.md` 不受影响。修法候选：`ssh://` 拼写进 resolve/lstat 前归一分隔符。复现与证据 [notes/host-silent-fs.md](./notes/host-silent-fs.md) §6 |
 | UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 从 UPSTREAM-6 拆出。0.1.7-rc.1 仍不把 SSH 四包装进 dsh / web-app。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵会响 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |

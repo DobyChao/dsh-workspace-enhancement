@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 修复
+
+- **fs `watch` 接缝（`UPSTREAM-5`）**：0.1.7-rc.2 在具体后端上新增第 15 个接缝方法 `watch`（chokidar），混合门面未实现会让新宿主经 `ctx.fs` 调用时 `TypeError`。门面照 `readByteRange` 先例补齐：本地目标转发委托（老家族委托缺失时诚实 `FS_IO_ERROR`），远程目标明确拒绝（SFTP 无宿主侧监听）。契约测试同步锁死 15 方法全集。
+
 ### 变更
 
 - **远程 spawn 一次提权（`REQ-I18`，ADR-0025）**：官方 bash/pwsh 的 `sandboxPolicy` 经 shell 桥进入这一次 `subprocess.spawn`；`danger-full-access` 的允许一次让该次核心 `--sandbox off`，下一次仍跟会话档。win32 `bash` 与 `sw_exec` 补上 `sandbox_permissions` / `justification`。远程 `confine` 短路仍不包本机 runner，并带上 bwrap 的 `read-only file system` 拒绝方言，越界结果才有官方提权 hint。

@@ -1,18 +1,21 @@
 /**
- * BUG-2 / UPSTREAM-1 契约回归：`MixedFileSystem` 作为 `ctx.fs` 唯一实现，必须实现
- * dsh-fs 接缝的**全部**方法。两次踩坑同源：
+ * BUG-2 / UPSTREAM-1 / UPSTREAM-5 契约回归：`MixedFileSystem` 作为 `ctx.fs` 唯一实现，
+ * 必须实现 dsh-fs 接缝的**全部**方法。三次踩坑同源：
  *
  * - BUG-2：漏掉第 13 个方法 `processPathFromHostPath`（图片附件解析 →
  *   `resolveImageAccess` → `ctx.get('fs')?.processPathFromHostPath(hostPath)`），
  *   带图请求直接 `TypeError` → 被 LLM 适配器包成 `LlmError(…, 'TRANSPORT')`。
  * - UPSTREAM-1：0.1.5 线新增第 14 个方法 `readByteRange`，宿主同样经 `ctx.get('fs')`
  *   取值 —— 门面不实现就是同一个 `TypeError`。
+ * - UPSTREAM-5：0.1.7 线（rc.2）在具体后端上新增第 15 个方法 `watch`
+ *   （`LocalFileSystem.watch`，chokidar），drift 哨兵 2026-09-25 首次抓到 ——
+ *   门面照 `readByteRange` 的先例补齐（local 委托可选、remote 诚实拒绝）。
  *
  * 为什么是**反射 + 静态清单**两条断言：
  *
- * - 反射（具体后端原型链）跟随**已安装家族**：装 0.1.5 时能把"上游又加了方法而我们
- *   没实现"抓出来；装 0.1.2 时它只反射出 13 个，抓不到 `readByteRange`。
- * - 静态清单（`REQUIRED_SEAM_METHODS`）锁死"门面必须有这 14 个"，与装哪个家族无关
+ * - 反射（具体后端原型链）跟随**已安装家族**：装 0.1.7 时能把"上游又加了方法而我们
+ *   没实现"抓出来；装 0.1.5 时它只反射出 14 个，抓不到 `watch`。
+ * - 静态清单（`REQUIRED_SEAM_METHODS`）锁死"门面必须有这 15 个"，与装哪个家族无关
  *   —— 这是老家族下仍然能挡住回归的那一条。
  *
  * 为什么不能只反射 `FileSystem.prototype`：`FileSystem` 的抽象成员被 TS 擦除，
@@ -25,10 +28,11 @@
 
 import assert from 'node:assert/strict'
 import { isAbsolute, join, resolve as resolvePath } from 'node:path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { FileSystem, FsTargetKey } from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, FsTargetKey } from '@deepseek-ai/dsh-fs'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
@@ -55,7 +59,7 @@ function seamMethodNames(root: object): string[] {
 
 const UPSTREAM_METHODS = seamMethodNames(LocalFileSystem.prototype)
 
-/** 0.1.5 线**之前**的接缝方法（13 个）；新家族在此之上再暴露 `readByteRange`。 */
+/** 0.1.5 线**之前**的接缝方法（13 个）；新家族在此之上再暴露已知增量。 */
 const PRE_015_METHODS = [
   'contains',
   'editText',
@@ -72,11 +76,21 @@ const PRE_015_METHODS = [
   'writeText',
 ]
 
-/** 门面必须实现的**全集**：13 个老方法 + 0.1.5 线新增的 `readByteRange`。 */
-const REQUIRED_SEAM_METHODS = [...PRE_015_METHODS, 'readByteRange'].sort()
+/**
+ * 0.1.5 起**已知**的接缝增量：`readByteRange`（0.1.5 线，UPSTREAM-1）、
+ * `watch`（0.1.7 线，UPSTREAM-5）。上游再加方法时，反射断言会点名新名字，
+ * 把它挪进这张表并给门面补实现。
+ */
+const KNOWN_ADDITIONS = ['readByteRange', 'watch']
+
+/** 门面必须实现的**全集**：13 个老方法 + 已知增量。 */
+const REQUIRED_SEAM_METHODS = [...PRE_015_METHODS, ...KNOWN_ADDITIONS].sort()
 
 /** 已安装家族是否带 UPSTREAM-1 的新方法（决定语义用例跑还是跳过）。 */
 const LOCAL_HAS_RANGE = UPSTREAM_METHODS.includes('readByteRange')
+
+/** 已安装家族是否带 UPSTREAM-5 的新方法（同上）。 */
+const LOCAL_HAS_WATCH = UPSTREAM_METHODS.includes('watch')
 
 /**
  * 远程分支替身：本文件的所有断言都必须落在 local 世界——远程世界不共享宿主
@@ -141,6 +155,14 @@ function stubLocal(): FileSystemBranch & { calls: string[] } {
       calls.push(`readByteRange:${String(target.targetKey)}:${range.offset}:${range.length}`)
       return Uint8Array.from([1, 2, 3])
     },
+    // UPSTREAM-5: 同上——老家族的后端没有 `watch`，门面自己带守卫。
+    async watch(target: FsTarget, changed: (error?: Error) => void, signal: AbortSignal): Promise<() => Promise<void>> {
+      calls.push(`watch:local:${target.displayPath}:${signal.aborted}`)
+      changed()
+      return async () => {
+        calls.push('watchStop:local')
+      }
+    },
     async listDir(): Promise<never[]> {
       return []
     },
@@ -189,13 +211,13 @@ test('contract: the installed backend still exposes the 13 pre-0.1.5 seam method
     ['processPathFromHostPath', 'sandboxMode'],
     'upstream FileSystem.prototype no longer looks as expected — revisit this contract test',
   )
-  // 去掉 0.1.5 线新增项后，老方法必须逐个还在（改名/删除会在这里红）。
-  assert.deepEqual(UPSTREAM_METHODS.filter(name => name !== 'readByteRange'), PRE_015_METHODS,
+  // 去掉已知增量后，老方法必须逐个还在（改名/删除会在这里红）。
+  assert.deepEqual(UPSTREAM_METHODS.filter(name => !KNOWN_ADDITIONS.includes(name)), PRE_015_METHODS,
     'the installed family dropped or renamed a pre-0.1.5 seam method')
 })
 
-test('contract: MixedFileSystem implements every required seam method (13 + readByteRange)', () => {
-  // 与安装的家族无关：门面必须是 14 个方法的全集（老家族下也只能靠这条挡住回归）。
+test('contract: MixedFileSystem implements every required seam method (13 + known additions)', () => {
+  // 与安装的家族无关：门面必须是全集（老家族下也只能靠这条挡住回归）。
   const missing = REQUIRED_SEAM_METHODS.filter(name => typeof (MixedFileSystem.prototype as Record<string, unknown>)[name] !== 'function')
   assert.deepEqual(missing, [], `MixedFileSystem is missing seam method(s): ${missing.join(', ')}`)
   // `sandboxMode` 是访问器，不是方法。
@@ -211,8 +233,8 @@ test('contract: MixedFileSystem covers everything the installed backend exposes'
 
 test('contract: the reflection assertion turns red when the facade lacks a method', () => {
   // 反例自证：从门面自身的方法集合里删掉方法，断言必须点名它（这正是修复前的形状：
-  // `FileSystemBranch` 类型没有该方法 → 门面也没有）。两个踩过的方法都自证一遍。
-  for (const method of ['processPathFromHostPath', 'readByteRange']) {
+  // `FileSystemBranch` 类型没有该方法 → 门面也没有）。三个踩过的方法都自证一遍。
+  for (const method of ['processPathFromHostPath', 'readByteRange', 'watch']) {
     const own: Record<string, unknown> = {}
     for (const key of Object.getOwnPropertyNames(MixedFileSystem.prototype)) {
       const descriptor = Object.getOwnPropertyDescriptor(MixedFileSystem.prototype, key)
@@ -271,4 +293,83 @@ test('BUG-2: the sandboxed local delegate answers the same host mapping', async 
   const hostPath = join(tmpdir(), 'dsw-bug2-sandboxed.png')
   assert.equal(mixed.processPathFromHostPath(hostPath), resolvePath(hostPath))
   assert.equal(mixed.processPathFromHostPath('relative/a.png'), undefined)
+})
+
+/* ------------------------------------------ 3) UPSTREAM-5 `watch` 的路由与语义 */
+
+test('UPSTREAM-5: watch forwards to the local backend with the caller-supplied callbacks', async () => {
+  const local = stubLocal()
+  const mixed = new MixedFileSystem(local, explodingRemote())
+  let fired = 0
+  const controller = new AbortController()
+  const stop = await mixed.watch(
+    { targetKey: FsTargetKey(join(tmpdir(), 'dsw-watch.txt')), displayPath: 'watched' },
+    () => {
+      fired += 1
+    },
+    controller.signal,
+  )
+  assert.deepEqual(local.calls, [`watch:local:watched:false`])
+  assert.equal(fired, 1, 'the delegate invoked the caller-supplied changed callback')
+  await stop()
+  assert.deepEqual(local.calls.slice(1), ['watchStop:local'], 'stop must reach the delegate stop function')
+})
+
+test('UPSTREAM-5: a REMOTE target fails honestly and never consults the remote branch', async () => {
+  const mixed = new MixedFileSystem(stubLocal(), explodingRemote())
+  const controller = new AbortController()
+  // explodingRemote would throw the BUG-2 marker; the facade must reject with its
+  // own watch message BEFORE any remote delegation.
+  await assert.rejects(
+    () => mixed.watch(
+      { targetKey: FsTargetKey('ssh://c1/srv/a.txt'), displayPath: 'ssh://c1/srv/a.txt' },
+      () => {},
+      controller.signal,
+    ),
+    /cannot watch .* does not support watching/,
+  )
+})
+
+test('UPSTREAM-5: a delegate predating the 0.1.7 line gets an honest FsError, not a TypeError', async () => {
+  const local = stubLocal() as Record<string, unknown>
+  local.watch = undefined
+  const mixed = new MixedFileSystem(local as unknown as FileSystemBranch, explodingRemote())
+  const controller = new AbortController()
+  await assert.rejects(
+    () => mixed.watch(
+      { targetKey: FsTargetKey(join(tmpdir(), 'dsw-watch-old.txt')), displayPath: 'old' },
+      () => {},
+      controller.signal,
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof FsError)
+      assert.equal((error as FsError).code, 'FS_IO_ERROR')
+      return /dsh-fs before the 0.1.7 line/.test(String((error as Error).message))
+    },
+  )
+})
+
+test('UPSTREAM-5: real backend semantics — a watched local file fires on change', { skip: !LOCAL_HAS_WATCH }, async () => {
+  const mixed = new MixedFileSystem(realLocal(), explodingRemote())
+  const dir = await mkdtemp(join(tmpdir(), 'dsw-watch-'))
+  const file = join(dir, 'watched.txt')
+  await writeFile(file, 'one\n')
+  try {
+    const fired: string[] = []
+    const controller = new AbortController()
+    const stop = await mixed.watch(
+      { targetKey: FsTargetKey(file), displayPath: file },
+      (error) => {
+        fired.push(error === undefined ? 'changed' : `error:${String(error)}`)
+      },
+      controller.signal,
+    )
+    await writeFile(file, 'two\n')
+    const deadline = Date.now() + 10_000
+    while (fired.length === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.deepEqual(fired, ['changed'], 'the write must fire the changed callback exactly once')
+    await stop()
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
