@@ -117,3 +117,9 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
   该 skill 立即出现——说明送到远端的路径拼写就是反斜杠形式。
 - 复现（约 5 分钟）：远端放目录包 skill → lab 开远程会话 → `/` 选择器只见平铺。
   排查缓存因素时重启 lab 宿主再看一次。
+
+**修复（BUG-10，2026-09-25）**：`parseSshRoute` 在解析时把 `ssh://` 路径部分的字面 `\`
+归一为 `/`（[registry.ts](../../src/registry.ts) 的 `parseSshRoute`）——我方拼写从不带 `\`，
+上游 win32 join 是唯一来源。代价：远端真叫 `a\b` 的文件无法经 `ssh://` 拼写寻址
+（连接 id 字符集本就排除 `\`）。回归：`test/mixed-routing.test.ts` 的 BUG-10 两用例。
+平铺 `.md` 本就不受影响；宿主不重启清单不刷新是注册表缓存行为，与本修复无关。

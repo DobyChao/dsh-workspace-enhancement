@@ -17,7 +17,7 @@ import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import type { SubprocessHandle, SubprocessSpawnSpec, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
-import { sshRoutesRoot, resolveSshCwd } from '../src/transport.ts'
+import { sshRoutesRoot, resolveSshCwd, remoteRouteFromCwd } from '../src/transport.ts'
 import { MixedFileSystem, MixedSubprocessRuntime, remoteArgvOf, worldOfCwd, worldOfTargetKey } from '../src/mixed.ts'
 import type { FileSystemBranch, SubprocessBranch } from '../src/mixed.ts'
 
@@ -45,6 +45,26 @@ test('worldOfTargetKey: ssh:// keys are remote; realpath keys are local', () => 
   assert.equal(worldOfTargetKey('ssh://c1/srv/work'), 'remote')
   assert.equal(worldOfTargetKey('ssh://c1/'), 'remote')
   assert.equal(worldOfTargetKey(String(FsTargetKey(join(LOCAL_CWD, 'a.txt')))), 'local')
+})
+
+test('BUG-10: win32-joined ssh:// spellings normalize to POSIX separators at parse', () => {
+  // Upstream skill discovery on a win32 host re-joins our `ssh://` listDir
+  // entries with node:path.join, gluing `\` into the path part. Before the fix
+  // `posix.isAbsolute` passed the glued path through and the remote stat looked
+  // for a file literally named `demo-remote-skill\SKILL.md`.
+  assert.deepEqual(remoteRouteFromCwd('ssh://c1/w/.dsh/skills/demo-remote-skill\\SKILL.md'), {
+    connectionId: 'c1',
+    path: '/w/.dsh/skills/demo-remote-skill/SKILL.md',
+  })
+  assert.deepEqual(remoteRouteFromCwd('ssh://c1/srv\\work\\file.txt'), {
+    connectionId: 'c1',
+    path: '/srv/work/file.txt',
+  })
+  assert.equal(worldOfTargetKey('ssh://c1/srv\\work'), 'remote')
+  // Forward-slash spellings (our own) are untouched, and a backslash cannot
+  // smuggle itself into the connection id (its charset excludes it).
+  assert.deepEqual(remoteRouteFromCwd('ssh://c1/srv/work'), { connectionId: 'c1', path: '/srv/work' })
+  assert.equal(remoteRouteFromCwd('ssh://c1\\srv/work'), null)
 })
 
 test('t6: worldOfCwd — a POSIX-absolute cwd on win32 is remote; UNC/drive stay local', () => {
@@ -407,6 +427,22 @@ test('REQ-I11: a remote spelling routes remote with no side store and a local cw
   // accepted spelling of the same route.
   await mixed.resolve(join(sshRoutesRoot(), 'c1', 'srv', 'work'), { cwd: LOCAL_CWD })
   assert.deepEqual(remote.calls.slice(2), ['resolve:remote:/srv/work'])
+  assert.deepEqual(local.calls, [])
+})
+
+test('BUG-10: a win32-joined directory-package path reaches the remote branch in POSIX spelling', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+  // The failing chain (2026-09-23 lab): upstream discoverRoot joins
+  // `entry.path` + 'SKILL.md' with the HOST's path module, so a Windows host
+  // asks ctx.fs about `ssh://c1/…/demo-remote-skill\SKILL.md`. The facade must
+  // hand the remote branch the normalized POSIX path, not the glued one.
+  await mixed.resolve('ssh://c1/w/.dsh/skills/demo-remote-skill\\SKILL.md', { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls, ['resolve:remote:/w/.dsh/skills/demo-remote-skill/SKILL.md'])
+  assert.deepEqual(local.calls, [])
+  await mixed.lstat('ssh://c1/w/.dsh/skills/demo-remote-skill\\SKILL.md', { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
   assert.deepEqual(local.calls, [])
 })
 

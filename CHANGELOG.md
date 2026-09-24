@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 修复
+
+- **远程目录包 skill 发现（`BUG-10`）**：win32 宿主把 `ssh://` 路径用 `join(entry.path, "SKILL.md")` 拼出字面 `\`，远端 stat 落空后目录包静默消失。`parseSshRoute` 解析时把路径部分的 `\` 归一为 `/`；平铺 `.md` 不受影响。
+
 ### 变更
 
 - **远程 spawn 一次提权（`REQ-I18`，ADR-0025）**：官方 bash/pwsh 的 `sandboxPolicy` 经 shell 桥进入这一次 `subprocess.spawn`；`danger-full-access` 的允许一次让该次核心 `--sandbox off`，下一次仍跟会话档。win32 `bash` 与 `sw_exec` 补上 `sandbox_permissions` / `justification`。远程 `confine` 短路仍不包本机 runner，并带上 bwrap 的 `read-only file system` 拒绝方言，越界结果才有官方提权 hint。
