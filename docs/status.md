@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-22 11:07 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-24 16:13 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,19 +10,19 @@
 | package.json 版本 | `0.2.1` |
 | npm 已发布版本 | `0.2.1` |
 | 最新 tag | `v0.2.1` |
-| 分支 / HEAD | `feat/req-i18-ux-6-spawn-schema` / `aedbeae` |
-| HEAD 提交 | `docs: record region permissions and prune stale backlog` (2026-09-22) |
+| 分支 / HEAD | `master` / `15504ae` |
+| HEAD 提交 | `feat(remote): bind tools to workspace worlds (#31)` (2026-09-24) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 49 |
-| 单测用例（静态计数） | 593 |
+| 单测文件 | 50 |
+| 单测用例（静态计数） | 609 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 37 |
+| 轮次报告 | 38 |
 
 ## 待办分布（docs/backlog.md）
 
@@ -31,7 +31,7 @@
 | `todo` | 16 |
 | `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 53 |
+| `done` | 55 |
 | `shipped` | 8 |
 | `dropped` | 14 |
 

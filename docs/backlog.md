@@ -16,14 +16,12 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I19 | 主/副工作区区域权限：工具绑世界 | doing | P2 | 2026-09-22。本机副根 2/9 维持 WW 不可写；远程 4/7 按每根一条 serve 视为 WW。5/8 不新铸 jail。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。验收 [R37](./uat/R37-req-i19-region-permissions.md) |
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-24。next 已是 0.1.7-rc.1，latest 仍 0.1.5-rc.3，peer 不改。代码补了五处接缝。验收：对该 rc typecheck + boot smoke。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
-| BUG-11 | Linux 宿主区域矩阵五步失败 | todo | P1 | L9/L13a 已修。L15/L16 本地 sw_exec 改回宿主 confine。L5 不再把已换掉的工作区留在 remembered jail。待 Linux 复跑 [R37](./uat/R37-req-i19-region-permissions.md) |
 | BUG-10 | 远程项目 skill 目录包发现失败（win32 join 反斜杠） | todo | P1 | 2026-09-23 lab 实证。上游 `join(dir, "SKILL.md")` 在 Windows 宿主产出 `\` 拼接的 `ssh://` 路径，远端 stat 落空静默跳过；平铺 `.md` 不受影响。修法候选：`ssh://` 拼写进 resolve/lstat 前归一分隔符。复现与证据 [notes/host-silent-fs.md](./notes/host-silent-fs.md) §6 |
 | UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 从 UPSTREAM-6 拆出。0.1.7-rc.1 仍不把 SSH 四包装进 dsh / web-app。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵会响 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
@@ -55,6 +53,8 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/`。收口见 `INFRA-13` |
+| REQ-I19 | 主/副工作区区域权限：工具绑世界 | done | P2 | PR #31。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。UAT [R37](./uat/R37-req-i19-region-permissions.md) Windows 18/18；Linux 复跑 2026-09-25 用户确认收口。档案 [R37](./rounds/R37-req-i19-region-permissions.md) |
+| BUG-11 | Linux 宿主区域矩阵五步失败 | done | P1 | 修复随 PR #31（拒 glued ssh workdir/jail 外 cwd、本地 sw_exec 回宿主 confine、清陈旧 jail）。Linux 复跑 R37 通过（2026-09-25 用户确认）。档案同上 R37 |
 | INFRA-15 | 核心分发：npm 带工件 + 第三方不由我们分发 | done | P1 | PR #23。档案 [R28](./rounds/R28-infra15-core-artifact-distribution.md)。尾巴：四组合 UAT 未跑 |
 | INFRA-13 | 文档地图收口 | done | P3 | [`docs/README.md`](./README.md) 是地图。同轮 `ADR-0023`：远端读写纳入核心 |
 | INFRA-2 | 统一质量门 `npm run check` | done | P0 | 另有 `test:agent` |
