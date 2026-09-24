@@ -40,6 +40,7 @@ import type {
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import { posix } from 'node:path'
+import { userInfo } from 'node:os'
 import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
@@ -70,6 +71,13 @@ export interface SubprocessBranch {
   resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string>
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle
   spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>
+  /**
+   * Shell-selection facts of this branch's execution environment — the seam
+   * member the 0.1.7 line added on `SubprocessRuntime`. Optional **on delegates
+   * only** (the pre-0.1.7 local runtime has none); the FACADE always implements
+   * it, computing the same host facts itself when the delegate predates it.
+   */
+  terminalEnvironment?(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }>
 }
 
 /**
@@ -150,6 +158,24 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
       return this.remote.spawn({ ...spec, argv: remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined) })
     }
     return this.local.spawn(spec)
+  }
+
+  /**
+   * The 0.1.7 seam member, world-less like `resolveExecutable` (no cwd key to
+   * route on): the facade answers the HARNESS-HOST facts through the local
+   * delegate. Remote shell facts stay the SSH-side runtime's own answer
+   * (`SshSubprocessRuntime` probes the connection — ADR-0026 §4.3); a delegate
+   * predating the method gets the same facts computed here, using upstream's
+   * exact formula (`dsh-subprocess-local@0.1.7` `terminalEnvironment`).
+   */
+  terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+    const viaDelegate = this.local.terminalEnvironment
+    if (viaDelegate !== undefined) return viaDelegate.call(this.local, signal)
+    const platform = process.platform === 'win32' ? 'windows' : 'posix'
+    const defaultShell = platform === 'windows'
+      ? process.env.ComSpec || undefined
+      : process.env.SHELL || userInfo().shell || undefined
+    return Promise.resolve({ platform, ...(defaultShell === undefined ? {} : { defaultShell }) })
   }
 
   /** @inheritdoc */
