@@ -11,6 +11,7 @@ import {
   passthroughConfinedArgv,
   shouldPassthroughRemoteConfine,
 } from '../src/remote-confine.ts'
+import { installRemoteSpawnPolicyBridge } from '../src/remote-spawn-policy.ts'
 
 test('passthroughConfinedArgv: identity argv, full enforcement', () => {
   const out = passthroughConfinedArgv(['bash', '-c', 'echo'])
@@ -76,4 +77,39 @@ test('installRemoteConfinePassthrough: local cwd still wraps', async () => {
   const sandbox = ctx.get('sandbox') as { confine: (argv: readonly string[], policy: { mode: string; workspaceRoot: string }) => { argv: string[] } }
   const out = sandbox.confine(['bash', '-c', 'echo'], { mode: 'workspace-write', workspaceRoot: '/work' })
   assert.deepEqual(out.argv[0], 'bwrap')
+})
+
+test('installRemoteConfinePassthrough: sw_exec local still wraps on a remote session', async () => {
+  const ctx = new Context()
+  let innerCalls = 0
+  ctx.provide('sandbox', {
+    confine(argv: readonly string[]) {
+      innerCalls += 1
+      return {
+        argv: ['bwrap', '--', ...argv],
+        enforcement: 'full' as const,
+        denialSignatures: [],
+        runnerFailureRules: [],
+      }
+    },
+  })
+  ctx.provide('agents', {
+    currentInitiator: () => ({ session: { header: { cwd: 'ssh://c1/work' } } }),
+  })
+  ctx.provide('shell', {
+    run(spec: { command?: string }) {
+      const sandbox = ctx.get('sandbox') as { confine: (argv: readonly string[], policy: { mode: string }) => { argv: string[] } }
+      return sandbox.confine([spec.command ?? ''], { mode: 'workspace-write' })
+    },
+  })
+  installRemoteConfinePassthrough(ctx)
+  installRemoteSpawnPolicyBridge(ctx)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const shell = ctx.get('shell') as { run: (spec: { command: string; dswLocalExec?: boolean }) => { argv: string[] } }
+  const remote = shell.run({ command: 'echo' })
+  assert.deepEqual(remote.argv, ['echo'])
+  assert.equal(innerCalls, 0)
+  const local = shell.run({ command: 'echo', dswLocalExec: true })
+  assert.deepEqual(local.argv[0], 'bwrap')
+  assert.equal(innerCalls, 1)
 })

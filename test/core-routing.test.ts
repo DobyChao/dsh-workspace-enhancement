@@ -230,6 +230,31 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => { setTimeout(resolve, ms) })
 }
 
+test('createCoreHub: a remembered sibling is dropped once the machine workspace moves', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-core-forget-'))
+  const t = transport()
+  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'workspace-write', workspace: '/S', cwd: '/S' }
+  const opened: Array<string | undefined> = []
+  const hub = createCoreHub(ctxWith(t), {
+    idleMs: 0,
+    deps: {
+      machine: (id) => (id === 'c1' ? machine : undefined),
+      connection: (id) => (id === 'c1' ? t : undefined),
+      unavailable: (confinement, detail) => new RemoteSandboxError(`${confinement}: ${detail}`, REMOTE_SANDBOX_UNAVAILABLE),
+    },
+    open: async (request) => {
+      opened.push(request.workspace)
+      return pair(root, 'workspace-write', request.workspace)
+    },
+  })
+  await hub.require('c1', { cwd: '/S', policy: 'workspace-write' })
+  machine.workspace = '/W'
+  machine.cwd = '/W'
+  await hub.require('c1', { cwd: '/S', policy: 'workspace-write' })
+  assert.deepEqual(opened, ['/S', '/W'])
+  hub.close('c1')
+})
+
 test('createCoreHub: an undeclared sibling cwd reuses the current jail', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsw-core-sib-'))
   const t = transport()

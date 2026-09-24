@@ -19,6 +19,13 @@ import { initiatorSessionOf } from './remote-policy.ts'
 import { pinBashWorkdir, pinPwshWorkdir, sessionLocalCwd } from './region-exec.ts'
 
 const storage = new AsyncLocalStorage<unknown>()
+/** Set while `sw_exec(server: "local")` is inside the host shell. */
+const hostLocalExec = new AsyncLocalStorage<true>()
+
+/** True only inside a host-local shell call (`dswLocalExec`). */
+export function isHostLocalShellExec(): boolean {
+  return hostLocalExec.getStore() === true
+}
 
 /** The policy bound to the current spawn, if a caller entered one. */
 export function currentRemoteSpawnPolicy(): unknown {
@@ -96,15 +103,19 @@ function patchShell(owner: Context): void {
   if (typeof shell.run === 'function') {
     const original = shell.run.bind(shell)
     shell.run = (spec) => {
+      const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      return runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      return local ? hostLocalExec.run(true, call) : call()
     }
   }
   if (typeof shell.start === 'function') {
     const original = shell.start.bind(shell)
     shell.start = (spec) => {
+      const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      return runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      return local ? hostLocalExec.run(true, call) : call()
     }
   }
 }

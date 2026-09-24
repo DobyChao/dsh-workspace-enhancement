@@ -11,6 +11,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import { initiatorSessionOf } from './remote-policy.ts'
+import { isHostLocalShellExec } from './remote-spawn-policy.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 
 interface ConfineHost {
@@ -50,6 +51,7 @@ export function passthroughConfinedArgv(argv: readonly string[]): ConfinedArgv {
  * or a placeholder tree). Missing initiator → false (local is the safe default).
  */
 export function shouldPassthroughRemoteConfine(ctx: Context): boolean {
+  if (isHostLocalShellExec()) return false
   const cwd = initiatorSessionOf(ctx)?.header?.cwd
   return remoteRouteFromCwd(cwd) !== null
 }
