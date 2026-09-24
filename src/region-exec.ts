@@ -128,7 +128,13 @@ export function decideSwExec(input: SwExecDecisionInput): SwExecDecision {
  */
 export function pinBashWorkdir(workdir: string | undefined, sessionCwd: string | undefined): string | undefined {
   if (workdir === undefined) return undefined
+  const glued = gluedSshMachine(workdir)
   const session = remoteRouteFromCwd(sessionCwd)
+  if (glued !== undefined) {
+    if (session === null) throw new Error(BASH_USE_SW_EXEC_LOCAL_SESSION)
+    if (glued !== session.connectionId) throw new Error(BASH_USE_SW_EXEC)
+    throw new Error(BASH_USE_LOCAL)
+  }
   const target = remoteRouteFromCwd(workdir)
   if (session === null) {
     if (target !== null) throw new Error(BASH_USE_SW_EXEC_LOCAL_SESSION)
@@ -140,6 +146,20 @@ export function pinBashWorkdir(workdir: string | undefined, sessionCwd: string |
   }
   if (isHostAbsolute(workdir)) throw new Error(BASH_USE_LOCAL)
   return workdir
+}
+
+/**
+ * Official bash calls `path.resolve(sessionCwd, workdir)` before `shell.run`.
+ * `ssh://` is not an absolute path, so the URL is glued on
+ * (`…/proj/ssh:/c1/srv`) and the route check never sees it.
+ */
+function gluedSshMachine(workdir: string): string | undefined {
+  if (workdir.startsWith('ssh://')) return undefined
+  const at = workdir.indexOf('ssh:/')
+  if (at < 0) return undefined
+  const rest = workdir.slice(at + 'ssh:/'.length).replace(/^[/\\]+/u, '')
+  const id = rest.split(/[/\\]/u)[0]
+  return id !== undefined && id.length > 0 ? id : undefined
 }
 
 /**

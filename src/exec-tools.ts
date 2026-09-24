@@ -1127,7 +1127,15 @@ async function runLocalSwExec(
     ...(exec.agent !== undefined ? { session: (exec.agent as { session?: unknown }).session } : {}),
   })
   const mode = granted ?? standing?.mode
-  const sandboxPolicy = mode !== undefined ? { ...standing, mode } : standing
+  const sessionHost = sessionCwdOf(exec)
+  const sessionRoot = sessionHost !== undefined && isLocalWorkdirSpelling(sessionHost, 'linux') ? sessionHost : undefined
+  const sandboxPolicy = mode !== undefined || standing !== undefined || sessionRoot !== undefined
+    ? {
+      ...standing,
+      ...(mode !== undefined ? { mode } : {}),
+      ...(sessionRoot !== undefined ? { workspaceRoot: sessionRoot } : {}),
+    }
+    : undefined
   const request: Record<string, unknown> = {
     command: args.command,
     workdir,

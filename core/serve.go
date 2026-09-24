@@ -14,11 +14,11 @@ import (
 )
 
 type server struct {
-	w        io.Writer
-	mu       sync.Mutex
-	sandbox  string
+	w         io.Writer
+	mu        sync.Mutex
+	sandbox   string
 	workspace string
-	spawn    *spawnHub
+	spawn     *spawnHub
 }
 
 func serve(r io.Reader, w io.Writer, sandbox, workspace string) error {
@@ -193,6 +193,9 @@ func (s *server) dispatch(method string, raw json.RawMessage) (any, string, erro
 	case "spawn.start":
 		argv := stringSliceField(raw, "argv")
 		cwd, _ := strField(raw, "cwd")
+		if s.sandbox == "workspace-write" && cwd != "" && !s.canWrite(cwd) {
+			return nil, errReadOnly, fmt.Errorf("cwd is outside the workspace")
+		}
 		job, err := s.spawn.start(argv, nativePath(cwd), stringMapField(raw, "env"))
 		if err != nil {
 			return nil, errIO, err
