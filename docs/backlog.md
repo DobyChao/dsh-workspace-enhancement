@@ -31,7 +31,7 @@
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
-| AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 防基类新增方法后门面漏实现。证据 R14 审计 O2 |
+| AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 2026-09-25 评估：**extends 不做**（基类是 cordis Service、构造要 Context；静默继承会绕过世界路由——理由见 `test/mixed-subprocess-contract.test.ts` 头注）。风险以双侧反射契约承担：fs 侧已拦住 0.1.7 `watch`；subprocess 侧本 PR 补上（实锤：门面曾缺 `terminalEnvironment`）。待合并后挪 §5 |
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
