@@ -44,6 +44,21 @@ export class SshTerminalHandle implements SubprocessTerminalHandle {
     this.done = this.waitForClose()
   }
 
+  /**
+   * ssh2 `setWindow` is `(rows, cols, height, width)`. The seam is `(cols, rows)`.
+   * Pixel size stays 0; we do not invent a cell size.
+   */
+  resize(cols: number, rows: number): Promise<void> {
+    if (this.topLevelExited) return Promise.reject(new Error('terminal process has exited'))
+    this.channel.setWindow(rows, cols, 0, 0)
+    return Promise.resolve()
+  }
+
+  /** No foreground-group observation over an SSH PTY. Callers must treat this as unknown. */
+  inspectActivity(): Promise<{ state: 'unknown'; revision: number }> {
+    return Promise.resolve({ state: 'unknown', revision: 0 })
+  }
+
   /** @inheritdoc */
   write(data: string): Promise<void> {
     if (this.topLevelExited) return Promise.reject(new Error('terminal process has exited'))
@@ -131,7 +146,9 @@ export async function spawnSshTerminal(ssh: SshTransport, cwd: string, spec: Sub
   const client = await ssh.getClient()
   spec.signal?.throwIfAborted()
   const channel = await new Promise<ClientChannel>((resolve, reject) => {
-    client.shell({ term: 'xterm-256color', rows: spec.rows, cols: spec.cols }, (error, stream) => {
+    const requested = (spec as { terminalType?: string }).terminalType
+    const term = requested !== undefined && requested.length > 0 ? requested : 'xterm-256color'
+    client.shell({ term, rows: spec.rows, cols: spec.cols }, (error, stream) => {
       if (error !== undefined) reject(error)
       else resolve(stream)
     })

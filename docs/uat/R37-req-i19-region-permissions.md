@@ -97,8 +97,8 @@ Windows 上计分步骤 1–12、14–19。没有第二台机器时步骤 13 标
 
 | 项 | 值 |
 |---|---|
-| 结论 | ☑ 通过 |
-| 通过项 / 总项 | Windows 18 / 18（步骤 13 N/A，不进分母）。Linux §5 未跑，不并入这个分数 |
+| 结论 | Windows ☑ 通过。Linux §5 ☑ 不通过 |
+| 通过项 / 总项 | Windows 18 / 18（步骤 13 N/A）。Linux §5 **11 / 16，不通过**（L5、L9、L13、L15、L16） |
 | 证据链接 | `C:\Users\Admin\.dsh-lab\e2e\R37\uat-evidence.md`；截图（本地素材，不入库）`.tmp/r37-uat/` |
 | 未通过项 | 无 |
 | 是否阻塞发布 | ☐ 是 ☑ 否 |
@@ -140,15 +140,15 @@ dsh web --port 50599 --no-open
 
 | # | 操作 | 期望 | 观察点 | 结果 |
 |---|---|---|---|---|
-| L1 | 看工具清单 | 有官方 `bash`、`sw_exec` | 工具名 | ☐ 通过 ☐ 不通过 |
-| L2 | `bash` 省略 workdir，打印当前目录 | 成功，目录是本机会话目录（区域 1） | stdout 里的路径 | ☐ 通过 ☐ 不通过 |
-| L3 | `bash` 在该目录写一个新文件 | 成功 | 文件内容 | ☐ 通过 ☐ 不通过 |
-| L4 | `bash` 在该目录之外、且不是 `/tmp` 的路径写文件（区域 3） | 拒绝；文件不存在 | sandbox denied；该路径无新文件 | ☐ 通过 ☐ 不通过 |
-| L5 | 本会话连上 `c1`。`sw_exec` `server` 为 `c1`，在登记根 `W` 里写文件；再往未声明的平级目录 `S` 写另一个文件 | `W` 成功（区域 4）；`S` 拒绝且文件不存在（区域 5，不新开可写 jail） | 远端两个路径的 `ls` | ☐ 通过 ☐ 不通过 |
-| L6 | `sw_exec` `server` 为 `c1`：`touch /tmp/r37-i19-linux` | 成功，不弹提权卡。这是远端 jail 里的 tmpfs，不是这台 Linux 宿主的 `/tmp` | 工具 stdout / 退出码；无提权卡 | ☐ 通过 ☐ 不通过 |
-| L7 | 断开 `c1`，或 `server` 填一个不存在的 id，再 `echo hi` | 拒绝，命令没有在远端执行 | 工具错误（先连接 / 未知 id）；没有 `hi` 的远端 stdout | ☐ 通过 ☐ 不通过 |
-| L8 | `sw_exec` `server` 为 `local`，或 workdir 填本机绝对路径 | 拒绝，且没有改去跑 `bash` | 错误含 `use the bash tool`；结果不是 bash 的 stdout | ☐ 通过 ☐ 不通过 |
-| L9 | `bash` 的 workdir 写成 `ssh://c1/…` | 拒绝 | 错误含 `this session is local. Remote commands use sw_exec` | ☐ 通过 ☐ 不通过 |
+| L1 | 看工具清单 | 有官方 `bash`、`sw_exec` | 工具名 | ☑ 通过 |
+| L2 | `bash` 省略 workdir，打印当前目录 | 成功，目录是本机会话目录（区域 1） | stdout 里的路径 | ☑ 通过 |
+| L3 | `bash` 在该目录写一个新文件 | 成功 | 文件内容 | ☑ 通过 |
+| L4 | `bash` 在该目录之外、且不是 `/tmp` 的路径写文件（区域 3） | 拒绝；文件不存在 | sandbox denied；该路径无新文件 | ☑ 通过 |
+| L5 | 本会话连上 `c1`。`sw_exec` `server` 为 `c1`，在登记根 `W` 里写文件；再往未声明的平级目录 `S` 写另一个文件 | `W` 成功（区域 4）；`S` 拒绝且文件不存在（区域 5，不新开可写 jail） | 远端两个路径的 `ls` | ☑ 不通过。显式指到未声明兄弟 `S` 时写成功 |
+| L6 | `sw_exec` `server` 为 `c1`：`touch /tmp/r37-i19-linux` | 成功，不弹提权卡。这是远端 jail 里的 tmpfs，不是这台 Linux 宿主的 `/tmp` | 工具 stdout / 退出码；无提权卡 | ☑ 通过 |
+| L7 | 断开 `c1`，或 `server` 填一个不存在的 id，再 `echo hi` | 拒绝，命令没有在远端执行 | 工具错误（先连接 / 未知 id）；没有 `hi` 的远端 stdout | ☑ 通过 |
+| L8 | `sw_exec` `server` 为 `local`，或 workdir 填本机绝对路径 | 拒绝，且没有改去跑 `bash` | 错误含 `use the bash tool`；结果不是 bash 的 stdout | ☑ 通过 |
+| L9 | `bash` 的 workdir 写成 `ssh://c1/…` | 拒绝 | 错误含 `this session is local. Remote commands use sw_exec` | ☑ 不通过。拒绝了，但原文是 `spawn bwrap ENOENT` |
 
 ### 情况 2：主工作区在 `c1`
 
@@ -156,13 +156,13 @@ dsh web --port 50599 --no-open
 
 | # | 操作 | 期望 | 观察点 | 结果 |
 |---|---|---|---|---|
-| L10 | `bash` 省略 workdir：`echo hi` | 成功，在远端登记根（区域 6） | stdout `hi` | ☐ 通过 ☐ 不通过 |
-| L11 | `sw_exec` 省略 `server`，或 `server` 填 `c1`：`echo hi` | 拒绝，不执行 | 错误含 `uses the bash tool` | ☐ 通过 ☐ 不通过 |
-| L12 | 若另有已连接机器 `c2`：`sw_exec` `server` 为 `c2`，`echo hi` | 成功，在 `c2` 上 | stdout `hi`；无 L11 的拒绝 | ☐ 通过 ☐ 不通过 ☐ N/A |
-| L13 | `bash` 的 workdir 写成另一台机器的 `ssh://…`；再把 workdir 写成本机绝对路径 | 两次都拒绝 | 前者含 `Use sw_exec for that server`；后者含 `local paths use sw_exec with server "local"` | ☐ 通过 ☐ 不通过 |
-| L14 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，打印当前目录。再省略 workdir 打一次。再把 workdir 写成相对路径打一次 | 显式绝对路径：成功，目录就是那个路径，不是远端、也不是 `dsw-routes` 占位。省略 workdir：恰好一个本机副根时是那个目录，否则是用户主目录。相对路径：拒绝 | 两次 stdout 的路径；相对路径的错误含 `a local workdir must be an absolute path` | ☐ 通过 ☐ 不通过 |
-| L15 | 标题栏「工作区」挂一个本机目录（区域 9）。workspace-write 下用官方 Write，或 `sw_exec` `server` 为 `local`、workdir 指到该目录，写一个新文件。另外用 `sw_exec(server: "local")` 写宿主 `/tmp` 下一个新文件 | 区域 9 拒绝，文件不存在。宿主 `/tmp` 那条成功（官方可写例外，不是远端 tmpfs） | sandbox denied；区域 9 无新文件；宿主 `/tmp` 上该文件存在 | ☐ 通过 ☐ 不通过 |
-| L16 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，`run_in_background: true`，命令里先输出一行再 `sleep`。接着 `job_output`，再 `job_kill`。另起一条后台，往本机工作区外且不是 `/tmp` 的路径写文件 | 调用立刻返回，不等 sleep 结束。job id 的 `server` 和 `endpoint` 都是 `local`。`job_output` 读到那一行，`job_kill` 能停掉。工作区外的写在 `job_output` 里被拒，文件不存在 | 返回时刻；job 字段；`job_output` 原文；目标路径不存在 | ☐ 通过 ☐ 不通过 |
+| L10 | `bash` 省略 workdir：`echo hi` | 成功，在远端登记根（区域 6） | stdout `hi` | ☑ 通过 |
+| L11 | `sw_exec` 省略 `server`，或 `server` 填 `c1`：`echo hi` | 拒绝，不执行 | 错误含 `uses the bash tool` | ☑ 通过 |
+| L12 | 若另有已连接机器 `c2`：`sw_exec` `server` 为 `c2`，`echo hi` | 成功，在 `c2` 上 | stdout `hi`；无 L11 的拒绝 | ☑ 通过（有 `c2`） |
+| L13 | `bash` 的 workdir 写成另一台机器的 `ssh://…`；再把 workdir 写成本机绝对路径 | 两次都拒绝 | 前者含 `Use sw_exec for that server`；后者含 `local paths use sw_exec with server "local"` | ☑ 不通过。跨机那次原文是 `fork/exec /usr/bin/bash: no such file or directory`；本机绝对路径那次通过 |
+| L14 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，打印当前目录。再省略 workdir 打一次。再把 workdir 写成相对路径打一次 | 显式绝对路径：成功，目录就是那个路径，不是远端、也不是 `dsw-routes` 占位。省略 workdir：恰好一个本机副根时是那个目录，否则是用户主目录。相对路径：拒绝 | 两次 stdout 的路径；相对路径的错误含 `a local workdir must be an absolute path` | ☑ 通过 |
+| L15 | 标题栏「工作区」挂一个本机目录（区域 9）。workspace-write 下用官方 Write，或 `sw_exec` `server` 为 `local`、workdir 指到该目录，写一个新文件。另外用 `sw_exec(server: "local")` 写宿主 `/tmp` 下一个新文件 | 区域 9 拒绝，文件不存在。宿主 `/tmp` 那条成功（官方可写例外，不是远端 tmpfs） | sandbox denied；区域 9 无新文件；宿主 `/tmp` 上该文件存在 | ☑ 不通过。区域 9 写成功；宿主 `/tmp` 通过 |
+| L16 | `sw_exec` `server` 为 `local`，workdir 为本机绝对路径，`run_in_background: true`，命令里先输出一行再 `sleep`。接着 `job_output`，再 `job_kill`。另起一条后台，往本机工作区外且不是 `/tmp` 的路径写文件 | 调用立刻返回，不等 sleep 结束。job id 的 `server` 和 `endpoint` 都是 `local`。`job_output` 读到那一行，`job_kill` 能停掉。工作区外的写在 `job_output` 里被拒，文件不存在 | 返回时刻；job 字段；`job_output` 原文；目标路径不存在 | ☑ 不通过。job 与 `job_kill` 通过；工作区外的后台写成功 |
 
 区域 7/8 的 jail 规则与 Windows 步骤 18、19 相同，Linux 上执行工具是官方 `bash` 而不是注入的 bash：workdir 指到已挂的平级副根 `S` 时可写，停在 `W` 时写 `S` 被拒；workdir 指到未声明目录 `U` 时写被拒，`touch /tmp/r37-i19-linux-8` 成功且无提权卡。Windows 已按注入 bash 通过，这里不单列、不进分母。有余力可以再走一遍。
 

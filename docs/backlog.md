@@ -22,11 +22,12 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-24。next 已是 0.1.7-rc.1，latest 仍 0.1.5-rc.3，peer 不改。代码补了五处接缝。验收：对该 rc typecheck + boot smoke。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
+| BUG-11 | Linux 宿主区域矩阵五步失败 | todo | P1 | 2026-09-24 R37 §5 为 11/16。L5 未声明兄弟可写；L9/L13a 拒绝文案被 spawn 错误盖住；L15 区域 9 可写；L16 后台写出工作区外。脚本 [R37](./uat/R37-req-i19-region-permissions.md) |
 | BUG-10 | 远程项目 skill 目录包发现失败（win32 join 反斜杠） | todo | P1 | 2026-09-23 lab 实证。上游 `join(dir, "SKILL.md")` 在 Windows 宿主产出 `\` 拼接的 `ssh://` 路径，远端 stat 落空静默跳过；平铺 `.md` 不受影响。修法候选：`ssh://` 拼写进 resolve/lstat 前归一分隔符。复现与证据 [notes/host-silent-fs.md](./notes/host-silent-fs.md) §6 |
+| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 从 UPSTREAM-6 拆出。0.1.7-rc.1 仍不把 SSH 四包装进 dsh / web-app。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵会响 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
-| UPSTREAM-5 | 0.1.6-alpha.1 subprocess 接口漂移 | todo | P2 | 四处加宽导致三实现类失配。收口清单 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §1.2 / §4。验收：alpha 回绿；升 rc 前收口 |
-| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P2 | 从 UPSTREAM-6 拆出。独立能力包不在 `upstream.yml` 家族清单里，通道红绿都看不见。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵或 issue 会响 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
@@ -43,7 +44,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P2 | **待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。新包巡检拆到 `UPSTREAM-7` |
+| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 2026-09-24 复看：四包 `next`=`0.1.7-rc.1`，`dsh-ssh` 仍在 `lib/index.js:46` 拒非 linux/darwin。未进 `dsh` 与 `dsh-web-app` 依赖。**待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。现况仍倾向 A |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
 

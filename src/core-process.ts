@@ -9,7 +9,7 @@
 
 import { Buffer } from 'node:buffer'
 import { PassThrough } from 'node:stream'
-import type { Readable, Writable } from 'node:stream'
+import type { Duplex, Readable, Writable } from 'node:stream'
 import type {
   SubprocessCollect,
   SubprocessHandle,
@@ -48,6 +48,8 @@ export class CoreSubprocessHandle implements SubprocessHandle {
   readonly stdin: Writable | undefined
   readonly stdout: Readable | undefined
   readonly stderr: Readable | undefined
+  /** Core RPC has no inherited fd-7 control channel. */
+  readonly control: Duplex | undefined = undefined
   private readonly ownCollected: SubprocessHandle['collected']
   private fallbackHandle: SubprocessHandle | undefined
   readonly done: Promise<SubprocessOutcome>
