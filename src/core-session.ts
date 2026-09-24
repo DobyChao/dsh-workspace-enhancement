@@ -98,8 +98,10 @@ export interface CoreWorkspaceInput {
   machineWorkspace?: string | undefined
   machineCwd?: string | undefined
   /**
-   * Session / spawn cwd. May mint a sibling workspace-write jail when nothing
-   * already-declared contains it.
+   * Session / spawn cwd. A path inside a declared root selects that jail.
+   * A path outside every declared root stays on the current jail (REQ-I19):
+   * it does not mint a sibling workspace-write root. With no declared root
+   * yet, the cwd itself is the primary jail.
    */
   cwd?: string | undefined
   /**
@@ -133,6 +135,10 @@ export function resolveCoreWorkspace(input: CoreWorkspaceInput): string | undefi
       const parentHit = longestContainingRoot(declared, parent)
       if (parentHit !== undefined) return parentHit
     }
+    // REQ-I19: regions 5 and 8 must not open a new writable jail. The command
+    // may still use this cwd; writes outside the current jail fail inside it.
+    const current = declared.find(root => root !== '/')
+    if (current !== undefined) return current
     return minted
   }
   const path = normalizePosixRoot(input.path)

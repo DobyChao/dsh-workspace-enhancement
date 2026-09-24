@@ -197,13 +197,20 @@ export function createCoreHub(
   const knownRootsOf = (connectionId: string): string[] => {
     const machine = deps.machine(connectionId)
     const initiator = remoteRouteFromCwd(initiatorSessionOf(ctx)?.header?.cwd)
-    return uniquePosixRoots([
+    const declared = uniquePosixRoots([
       machine?.workspace,
       machine?.cwd,
       initiator?.connectionId === connectionId ? initiator.path : undefined,
       ...sideRootsOf(ctx, connectionId),
-      ...(known.get(connectionId) ?? []),
     ])
+    const remembered = known.get(connectionId)
+    if (remembered === undefined) return declared
+    if (declared.length === 0) return uniquePosixRoots([...remembered])
+    for (const root of [...remembered]) {
+      const stillDeclared = declared.some(item => root === item || root.startsWith(`${item}/`))
+      if (!stillDeclared) remembered.delete(root)
+    }
+    return uniquePosixRoots([...declared, ...remembered])
   }
 
   const policyOf = (opts?: CoreRequireOpts): SandboxMode =>

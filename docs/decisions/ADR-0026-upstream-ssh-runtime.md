@@ -34,11 +34,12 @@
 | `@deepseek-ai/dsh-sandbox-ssh` | Remote POSIX sandbox argv provider over the shared SSH helper | 仅 `0.1.6-alpha.1` | 2026-09-15T03:25:34Z |
 | `@deepseek-ai/dsh-subprocess-ssh` | Subprocess and terminal provider over the shared POSIX SSH helper | 仅 `0.1.6-alpha.1` | 2026-09-15T03:26:10Z |
 
-四者的 `dist-tags` 都只有 `alpha` 与 `latest` 指向同一个 `0.1.6-alpha.1`；**没有** 0.1.5 及以前版本，
-也没有 `next`（rc）版本。上游 `@deepseek-ai/dsh` CLI 与 `dsh-base` 的依赖里**都没有**这四个包
+2026-09-15 取样时四者的 `dist-tags` 只有 `alpha` 与 `latest` 指向 `0.1.6-alpha.1`，没有 `next`。标签现状见下方 2026-09-24 修订。上游 `@deepseek-ai/dsh` CLI 与 `dsh-base` 的依赖里**都没有**这四个包
 （默认组合仍装 `dsh-fs-local` / `dsh-subprocess-local`）⇒ 它们是**自定义 profile 的 opt-in 能力**，
 不是默认装配。
 
+> **2026-09-24 修订**：四包 `next` 均为 **`0.1.7-rc.1`**（另有 `0.1.7-alpha.1` / `alpha.2`）。`@deepseek-ai/dsh` 的 `next` 同为 `0.1.7-rc.1`，`latest` 仍是 `0.1.5-rc.3`。`dsh-ssh@0.1.7-rc.1` `lib/index.js:46` 仍是 `process.platform !== linux/darwin` 即抛 `SSH runtime requires a POSIX client`。`dsh@0.1.7-rc.1` 与 `dsh-web-app@0.1.7-rc.1` 的依赖里没有 SSH 四包。§5 选项 A 仍然成立，拍板仍待所有者。
+>
 > **2026-09-18 修订**：四包现已各发 **`0.1.6-alpha.2`**（`npm view` 核实），上游在持续推进；
 > 这正是 §5「哨兵盲区处置」想要的信号形态。本 ADR 其余行号仍属 alpha.1 解包产物；
 > alpha.2 的增量diff未做（无收口需要，`UPSTREAM-5` 动 pin 时再补）。

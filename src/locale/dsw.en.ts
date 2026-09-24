@@ -154,6 +154,7 @@ const en: Record<DswKey, string> = {
   // validation and routing errors (t15-r2: every host-triggerable surface is
   // keyed; see i18n-design.md §13-9, now removed)
   'rpc.hostEmpty': 'host must be a non-empty string',
+  'rpc.machineIdReserved': 'machine id "{id}" is reserved',
   'rpc.usernameEmpty': 'username must be a non-empty string',
   'rpc.portInvalid': 'port must be an integer in 1..65535: {port}',
   'rpc.cwdShape': 'cwd must be an absolute POSIX path: {cwd}',

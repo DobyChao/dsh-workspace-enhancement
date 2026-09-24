@@ -222,6 +222,23 @@ export class SshSubprocessEngine {
     return posix.isAbsolute(executable) ? executable : posix.resolve(this.ssh().cwd, executable)
   }
 
+  /**
+   * Shell facts of the remote machine. Never `process.platform`: this provider
+   * executes over SSH. `mingw`/`msys`/`cygwin` count as Windows.
+   */
+  async terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+    signal?.throwIfAborted()
+    const probed = await this.ssh().exec(
+      'uname -s; printf "\\n"; command -v bash || command -v sh',
+      signal !== undefined ? { signal } : undefined,
+    )
+    signal?.throwIfAborted()
+    const [name, shell] = probed.stdout.split('\n')
+    const platform = /mingw|msys|cygwin|windows/i.test(name ?? '') ? 'windows' as const : 'posix' as const
+    const defaultShell = shell?.trim()
+    return defaultShell !== undefined && defaultShell.length > 0 ? { platform, defaultShell } : { platform }
+  }
+
   /** @inheritdoc (same semantics as SubprocessRuntime.spawn, remote world). */
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     if (this.disposing) throw new Error('subprocess-ssh: service is disposing')
@@ -359,6 +376,11 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
   /** @inheritdoc */
   resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string> {
     return this.engine.resolveExecutable(command, env, signal)
+  }
+
+  /** @inheritdoc Remote shell facts. The 0.1.5 seam has no this method; 0.1.7 requires it. */
+  terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+    return this.engine.terminalEnvironment(signal)
   }
 
   /** @inheritdoc */

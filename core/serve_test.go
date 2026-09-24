@@ -230,6 +230,33 @@ func TestServeReadOnlyWrite(t *testing.T) {
 	<-done
 }
 
+func TestSpawnCwdOutsideWorkspace(t *testing.T) {
+	r, wIn, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- serve(r, wOut, "workspace-write", "/home/uuz/dsh-i5-ws") }()
+	frame := mustFrame(envelope{Proto: 1, ID: 4, M: "spawn.start", P: json.RawMessage(`{"argv":["true"],"cwd":"/home/uuz/sibling"}`)})
+	if _, err := wIn.Write(frame); err != nil {
+		t.Fatal(err)
+	}
+	_ = wIn.Close()
+	msg, err := readOne(rOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Err == nil || msg.Err.Code != errReadOnly {
+		t.Fatalf("want EROFS got %+v", msg.Err)
+	}
+	_ = wOut.Close()
+	<-done
+}
+
 func mustFrame(msg envelope) []byte {
 	body, err := json.Marshal(msg)
 	if err != nil {

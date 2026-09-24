@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import { PassThrough } from 'node:stream'
-import type { Readable, Writable } from 'node:stream'
+import type { Duplex, Readable, Writable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type {
   SubprocessCollect,
@@ -117,6 +117,8 @@ export class SshSubprocessHandle implements SubprocessHandle {
   readonly stdin: Writable | undefined
   readonly stdout: Readable | undefined
   readonly stderr: Readable | undefined
+  /** ssh2 has no inherited fd-7 control channel. */
+  readonly control: Duplex | undefined = undefined
   readonly collected: SubprocessHandle['collected']
   readonly done: Promise<SubprocessOutcome>
   /** Remote OS pids are not a local-process identity; the seam's sentinel. */

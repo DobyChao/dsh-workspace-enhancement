@@ -746,6 +746,9 @@ export class SshRegistry extends Service {
     }
     let maxId = 0
     for (const spec of state.list) {
+      if (spec.id === 'local') {
+        throw new Error(`dsw: ${this.t('rpc.machineIdReserved', { id: spec.id })}`)
+      }
       const numeric = /^c(\d+)$/.exec(spec.id)
       if (numeric !== null) maxId = Math.max(maxId, Number(numeric[1]))
       this.specs.set(spec.id, spec)
@@ -865,6 +868,7 @@ export class SshRegistry extends Service {
     const prev = input.id !== undefined ? this.specs.get(input.id) : undefined
     const label = (input.label ?? '').trim() || (input.name ?? '').trim() || prev?.label || `${username}@${host}`
     const id = prev !== undefined ? prev.id : input.id ?? this.allocateId()
+    if (id === 'local') throw new Error(`dsw: ${this.t('rpc.machineIdReserved', { id })}`)
     // A caller-supplied id unknown to the table (created outside this registry
     // instance, or a `cN` id whose record was removed) must still be visible to
     // the allocator: leaving nextId behind it would let the next auto-allocation

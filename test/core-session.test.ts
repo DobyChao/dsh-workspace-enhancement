@@ -83,9 +83,29 @@ test('resolveCoreWorkspace: read-only has no jail root', () => {
   assert.equal(resolveCoreWorkspace({ mode: 'read-only', cwd: '/a', machineWorkspace: '/a' }), undefined)
 })
 
-test('resolveCoreWorkspace: sibling cwd mints a second root', () => {
+test('resolveCoreWorkspace: an undeclared cwd stays on the current jail', () => {
   assert.equal(
     resolveCoreWorkspace({ mode: 'workspace-write', machineWorkspace: '/a', cwd: '/b' }),
+    '/a',
+  )
+  assert.equal(
+    resolveCoreWorkspace({
+      mode: 'workspace-write',
+      machineWorkspace: '/a',
+      cwd: '/home/uuz/ssh-test-lab/.git',
+    }),
+    '/a',
+  )
+})
+
+test('resolveCoreWorkspace: a declared side root is its own jail', () => {
+  assert.equal(
+    resolveCoreWorkspace({
+      mode: 'workspace-write',
+      machineWorkspace: '/a',
+      knownRoots: ['/a', '/b'],
+      cwd: '/b/src',
+    }),
     '/b',
   )
 })
