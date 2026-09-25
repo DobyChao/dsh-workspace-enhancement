@@ -60,6 +60,7 @@ Which plugin version to install depends on the **DSH host family** you run — c
 | Your DSH host | Install | Notes |
 |---|---|---|
 | **`0.1.5` line** (`0.1.5-rc.1`, `0.1.5-rc.2`, …) | **0.1.4 or newer** | The **only** supported family (peers are `^0.1.5-rc.1`). The browser channel rides the official shared `/api` transport (`/api/dsw/<endpoint>`), so no standalone `/dsw` route is needed |
+| `0.1.7` line (rc — the `next` channel, `0.1.7-rc.2` today) | next release after `0.2.1` | Seam-aligned as of 2026-09-25: `watch` + `terminalEnvironment` on the mixed facades, verified by the drift sentinel (typecheck + suite + boot smoke against `0.1.7-rc.2`). The peer pin stays `^0.1.5-rc.1` until the `latest` tag moves — see `docs/compatibility.md` |
 | `0.1.2-rc.1` family (`0.1.2`, `0.1.3` releases) | `0.1.3` — the last release of that line | **No longer supported** (retired 2026-09-11). That line moved the Connection seam — `connection.rpc.handle` can no longer register a channel — so no fix is backported to it |
 | any other / older line | — | Never supported |
 
