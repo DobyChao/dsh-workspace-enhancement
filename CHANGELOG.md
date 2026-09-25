@@ -4,7 +4,14 @@
 
 ## Unreleased
 
+### 修复
+
+- **远程目录包 skill 发现（`BUG-10`）**：win32 宿主用 `join(entry.path, "SKILL.md")` 重组我们的 `ssh://` 条目时会**整体搅碎**前缀（`ssh://c1/a` + `SKILL.md` ⇒ `.\ssh:\c1\SKILL.md`），resolve 无 cwd 落本地分支、目录包静默消失（R38 UAT §4 实证）。修复两层：① `parseSshRoute` 把 `ssh://` 路径部分的字面 `\` 归一为 `/`（子缺口，`bs-probe` 探针验证）；② `remoteRouteFromCwd` 识别搅碎拼写（`ssh:` 后仅反斜杠分隔）并重建路由。平铺 `.md` 不经 join 不受影响。
+- **fs `watch` 接缝（`UPSTREAM-5`）**：0.1.7-rc.2 在具体后端上新增第 15 个接缝方法 `watch`（chokidar），混合门面未实现会让新宿主经 `ctx.fs` 调用时 `TypeError`。门面照 `readByteRange` 先例补齐：本地目标转发委托（老家族委托缺失时诚实 `FS_IO_ERROR`），远程目标明确拒绝（SFTP 无宿主侧监听）。契约测试同步锁死 15 方法全集。subprocess 门面同轮补上 `terminalEnvironment`（世界无关随 local 委托，委托太老按上游同式自算宿主事实）。
+
 ### 变更
+
+- **上游新包巡检哨兵（`UPSTREAM-7`，ADR-0026 §5）**：`upstream.yml` 新增 scope-watch 作业（每周一 + 手动）：比对 `@deepseek-ai/dsh` / `dsh-web-app` 在 latest/next/alpha 三通道的 `@deepseek-ai/*` 依赖组成与入库基线 `scripts/upstream-baseline.json`，漂移即开/更新 issue；官方 SSH 四包被收编单独点名（`UPSTREAM-6` 复评触发器）。基线确认 = `node scripts/upstream-watch.mjs --write-baseline` 后提交。
 
 - **远程 spawn 一次提权（`REQ-I18`，ADR-0025）**：官方 bash/pwsh 的 `sandboxPolicy` 经 shell 桥进入这一次 `subprocess.spawn`；`danger-full-access` 的允许一次让该次核心 `--sandbox off`，下一次仍跟会话档。win32 `bash` 与 `sw_exec` 补上 `sandbox_permissions` / `justification`。远程 `confine` 短路仍不包本机 runner，并带上 bwrap 的 `read-only file system` 拒绝方言，越界结果才有官方提权 hint。
 - **工具 schema 固定英文（`UX-6`，ADR-0014）**：`bash` / `sw_*` 的 description 与 parameters 不再跟设置页 Language。执行错误和工具输出仍按宿主语言。

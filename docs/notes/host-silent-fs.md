@@ -117,3 +117,21 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
   该 skill 立即出现——说明送到远端的路径拼写就是反斜杠形式。
 - 复现（约 5 分钟）：远端放目录包 skill → lab 开远程会话 → `/` 选择器只见平铺。
   排查缓存因素时重启 lab 宿主再看一次。
+
+**修复（BUG-10，2026-09-25）**：`parseSshRoute` 在解析时把 `ssh://` 路径部分的字面 `\`
+归一为 `/`（[registry.ts](../../src/registry.ts) 的 `parseSshRoute`）——我方拼写从不带 `\`，
+上游 win32 join 是唯一来源。代价：远端真叫 `a\b` 的文件无法经 `ssh://` 拼写寻址
+（连接 id 字符集本就排除 `\`）。回归：`test/mixed-routing.test.ts` 的 BUG-10 两用例。
+平铺 `.md` 本就不受影响；宿主不重启清单不刷新是注册表缓存行为，与本修复无关。
+
+**第二层已落地（`routeFromWin32Shredded`，2026-09-25）**：按下方走查修正的修法候选，
+`remoteRouteFromCwd` 识别搅碎拼写（`ssh:` 后仅反斜杠分隔）并重建路由；真 SSH c1 复放
+与 R38 复跑均通过（5/5，含正文注入与宿主重启后新内容生效）。
+
+**走查修正（R38 UAT，2026-09-25）**：上面「join 产出 `ssh://…\SKILL.md`」的机制重构有误。
+离线复刻（`docs/uat/R38-bug10-skill-dir-uat.md` §4）实证：win32 join 会把 `ssh://` 前缀
+**整体搅碎**成相对路径 `.\ssh:\<id>\…\SKILL.md`——字符串不再以 `ssh://` 开头，
+`parseSshRoute` 归一无从参与；resolve 无 cwd 落本地分支 FS_NOT_FOUND，上游静默跳过。
+平铺条目不经 join，故一直正常。2026-09-23 的字面反斜杠文件实验实际验证的是
+「`ssh://` 拼写内反斜杠直通」子缺口——`parseSshRoute` 归一已正确关闭该缺口（`bs-probe`
+探针复验：旧代码必现的它，现在正确地不出现），但目录包发现仍失败。修法候选见 UAT §4。

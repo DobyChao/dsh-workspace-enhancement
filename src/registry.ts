@@ -330,7 +330,14 @@ export function parseSshRoute(value: string): { id: string; path: string } | nul
   const separator = rest.indexOf('/')
   if (separator <= 0) return null
   const id = rest.slice(0, separator)
-  const path = rest.slice(separator)
+  // BUG-10: a win32 host joins our `ssh://` spellings with `\` (upstream skill
+  // discovery's `join(entry.path, "SKILL.md")`), and `posix.isAbsolute` below
+  // accepts `/dir\SKILL.md` as-is — the remote then stats a file literally
+  // named `dir\SKILL.md` and the directory skill package silently disappears.
+  // Our own spellings only ever use `/`, so `\` in the path part is normalized
+  // to the separator; a remote file genuinely named with `\` is not addressable
+  // through this spelling (the id charset cannot contain `\` either way).
+  const path = rest.slice(separator).replaceAll('\\', '/')
   if (!isRegistryConnectionId(id) || !posix.isAbsolute(path)) return null
   return { id, path }
 }

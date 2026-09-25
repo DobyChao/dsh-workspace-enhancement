@@ -21,9 +21,9 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-24。next 已是 0.1.7-rc.1，latest 仍 0.1.5-rc.3，peer 不改。代码补了五处接缝。验收：对该 rc typecheck + boot smoke。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
-| BUG-10 | 远程项目 skill 目录包发现失败（win32 join 反斜杠） | todo | P1 | 2026-09-23 lab 实证。上游 `join(dir, "SKILL.md")` 在 Windows 宿主产出 `\` 拼接的 `ssh://` 路径，远端 stat 落空静默跳过；平铺 `.md` 不受影响。修法候选：`ssh://` 拼写进 resolve/lstat 前归一分隔符。复现与证据 [notes/host-silent-fs.md](./notes/host-silent-fs.md) §6 |
-| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 从 UPSTREAM-6 拆出。0.1.7-rc.1 仍不把 SSH 四包装进 dsh / web-app。见 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5。验收：新包出现时哨兵会响 |
+| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-25 drift 红：`next` 已是 0.1.7-rc.2，`dsh-fs-local` 新增 `watch`（第 15 个接缝方法），反射契约正确点名。门面已补（local 委托转发/remote 诚实拒/老委托 `FS_IO_ERROR`）；subprocess 基类仍 4 成员已核齐。待 drift 复跑绿后收口。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
+| BUG-10 | 远程项目 skill 目录包发现失败（win32 join 搅碎 `ssh://` 前缀） | todo | P1 | win32 join 把 displayPath 搅碎成 `.\ssh:\<id>…`，不以 `ssh://` 开头，resolve 落本地静默跳过（R38 实证）。分支两层修：`parseSshRoute` 归一路径 `\`；`remoteRouteFromCwd` 重建搅碎拼写。R38 复跑 5/5 通过（2026-09-25，含正文注入与宿主重启后新内容生效）。修复在 PR #37（CI 绿），待所有者合并后挪 §4。复跑记录 [R38](./uat/R38-bug10-skill-dir-uat.md) §5 |
+| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 2026-09-25 落地：`upstream.yml` scope-watch 作业每周比对宿主包（dsh / dsh-web-app × latest/next/alpha）`@deepseek-ai/*` 组成与 [baseline](../scripts/upstream-baseline.json)，漂移开 issue；SSH 四包收编单独点名（`UPSTREAM-6` 复评触发）。验收：手动 dispatch 演练漂移会开 issue。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
@@ -31,7 +31,7 @@
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
-| AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 防基类新增方法后门面漏实现。证据 R14 审计 O2 |
+| AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 2026-09-25 评估：**extends 不做**（基类是 cordis Service、构造要 Context；静默继承会绕过世界路由——理由见 `test/mixed-subprocess-contract.test.ts` 头注）。风险以双侧反射契约承担：fs 侧已拦住 0.1.7 `watch`；subprocess 侧本 PR 补上（实锤：门面曾缺 `terminalEnvironment`）。待合并后挪 §5 |
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
