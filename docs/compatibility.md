@@ -48,7 +48,7 @@
 |---|---|---|---|
 | L1 静态 | 所有 peer 必须声明**同一个**范围（可以是 `||` 联合）；dev 必须是该范围里的一个备选；peer 范围必须带 `-rc.`；宿主包不得进 `dependencies`；**联合范围里每个家族都必须在 `upstream.yml` 里被点名** | `scripts/check.mjs` #6 | 每次 `npm run check` |
 | L2 升级 | Renovate 把 `@deepseek-ai/*` 分组为一个 PR（peer 与 dev 同步升级），禁止自动合并 | `renovate.json` | 每周 |
-| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue | `.github/workflows/upstream.yml` | 每周一 + 每周四（alpha）+ 手动 |
+| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue。**scope watch**（`UPSTREAM-7`）：每周一同一 workflow 比对宿主包 `@deepseek-ai/*` 组成与 `scripts/upstream-baseline.json`，漂移即开 issue（SSH 四包收编单独点名，是 `UPSTREAM-6` 复评触发器） | `.github/workflows/upstream.yml` + `scripts/upstream-watch.mjs` | 每周一 + 每周四（alpha）+ 手动 |
 | L4 运行时 | 能力探测而非版本假设：可选服务 `ctx.get()` 判空、特性探测、双键回退、首用 fail-loud | `src/**`（见下） | 运行期 |
 
 L3 的判读：它红不代表要立刻改代码，而是**代表"上游已经变了，你需要看一眼"**——
@@ -63,8 +63,8 @@ npm 上 `@deepseek-ai/dsh` 家族有三个通道：`latest` → `next`（rc）�
 
 | 通道 | 现在解析到 | 含义 |
 |---|---|---|
-| `next` | **`0.1.5-rc.2`**（rc.1 → rc.2 为**同日连续发版**） | 我们声明支持的家族（**唯一**一条）——红了 = **下一个宿主版本就会撞** |
-| `alpha` | **`0.1.6-alpha.1`**（2026-09-15 新世代；上一世代是 `0.1.5-alpha.2`） | 下一代——红了 = **提前预警**（还有提升缓冲期）。本次红是真信号 → `UPSTREAM-5` |
+| `next` | **`0.1.7-rc.2`**（2026-09-25 实测；`latest` 仍 `0.1.5-rc.3`） | 我们声明支持的家族（**唯一**一条）——红了 = **下一个宿主版本就会撞**。2026-09-25 首次真红：`dsh-fs-local` 新增 `watch` → `UPSTREAM-5` |
+| `alpha` | **`0.1.7-alpha.2`**（2026-09-25 实测） | 下一代——红了 = **提前预警**（还有提升缓冲期）。0.1.6 的 SSH 新包事实见 `ADR-0026` |
 
 > **`legacy`（0.1.2-rc.1）通道已于 2026-09-11 删除**（`UPSTREAM-4`）：所有者拍板 3080 不再安装本插件、
 > 后续不考虑 0.1.2 兼容，peer 范围随之收窄为单家族，再留一条 legacy 通道就是**验证一个我们不支持的家族**。
@@ -162,7 +162,7 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
    `setWindow(rows, cols)` 顺序相反、`terminalEnvironment` 必须报远端事实等）。
 3. **契约引用一律「包 + 版本 + 符号」**（§5.3）：上游 `dsh-subprocess-ssh` 的类与我方
    `SshSubprocessRuntime` **重名**，只写类名必然读错。
-4. **新包巡检**：每次 alpha 红/绿时按 `ADR-0026` §6 的命令 `npm view` 一下 scope 新增包——
+4. **新包巡检（已自动化，`UPSTREAM-7`）**：`upstream.yml` 的 scope-watch 作业每周比对宿主包组成与 `scripts/upstream-baseline.json`（基线确认 = `node scripts/upstream-watch.mjs --write-baseline` 后提交）；SSH 四包被收编会在 issue 里单独点名（`UPSTREAM-6` 复评触发器）。手工核查仍可按 `ADR-0026` §6 的命令 `npm view`——
    通道"绿"只证明**接缝**兼容，不证明上游没换赛道。
 
 ## 7. 维护本文件

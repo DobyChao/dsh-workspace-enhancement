@@ -34,6 +34,59 @@ permissions:
   issues: write
 
 jobs:
+  # UPSTREAM-7: the drift channels below only reinstall the seam family this
+  # repo DECLARES, so a green channel says nothing about packages we do not
+  # depend on — the 0.1.6 line shipped a whole official SSH runtime family
+  # that way (ADR-0026 §5). This job diffs the @deepseek-ai composition of the
+  # host packages (dsh / dsh-web-app, per dist-tag) against the committed
+  # baseline (`scripts/upstream-baseline.json`) and opens an issue on any
+  # addition/removal, with the SSH four-pack called out as the UPSTREAM-6
+  # reevaluation trigger. Acknowledging = regenerate the baseline, commit.
+  # Weekly (rides the Monday next+alpha slot); manual dispatch also runs it.
+  scope-watch:
+    name: scope watch
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * 1'
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Watch the @deepseek-ai host composition
+        id: watch
+        run: node scripts/upstream-watch.mjs
+
+      - name: Open or update the scope-watch issue
+        if: steps.watch.outputs.signal == 'changed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const title = '[upstream watch] the @deepseek-ai host composition changed'
+            const body = [
+              fs.readFileSync('.tmp/upstream-watch-report.md', 'utf8'),
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              'This is the scope watch (UPSTREAM-7): the drift channels only reinstall the seam family this repo declares, so capability packages outside that list arrive silently unless this check rings.',
+              '',
+              'See `docs/compatibility.md` §3.1 and `docs/decisions/ADR-0026-upstream-ssh-runtime.md` §5.',
+            ].join('\n')
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100,
+            })
+            const existing = open.find(issue => issue.title === title)
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body,
+              })
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+              })
+            }
+
   drift:
     name: drift (${{ matrix.channel }})
     runs-on: ubuntu-latest
