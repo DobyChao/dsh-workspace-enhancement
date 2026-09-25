@@ -7,7 +7,7 @@
 ### 修复
 
 - **远程目录包 skill 发现（`BUG-10`）**：win32 宿主用 `join(entry.path, "SKILL.md")` 重组我们的 `ssh://` 条目时会**整体搅碎**前缀（`ssh://c1/a` + `SKILL.md` ⇒ `.\ssh:\c1\SKILL.md`），resolve 无 cwd 落本地分支、目录包静默消失（R38 UAT §4 实证）。修复两层：① `parseSshRoute` 把 `ssh://` 路径部分的字面 `\` 归一为 `/`（子缺口，`bs-probe` 探针验证）；② `remoteRouteFromCwd` 识别搅碎拼写（`ssh:` 后仅反斜杠分隔）并重建路由。平铺 `.md` 不经 join 不受影响。
-- **fs `watch` 接缝（`UPSTREAM-5`）**：0.1.7-rc.2 在具体后端上新增第 15 个接缝方法 `watch`（chokidar），混合门面未实现会让新宿主经 `ctx.fs` 调用时 `TypeError`。门面照 `readByteRange` 先例补齐：本地目标转发委托（老家族委托缺失时诚实 `FS_IO_ERROR`），远程目标明确拒绝（SFTP 无宿主侧监听）。契约测试同步锁死 15 方法全集。subprocess 门面同轮补上 `terminalEnvironment`（世界无关随 local 委托，委托太老按上游同式自算宿主事实）。
+- **fs `watch` 接缝（`UPSTREAM-5`）**：0.1.7-rc.2 在具体后端上新增第 15 个接缝方法 `watch`（chokidar），混合门面未实现会让新宿主经 `ctx.fs` 调用时 `TypeError`。门面照 `readByteRange` 先例补齐：本地目标转发委托（老家族委托缺失时诚实 `FS_IO_ERROR`），远程目标明确拒绝（SFTP 无宿主侧监听）。契约测试同步锁死 15 方法全集，基类原型快照家族自适应（0.1.7 基类自己具现 `watch`）。subprocess 门面同轮补上 `terminalEnvironment`（世界无关随 local 委托，委托太老按上游同式自算宿主事实）。
 
 ### 变更
 

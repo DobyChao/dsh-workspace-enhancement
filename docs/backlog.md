@@ -21,7 +21,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-25 drift 红：`next` 已是 0.1.7-rc.2，`dsh-fs-local` 新增 `watch`（第 15 个接缝方法），反射契约正确点名。门面已补（local 委托转发/remote 诚实拒/老委托 `FS_IO_ERROR`）；subprocess 基类仍 4 成员已核齐。待 drift 复跑绿后收口。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
+| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-25 drift 红：`next` 全家族已是 0.1.7-rc.2（`dsh-fs` 当日跟上），`dsh-fs-local` 新增 `watch`（第 15 接缝方法）且**基类**具现之，反射契约点名。门面已补；基类快照改家族自适应。待 drift 复跑绿后收口。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
 | BUG-10 | 远程项目 skill 目录包发现失败（win32 join 搅碎 `ssh://` 前缀） | todo | P1 | win32 join 把 displayPath 搅碎成 `.\ssh:\<id>…`，不以 `ssh://` 开头，resolve 落本地静默跳过（R38 实证）。分支两层修：`parseSshRoute` 归一路径 `\`；`remoteRouteFromCwd` 重建搅碎拼写。R38 复跑 5/5 通过（2026-09-25，含正文注入与宿主重启后新内容生效）。修复在 PR #37（CI 绿），待所有者合并后挪 §4。复跑记录 [R38](./uat/R38-bug10-skill-dir-uat.md) §5 |
 | UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 2026-09-25 落地：`upstream.yml` scope-watch 作业每周比对宿主包（dsh / dsh-web-app × latest/next/alpha）`@deepseek-ai/*` 组成与 [baseline](../scripts/upstream-baseline.json)，漂移开 issue；SSH 四包收编单独点名（`UPSTREAM-6` 复评触发）。验收：手动 dispatch 演练漂移会开 issue。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |

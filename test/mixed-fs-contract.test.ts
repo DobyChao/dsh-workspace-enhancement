@@ -204,12 +204,23 @@ async function realSandboxed(): Promise<SandboxedFileSystem> {
 /* ------------------------------------------------ 1) 上游方法全集反射 */
 
 test('contract: the installed backend still exposes the 13 pre-0.1.5 seam methods', () => {
-  // 上游基类的抽象成员在运行时被擦除，只有 `sandboxMode`/`processPathFromHostPath`
-  // 留下；方法全集必须从具体后端反射，否则这条契约用例本身堵不住漏实现。
+  // 上游基类的抽象成员在运行时被擦除；方法全集必须从具体后端反射，否则这条契约用例本身堵不住漏实现。
+  // 基类原型快照是**家族自适应**的 floor/subset 断言：0.1.5 线只有 floor 两项，
+  // 0.1.7 起（dsh-fs@0.1.7-rc.2，2026-09-25 dispatch 实测）基类自己声明具现 `watch`。
+  // 基类再出新名字 ⇒ subset 断言红，提醒归类进 BASE_KNOWN 并核对门面覆盖
+  // （下方反射断言会点名缺实现）；基类丢掉 floor 成员 ⇒ floor 断言红。
+  const baseMembers = Object.getOwnPropertyNames(FileSystem.prototype).filter(name => name !== 'constructor').sort()
+  const BASE_FLOOR = ['processPathFromHostPath', 'sandboxMode']
+  const BASE_KNOWN = [...BASE_FLOOR, 'watch']
   assert.deepEqual(
-    Object.getOwnPropertyNames(FileSystem.prototype).filter(name => name !== 'constructor').sort(),
-    ['processPathFromHostPath', 'sandboxMode'],
-    'upstream FileSystem.prototype no longer looks as expected — revisit this contract test',
+    baseMembers.filter(name => !BASE_KNOWN.includes(name)),
+    [],
+    'upstream FileSystem.prototype grew a new member — classify it in BASE_KNOWN and make sure the facade routes it',
+  )
+  assert.deepEqual(
+    BASE_FLOOR.filter(name => !baseMembers.includes(name)),
+    [],
+    'upstream FileSystem.prototype dropped a known member — revisit this contract test',
   )
   // 去掉已知增量后，老方法必须逐个还在（改名/删除会在这里红）。
   assert.deepEqual(UPSTREAM_METHODS.filter(name => !KNOWN_ADDITIONS.includes(name)), PRE_015_METHODS,
