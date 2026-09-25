@@ -93,12 +93,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Version extraction takes the LAST whitespace token of `npm view`'s last line
-          # and strips quotes: npm >= 11 prints multi-match output as `name@ver 'ver'`
-          # (both forms, sometimes on one line) — a bare `tail -1` yielded a spec
-          # fragment that broke `npm install` (2026-09-25: dsh-code-runtime mangled
-          # into `pkg@scope/pkg@0.1.5-rc.3 '0.1.5-rc.3'` → 404 → boot smoke died).
-# `tag:` resolves every host-shared package through a dist-tag; `family:`
+        # Version extraction takes the LAST whitespace token of `npm view`'s last
+        # line and strips quotes: npm >= 11 prints multi-match output as
+        # `name@ver 'ver'` (both forms, sometimes on one line) — a bare `tail -1`
+        # yielded a spec fragment that broke `npm install` (2026-09-25:
+        # dsh-code-runtime mangled into `pkg@scope/pkg@0.1.5-rc.3 '0.1.5-rc.3'`
+        # → 404 → boot smoke died).
+        # `tag:` resolves every host-shared package through a dist-tag; `family:`
         # pins them all to one exact version.
         include:
           - channel: next
@@ -323,11 +324,11 @@ jobs:
                 UNRESOLVED="$UNRESOLVED $dep@$range"
               fi
             done <<< "$WANTLIST"
-            if [ -z "$NEW" ]; then break; fi
             if [ -n "$UNRESOLVED" ]; then
               echo "::error::boot smoke cannot resolve CLI deps/peers on '$WANT':$UNRESOLVED"
               exit 1
             fi
+            if [ -z "$NEW" ]; then break; fi
             echo "boot closure (round $round):$NEW"
             # Union install, same reason as the seam-family closure: an install
             # naming only this round's deps would revert every earlier
