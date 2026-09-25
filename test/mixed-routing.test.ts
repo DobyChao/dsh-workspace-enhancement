@@ -67,6 +67,29 @@ test('BUG-10: win32-joined ssh:// spellings normalize to POSIX separators at par
   assert.equal(remoteRouteFromCwd('ssh://c1\\srv/work'), null)
 })
 
+test('BUG-10: a win32-join SHREDDED ssh spelling is rebuilt at the routing entry', () => {
+  // The directory-package chain (R38 UAT §4): win32 join rewrites
+  // 'ssh://c1/…/demo-dir-skill' + 'SKILL.md' into a RELATIVE path whose first
+  // segment is 'ssh:' — the string no longer starts with ssh://, so only the
+  // shredded-spelling recovery can route it back to the remote.
+  assert.deepEqual(remoteRouteFromCwd(String.raw`.\ssh:\c1\home\uuz\.dsh\skills\demo-dir-skill\SKILL.md`), {
+    connectionId: 'c1',
+    path: '/home/uuz/.dsh/skills/demo-dir-skill/SKILL.md',
+  })
+  // The './' prefix join mints is optional in the pattern; '..' shreds the same way.
+  assert.deepEqual(remoteRouteFromCwd(String.raw`ssh:\c1\a\SKILL.md`), { connectionId: 'c1', path: '/a/SKILL.md' })
+  assert.deepEqual(remoteRouteFromCwd(String.raw`..\ssh:\c1\a\SKILL.md`), { connectionId: 'c1', path: '/a/SKILL.md' })
+  // Genuine local paths never match: plain relatives, drive paths (a 'ssh:'
+  // first segment is not a drive spec), and a non-connection id stays local.
+  assert.equal(remoteRouteFromCwd('proj/file.txt'), null)
+  assert.equal(remoteRouteFromCwd(String.raw`C:\ssh\c1\x`), null)
+  assert.equal(remoteRouteFromCwd(String.raw`.\ssh:\c1 hidden\x`), null)
+  assert.equal(worldOfCwd(String.raw`.\ssh:\c1\home\proj`, 'win32'), 'remote')
+  // The recovery is host-independent: a POSIX host never mints this spelling
+  // (its join keeps '/'), but if one arrives it names the same route.
+  assert.equal(worldOfCwd(String.raw`.\ssh:\c1\home\proj`, 'linux'), 'remote')
+})
+
 test('t6: worldOfCwd — a POSIX-absolute cwd on win32 is remote; UNC/drive stay local', () => {
   assert.equal(worldOfCwd('/home/uuz/r4-verify', 'win32'), 'remote')
   assert.equal(worldOfCwd('/home/uuz', 'win32'), 'remote')
@@ -461,14 +484,27 @@ test('BUG-10: a win32-joined directory-package path reaches the remote branch in
   const local = stubFileSystemBranch('local')
   const remote = stubFileSystemBranch('remote')
   const mixed = new MixedFileSystem(local, remote as never)
-  // The failing chain (2026-09-23 lab): upstream discoverRoot joins
-  // `entry.path` + 'SKILL.md' with the HOST's path module, so a Windows host
-  // asks ctx.fs about `ssh://c1/…/demo-remote-skill\SKILL.md`. The facade must
-  // hand the remote branch the normalized POSIX path, not the glued one.
+  // The 2026-09-23 lab observation: a backslash glued INSIDE an ssh:// spelling.
+  // parseSshRoute normalizes it (the sub-gap the bs-probe pinned in R38).
   await mixed.resolve('ssh://c1/w/.dsh/skills/demo-remote-skill\\SKILL.md', { cwd: LOCAL_CWD })
   assert.deepEqual(remote.calls, ['resolve:remote:/w/.dsh/skills/demo-remote-skill/SKILL.md'])
   assert.deepEqual(local.calls, [])
   await mixed.lstat('ssh://c1/w/.dsh/skills/demo-remote-skill\\SKILL.md', { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
+  assert.deepEqual(local.calls, [])
+})
+
+test('BUG-10: a SHREDDED directory-package spelling routes remote with NO cwd at all', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+  // The chain that actually ran in the lab (R38 UAT §4): upstream resolve gets
+  // '.\ssh:\c1\…\SKILL.md' and NO cwd — the pre-recovery facade fell to the
+  // local branch (FS_NOT_FOUND, silently skipped upstream).
+  await mixed.resolve(String.raw`.\ssh:\c1\w\.dsh\skills\demo-dir-skill\SKILL.md`)
+  assert.deepEqual(remote.calls, ['resolve:remote:/w/.dsh/skills/demo-dir-skill/SKILL.md'])
+  assert.deepEqual(local.calls, [])
+  await mixed.lstat(String.raw`.\ssh:\c1\w\.dsh\skills\demo-dir-skill\SKILL.md`, { cwd: LOCAL_CWD })
   assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
   assert.deepEqual(local.calls, [])
 })

@@ -123,3 +123,11 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
 上游 win32 join 是唯一来源。代价：远端真叫 `a\b` 的文件无法经 `ssh://` 拼写寻址
 （连接 id 字符集本就排除 `\`）。回归：`test/mixed-routing.test.ts` 的 BUG-10 两用例。
 平铺 `.md` 本就不受影响；宿主不重启清单不刷新是注册表缓存行为，与本修复无关。
+
+**走查修正（R38 UAT，2026-09-25）**：上面「join 产出 `ssh://…\SKILL.md`」的机制重构有误。
+离线复刻（`docs/uat/R38-bug10-skill-dir-uat.md` §4）实证：win32 join 会把 `ssh://` 前缀
+**整体搅碎**成相对路径 `.\ssh:\<id>\…\SKILL.md`——字符串不再以 `ssh://` 开头，
+`parseSshRoute` 归一无从参与；resolve 无 cwd 落本地分支 FS_NOT_FOUND，上游静默跳过。
+平铺条目不经 join，故一直正常。2026-09-23 的字面反斜杠文件实验实际验证的是
+「`ssh://` 拼写内反斜杠直通」子缺口——`parseSshRoute` 归一已正确关闭该缺口（`bs-probe`
+探针复验：旧代码必现的它，现在正确地不出现），但目录包发现仍失败。修法候选见 UAT §4。
