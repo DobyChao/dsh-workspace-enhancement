@@ -104,7 +104,7 @@ pwsh -File scripts/dev-lab.ps1 -SkipBuild
 | [R27-req-i13-remote-session-sandbox.md](./R27-req-i13-remote-session-sandbox.md) | R27 REQ-I5 + REQ-I13 合验（核心运输 + 会话 `/permission`） |
 | [R28-ui-design-language.md](./R28-ui-design-language.md) | R28 `UX-3` 客户端 UI 对齐宿主设计语言（12 步，浅/深各走一遍） |
 | [R37-req-i19-region-permissions.md](./R37-req-i19-region-permissions.md) | R37 `REQ-I19` 工具绑世界（Windows 18/18；Linux 首轮 11/16，修复后 2026-09-25 用户确认收口） |
-| [R38-bug10-skill-dir-uat.md](./R38-bug10-skill-dir-uat.md) | R38 `BUG-10` 远程目录包 skill 发现（5 步） |
+| [R38-bug10-skill-dir-uat.md](./R38-bug10-skill-dir-uat.md) | R38 `BUG-10` 远程目录包 skill 发现（首轮 2/5 驱出第二层修复，复跑 5/5 通过） |
 | [FEEDBACK.md](./FEEDBACK.md) | 用户反馈模板 |
 
 来源：`AGENTS.md` §4/§8；`scripts/dev-lab.ps1`；`docs/README.md`；`.agent-teams/archive/dsw-i18n-r6/inbox/captain.jsonl`（t11 E2E 证据约定）

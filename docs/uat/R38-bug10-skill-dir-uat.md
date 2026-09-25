@@ -39,9 +39,9 @@
 
 | 项 | 值 |
 |---|---|
-| 结论 | **不通过（2026-09-25 走查）**——目录包发现仍失败，已定性根因（见 §4） |
-| 通过项 / 总项 | 2 / 5（步骤 1-2 通过；3 失败；4-5 阻塞） |
-| 是否阻塞发布 | ☐ 是 ☑ 否（功能缺失面窄，平铺不受影响） |
+| 结论 | **通过（2026-09-25 复跑，5/5）**——首轮走查不通过（2/5），驱动出修复 `7a8a152`，复跑全过（§5） |
+| 通过项 / 总项 | 5 / 5 |
+| 是否阻塞发布 | ☐ 是 ☑ 否 |
 | 用户签字 | 待用户确认 |
 
 ## 4. 走查记录（2026-09-25）：`parseSshRoute` 归一修复覆盖不到目录包链
@@ -73,3 +73,15 @@ ssh 拼写并重建：`^(\.{1,2}\\)?ssh:\\+<id>\\…` → `ssh://<id>/<posix>`�
 win32 本地相对段不可能含 `\`，识别安全；Linux 宿主 join 本就不搅碎，不受影响。
 
 来源：`docs/notes/host-silent-fs.md` §6；`test/mixed-routing.test.ts` BUG-10 用例。
+
+## 5. 复跑记录（2026-09-25 晚，修复 `7a8a152`）
+
+`routeFromWin32Shredded` 落地后重走固定流水（build → pack → tarball 装 lab → 重启宿主），离线复刻预检通过后上浏览器：
+
+| # | 操作 | 期望 | 结果 |
+|---|---|---|---|
+| 3 | 远程会话（eee）`/` 打开选择器 | 两个 skill 都列出 | ✅ `demo-dir-skill` 与 `flat-skill` 同时列出 |
+| 4 | 选中 `demo-dir-skill` 发送 | 正文载入对话 | ✅ 输入框填 `/demo-dir-skill`；消息带 `上下文注入 demo-dir-skill` 注入块；模型确认 SKILL.md 正文从 `.dsh/skills/demo-dir-skill/` 读到 |
+| 5 | 远端改写 SKILL.md（description v2 + STEP-5 MARKER）→ 重启宿主 → 新建会话 | 新内容生效 | ✅ 选择器显示 `demo-dir-skill R38 UAT step-5 EDITED description (v2)`——宿主重启后注册表缓存失效，读到远端新内容 |
+
+闸门：`check:static` / `typecheck` / `test:agent`（48 文件）全绿。
