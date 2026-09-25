@@ -93,7 +93,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `tag:` resolves every host-shared package through a dist-tag; `family:`
+        # Version extraction takes the LAST whitespace token of `npm view`'s last line
+          # and strips quotes: npm >= 11 prints multi-match output as `name@ver 'ver'`
+          # (both forms, sometimes on one line) — a bare `tail -1` yielded a spec
+          # fragment that broke `npm install` (2026-09-25: dsh-code-runtime mangled
+          # into `pkg@scope/pkg@0.1.5-rc.3 '0.1.5-rc.3'` → 404 → boot smoke died).
+# `tag:` resolves every host-shared package through a dist-tag; `family:`
         # pins them all to one exact version.
         include:
           - channel: next
@@ -128,7 +133,7 @@ jobs:
           NAMES="$(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")"
           if [ -n "${{ matrix.family }}" ]; then
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -137,7 +142,7 @@ jobs:
             done
           else
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -177,7 +182,7 @@ jobs:
           if [ -n "$MISSING" ]; then
             DEPS=""
             for dep in $MISSING; do
-              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; fi
             done
             if [ -n "$DEPS" ]; then
@@ -209,7 +214,7 @@ jobs:
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
           ANCHOR="$(node -e "try { console.log(require('./node_modules/@deepseek-ai/dsh-fs/package.json').version) } catch { console.log('') }")"
-          WANT_V="$(npm view "@deepseek-ai/dsh-fs@$WANT" version 2>/dev/null | tail -1 || true)"
+          WANT_V="$(npm view "@deepseek-ai/dsh-fs@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
           if [ -z "$WANT_V" ]; then
             echo "::warning::@deepseek-ai/dsh-fs has no '$WANT' release — family anchor not verified"
           elif [ "$ANCHOR" != "$WANT_V" ]; then
@@ -242,7 +247,7 @@ jobs:
           set -o pipefail
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
-          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1 || true)"
+          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
           if [ -z "$HOST" ]; then
             echo "::warning::@deepseek-ai/dsh has no release on '$WANT' — boot smoke skipped"
             exit 0
@@ -300,12 +305,12 @@ jobs:
               # independent version lines whose next tag can trail the release
               # app-boot needs (@deepseek-ai/cordis-plugin-group: next=1.0.1-rc.4
               # vs required ^1.0.2, latest=1.0.2 — 2026-09-15).
-              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$range" ] && [ -n "$v" ]; then
-                sat="$(npm view "$dep@$range" version 2>/dev/null | tail -1 || true)"
+                sat="$(npm view "$dep@$range" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
                 if [ -n "$sat" ] && [ "$sat" != "$v" ]; then v="$sat"; fi
               fi
-              if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 || true)"; fi
+              if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"; fi
               if [ -n "$v" ]; then NEW="$NEW $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep@$range"; fi
             done <<< "$MISSING"
             if [ -n "$UNRESOLVED" ]; then
