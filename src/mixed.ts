@@ -40,6 +40,7 @@ import type {
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import { posix } from 'node:path'
+import { userInfo } from 'node:os'
 import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
@@ -70,6 +71,13 @@ export interface SubprocessBranch {
   resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string>
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle
   spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>
+  /**
+   * Shell-selection facts of this branch's execution environment — the seam
+   * member the 0.1.7 line added on `SubprocessRuntime`. Optional **on delegates
+   * only** (the pre-0.1.7 local runtime has none); the FACADE always implements
+   * it, computing the same host facts itself when the delegate predates it.
+   */
+  terminalEnvironment?(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }>
 }
 
 /**
@@ -152,6 +160,24 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
     return this.local.spawn(spec)
   }
 
+  /**
+   * The 0.1.7 seam member, world-less like `resolveExecutable` (no cwd key to
+   * route on): the facade answers the HARNESS-HOST facts through the local
+   * delegate. Remote shell facts stay the SSH-side runtime's own answer
+   * (`SshSubprocessRuntime` probes the connection — ADR-0026 §4.3); a delegate
+   * predating the method gets the same facts computed here, using upstream's
+   * exact formula (`dsh-subprocess-local@0.1.7` `terminalEnvironment`).
+   */
+  terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+    const viaDelegate = this.local.terminalEnvironment
+    if (viaDelegate !== undefined) return viaDelegate.call(this.local, signal)
+    const platform = process.platform === 'win32' ? 'windows' : 'posix'
+    const defaultShell = platform === 'windows'
+      ? process.env.ComSpec || undefined
+      : process.env.SHELL || userInfo().shell || undefined
+    return Promise.resolve({ platform, ...(defaultShell === undefined ? {} : { defaultShell }) })
+  }
+
   /** @inheritdoc */
   async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
     return worldOfCwd(spec.cwd) === 'remote' ? this.remote.spawnTerminal(spec) : this.local.spawnTerminal(spec)
@@ -190,6 +216,15 @@ export type FileSystemBranch = {
    * buffer.
    */
   readByteRange?(target: FsTarget, range: { offset: number; length: number }, signal?: AbortSignal): Promise<Uint8Array>
+  /**
+   * Notify-on-change subscription, the seam method the 0.1.7 line added on
+   * the concrete local backend (`LocalFileSystem.watch` — chokidar on the host
+   * filesystem). Optional **on delegates only**, exactly like `readByteRange`:
+   * the pre-0.1.7 family's backend has no such method, and the FACADE always
+   * implements it (answering a clear `FsError` when its delegate predates it)
+   * so a newer host never hits a `TypeError` through `ctx.get('fs')`.
+   */
+  watch?(target: FsTarget, changed: (error?: Error) => void, signal: AbortSignal): Promise<() => Promise<void>>
   listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
   writeText(
     target: FsTarget,
@@ -387,6 +422,35 @@ export class MixedFileSystem implements FileSystemBranch {
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.listDir(target, signal)
       : this.local.listDir(target, signal)
+  }
+
+  /**
+   * UPSTREAM-5: the 0.1.7 line added `watch` on the concrete local backend and
+   * the host reaches it through `ctx.get('fs')` — the same BUG-2/UPSTREAM-1
+   * shape. The remote world cannot honor it (SFTP has no host-side chokidar),
+   * so a remote target fails honestly instead of fabricating a silent
+   * never-fires watcher; a local target forwards to the delegate, which only
+   * has the method from the 0.1.7 line on.
+   */
+  async watch(
+    target: FsTarget,
+    changed: (error?: Error) => void,
+    signal: AbortSignal,
+  ): Promise<() => Promise<void>> {
+    if (worldOfTargetKey(String(target.targetKey)) === 'remote') {
+      throw new FsError(
+        `cannot watch "${target.displayPath}": the remote filesystem backend does not support watching`,
+        'FS_IO_ERROR',
+      )
+    }
+    const watcher = this.local.watch
+    if (watcher === undefined) {
+      throw new FsError(
+        `cannot watch "${target.displayPath}": the local filesystem backend does not support watching (dsh-fs before the 0.1.7 line)`,
+        'FS_IO_ERROR',
+      )
+    }
+    return watcher.call(this.local, target, changed, signal)
   }
 
   /** @inheritdoc — the per-call policy reaches both backends (ADR-0025). */

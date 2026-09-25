@@ -146,6 +146,33 @@ test('MixedSubprocessRuntime: spawnTerminal routes by spec.cwd; resolveExecutabl
   assert.equal(remote.calls.length, 1)
 })
 
+test('UPSTREAM-5: terminalEnvironment forwards to the local delegate when it has the member', async () => {
+  // 世界无关接缝（无 cwd 可路由）：有 0.1.7 委托就转发委托的事实。
+  const local = stubSubprocessBranch('local') as SubprocessBranch & { calls: string[] } & {
+    terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }>
+  }
+  local.terminalEnvironment = async (signal) => {
+    local.calls.push(`env:local:${signal?.aborted ?? false}`)
+    return { platform: 'posix', defaultShell: '/bin/delegate-shell' }
+  }
+  const mixed = new MixedSubprocessRuntime(local, stubSubprocessBranch('remote') as never)
+  const controller = new AbortController()
+  assert.deepEqual(await mixed.terminalEnvironment(controller.signal), { platform: 'posix', defaultShell: '/bin/delegate-shell' })
+  assert.deepEqual(local.calls, ['env:local:false'])
+})
+
+test('UPSTREAM-5: terminalEnvironment computes the host facts when the delegate predates the member', async () => {
+  // 0.1.5 家族委托没有该方法——门面按上游同式自算（win32 → windows / 其它 → posix，
+  // ComSpec | SHELL | userInfo().shell），绝不回落远端事实。
+  const local = stubSubprocessBranch('local')
+  assert.equal(local.terminalEnvironment, undefined, 'the stub must model the pre-0.1.7 delegate')
+  const mixed = new MixedSubprocessRuntime(local, stubSubprocessBranch('remote') as never)
+  const env = await mixed.terminalEnvironment()
+  assert.equal(env.platform, process.platform === 'win32' ? 'windows' : 'posix')
+  if (env.defaultShell !== undefined) assert.equal(typeof env.defaultShell, 'string')
+  assert.deepEqual(local.calls, [], 'the fallback must not delegate')
+})
+
 test('t6: MixedSubprocessRuntime remote spawn rewrites a Windows argv[0] (rg.exe → rg)', () => {
   const seen: string[] = []
   const local = stubSubprocessBranch('local')

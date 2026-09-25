@@ -7,6 +7,7 @@
 ### 修复
 
 - **远程目录包 skill 发现（`BUG-10`）**：win32 宿主把 `ssh://` 路径用 `join(entry.path, "SKILL.md")` 拼出字面 `\`，远端 stat 落空后目录包静默消失。`parseSshRoute` 解析时把路径部分的 `\` 归一为 `/`；平铺 `.md` 不受影响。
+- **fs `watch` 接缝（`UPSTREAM-5`）**：0.1.7-rc.2 在具体后端上新增第 15 个接缝方法 `watch`（chokidar），混合门面未实现会让新宿主经 `ctx.fs` 调用时 `TypeError`。门面照 `readByteRange` 先例补齐：本地目标转发委托（老家族委托缺失时诚实 `FS_IO_ERROR`），远程目标明确拒绝（SFTP 无宿主侧监听）。契约测试同步锁死 15 方法全集。subprocess 门面同轮补上 `terminalEnvironment`（世界无关随 local 委托，委托太老按上游同式自算宿主事实）。
 
 ### 变更
 
