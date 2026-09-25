@@ -262,15 +262,20 @@ jobs:
           # regular dependency carries. Without this closure the host died with
           # ERR_MODULE_NOT_FOUND before printing its URL on BOTH channels
           # (2026-09-14 run 34824542756, issues #7/#9) and none of the smoke's
-          # assertions ever ran. Close the CLI tree's @deepseek-ai/* gaps in a
-          # fixpoint loop, resolving each dep range-aware (channel tag first,
-          # but the requirer's declared range wins when the channel pin is
-          # stale), and install the UNION of every spec so far — a later
+          # assertions ever ran. Close the CLI tree's @deepseek-ai/* graph in a
+          # fixpoint loop that pins EVERY walked dep to an explicit spec (channel
+          # tag first, but the requirer's declared range wins when the channel
+          # pin is stale) — not just the ABSENT ones: the repo's own lockfile
+          # leaves @deepseek-ai packages of the older family in node_modules,
+          # and a 0.1.7 persistence plugin meeting a 0.1.5 Session died at boot
+          # with "format catalog v4 does not match Session v3" (2026-09-25,
+          # drift next). Termination keys on the resolved spec set stabilizing,
+          # and the UNION of every spec so far is always installed — a later
           # `npm install --no-save <subset>` reifies the tree from package.json
           # and would revert the unnamed ones back to the lockfile.
           ALLDEPS="@deepseek-ai/dsh@$HOST"
           for round in 1 2 3; do
-            MISSING="$(node -e '
+            WANTLIST="$(node -e '
               const fs = require("fs");
               const seen = new Set(["@deepseek-ai/dsh"]);
               const queue = ["@deepseek-ai/dsh"];
@@ -287,14 +292,13 @@ jobs:
                   const block = manifest[field] ?? {};
                   for (const dep of Object.keys(block)) {
                     if (!dep.startsWith("@deepseek-ai/")) continue;
-                    if (!fs.existsSync("node_modules/" + dep + "/package.json")) out.set(dep, block[dep]);
-                    else if (!seen.has(dep)) { seen.add(dep); queue.push(dep); }
+                    if (!out.has(dep)) out.set(dep, block[dep]);
+                    if (!seen.has(dep) && fs.existsSync("node_modules/" + dep + "/package.json")) { seen.add(dep); queue.push(dep); }
                   }
                 }
               }
               console.log([...out].map(([dep, range]) => dep + "|" + range).join("\n"));
             ')"
-            if [ -z "$MISSING" ]; then break; fi
             NEW=""
             UNRESOLVED=""
             while IFS= read -r entry; do
@@ -311,8 +315,15 @@ jobs:
                 if [ -n "$sat" ] && [ "$sat" != "$v" ]; then v="$sat"; fi
               fi
               if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"; fi
-              if [ -n "$v" ]; then NEW="$NEW $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep@$range"; fi
-            done <<< "$MISSING"
+              if [ -n "$v" ]; then
+                # Already-pinned specs are skipped; everything else — missing OR
+                # present at a stale version — gets an explicit pin this round.
+                case " $ALLDEPS " in *" $dep@$v "*) ;; *) NEW="$NEW $dep@$v";; esac
+              else
+                UNRESOLVED="$UNRESOLVED $dep@$range"
+              fi
+            done <<< "$WANTLIST"
+            if [ -z "$NEW" ]; then break; fi
             if [ -n "$UNRESOLVED" ]; then
               echo "::error::boot smoke cannot resolve CLI deps/peers on '$WANT':$UNRESOLVED"
               exit 1
