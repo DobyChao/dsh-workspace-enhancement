@@ -40,6 +40,10 @@
 
 > **2026-09-24 修订**：四包 `next` 均为 **`0.1.7-rc.1`**（另有 `0.1.7-alpha.1` / `alpha.2`）。`@deepseek-ai/dsh` 的 `next` 同为 `0.1.7-rc.1`，`latest` 仍是 `0.1.5-rc.3`。`dsh-ssh@0.1.7-rc.1` `lib/index.js:46` 仍是 `process.platform !== linux/darwin` 即抛 `SSH runtime requires a POSIX client`。`dsh@0.1.7-rc.1` 与 `dsh-web-app@0.1.7-rc.1` 的依赖里没有 SSH 四包。§5 选项 A 仍然成立，拍板仍待所有者。
 >
+> **2026-09-25 修订**：`dsh-fs` 的 `next` 亦从 `0.1.5-rc.2` 跳到 **`0.1.7-rc.2`**（当日两次 dispatch 之间），
+> 且**基类** `FileSystem.prototype` 具现 `watch`（不再只是具体后端私有）——混合门面已实现该方法，
+> 契约测试的基类快照改为家族自适应（floor ⊆ 已知集）。其余各包 `next` 维持 `0.1.7-rc.2`。
+>
 > **2026-09-18 修订**：四包现已各发 **`0.1.6-alpha.2`**（`npm view` 核实），上游在持续推进；
 > 这正是 §5「哨兵盲区处置」想要的信号形态。本 ADR 其余行号仍属 alpha.1 解包产物；
 > alpha.2 的增量diff未做（无收口需要，`UPSTREAM-5` 动 pin 时再补）。
