@@ -124,9 +124,15 @@ ps -eo pid,ppid,args | grep -E '[b]wrap|[d]sh-core serve'
 （连接 id 字符集本就排除 `\`）。回归：`test/mixed-routing.test.ts` 的 BUG-10 两用例。
 平铺 `.md` 本就不受影响；宿主不重启清单不刷新是注册表缓存行为，与本修复无关。
 
-**第二层已落地（`routeFromWin32Shredded`，2026-09-25）**：按下方走查修正的修法候选，
+**第二层已落地（`routeFromJoinShredded` win32 形，2026-09-25）**：按下方走查修正的修法候选，
 `remoteRouteFromCwd` 识别搅碎拼写（`ssh:` 后仅反斜杠分隔）并重建路由；真 SSH c1 复放
-与 R38 复跑均通过（5/5，含正文注入与宿主重启后新内容生效）。
+与 R38 复跑均通过（5/5，含正文注入与宿主重启后新内容生效——win32 宿主）。
+
+**第三层（posix 塌缩形，2026-09-25 Linux 宿主独立复测带出）**：posix join 不搅碎、而是把
+`://` **塌成 `:/`**——`posix.join('ssh://c1/…/dir', 'SKILL.md')` ⇒ `ssh:/c1/…/SKILL.md`
+（单斜杠、正斜杠）。`parseSshRoute` 要 `ssh://`、win32 恢复要反斜杠，两者都够不着 ⇒ Linux
+宿主上目录包 E2E 仍缺席（平铺不受影响）。`routeFromJoinShredded` 增加塌缩分支
+（`ssh:/<id>/<path>`，恰一斜杠是签名：真 `ssh://` 拼写不会命中）。Linux E2E 复跑待验。
 
 **走查修正（R38 UAT，2026-09-25）**：上面「join 产出 `ssh://…\SKILL.md`」的机制重构有误。
 离线复刻（`docs/uat/R38-bug10-skill-dir-uat.md` §4）实证：win32 join 会把 `ssh://` 前缀
