@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+## [0.2.2](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-26)
+
+0.2.1 之后的修复与上游对齐：远程 skill 目录包发现（宿主 join 三种破坏形态）、
+0.1.7-rc 接缝（fs `watch` + subprocess `terminalEnvironment`）、上游新包巡检哨兵、
+drift workflow 加固。宿主窗口仍是 `^0.1.5-rc.1`（0.1.7-rc 线经哨兵实证兼容，随本版生效，
+升 pin 等 `latest` 翻）。
+
+升级已部署 0.2.1 核心的机器时请再点一次「部署核心」：工件版本改为 `0.2.2`
+（serve 的 workspace 世界绑定变化在核心里，`dsh-core version` / hello 同步到 `0.2.2`）。
+
 ### 修复
 
 - **远程目录包 skill 发现（`BUG-10`）**：win32 宿主用 `join(entry.path, "SKILL.md")` 重组我们的 `ssh://` 条目时会**整体搅碎**前缀（`ssh://c1/a` + `SKILL.md` ⇒ `.\ssh:\c1\SKILL.md`），resolve 无 cwd 落本地分支、目录包静默消失（R38 UAT §4 实证）。修复两层：① `parseSshRoute` 把 `ssh://` 路径部分的字面 `\` 归一为 `/`（子缺口，`bs-probe` 探针验证）；② `remoteRouteFromCwd` 识别搅碎拼写并重建路由——win32 形（`ssh:` 后仅反斜杠）与 posix 塌缩形（`join` 把 `://` 塌成 `:/`，Linux 复测实证）两个分支。平铺 `.md` 不经 join 不受影响。
