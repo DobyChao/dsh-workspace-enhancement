@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-24 16:13 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-26 03:56 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,30 +10,30 @@
 | package.json 版本 | `0.2.1` |
 | npm 已发布版本 | `0.2.1` |
 | 最新 tag | `v0.2.1` |
-| 分支 / HEAD | `master` / `15504ae` |
-| HEAD 提交 | `feat(remote): bind tools to workspace worlds (#31)` (2026-09-24) |
+| 分支 / HEAD | `master` / `402e317` |
+| HEAD 提交 | `fix: rebuild posix-collapsed ssh routes and harden the drift workflow (#42)` (2026-09-26) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 50 |
-| 单测用例（静态计数） | 609 |
+| 单测文件 | 52 |
+| 单测用例（静态计数） | 634 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 38 |
+| 轮次报告 | 39 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 16 |
+| `todo` | 12 |
 | `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 55 |
+| `done` | 58 |
 | `shipped` | 8 |
-| `dropped` | 14 |
+| `dropped` | 15 |
 
 ## 被挡住 / 待拍板
 

@@ -21,9 +21,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-5 | 0.1.7-rc.1 subprocess 接缝对齐 | todo | P0 | 2026-09-25 drift 红：`next` 全家族已是 0.1.7-rc.2（`dsh-fs` 当日跟上），`dsh-fs-local` 新增 `watch`（第 15 接缝方法）且**基类**具现之，反射契约点名。门面已补；基类快照改家族自适应。待 drift 复跑绿后收口。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §4 |
-| BUG-10 | 远程项目 skill 目录包发现失败（宿主 join 搅碎 `ssh://` 前缀） | todo | P1 | win32 join 搅碎成 `.\ssh:\<id>…`、posix join 塌缩成 `ssh:/<id>/…`（Linux 复测实证），resolve 落本地静默跳过。三层修：归一 + win32 搅碎重建 + posix 塌缩重建（本 PR）。win32 UAT 5/5 过；Linux E2E 复跑待验。走查 [R38](./uat/R38-bug10-skill-dir-uat.md) §4/§6 |
-| UPSTREAM-7 | 上游新包巡检要让哨兵响 | todo | P1 | 2026-09-25 落地：`upstream.yml` scope-watch 作业每周比对宿主包（dsh / dsh-web-app × latest/next/alpha）`@deepseek-ai/*` 组成与 [baseline](../scripts/upstream-baseline.json)，漂移开 issue；SSH 四包收编单独点名（`UPSTREAM-6` 复评触发）。验收：手动 dispatch 演练漂移会开 issue。[ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
@@ -31,7 +28,6 @@
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
-| AUDIT-1 | 混合门面改为 `extends` 上游基类 | todo | P3 | 2026-09-25 评估：**extends 不做**（基类是 cordis Service、构造要 Context；静默继承会绕过世界路由——理由见 `test/mixed-subprocess-contract.test.ts` 头注）。风险以双侧反射契约承担：fs 侧已拦住 0.1.7 `watch`；subprocess 侧本 PR 补上（实锤：门面曾缺 `terminalEnvironment`）。待合并后挪 §5 |
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
@@ -55,6 +51,9 @@
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/`。收口见 `INFRA-13` |
 | REQ-I19 | 主/副工作区区域权限：工具绑世界 | done | P2 | PR #31。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。UAT [R37](./uat/R37-req-i19-region-permissions.md) Windows 18/18；Linux 复跑 2026-09-25 用户确认收口。档案 [R37](./rounds/R37-req-i19-region-permissions.md) |
 | BUG-11 | Linux 宿主区域矩阵五步失败 | done | P1 | 修复随 PR #31（拒 glued ssh workdir/jail 外 cwd、本地 sw_exec 回宿主 confine、清陈旧 jail）。Linux 复跑 R37 通过（2026-09-25 用户确认）。档案同上 R37 |
+| BUG-10 | 远程项目 skill 目录包发现失败（宿主 join 破坏 `ssh://` 前缀） | done | P1 | PR #37/#42 三层修（归一 / win32 搅碎 / posix 塌缩重建）。win32 UAT 5/5。尾巴：Linux E2E 复跑 + win32 回归。档案 [R39](./rounds/R39-bug10-upstream5-7-audit1.md) |
+| UPSTREAM-5 | 0.1.7 家族接缝对齐 | done | P0 | rc.2 全接缝（fs `watch` + subprocess `terminalEnvironment`）；契约 15 方法；workflow 加固后终 dispatch 绿（run 36216275977）。peer 等 `latest` 翻再升。档案 R39 |
+| UPSTREAM-7 | 上游新包巡检要让哨兵响 | done | P1 | scope-watch 上线：宿主包组成比对基线，漂移开 issue，SSH 四包收编点名（`UPSTREAM-6` 触发器）。报警已演练（issue #40）。档案 R39 |
 | INFRA-15 | 核心分发：npm 带工件 + 第三方不由我们分发 | done | P1 | PR #23。档案 [R28](./rounds/R28-infra15-core-artifact-distribution.md)。尾巴：四组合 UAT 未跑 |
 | INFRA-13 | 文档地图收口 | done | P3 | [`docs/README.md`](./README.md) 是地图。同轮 `ADR-0023`：远端读写纳入核心 |
 | INFRA-2 | 统一质量门 `npm run check` | done | P0 | 另有 `test:agent` |
@@ -134,6 +133,7 @@
 | REQ-I12 | 围栏可见面 + 死字段 `remoteSandboxRunner` | dropped | — | 死字段已不读。审批下拉另见 `UX-7` |
 | SEC-1 | 副根 `fs:r + exec:on` 绕过 | dropped | — | 随 `REQ-I7` 失去对象。调查留 `ADR-0012`（作废） |
 | SEC-2 | 主 workdir 写删只读副根 | dropped | — | 同上；围栏改由 `AUDIT-6` / `REQ-I9` 线 |
+| AUDIT-1 | 混合门面改为 `extends` 上游基类 | dropped | — | 不做：基类是 cordis Service，静默继承绕过世界路由。双侧反射契约承担（R39） |
 
 ## 6. AgentTeams 标准轮次（INFRA-8 目标）
 
