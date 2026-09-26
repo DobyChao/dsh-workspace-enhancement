@@ -9,7 +9,8 @@
 
 | 插件版本 | 宿主 `@deepseek-ai/dsh` | 状态 | 说明 |
 |---|---|---|---|
-| 0.2.1（当前发布） | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.0 之后：`REQ-I10` 日落 pick、`REQ-I15` 读面降级、`REQ-I16` bash 按工作区注入、`BUG-7`/`BUG-8`/`BUG-9`。核心工件 `0.2.1`（hello 从误留的 `0.2.0-dev` 对齐）。宿主窗口与 0.2.0 相同 |
+| 0.2.2（当前发布） | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.1 之后：`BUG-10` 远程目录包 skill 三层修复（宿主 join 三种破坏形态）、`UPSTREAM-5` 0.1.7-rc 接缝（fs `watch` + subprocess `terminalEnvironment`，README 增 0.1.7-rc 行）、`UPSTREAM-7` scope watch 哨兵、drift workflow 加固。核心工件 `0.2.2`（serve 世界绑定，需重部署） |
+| 0.2.1 | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.0 之后：`REQ-I10` 日落 pick、`REQ-I15` 读面降级、`REQ-I16` bash 按工作区注入、`BUG-7`/`BUG-8`/`BUG-9`。核心工件 `0.2.1`（hello 从误留的 `0.2.0-dev` 对齐）。宿主窗口与 0.2.0 相同 |
 | 0.2.0 | `^0.1.5-rc.1` | 支持 | 远端一个核心（`REQ-I5` / `REQ-I13`）+ 核心分发（`INFRA-15`）+ UI 设计语言（`UX-3`）+ `BUG-4`/`BUG-5`/`BUG-6` |
 | 0.1.4 | `^0.1.5-rc.1`（**单家族**） | 支持 | UPSTREAM-1：补上 0.1.5 线新增的 `readByteRange`（引擎 + 门面）；**UPSTREAM-3 R19**：浏览器通道从自挂 `/dsw` 改为**官方共享 `/api` 的精确 Fetch 路由**（`ADR-0018`），F1/F2/F3 全部落地；**UPSTREAM-4**：按所有者决定退场 0.1.2 家族，peer 13 项 + dev 21 项收窄为 `^0.1.5-rc.1`，哨兵只留 next/alpha 两条通道。**运行时口径（2026-09-11 实测）**：lab profile（`link:` 装本插件）+ `0.1.5-rc.2` 宿主真 boot ⇒ `POST /api/dsw/connections.list → 200, result.ok=true`；**0.1.5 家族可宣称运行时支持**（HTTP/宿主装配级；浏览器全流程见 UAT） |
 | 0.1.3 | `0.1.2-rc.1` 家族 | **停止支持** | 发布形态修正：`dependencies` 仅 `ssh2`、15 个 peer 走 `^0.1.2-rc.1`；含 BUG-2 贴图修复与 REQ-I6。**2026-09-11 起 0.1.2 家族整体退场**（`UPSTREAM-4`）：本仓库不再为该线做兼容，升级宿主必须一并升级本插件 |
