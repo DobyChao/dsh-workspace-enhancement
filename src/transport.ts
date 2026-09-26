@@ -126,36 +126,44 @@ export interface RemoteRouteRef {
  * Resolve ANY session-cwd spelling to its remote route, or null for a local
  * session (zero prompt injection). Three spellings select the same registry
  * connection: the `ssh://<id>/<path>` form and both local placeholder trees
- * (`dsw-routes/<id>/…`, pre-rename `dsh-ssh-routes/<id>/…`) — plus, as a BUG-10
- * recovery, the shredded relative spelling a win32 host's join mints from our
- * own `ssh://` entries (`routeFromWin32Shredded`).
+ * (`dsw-routes/<id>/…`, pre-rename `dsh-ssh-routes/<id>/…`) — plus, as BUG-10
+ * recoveries, the two mangled spellings a host's `path.join` mints from our
+ * own `ssh://` entries (`routeFromJoinShredded`).
  * @param cwd - the session's header cwd.
  * @param dshBase - DSH home override (tests); defaults to the environment.
  */
 export function remoteRouteFromCwd(cwd: string | undefined, dshBase?: string): RemoteRouteRef | null {
   if (cwd === undefined) return null
   let parsed = cwd.startsWith('ssh://') ? parseSshRoute(cwd) : routeFromPlaceholder(cwd, dshBase)
-  if (parsed === null) parsed = routeFromWin32Shredded(cwd)
+  if (parsed === null) parsed = routeFromJoinShredded(cwd)
   if (parsed === null) return null
   return { connectionId: parsed.id, path: parsed.path }
 }
 
 /**
- * BUG-10: recover the remote route a win32 host's `path.win32.join` SHREDDED.
- * Upstream skill discovery re-joins our `ssh://<id>/…` listDir entries with the
- * host's join, which rewrites the whole spelling into a RELATIVE path —
- * `ssh://c1/a/b` + `SKILL.md` ⇒ `.\ssh:\c1\a\b\SKILL.md`. The string no longer
- * starts with `ssh://`, so `parseSshRoute` cannot engage and a cwd-less
- * `resolve` silently falls to the local branch (R38 UAT §4). The shape is
- * unambiguous: win32 normalize collapses the `://` to a single `\`, so the
- * recovery requires backslash-only separators after `ssh:` — a genuine
- * `ssh://` spelling with a valid id never reaches it (it parses first), a
- * drive path never matches, and POSIX hosts never shred (their join keeps `/`).
+ * BUG-10: recover the remote route a host's `path.join` MANGLED. Upstream
+ * skill discovery re-joins our `ssh://<id>/…` listDir entries with the host's
+ * join, and both platform joins destroy the `ssh://` prefix a cwd-less
+ * `resolve` needs — it then silently falls to the local branch (R38 UAT §4,
+ * Linux-host retest 2026-09-25):
+ *
+ * - win32 join rewrites the whole spelling into a RELATIVE path with the
+ *   authority collapsed to a single `\` — `ssh://c1/a/b` + `SKILL.md` ⇒
+ *   `.\ssh:\c1\a\b\SKILL.md`. Backslash-only separators are unambiguous: a
+ *   genuine `ssh://` spelling with a valid id never reaches this recovery
+ *   (it parses first) and a drive path never matches.
+ * - posix join merely COLLAPSES the authority slashes — the same join yields
+ *   `ssh:/c1/a/b/SKILL.md`. A single `/` after `ssh:` is likewise safe: a
+ *   proper `ssh://` spelling never has exactly one, and a relative local path
+ *   starting `ssh:/` is not producible on win32 (colon is drive-only) and only
+ *   marginally on POSIX (a directory literally named `ssh:`).
  */
-function routeFromWin32Shredded(value: string): { id: string; path: string } | null {
+function routeFromJoinShredded(value: string): { id: string; path: string } | null {
   const shredded = /^(?:\.{1,2}[\\/])?ssh:\\+([A-Za-z0-9._-]*)(?:\\+(.*))?$/.exec(value)
-  if (shredded === null) return null
-  return parseSshRoute(`ssh://${shredded[1]}/${shredded[2] ?? ''}`)
+  if (shredded !== null) return parseSshRoute(`ssh://${shredded[1]}/${shredded[2] ?? ''}`)
+  const collapsed = /^ssh:\/([A-Za-z0-9._-]+)(\/.*)?$/.exec(value)
+  if (collapsed !== null) return parseSshRoute(`ssh://${collapsed[1]}${collapsed[2] ?? '/'}`)
+  return null
 }
 
 function registryConnectionOf(ctx: Context, id: string): SshTransport | undefined {

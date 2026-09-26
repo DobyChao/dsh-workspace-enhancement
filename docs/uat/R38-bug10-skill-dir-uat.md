@@ -72,6 +72,14 @@ win32.join('ssh://c1/home/uuz/eee/.dsh/skills/demo-dir-skill', 'SKILL.md')
 ssh 拼写并重建：`^(\.{1,2}\\)?ssh:\\+<id>\\…` → `ssh://<id>/<posix>`（`\`→`/`，补回 `//`）。
 win32 本地相对段不可能含 `\`，识别安全；Linux 宿主 join 本就不搅碎，不受影响。
 
+## 6. Linux 宿主追记（2026-09-25 独立复测）
+
+在 Linux 宿主（master `d132a6a` tarball + 真 SSH）复测：单测全绿、win32 搅碎代码在位，
+但步骤 3 仍只列平铺——**posix join 不搅碎、而是塌缩**：`posix.join('ssh://…/dir','SKILL.md')`
+⇒ `ssh:/…/SKILL.md`（单斜杠），第二层的 win32 恢复够不着。第三层（posix 塌缩重建，
+`fix/bug10-posix-join-collapse`）已加解析/门面用例；**Linux E2E 复跑与 win32 复跑（回归）待验**。
+win32 侧 §5 复跑通过不受影响（塌缩分支恰一斜杠是签名，真 `ssh://` 不命中）。
+
 来源：`docs/notes/host-silent-fs.md` §6；`test/mixed-routing.test.ts` BUG-10 用例。
 
 ## 5. 复跑记录（2026-09-25 晚，修复 `7a8a152`）

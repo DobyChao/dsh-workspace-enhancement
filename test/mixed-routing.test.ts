@@ -90,6 +90,26 @@ test('BUG-10: a win32-join SHREDDED ssh spelling is rebuilt at the routing entry
   assert.equal(worldOfCwd(String.raw`.\ssh:\c1\home\proj`, 'linux'), 'remote')
 })
 
+test('BUG-10: a posix-join COLLAPSED ssh spelling is rebuilt at the routing entry', () => {
+  // The Linux-host chain (2026-09-25 independent retest): posix join does not
+  // shred the prefix, it COLLAPSES the authority slashes —
+  // posix.join('ssh://c1/…/demo-dir-skill', 'SKILL.md') ⇒ 'ssh:/c1/…/SKILL.md'.
+  // parseSshRoute needs 'ssh://' and the win32 recovery needs backslashes, so
+  // this third spelling needs its own branch in the recovery.
+  assert.deepEqual(remoteRouteFromCwd('ssh:/c1/home/uuz/.dsh/skills/demo-dir-skill/SKILL.md'), {
+    connectionId: 'c1',
+    path: '/home/uuz/.dsh/skills/demo-dir-skill/SKILL.md',
+  })
+  assert.deepEqual(remoteRouteFromCwd('ssh:/c1'), { connectionId: 'c1', path: '/' })
+  // Exactly one slash after 'ssh:' is the collapsed signature: proper 'ssh://'
+  // spellings with a bad id still stay local (no re-interpretation), and a
+  // non-connection id (space) never routes.
+  assert.equal(remoteRouteFromCwd('ssh://c1 hidden/x'), null)
+  assert.equal(remoteRouteFromCwd('ssh:/c1 hidden/x'), null)
+  assert.equal(worldOfCwd('ssh:/c1/home/proj', 'linux'), 'remote')
+  assert.equal(worldOfCwd('ssh:/c1/home/proj', 'win32'), 'remote')
+})
+
 test('t6: worldOfCwd — a POSIX-absolute cwd on win32 is remote; UNC/drive stay local', () => {
   assert.equal(worldOfCwd('/home/uuz/r4-verify', 'win32'), 'remote')
   assert.equal(worldOfCwd('/home/uuz', 'win32'), 'remote')
@@ -505,6 +525,21 @@ test('BUG-10: a SHREDDED directory-package spelling routes remote with NO cwd at
   assert.deepEqual(remote.calls, ['resolve:remote:/w/.dsh/skills/demo-dir-skill/SKILL.md'])
   assert.deepEqual(local.calls, [])
   await mixed.lstat(String.raw`.\ssh:\c1\w\.dsh\skills\demo-dir-skill\SKILL.md`, { cwd: LOCAL_CWD })
+  assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
+  assert.deepEqual(local.calls, [])
+})
+
+test('BUG-10: a posix-COLLAPSED directory-package spelling routes remote with NO cwd', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+  // The Linux-host chain (2026-09-25 retest): posix join collapses 'ssh://…'
+  // to 'ssh:/…'; without the collapsed-spelling recovery the facade answered
+  // from the local branch and the directory package never catalogued.
+  await mixed.resolve('ssh:/c1/w/.dsh/skills/demo-dir-skill/SKILL.md')
+  assert.deepEqual(remote.calls, ['resolve:remote:/w/.dsh/skills/demo-dir-skill/SKILL.md'])
+  assert.deepEqual(local.calls, [])
+  await mixed.lstat('ssh:/c1/w/.dsh/skills/demo-dir-skill/SKILL.md')
   assert.deepEqual(remote.calls.slice(1), ['lstat:remote'])
   assert.deepEqual(local.calls, [])
 })
