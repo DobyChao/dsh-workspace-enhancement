@@ -93,6 +93,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Version extraction takes the LAST whitespace token of `npm view`'s last
+        # line and strips quotes: npm >= 11 prints multi-match output as
+        # `name@ver 'ver'` (both forms, sometimes on one line) — a bare `tail -1`
+        # yielded a spec fragment that broke `npm install` (2026-09-25:
+        # dsh-code-runtime mangled into `pkg@scope/pkg@0.1.5-rc.3 '0.1.5-rc.3'`
+        # → 404 → boot smoke died).
         # `tag:` resolves every host-shared package through a dist-tag; `family:`
         # pins them all to one exact version.
         include:
@@ -128,7 +134,7 @@ jobs:
           NAMES="$(node -e "console.log(Object.keys(require('./package.json').peerDependencies).filter(n=>n.startsWith('@deepseek-ai/dsh-')).join(' '))")"
           if [ -n "${{ matrix.family }}" ]; then
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$name@${{ matrix.family }}" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -137,7 +143,7 @@ jobs:
             done
           else
             for name in $NAMES; do
-              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$name@${{ matrix.tag }}" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then
                 PKGS="$PKGS $name@$v"
               else
@@ -177,7 +183,7 @@ jobs:
           if [ -n "$MISSING" ]; then
             DEPS=""
             for dep in $MISSING; do
-              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$v" ]; then DEPS="$DEPS $dep@$v"; fi
             done
             if [ -n "$DEPS" ]; then
@@ -209,7 +215,7 @@ jobs:
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
           ANCHOR="$(node -e "try { console.log(require('./node_modules/@deepseek-ai/dsh-fs/package.json').version) } catch { console.log('') }")"
-          WANT_V="$(npm view "@deepseek-ai/dsh-fs@$WANT" version 2>/dev/null | tail -1 || true)"
+          WANT_V="$(npm view "@deepseek-ai/dsh-fs@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
           if [ -z "$WANT_V" ]; then
             echo "::warning::@deepseek-ai/dsh-fs has no '$WANT' release — family anchor not verified"
           elif [ "$ANCHOR" != "$WANT_V" ]; then
@@ -242,7 +248,7 @@ jobs:
           set -o pipefail
           WANT="${{ matrix.family }}"
           if [ -z "$WANT" ]; then WANT="${{ matrix.tag }}"; fi
-          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1 || true)"
+          HOST="$(npm view "@deepseek-ai/dsh@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
           if [ -z "$HOST" ]; then
             echo "::warning::@deepseek-ai/dsh has no release on '$WANT' — boot smoke skipped"
             exit 0
@@ -257,15 +263,20 @@ jobs:
           # regular dependency carries. Without this closure the host died with
           # ERR_MODULE_NOT_FOUND before printing its URL on BOTH channels
           # (2026-09-14 run 34824542756, issues #7/#9) and none of the smoke's
-          # assertions ever ran. Close the CLI tree's @deepseek-ai/* gaps in a
-          # fixpoint loop, resolving each dep range-aware (channel tag first,
-          # but the requirer's declared range wins when the channel pin is
-          # stale), and install the UNION of every spec so far — a later
+          # assertions ever ran. Close the CLI tree's @deepseek-ai/* graph in a
+          # fixpoint loop that pins EVERY walked dep to an explicit spec (channel
+          # tag first, but the requirer's declared range wins when the channel
+          # pin is stale) — not just the ABSENT ones: the repo's own lockfile
+          # leaves @deepseek-ai packages of the older family in node_modules,
+          # and a 0.1.7 persistence plugin meeting a 0.1.5 Session died at boot
+          # with "format catalog v4 does not match Session v3" (2026-09-25,
+          # drift next). Termination keys on the resolved spec set stabilizing,
+          # and the UNION of every spec so far is always installed — a later
           # `npm install --no-save <subset>` reifies the tree from package.json
           # and would revert the unnamed ones back to the lockfile.
           ALLDEPS="@deepseek-ai/dsh@$HOST"
           for round in 1 2 3; do
-            MISSING="$(node -e '
+            WANTLIST="$(node -e '
               const fs = require("fs");
               const seen = new Set(["@deepseek-ai/dsh"]);
               const queue = ["@deepseek-ai/dsh"];
@@ -282,14 +293,13 @@ jobs:
                   const block = manifest[field] ?? {};
                   for (const dep of Object.keys(block)) {
                     if (!dep.startsWith("@deepseek-ai/")) continue;
-                    if (!fs.existsSync("node_modules/" + dep + "/package.json")) out.set(dep, block[dep]);
-                    else if (!seen.has(dep)) { seen.add(dep); queue.push(dep); }
+                    if (!out.has(dep)) out.set(dep, block[dep]);
+                    if (!seen.has(dep) && fs.existsSync("node_modules/" + dep + "/package.json")) { seen.add(dep); queue.push(dep); }
                   }
                 }
               }
               console.log([...out].map(([dep, range]) => dep + "|" + range).join("\n"));
             ')"
-            if [ -z "$MISSING" ]; then break; fi
             NEW=""
             UNRESOLVED=""
             while IFS= read -r entry; do
@@ -300,18 +310,25 @@ jobs:
               # independent version lines whose next tag can trail the release
               # app-boot needs (@deepseek-ai/cordis-plugin-group: next=1.0.1-rc.4
               # vs required ^1.0.2, latest=1.0.2 — 2026-09-15).
-              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 || true)"
+              v="$(npm view "$dep@$WANT" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
               if [ -n "$range" ] && [ -n "$v" ]; then
-                sat="$(npm view "$dep@$range" version 2>/dev/null | tail -1 || true)"
+                sat="$(npm view "$dep@$range" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"
                 if [ -n "$sat" ] && [ "$sat" != "$v" ]; then v="$sat"; fi
               fi
-              if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 || true)"; fi
-              if [ -n "$v" ]; then NEW="$NEW $dep@$v"; else UNRESOLVED="$UNRESOLVED $dep@$range"; fi
-            done <<< "$MISSING"
+              if [ -z "$v" ]; then v="$(npm view "$dep" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'" | sed -E 's/.*@//' || true)"; fi
+              if [ -n "$v" ]; then
+                # Already-pinned specs are skipped; everything else — missing OR
+                # present at a stale version — gets an explicit pin this round.
+                case " $ALLDEPS " in *" $dep@$v "*) ;; *) NEW="$NEW $dep@$v";; esac
+              else
+                UNRESOLVED="$UNRESOLVED $dep@$range"
+              fi
+            done <<< "$WANTLIST"
             if [ -n "$UNRESOLVED" ]; then
               echo "::error::boot smoke cannot resolve CLI deps/peers on '$WANT':$UNRESOLVED"
               exit 1
             fi
+            if [ -z "$NEW" ]; then break; fi
             echo "boot closure (round $round):$NEW"
             # Union install, same reason as the seam-family closure: an install
             # naming only this round's deps would revert every earlier
