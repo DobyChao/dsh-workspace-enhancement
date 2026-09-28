@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-28 11:40 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-28 11:52 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `master` / `3b550cb` |
-| HEAD 提交 | `feat: real-machine test matrix with a WSL Linux lab and daily upstream tag watch (#47)` (2026-09-28) |
+| 分支 / HEAD | `master` / `d3b9161` |
+| HEAD 提交 | `docs(backlog): trim the INFRA-21 note under the gate limit` (2026-09-28) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
