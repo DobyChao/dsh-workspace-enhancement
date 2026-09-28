@@ -60,6 +60,12 @@
 - **检出链是用户实机，不是自动化**：typecheck / 单测 / boot 三层当时全绿——断的是运行时契约
   而非编译期形状。两个直接产物：①契约 fixture 从磁盘权威源当轮落盘的纪律（compatibility.md
   已记）；②drift「装新家族却 boot 旧宿主」的结构性漏网 → `INFRA-20`。
+  **【2026-09-28 追记纠错】②的机理表述不确**：CI drift 的 boot smoke 步骤**一直是** scratch
+  安装 `dsh@<channel>`（含 CLI 闭包不动点安装，upstream.yml boot 步骤）再 boot——boot 的就是
+  被测的，本地 boot-smoke 才用全局 0.1.5 宿主。真正的漏网是：**没有任何用例驱动工具执行路径**
+  （render / 后台 jobs 只在真实工具调用时走到；boot 哨兵只探 boot + connections.list）。
+  对应修正见 R42（INFRA-20 改为：真实家族形状契约测试 + 每日 tag 轻探；工具路径覆盖归
+  INFRA-19 实机矩阵的 L1 M3/M4）。
 - 本机网络：7890 代理当日长时间抖动/宕机，gh/git 需绕行（`env -u *_PROXY`）；WSL 内 npm 对
   registry 直连绕代理后恢复。
 - 管理侧定调（本轮对话）：交互模型 = 用户提需求 → 用户点名一组 backlog（恰好一个 PR）→

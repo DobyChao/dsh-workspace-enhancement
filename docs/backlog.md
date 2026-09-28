@@ -16,14 +16,14 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | doing | P1 | 2026-09-28 派发（一轮=一 PR）。交付：`docs/uat/matrix.md`（L1 7 条/L2 12 条，锚点=事故史，能力缺失→blocked）+ WSL lab 脚本（家族校验跟 pin、allowBuilds 代填、smoke=token 兑换+通道）。WSL smoke 真机 PASS（0.1.7-rc.2 Linux 宿主）。尾巴见 PR |
+| INFRA-20 | 上游信号升级：tag 每日轻探 + 真实家族形状契约 | doing | P1 | 机理修正（R41 追记）：drift 一直 boot 被测家族；真漏网=工具路径无用例。交付：`upstream-tags.mjs`（每日，latest/next/alpha 漂移开 issue）+ `test/settings-family-face.test.ts`（真实安装家族 settings 面 ⊆ 两族已知并集 + UPSTREAM-8 崩坏复现，drift 每周跑它）。同 PR |
 
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | todo | P1 | 2026-09-28 用户定调：单测抓不到装配/运行时问题（UPSTREAM-8 即证）。目标：lab 双宿主（win32 现有 + WSL 内装 Linux 宿主），browser-use 驱动 UI 用例；case 分层——per-PR 冒烟（少量）+ per-release 全量（适中）。能力缺失（无 browser-use）→ 整行 blocked，不静默跳过。与 `docs/uat/`、`e2e/` 资产衔接 |
-| INFRA-20 | drift 升级：boot 的就是被测的 + tag 每日轻探 | todo | P1 | UPSTREAM-8 教训：drift 装新家族却 boot 旧全局宿主，运行时接缝漏网。①drift 通道 scratch 安装 `dsh@<channel>` 再 boot-smoke（真测该家族宿主组合）；②dist-tag 每日轻探（`npm view` 秒级）漂移即 issue，每周全量 drift 保留；③新家族契约 fixture 当轮从磁盘权威源落盘（纪律入 compatibility.md） |
 | INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 = 单 PR | todo | P2 | 2026-09-28 用户定调交互模型：①用户提需求/答疑；②用户点名 N 条 backlog = **恰好一个 PR**；③用户合并；④用户发版。落地：AGENTS.md §7 写死点名派发规则；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失能力的步骤标 `agent-missing:<cap>` 进 §3 不跳过；协议只依赖仓库内文件，与 harness 无关 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |

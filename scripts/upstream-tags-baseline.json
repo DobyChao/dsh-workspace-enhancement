@@ -1,0 +1,11 @@
+{
+  "$comment": "Acknowledged dist-tags of the host package (the family signal; seam packages' own latest tags are frozen noise — compatibility.md §3.1). The tag watch (upstream.yml, daily) diffs live registry data against this file and opens an issue on movement; regenerate with `node scripts/upstream-tags.mjs --write-baseline` to acknowledge.",
+  "recordedAt": "2026-09-28",
+  "tags": {
+    "@deepseek-ai/dsh": {
+      "latest": "0.1.7-rc.2",
+      "next": "0.1.7-rc.2",
+      "alpha": "0.1.7-alpha.2"
+    }
+  }
+}
