@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
 import { zh, en, lookup, type DswKey } from '../src/locale/index.ts'
-import { hostLocaleOf, localeOf } from '../src/locale/host.ts'
+import { hostLocaleOf, localeOf, localePreferenceOf } from '../src/locale/host.ts'
 
 /* ------------------------------------------------------ 1) 双语键集严格相等 */
 
@@ -151,5 +151,39 @@ test('hostLocaleOf：只读 ctx.settings 可选服务（ctx.get 判空、非 inj
   const locale = hostLocaleOf(ctx)
   void locale.active()
   assert.deepEqual(ctx.reads, [['settings', false]], 'hostLocaleOf 只能通过 ctx.get("settings", false) 访问，且不读其他服务')
+})
+
+/* ------------------- 4) UPSTREAM-8：0.1.7 SettingsForms 家族（settings 无 get） */
+
+/** A fake context returning an arbitrary RAW settings value (family fixture). */
+function fakeContextRawSettings(settings: unknown): Context {
+  return { get: (name: string) => (name === 'settings' ? settings : undefined) } as unknown as Context
+}
+
+test('localePreferenceOf：get 非函数（0.1.7 SettingsForms、裸对象、null/undefined）→ undefined，不再抛', () => {
+  assert.equal(localePreferenceOf(undefined), undefined)
+  assert.equal(localePreferenceOf(null), undefined)
+  assert.equal(localePreferenceOf({ describe: () => [], update: async () => {}, replace: async () => {} }), undefined)
+  assert.equal(localePreferenceOf({ get: 'not a function' }), undefined)
+  assert.equal(
+    localePreferenceOf({ get: (namespace: string) => (namespace === 'locale' ? { preference: 'zh' } : undefined) }),
+    'zh',
+  )
+})
+
+test('hostLocaleOf（UPSTREAM-8）：0.1.7 SettingsForms 服务没有 get —— active/t 不抛、回退 en', () => {
+  const settingsForms = {
+    describe: () => [],
+    update: async () => {},
+    replace: async () => {},
+    mutate: async () => {},
+    configure: () => () => {},
+    writable: true,
+    documentPath: 'C:/x/patch.yaml',
+  }
+  const locale = hostLocaleOf(fakeContextRawSettings(settingsForms))
+  assert.equal(locale.active(), 'en')
+  assert.equal(locale.t('status.unknown'), en['status.unknown'])
+  assert.doesNotThrow(() => locale.t('tool.output.exitCode', { code: 1 }))
 })
 

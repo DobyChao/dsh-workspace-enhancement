@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### 变更
+
+- **peer 锚升到 0.1.7 家族（`UPSTREAM-9`）**：2026-09-28 宿主包 `@deepseek-ai/dsh` 的 `latest` 翻到 `0.1.7-rc.2`（seam 包自身 `latest` 卡在 `0.0.1-rc.1`，家族信号以宿主包为准），`UPSTREAM-5` 留下的「peer 等 `latest` 翻再升」兑现：13 个 peer + 21 个 devDependency 全部 `^0.1.5-rc.1` → `^0.1.7-rc.2`，cordis `^4.0.4` / schemastery `^3.18.4` 跟随家族闭包要求。0.1.7 家族下 typecheck / 单测 / build 全绿；boot 哨兵在 0.1.5-rc.1 宿主上仍 SMOKE PASS（已装 0.2.2 的 0.1.5 宿主运行时不回退，但新发布物起安装要求 0.1.7 家族）。
+
+### 修复
+
+- **0.1.7-rc.2 宿主两处运行时断点（`UPSTREAM-8`，用户实机报告）**：① `dsh-settings` 被上游重写为 `SettingsForms`（无 `get` 读取器），插件渲染本地化标记（空输出 / exit code / 沙箱拒绝）即抛 `TypeError`——改为家族自适应读取（`localePreferenceOf`）：0.1.5 家族仍读 `get('locale').preference`，0.1.7 家族回退 EN（与官方 bash 工具的硬编码英文标记一致）。② `ctx.jobs.start` 的 `owner` 契约从 Agent 实例改为 **SessionId 字符串**，后台输出从 `readOutput` hook 改为 ring **pull source**——三处后台注册（`sw_exec` 远程 / `sw_exec local` / win32 `bash`）按 `readAt` 在场判别 ring 家族：owner 传 `agent.id` 并接上输出通道（collect readers 直连 / 宿主 shell 增量读的字节游标桥 `deltaRingSource`，8 MiB 保留界、UTF-8 码点边界裁剪）；0.1.5 家族行为不变（owner 实例 + `readOutput` hook）。
+
 ## [0.2.2](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-26)
 
 0.2.1 之后的修复与上游对齐：远程 skill 目录包发现（宿主 join 三种破坏形态）、
