@@ -86,7 +86,7 @@ jobs:
               })
             }
 
-jobs:
+
   # UPSTREAM-7: the drift channels below only reinstall the seam family this
   # repo DECLARES, so a green channel says nothing about packages we do not
   # depend on — the 0.1.6 line shipped a whole official SSH runtime family
