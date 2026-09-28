@@ -9,7 +9,8 @@
 
 | 插件版本 | 宿主 `@deepseek-ai/dsh` | 状态 | 说明 |
 |---|---|---|---|
-| 0.2.2（当前发布） | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.1 之后：`BUG-10` 远程目录包 skill 三层修复（宿主 join 三种破坏形态）、`UPSTREAM-5` 0.1.7-rc 接缝（fs `watch` + subprocess `terminalEnvironment`，README 增 0.1.7-rc 行）、`UPSTREAM-7` scope watch 哨兵、drift workflow 加固。核心工件 `0.2.2`（serve 世界绑定，需重部署） |
+| 未发布（master + `UPSTREAM-8`/`UPSTREAM-9`） | `^0.1.7-rc.2`（**单家族**） | 开发中 | 2026-09-28 宿主包 `latest` 翻到 `0.1.7-rc.2`（seam 包自身 latest 卡 `0.0.1` 不作数，信号以宿主包为准），UPSTREAM-5 留的「peer 等 latest 翻再升」兑现：34 个 dsh-* range 升 `^0.1.7-rc.2`（cordis `^4.0.4` / schemastery `^3.18.4` 跟随家族闭包）；`UPSTREAM-8` 同轮补齐 0.1.7 运行时接缝（SettingsForms locale 读 + jobs owner/ring 输出）。0.1.7 家族 typecheck/单测/build 全绿；boot 哨兵（0.1.5-rc.1 宿主）仍 SMOKE PASS = 已装 0.2.2 的 0.1.5 宿主运行时不回退 |
+| 0.2.2（当前发布） | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.1 之后：`BUG-10` 远程目录包 skill 三层修复（宿主 join 三种破坏形态）、`UPSTREAM-5` 0.1.7-rc 接缝（fs `watch` + subprocess `terminalEnvironment`，README 增 0.1.7-rc 行）、`UPSTREAM-7` scope watch 哨兵、drift workflow 加固。核心工件 `0.2.2`（serve 世界绑定，需重部署）。0.1.7-rc.2 宿主上有两处运行时断点（locale 渲染 + 后台 jobs），修复在未发布行 |
 | 0.2.1 | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.0 之后：`REQ-I10` 日落 pick、`REQ-I15` 读面降级、`REQ-I16` bash 按工作区注入、`BUG-7`/`BUG-8`/`BUG-9`。核心工件 `0.2.1`（hello 从误留的 `0.2.0-dev` 对齐）。宿主窗口与 0.2.0 相同 |
 | 0.2.0 | `^0.1.5-rc.1` | 支持 | 远端一个核心（`REQ-I5` / `REQ-I13`）+ 核心分发（`INFRA-15`）+ UI 设计语言（`UX-3`）+ `BUG-4`/`BUG-5`/`BUG-6` |
 | 0.1.4 | `^0.1.5-rc.1`（**单家族**） | 支持 | UPSTREAM-1：补上 0.1.5 线新增的 `readByteRange`（引擎 + 门面）；**UPSTREAM-3 R19**：浏览器通道从自挂 `/dsw` 改为**官方共享 `/api` 的精确 Fetch 路由**（`ADR-0018`），F1/F2/F3 全部落地；**UPSTREAM-4**：按所有者决定退场 0.1.2 家族，peer 13 项 + dev 21 项收窄为 `^0.1.5-rc.1`，哨兵只留 next/alpha 两条通道。**运行时口径（2026-09-11 实测）**：lab profile（`link:` 装本插件）+ `0.1.5-rc.2` 宿主真 boot ⇒ `POST /api/dsw/connections.list → 200, result.ok=true`；**0.1.5 家族可宣称运行时支持**（HTTP/宿主装配级；浏览器全流程见 UAT） |
@@ -65,11 +66,14 @@ npm 上 `@deepseek-ai/dsh` 家族有三个通道：`latest` → `next`（rc）�
 
 | 通道 | 现在解析到 | 含义 |
 |---|---|---|
-| `next` | **`0.1.7-rc.2`**（2026-09-25 实测；`latest` 仍 `0.1.5-rc.3`） | 我们声明支持的家族（**唯一**一条）——红了 = **下一个宿主版本就会撞**。2026-09-25 首次真红：`dsh-fs-local` 新增 `watch` → `UPSTREAM-5` |
+| `next` | **`0.1.7-rc.2`**（2026-09-28 复测；**`latest` 已于 2026-09-28 翻到同一版本**） | 我们声明支持的家族（**唯一**一条）——红了 = **下一个宿主版本就会撞**。2026-09-25 首次真红：`dsh-fs-local` 新增 `watch` → `UPSTREAM-5`；2026-09-28 `latest` 翻版触发 peer 升 pin `^0.1.7-rc.2`（`UPSTREAM-9`，UPSTREAM-5 留的「等 latest 翻再升」尾巴兑现） |
 | `alpha` | **`0.1.7-alpha.2`**（2026-09-25 实测） | 下一代——红了 = **提前预警**（还有提升缓冲期）。0.1.6 的 SSH 新包事实见 `ADR-0026` |
 
 > **`legacy`（0.1.2-rc.1）通道已于 2026-09-11 删除**（`UPSTREAM-4`）：所有者拍板 3080 不再安装本插件、
 > 后续不考虑 0.1.2 兼容，peer 范围随之收窄为单家族，再留一条 legacy 通道就是**验证一个我们不支持的家族**。
+>
+> **seam 包自身的 `latest` 不作数**（2026-09-28 实测卡在 `0.0.1-rc.1`）：家族信号以宿主包
+> `@deepseek-ai/dsh` 的 `latest` 为准——它指向哪条 rc 线，新装宿主就提供哪个家族组合。
 > 闸门 #6 的「多家族必须多通道」检查因此不再触发——声明少一条，就必须少验一条。
 
 **每通道都跑 boot 冒烟**（`UPSTREAM-3` ③）：原先哨兵只跑 typecheck + 单测 + 静态闸门，
