@@ -23,6 +23,8 @@ import {
   buildShellArgv,
   createRemoteOsCache,
   defaultRemoteDir,
+  deltaRingSource,
+  jobOwnerOf,
   makeSwExecDeadline,
   normalizeSwExecWorkdir,
   parseUnameAsync,
@@ -37,7 +39,7 @@ import {
   resolveSwExecTimeout,
   swExecCore,
 } from '../src/exec-tools.ts'
-import type { BackgroundJobs, SwExecConnection, SwExecEnv } from '../src/exec-tools.ts'
+import type { BackgroundJobHooks, BackgroundJobSource, BackgroundJobs, SwExecConnection, SwExecEnv } from '../src/exec-tools.ts'
 import type { SshRegistry } from '../src/registry.ts'
 import type { SshConnectionSpec } from '../src/connection.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
@@ -586,6 +588,139 @@ test('registerSwExec: server "local" background registers a host-shell job', asy
   assert.deepEqual(await hooks.done, { status: 'completed', detail: 'exit code: 0' })
   hooks.cancel()
   assert.equal(proc.status, 'killed')
+})
+
+/* --------------------------- 6b) UPSTREAM-8: 0.1.7 ring-family jobs owner/output */
+
+test('jobOwnerOf: 0.1.5 registry → agent instance; 0.1.7 ring registry → agent.id; absent agent → undefined', () => {
+  const legacy: BackgroundJobs = { start: () => 'x' }
+  const ring: BackgroundJobs = { start: () => 'x', readAt: () => ({ chunks: [], next: 0, lossy: false }) }
+  const agent = { id: 'sess-7', session: { header: {} } }
+  assert.equal(jobOwnerOf(legacy, agent), agent)
+  assert.equal(jobOwnerOf(ring, agent), 'sess-7')
+  assert.equal(jobOwnerOf(legacy, undefined), undefined)
+  assert.equal(jobOwnerOf(ring, undefined), undefined)
+})
+
+test('deltaRingSource: byte cursors across pumps; empty pump is a no-op; replays re-serve without loss', () => {
+  let delta = ''
+  const drain = (): string => { const out = delta; delta = ''; return out }
+  const source = deltaRingSource(drain)
+  assert.deepEqual(source.read(0), { text: '', nextOffset: 0, lossy: false })
+  delta = 'héllo '
+  const second = source.read(0)
+  assert.equal(second.text, 'héllo ')
+  assert.equal(second.nextOffset, 7, 'é counts two UTF-8 bytes')
+  assert.equal(second.lossy, false)
+  delta = 'world'
+  const third = source.read(second.nextOffset)
+  assert.equal(third.text, 'world')
+  assert.equal(third.nextOffset, 12)
+  const replay = source.read(0)
+  assert.equal(replay.text, 'héllo world')
+  assert.equal(replay.lossy, false)
+})
+
+test('deltaRingSource: retention bound trims on a codepoint boundary and flags reads below the window lossy', () => {
+  let delta = 'abcdefghij'
+  const source = deltaRingSource(() => { const out = delta; delta = ''; return out }, 5)
+  const trimmed = source.read(0)
+  assert.equal(trimmed.lossy, true, 'the read started below the retained window')
+  assert.equal(trimmed.text, 'fghij')
+  assert.equal(trimmed.nextOffset, 10)
+  assert.deepEqual(source.read(trimmed.nextOffset), { text: '', nextOffset: 10, lossy: false })
+  // A multibyte head: the drop index lands mid-codepoint and must back off to the lead byte.
+  let multibyte = 'ééabcd'
+  const boundary = deltaRingSource(() => { const out = multibyte; multibyte = ''; return out }, 5)
+  const kept = boundary.read(0)
+  assert.equal(kept.lossy, true)
+  assert.equal(kept.text, 'éabcd', 'the trim never splits a codepoint (no mojibake head)')
+  assert.equal(kept.nextOffset, 8)
+})
+
+test('registerSwExec background (0.1.7 ring family): owner is the agent id and output sources late-bind the handle', async () => {
+  const started: { kind: string; owner?: unknown; output?: readonly BackgroundJobSource[]; run(job?: unknown): BackgroundJobHooks }[] = []
+  const jobs: BackgroundJobs = {
+    start(spec) { started.push(spec); return 'sw-exec-9' },
+    readAt: () => ({ chunks: [], next: 0, lossy: false }),
+  }
+  const fake = fakeToolContext({ subprocess: { spawn: () => fakeHandle(undefined, { stdout: 'ring out' }) }, jobs })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }))
+  const agent = { id: 'sess-42', session: { header: { cwd: 'C:\\Users\\me\\proj' } } }
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', server: 'c1', run_in_background: true },
+    { signal: new AbortController().signal, agent },
+  )
+  assert.deepEqual(result, { kind: 'background', jobId: 'sw-exec-9', server: 'c1', endpoint: 'root@10.0.0.5' })
+  assert.equal(started[0]?.owner, 'sess-42', 'UPSTREAM-8: the ring family fences by SessionId, not the agent object')
+  const output = started[0]?.output
+  assert.equal(output?.length, 2)
+  assert.equal(output?.[0]?.channel, 'stdout')
+  assert.equal(output?.[1]?.channel, 'stderr')
+  assert.deepEqual(output?.[0]?.read(0), { text: '', nextOffset: 0, lossy: false }, 'pre-spawn pump is empty, never an error')
+  started[0]?.run({})
+  assert.equal(output?.[0]?.read(0).text, 'ring out', 'the source follows the handle spawned inside run()')
+})
+
+test('registerSwExec server "local" background (0.1.7 ring family): the delta bridge carries readOutput deltas with byte cursors', async () => {
+  const started: { kind: string; owner?: unknown; output?: readonly BackgroundJobSource[]; run(job?: unknown): BackgroundJobHooks }[] = []
+  let settled: (value?: unknown) => void = () => {}
+  const queue: string[] = []
+  const proc = {
+    status: 'running',
+    exitCode: null as number | null,
+    signal: null as string | null,
+    done: new Promise<unknown>(resolve => { settled = resolve }),
+    readOutput: () => ({ delta: queue.splice(0).join(''), lossy: false }),
+    kill: () => { proc.status = 'killed'; return true },
+    sandbox: undefined as { mode?: string; denied?: boolean } | undefined,
+  }
+  const jobs: BackgroundJobs = {
+    start(spec) { started.push(spec); return 'sw-exec-1' },
+    readAt: () => ({ chunks: [], next: 0, lossy: false }),
+  }
+  const fake = fakeToolContext({ jobs, shell: { resolve: r => r, run: () => Promise.reject(new Error('fg')), start: () => proc } })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  const agent = { id: 'sess-l', session: { header: { cwd: 'ssh://c1/srv' } } }
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', server: 'local', workdir: '/home/me', run_in_background: true },
+    { signal: new AbortController().signal, agent },
+  )
+  assert.deepEqual(result, { kind: 'background', jobId: 'sw-exec-1', server: 'local', endpoint: 'local' })
+  assert.equal(started[0]?.owner, 'sess-l')
+  const source = started[0]?.output?.[0]
+  assert.ok(source !== undefined)
+  assert.deepEqual(source.read(0), { text: '', nextOffset: 0, lossy: false }, 'pre-start pump is empty')
+  started[0]?.run({})
+  queue.push('hi\n')
+  const first = source.read(0)
+  assert.deepEqual(first, { text: 'hi\n', nextOffset: 3, lossy: false })
+  queue.push('lo')
+  assert.deepEqual(source.read(first.nextOffset), { text: 'lo', nextOffset: 5, lossy: false })
+  proc.status = 'completed'
+  proc.exitCode = 0
+  settled()
+})
+
+test('registerWin32Bash background (0.1.7 ring family): owner is the agent id and output sources late-bind the handle', async () => {
+  const started: { kind: string; owner?: unknown; output?: readonly BackgroundJobSource[]; run(job?: unknown): BackgroundJobHooks }[] = []
+  const jobs: BackgroundJobs = {
+    start(spec) { started.push(spec); return 'bash-9' },
+    readAt: () => ({ chunks: [], next: 0, lossy: false }),
+  }
+  const fake = fakeToolContext({ subprocess: { spawn: () => fakeHandle(undefined, { stdout: 'bash ring' }) }, jobs })
+  registerWin32Bash(fake.ctx, fakeRegistry({}), { platform: 'win32', forceRegister: true })
+  const agent = { id: 'sess-w', session: { header: { cwd: remotePlaceholder('c1') } } }
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', run_in_background: true },
+    { signal: new AbortController().signal, agent },
+  )
+  assert.deepEqual(result, { kind: 'background', jobId: 'bash-9' })
+  assert.equal(started[0]?.owner, 'sess-w')
+  const output = started[0]?.output
+  assert.equal(output?.length, 2)
+  started[0]?.run({})
+  assert.equal(output?.[0]?.read(0).text, 'bash ring')
 })
 
 test('registerSwExec: server "local" background refuses a missing shell start or jobs service', async () => {

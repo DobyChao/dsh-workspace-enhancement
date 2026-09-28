@@ -16,6 +16,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | doing | P0 | 0.2.2×0.1.7-rc.2：① settings 重写为 SettingsForms，`get` 已亡，渲染本地化标记即抛——家族自适应读，0.1.7 回退 EN（官方 bash 同为硬编码 EN）；② `jobs.start` owner 改 SessionId 字符串、输出改 ring pull source——三处后台双家族适配。验收：0.1.5 不变；0.1.7 后台可跑且 `job_output` 有字节。PR #44 |
+| UPSTREAM-9 | `latest` 翻 0.1.7-rc.2：peer/dev 升 pin `^0.1.7-rc.2` | doing | P0 | 2026-09-28 实测 `dsh@latest`=`0.1.7-rc.2`（seam 包自身 latest 卡 0.0.1 不作数）——UPSTREAM-5 留的「peer 等 latest 翻再升」触发。cordis/schemastery 不动（4.0.4/3.18.4 已满足家族闭包 `~4.0.4`/`~3.18.4`）。验收：0.1.7 家族下全门绿；boot 哨兵（0.1.5 宿主）仍绿＝双家族运行时回归。**叠在 #44 上** |
 
 ## 2. 已排期（todo，按优先级）
 
