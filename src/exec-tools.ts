@@ -746,14 +746,116 @@ export async function swExecCore(
 
 /* ------------------------------------------------------------------ jobs */
 
-/** The minimal `ctx.jobs` face (dsh-jobs `start` contract, verified on disk). */
+/** One 0.1.7 ring pull source: the registry pumps `read(fromByte)` at its own cadence. */
+export interface BackgroundJobSource {
+  /** Stream label attached to every chunk this source yields. */
+  channel?: string
+  /** Read everything captured since `fromByte` without consuming it. */
+  read(fromByte: number): { text: string; nextOffset: number; lossy: boolean; spillPath?: string }
+}
+
+/** Hooks the jobs runtime controls and observes the producer through (both families). */
+export interface BackgroundJobHooks {
+  cancel(reason?: string): void
+  done: Promise<unknown>
+  /** 0.1.5 family output hook; the 0.1.7 ring family reads pull sources instead. */
+  readOutput?(): string
+}
+
+/**
+ * The minimal `ctx.jobs` face — the UNION of the two dsh-jobs `start`
+ * contracts, both verified on disk (0.1.5-rc.1 global install, 0.1.7-rc.2
+ * `@next`, UPSTREAM-8):
+ * - 0.1.5 `JobStart`: `owner?: Agent` (the live agent INSTANCE), `run(): JobHooks`
+ *   where the hooks carry an optional `readOutput()` delta hook;
+ * - 0.1.7 `JobSpec`: `owner?: SessionId` (the id STRING — an object here makes
+ *   `start`'s owner preflight refuse the job, which is what broke every
+ *   background bash/sw_exec), `run(job: JobHandle): JobHooks` with no
+ *   `readOutput`, and `output` pull sources pumped into the job's ring.
+ */
 export interface BackgroundJobs {
   start(spec: {
     kind: string
     label: string
     owner?: unknown
-    run(): { cancel(reason?: string): void; done: Promise<unknown>; readOutput?(): string }
+    output?: readonly BackgroundJobSource[]
+    run(job?: unknown): BackgroundJobHooks
   }): string
+  /**
+   * 0.1.7 ring family only (the non-consuming byte-offset read). Present on
+   * the registry ⇒ pass `owner: agent.id` and wire `output` sources; absent ⇒
+   * 0.1.5 semantics (owner object + `readOutput` hook).
+   */
+  readAt?(id: string, from: number, caller?: unknown): unknown
+}
+
+/** Whether the jobs registry is the 0.1.7 ring family (pull sources, SessionId owner). */
+export function jobsAreRingFamily(jobs: BackgroundJobs): boolean {
+  return typeof jobs.readAt === 'function'
+}
+
+/**
+ * Family-adaptive job owner (UPSTREAM-8): 0.1.5 fences access by the live
+ * Agent instance; 0.1.7 fences by the SessionId string and refuses work whose
+ * owner does not name the currently registered agent — the official 0.1.7 bash
+ * tool passes `exec.agent.id`. Both spellings are kept so one build runs on
+ * both families.
+ * @param jobs - the registry the spec is headed for (family marker).
+ * @param agent - `exec.agent`, if the call carries one.
+ */
+export function jobOwnerOf(jobs: BackgroundJobs, agent: unknown): unknown {
+  if (agent === undefined) return undefined
+  return jobsAreRingFamily(jobs) ? (agent as { id?: unknown }).id : agent
+}
+
+/**
+ * 0.1.7 ring pull sources over a mixed-subprocess handle's collect readers,
+ * late-bound the way the official bash tool binds its started process (the
+ * handle only exists once `run` spawns). The 0.1.5 family ignores `output`.
+ */
+export function collectSources(handleOf: () => SubprocessHandle | undefined): BackgroundJobSource[] {
+  const source = (channel: 'stdout' | 'stderr'): BackgroundJobSource => ({
+    channel,
+    read: (fromByte) => {
+      const reader = handleOf()?.collected?.[channel]
+      if (reader === undefined) return { text: '', nextOffset: fromByte, lossy: false }
+      return reader.readFrom(fromByte)
+    },
+  })
+  return [source('stdout'), source('stderr')]
+}
+
+/** Retention bound of {@link deltaRingSource} — mirrors the whole-stream spill cap. */
+export const DELTA_RING_RETAIN_BYTES = SW_EXEC_OUTPUT_SPILL_MAX_BYTES
+
+/**
+ * 0.1.7 ring pull source over a DELTA-based reader (the host shell's
+ * `readOutput()`), which has no byte cursor of its own: every pump drains new
+ * deltas into a byte-addressed buffer, trims it to the retention bound (on a
+ * UTF-8 lead-byte boundary, so a trim never splits a codepoint), and serves
+ * absolute offsets. A read below the retained window is lossy, never an error
+ * — the ring's own semantics.
+ * @param pump - drains the delta reader (returns '' when nothing is new).
+ * @param retainBytes - retention bound; tests shrink it (default: the spill cap).
+ */
+export function deltaRingSource(pump: () => string, retainBytes: number = DELTA_RING_RETAIN_BYTES): BackgroundJobSource {
+  let buffer = Buffer.alloc(0)
+  let base = 0
+  return {
+    read(fromByte) {
+      const delta = pump()
+      if (delta !== '') buffer = Buffer.concat([buffer, Buffer.from(delta, 'utf8')])
+      if (buffer.length > retainBytes) {
+        let drop = buffer.length - retainBytes
+        while (drop > 0 && (buffer[drop]! & 0xc0) === 0x80) drop--
+        buffer = buffer.subarray(drop)
+        base += drop
+      }
+      const lossy = fromByte < base
+      const start = lossy ? 0 : fromByte - base
+      return { text: buffer.subarray(start).toString('utf8'), nextOffset: base + buffer.length, lossy }
+    },
+  }
 }
 
 /** Map one settled subprocess outcome onto the job-outcome vocabulary. */
@@ -1147,13 +1249,19 @@ async function runLocalSwExec(
     if (typeof shell.start !== 'function') throw new Error(SW_EXEC_LOCAL_START_MISSING)
     const jobs = jobsOf(ctx, tr)
     if (signalAborted(exec.signal)) throw toolAbortError()
+    let started: LocalShellProcess | undefined
     const jobId = jobs.start({
       kind: SW_EXEC_JOB_KIND,
       label: `local: ${args.command}`,
-      ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
+      ...(exec.agent !== undefined ? { owner: jobOwnerOf(jobs, exec.agent) } : {}),
+      // 0.1.7 ring family pumps this byte-addressed bridge over the shell's
+      // delta reads; the 0.1.5 family ignores `output` and calls the hooks'
+      // `readOutput` instead. Only one of the two ever consumes the deltas.
+      output: [deltaRingSource(() => (started === undefined ? '' : localShellRead(started, tr)))],
       run: () => {
         const resolved = typeof shell.resolve === 'function' ? shell.resolve(request) : request
         const proc = shell.start!({ ...resolved, dswLocalExec: true })
+        started = proc
         return {
           cancel: () => { proc.kill() },
           done: proc.done.then(
@@ -1304,10 +1412,12 @@ export function registerSwExec(
         // BEFORE registering, then the hook waits on nothing but the spawn.
         const os = await resolveRemoteOs(connection, exec.signal, osCache)
         const argv = buildShellArgv(os, args.command)
+        let handleRef: SubprocessHandle | undefined
         const jobId = jobs.start({
           kind: SW_EXEC_JOB_KIND,
           label: `${connection.id}: ${args.command}`,
-          ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
+          ...(exec.agent !== undefined ? { owner: jobOwnerOf(jobs, exec.agent) } : {}),
+          output: collectSources(() => handleRef),
           run: () => {
             const handle = spawnUnder(env.spawn, {
               argv,
@@ -1315,6 +1425,7 @@ export function registerSwExec(
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
             }, granted)
+            handleRef = handle
             const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),
@@ -1456,10 +1567,12 @@ export function registerWin32Bash(
         // Official bash contract: an already-cancelled call must never register
         // an orphan background job.
         if (exec.signal.aborted === true) throw toolAbortError()
+        let handleRef: SubprocessHandle | undefined
         const jobId = jobs.start({
           kind: 'bash',
           label: args.command,
-          ...(exec.agent !== undefined ? { owner: exec.agent } : {}),
+          ...(exec.agent !== undefined ? { owner: jobOwnerOf(jobs, exec.agent) } : {}),
+          output: collectSources(() => handleRef),
           run: () => {
             const handle = spawnUnder(spec => spawnerOf(ctx, t).spawn(spec), {
               argv: ['bash', '-c', args.command],
@@ -1467,6 +1580,7 @@ export function registerWin32Bash(
               stdio: COLLECT_STDIO,
               graceMs: SW_EXEC_KILL_GRACE_MS,
             }, granted)
+            handleRef = handle
             const readOutput = incrementalRead(handle, t)
             return {
               cancel: () => handle.terminate(),

@@ -59,7 +59,7 @@ DSH 安装目录下的 `@deepseek-ai/`，如 `<npm root -g>/@deepseek-ai/`）：
 | 你的 DSH 宿主 | 该装哪个版本 | 说明 |
 |---|---|---|
 | **`0.1.5` 线**（`0.1.5-rc.1`、`0.1.5-rc.2`…） | **0.1.4 或更新** | **唯一**受支持的家族（peer 收窄为 `^0.1.5-rc.1`）。浏览器通道挂官方共享 `/api`（`/api/dsw/<端点>`），不再自挂 `/dsw` |
-| `0.1.7` 线（rc——`next` 通道，现为 `0.1.7-rc.2`） | `0.2.1` 之后的下一个发布物 | 2026-09-25 起接缝已对齐：混合门面补 `watch` + `terminalEnvironment`，drift 哨兵实证（对 `0.1.7-rc.2` 的 typecheck + 单测 + boot smoke）。peer 锚仍 `^0.1.5-rc.1`，等 `latest` 翻再整体升 pin——见 `docs/compatibility.md` |
+| `0.1.7` 线（rc——`next` 通道，现为 `0.1.7-rc.2`） | `0.2.1` 之后的下一个发布物 | 2026-09-25 起接缝已对齐：混合门面补 `watch` + `terminalEnvironment`，drift 哨兵实证（对 `0.1.7-rc.2` 的 typecheck + 单测 + boot smoke）。2026-09-28 补齐运行时接缝（`UPSTREAM-8`，真机 `0.1.7-rc.2` 报告）：本地化标记渲染不再对重写后的 `SettingsForms` 服务抛错（回退 EN，与官方工具一致）；后台 `bash`/`sw_exec` 按 `0.1.7` job 注册表要求传 SessionId owner 并接上 ring 输出源。peer 锚仍 `^0.1.5-rc.1`，等 `latest` 翻再整体升 pin——见 `docs/compatibility.md` |
 | `0.1.2-rc.1` 家族（`0.1.2`、`0.1.3` 发布物） | `0.1.3`——该线的最后一个版本 | **已停止支持**（2026-09-11 退场）。该线挪动了 Connection 接缝（`connection.rpc.handle` 已无法注册通道），不会再回填修复 |
 | 其它 / 更老的线 | — | 从未支持 |
 
