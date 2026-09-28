@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-28 03:46 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-28 09:48 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `chore/upstream9-peer-pin-017` / `681097b` |
-| HEAD 提交 | `fix: adapt locale reads and background job owners to the 0.1.7-rc.2 host` (2026-09-28) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `master` / `89b5c3f` |
+| HEAD 提交 | `fix: adapt to the 0.1.7-rc.2 host (runtime seams + peer pin) (#44)` (2026-09-28) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -22,16 +22,16 @@
 | 单测用例（静态计数） | 642 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 40 |
+| 轮次报告 | 41 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
-| `doing` | 2 |
+| `todo` | 15 |
+| `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 58 |
+| `done` | 60 |
 | `shipped` | 9 |
 | `dropped` | 15 |
 

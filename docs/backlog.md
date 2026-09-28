@@ -16,13 +16,15 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | doing | P0 | 0.2.2×0.1.7-rc.2：① settings 重写为 SettingsForms，`get` 已亡，渲染本地化标记即抛——家族自适应读，0.1.7 回退 EN（官方 bash 同为硬编码 EN）；② `jobs.start` owner 改 SessionId 字符串、输出改 ring pull source——三处后台双家族适配。验收：0.1.5 不变；0.1.7 后台可跑且 `job_output` 有字节。PR #44 |
-| UPSTREAM-9 | `latest` 翻 0.1.7-rc.2：peer/dev 升 pin `^0.1.7-rc.2` | doing | P0 | 2026-09-28 实测 `dsh@latest`=`0.1.7-rc.2`（seam 包自身 latest 卡 0.0.1 不作数）——UPSTREAM-5 留的「peer 等 latest 翻再升」触发。cordis/schemastery 不动（4.0.4/3.18.4 已满足家族闭包 `~4.0.4`/`~3.18.4`）。验收：0.1.7 家族下全门绿；boot 哨兵（0.1.5 宿主）仍绿＝双家族运行时回归。**叠在 #44 上** |
+
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | todo | P1 | 2026-09-28 用户定调：单测抓不到装配/运行时问题（UPSTREAM-8 即证）。目标：lab 双宿主（win32 现有 + WSL 内装 Linux 宿主），browser-use 驱动 UI 用例；case 分层——per-PR 冒烟（少量）+ per-release 全量（适中）。能力缺失（无 browser-use）→ 整行 blocked，不静默跳过。与 `docs/uat/`、`e2e/` 资产衔接 |
+| INFRA-20 | drift 升级：boot 的就是被测的 + tag 每日轻探 | todo | P1 | UPSTREAM-8 教训：drift 装新家族却 boot 旧全局宿主，运行时接缝漏网。①drift 通道 scratch 安装 `dsh@<channel>` 再 boot-smoke（真测该家族宿主组合）；②dist-tag 每日轻探（`npm view` 秒级）漂移即 issue，每周全量 drift 保留；③新家族契约 fixture 当轮从磁盘权威源落盘（纪律入 compatibility.md） |
+| INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 = 单 PR | todo | P2 | 2026-09-28 用户定调交互模型：①用户提需求/答疑；②用户点名 N 条 backlog = **恰好一个 PR**；③用户合并；④用户发版。落地：AGENTS.md §7 写死点名派发规则；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失能力的步骤标 `agent-missing:<cap>` 进 §3 不跳过；协议只依赖仓库内文件，与 harness 无关 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
@@ -50,6 +52,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | done | P0 | PR #44（含 UPSTREAM-9，原 #45 并入关闭）。契约从磁盘权威源（`@next` scratch）核出并锁进 fixture 测试。**尾巴**：0.1.7 侧为契约级验证，真机 UAT 待用户（后台 bash/sw_exec + `job_output` 有字节 + zh 会话标记现为 EN）。档案 [R41](./rounds/R41-upstream8-9-017-adaptation.md) |
+| UPSTREAM-9 | `latest` 翻 0.1.7-rc.2：peer/dev 升 pin `^0.1.7-rc.2` | done | P0 | 同 PR #44。家族信号以宿主包 `latest` 为准（seam 自身 latest 不作数）。34 range + cordis/schemastery 升；0.1.7 主家族全门绿；boot 哨兵 0.1.5 宿主仍 PASS。档案 R41 |
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/`。收口见 `INFRA-13` |
 | REQ-I19 | 主/副工作区区域权限：工具绑世界 | done | P2 | PR #31。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。UAT [R37](./uat/R37-req-i19-region-permissions.md) Windows 18/18；Linux 复跑 2026-09-25 用户确认收口。档案 [R37](./rounds/R37-req-i19-region-permissions.md) |
 | BUG-11 | Linux 宿主区域矩阵五步失败 | done | P1 | 修复随 PR #31（拒 glued ssh workdir/jail 外 cwd、本地 sw_exec 回宿主 confine、清陈旧 jail）。Linux 复跑 R37 通过（2026-09-25 用户确认）。档案同上 R37 |
