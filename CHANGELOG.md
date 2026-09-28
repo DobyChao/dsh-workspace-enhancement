@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### 新增
+
+- **实机测试矩阵 + WSL Linux lab（`INFRA-19`）**：`docs/uat/matrix.md` 成为实机 case 的唯一清单——L1 每 PR 冒烟（7 条，锚点全为真实事故：F1/F2、BUG-5/7/9、UPSTREAM-8 ①②）+ L2 发版前全量（12 条 + 双 lab 对拍）；执行协议跨 agent（能力缺失 → `agent-missing:<cap>` 标 blocked，不静默跳过）。新增 `scripts/dev-lab-wsl.ps1` / `dev-lab-wsl.sh`：WSL 内起 **Linux 宿主** lab（端口 50600，家族校验跟 peer pin、自动重装错家族 CLI、代填宿主 `allowBuilds` 占位、smoke = token 兑换 + `/api/dsw` 通道断言）——本机已真机 PASS（0.1.7-rc.2 Linux 宿主）。
+- **上游信号升级（`INFRA-20`）**：①宿主包 dist-tag **每日**轻探（`node scripts/upstream-tags.mjs` + 基线 + `upstream.yml` 每日作业，漂移开 issue；`latest` 翻版不再靠肉眼）；②真实安装家族的 settings 面契约测试（`test/settings-family-face.test.ts`：方法名 ⊆ 两族已知并集 + UPSTREAM-8 崩坏复现）——drift 通道每周对 next/alpha 家族跑它，上游再改服务面先在 CI 红。机理修正见 R41 追记：CI drift 一直 boot 被测家族，真漏网是工具路径无用例（归 INFRA-19 L1 覆盖）。
+
 ### 变更
 
 - **peer 锚升到 0.1.7 家族（`UPSTREAM-9`）**：2026-09-28 宿主包 `@deepseek-ai/dsh` 的 `latest` 翻到 `0.1.7-rc.2`（seam 包自身 `latest` 卡在 `0.0.1-rc.1`，家族信号以宿主包为准），`UPSTREAM-5` 留下的「peer 等 `latest` 翻再升」兑现：13 个 peer + 21 个 devDependency 全部 `^0.1.5-rc.1` → `^0.1.7-rc.2`，cordis `^4.0.4` / schemastery `^3.18.4` 跟随家族闭包要求。0.1.7 家族下 typecheck / 单测 / build 全绿；boot 哨兵在 0.1.5-rc.1 宿主上仍 SMOKE PASS（已装 0.2.2 的 0.1.5 宿主运行时不回退，但新发布物起安装要求 0.1.7 家族）。

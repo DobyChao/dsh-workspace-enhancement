@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-28 09:48 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-28 11:17 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `master` / `89b5c3f` |
-| HEAD 提交 | `fix: adapt to the 0.1.7-rc.2 host (runtime seams + peer pin) (#44)` (2026-09-28) |
+| 分支 / HEAD | `chore/infra19-20-realtest-and-upstream` / `9dbd366` |
+| HEAD 提交 | `docs: close UPSTREAM-8/9 after PR #44 and open INFRA-19/20/21` (2026-09-28) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 52 |
-| 单测用例（静态计数） | 642 |
+| 单测文件 | 54 |
+| 单测用例（静态计数） | 650 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
 | 轮次报告 | 41 |
@@ -28,8 +28,8 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 15 |
-| `doing` | 0 |
+| `todo` | 13 |
+| `doing` | 2 |
 | `blocked` | 5 |
 | `done` | 60 |
 | `shipped` | 9 |

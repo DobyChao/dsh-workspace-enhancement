@@ -46,7 +46,12 @@
 | `npm run status` | 重新生成 `docs/status.md` | 任何人 |
 | `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5 红线 7） | 代理 / CI |
 | `node scripts/boot-smoke.mjs [--no-channel]` | **真 boot 哨兵**：临时 `DSH_HOME` → 起宿主 → 断言进程存活 / `GET /` 200 / `POST /api/dsw/connections.list` 200 + `result.ok=true`（`upstream.yml` 每条通道都跑，**强断言**；见 §4） | 代理 / CI |
-| `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例 | 本地 shell |
+| `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例（win32 宿主，50599） | 本地 shell |
+| `pwsh -File scripts/dev-lab-wsl.ps1 [-Smoke]` | 起 **WSL Linux 宿主** lab（50600；家族校验跟 pin、装 pack tarball；INFRA-19） | 本地 shell |
+| `node scripts/upstream-tags.mjs [--write-baseline]` | 宿主 dist-tag 轻探（每日 workflow 跑；漂移开 issue；认领=重写基线提交） | 代理 / CI |
+
+实机测试分层与 case 清单见 [`docs/uat/matrix.md`](./docs/uat/matrix.md)（L1 每 PR /
+L2 发版前；能力缺失→blocked，不静默跳过）。
 
 改完代码后**至少**跑 `npm run check:static && npm run typecheck && npm run test:agent`；
 能跑 shell 时跑完整 `npm run check`。

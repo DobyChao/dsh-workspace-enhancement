@@ -131,3 +131,21 @@ $env:TEMP='D:\a\j'; $env:TMP='D:\a\j'; npm test
 ```powershell
 wsl -e bash -lc "bash /mnt/d/ZCodeProject/dsh-workspace-enhancement/scripts/verify-linux.sh"
 ```
+
+## 8. 实机矩阵（INFRA-19，2026-09-28 起）
+
+L0–L4 全绿也拦不住「工具执行路径」的运行时断点（UPSTREAM-8 实证：render / 后台
+jobs 只在真实工具调用时走到）。补一层**实机**验证，case 清单与执行协议的唯一真相源是
+[`docs/uat/matrix.md`](./uat/matrix.md)：
+
+| 层 | 内容 | 驱动 | 何时 |
+|---|---|---|---|
+| L1 实机冒烟 | 矩阵 §3（7 条：boot 注入 / 机器连接 / 前后台远程执行 / fs 读写 / 停止 / 语言标记） | agent + browser-use + lab | 每 PR（改动涉及工具/服务/接缝时必跑） |
+| L2 实机全量 | 矩阵 §4（L1×双 lab + 12 条） | 同上 | 发版前 |
+
+两个 lab：win32（`scripts/dev-lab.ps1`，50599）与 **WSL Linux 宿主**
+（`scripts/dev-lab-wsl.ps1`，50600——家族校验跟 peer pin，插件装 pack tarball，
+smoke 探针 = token 兑换 + `/api/dsw` 通道）。能力缺失（browser-use / wsl / ssh 目标）
+→ 对应 backlog 行标 blocked（`agent-missing:<cap>`），**不静默跳过**；上游信号侧
+配套：宿主 dist-tag 每日轻探（`npm run upstream:tags`）+ 真实安装家族的 settings 面
+契约测试（`test/settings-family-face.test.ts`，drift 每周对 next/alpha 家族跑它）。
