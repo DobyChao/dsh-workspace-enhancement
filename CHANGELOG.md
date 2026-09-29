@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 新增
+
+- **跨 agent 协作协议（`INFRA-21`）**：AGENTS.md §7 写死交互模型——**一轮 = 用户点名的一组 backlog ID = 恰好一个 PR**（同会话顺手改动折进同一 PR）；**开工先跑 `npm run preflight`**（新增能力预检脚本：node/npm/git/gh/wsl/端口/lab/打包产物；browser-use 由 agent 自报——探测不了的诚实边界），缺能力 ⇒ 对应 backlog 行标 `agent-missing:<cap>` 进 §3，**绝不静默跳过**；**跨 agent 接续协议**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明，项目状态不依赖任何 agent 的会话记忆；**脚本化文档编辑一律走 `scripts/lib/doc-edit.mjs`**（`replaceOrThrow`/`mustInclude`，不命中/不唯一/无变化必抛）——R41–R43 三次裸 replace 静默丢编辑的教训，本轮修 backlog 时即拦下两次失配。
+
 ### 变更
 
 - **peer 联合 pin：0.1.7 + 0.2.0 双家族（`UPSTREAM-10`）**：0.2.0 宿主在 boot 时**强制执行**插件 peerDependencies——不符即整 bundle 跳过、通道静默 404（0.1.x 仅 pnpm 警告；boot 哨兵 09-29 实证）。13 个 peer 改为 `^0.1.7-rc.2 || ^0.2.0-rc.1`，联合 pin 副本对 0.2.0-rc.1 宿主 boot 哨兵 **SMOKE PASS**；devDependencies 留 `^0.1.7-rc.2`（主家族不变）。`upstream.yml` 为联合范围补**固定版本 drift 通道**（`pinned-0.1.7-rc.2`；0.2.0 线随 `next` tag 探），闸门的家族点名检查随之按备选归一化。静态闸门新增 **workflow 顶层键唯一性检查**——2026-09-28 重复 `jobs:` 键曾让整个 upstream.yml 失效（tag-watch 与 drift 全部静默不跑），而 CI 不校验此文件；该检查已在本地对重建的坏文件做过负向验证。

@@ -16,19 +16,22 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | doing | P1 | 2026-09-28 派发（一轮=一 PR）。交付：`docs/uat/matrix.md`（L1 7 条/L2 12 条，锚点=事故史，能力缺失→blocked）+ WSL lab 脚本（家族校验跟 pin、allowBuilds 代填、smoke=token 兑换+通道）。WSL smoke 真机 PASS（0.1.7-rc.2 Linux 宿主）。尾巴见 PR |
-| INFRA-20 | 上游信号升级：tag 每日轻探 + 真实家族形状契约 | doing | P1 | 机理修正（R41 追记）：drift 一直 boot 被测家族；真漏网=工具路径无用例。交付：`upstream-tags.mjs`（每日，latest/next/alpha 漂移开 issue）+ `test/settings-family-face.test.ts`（真实安装家族 settings 面 ⊆ 两族已知并集 + UPSTREAM-8 崩坏复现，drift 每周跑它）。同 PR |
+| INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 + 接续 | doing | P2 | 2026-09-28 定调：点名 N 条 = **恰好一个 PR**；用户合并；用户发版。落地：AGENTS.md §7 写死点名派发；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失标 `agent-missing:<cap>` 进 §3 不跳过；**接续**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明；开发/测试可拆 agent。协议只依赖仓库内文件 |
 
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 + 接续 | todo | P2 | 2026-09-28 定调：点名 N 条 = **恰好一个 PR**；用户合并；用户发版。落地：AGENTS.md §7 写死点名派发；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失标 `agent-missing:<cap>` 进 §3 不跳过；**接续**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明；开发/测试可拆 agent。协议只依赖仓库内文件 |
+| UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
+| PUB-8 | 0.2.3 发布 | todo | P1 | 2026-09-29 用户拍板发版窗口：**REQ-I14 + REQ-I17 做完即发**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
+| UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
+| REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
+| FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
 | UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
@@ -53,6 +56,8 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | done | P0 | PR #44（含 UPSTREAM-9，原 #45 并入关闭）。契约从磁盘权威源（`@next` scratch）核出并锁进 fixture 测试。**尾巴**：0.1.7 侧为契约级验证，真机 UAT 待用户（后台 bash/sw_exec + `job_output` 有字节 + zh 会话标记现为 EN）。档案 [R41](./rounds/R41-upstream8-9-017-adaptation.md) |
+| INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | done | P1 | PR #47。`docs/uat/matrix.md` 为实机 case 唯一清单（L1 7/L2 12+双 lab，锚点=事故史）；WSL lab 真机 smoke PASS（0.1.7-rc.2）。**尾巴**：L1/L2 首轮 browser-use 执行未跑。档案 R42 |
+| INFRA-20 | 上游信号升级：tag 每日轻探 + 真实家族形状契约 | done | P1 | 同 PR #47。tag-watch 每日 + settings 家族面契约测试进 `npm test`（drift 周跑）。首日实战三哨兵全响（#46/#48/#49）。档案 R42 |
 | UPSTREAM-10 | 0.2.0 家族对齐 | done | P1 | PR #50（A 案联合 pin）。0.2.0 宿主强制 peer ⇒ `^0.1.7-rc.2`+`^0.2.0-rc.1`；真仓库对 0.2.0-rc.1 boot 哨兵 SMOKE PASS；pinned 通道 + workflow 闸门随行。**尾巴**：0.2.0 宿主上 L1（M3/M4）走查。档案 R43 |
 | UPSTREAM-9 | `latest` 翻 0.1.7-rc.2：peer/dev 升 pin `^0.1.7-rc.2` | done | P0 | 同 PR #44。家族信号以宿主包 `latest` 为准（seam 自身 latest 不作数）。34 range + cordis/schemastery 升；0.1.7 主家族全门绿；boot 哨兵 0.1.5 宿主仍 PASS。档案 R41 |
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/`。收口见 `INFRA-13` |

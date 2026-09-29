@@ -66,7 +66,7 @@ case 数量纪律：**每条 case 必须有真实事故背书**（锚点列）�
 
 ## 5. 执行协议（跨 agent）
 
-1. **能力预检**：执行前 agent 自报能力。本矩阵要求：`browser-use`（视觉判定 + 交互）、
+1. **能力预检**：执行前跑 `npm run preflight`（环境面：node/npm/git/gh/wsl/端口/lab/打包产物）+ agent 自报能力（browser-use 等探测不了的）。本矩阵要求：`browser-use`（视觉判定 + 交互）、
    `shell`（起 lab）、`wsl`（Linux lab）。**缺任一 → 不静默跳过**：把对应 backlog 行
    标 `blocked`，备注 `agent-missing:<cap>`，在 PR/汇报里写明「待人工实机」或换有
    能力的 agent 执行。环境类能力（wsl/端口/ssh 目标）预检失败同样 blocked。
