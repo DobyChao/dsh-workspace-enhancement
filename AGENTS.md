@@ -44,6 +44,7 @@
 | `npm run build` | `tsc` + `tsdown` | 代理 / CI |
 | `npm run e2e` | Playwright 黑盒（lab 50599） | 本地 shell / CI |
 | `npm run status` | 重新生成 `docs/status.md` | 任何人 |
+| `npm run preflight` | **能力预检**（node/npm/git/gh/wsl/端口/lab/打包产物；browser-use 需 agent 自报）——每轮开工与接手先跑，缺能力 ⇒ blocked 不跳过（§7） | 代理 |
 | `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5 红线 7） | 代理 / CI |
 | `node scripts/boot-smoke.mjs [--no-channel]` | **真 boot 哨兵**：临时 `DSH_HOME` → 起宿主 → 断言进程存活 / `GET /` 200 / `POST /api/dsw/connections.list` 200 + `result.ok=true`（`upstream.yml` 每条通道都跑，**强断言**；见 §4） | 代理 / CI |
 | `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例（win32 宿主，50599） | 本地 shell |
@@ -146,6 +147,17 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 **分支模型**：`master` 只接受经过 CI 的提交；改动走短分支 + PR，**squash merge** 保持线性历史
 （当前全历史 0 个 merge 提交，不要破坏它）。
 
+**派发 · 接续 · 能力（INFRA-21）**：
+- **一轮 = 用户点名的一组 backlog ID = 恰好一个 PR**；同会话未点名的顺手改动折进同一 PR
+  （`Refs:` 列全 ID）。代理不自行扩围、不开第二个 PR。
+- **开工先跑 `npm run preflight`**，结果连同 agent 自报能力（browser-use 等探测不了的）贴进 PR /
+  round 报告；缺能力的步骤把对应 backlog 行标 `agent-missing:<cap>` 挪 §3，**绝不静默跳过**。
+- **跨 agent 接续**：交接 = WIP 提交到分支（测试红也无妨）+ backlog doing 行备注「现状 + 下一步」+
+  `gh pr comment` 留交接说明。接手者凭 preflight + 本文件 + backlog + PR 即可续作——项目状态
+  不依赖任何 agent 的会话记忆。
+- **脚本化文档编辑一律用 `scripts/lib/doc-edit.mjs`**（`replaceOrThrow` / `mustInclude`）——
+  裸 `String.replace` 不命中是无操作，R41–R43 三次静默丢编辑的教训。
+
 1. 在 `docs/backlog.md` 加行（ID + `todo`，放进 §2 对应优先级块），写清目标与验收标准。
 2. 状态改 `doing` 时**整行挪到 §1**，从 `master` 拉短分支：`feat/<ID>-slug` / `fix/<ID>-slug` / `chore/<ID>-slug`。
 3. 小步提交，Conventional Commits，尾行 `Refs: <ID>`。
@@ -179,6 +191,7 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 
 ## 8. 接手三分钟
 
+0. `npm run preflight` —— 能力预检：缺什么、什么会 blocked，一目了然。
 1. `npm run status` —— 看版本、HEAD、待办分布、被挡住的项。
 2. `docs/backlog.md` §1/§3 —— 当前在做什么、什么被挡住。
 3. `docs/README.md` —— 文档地图（现状 / 决策 / 档案各看哪）。
