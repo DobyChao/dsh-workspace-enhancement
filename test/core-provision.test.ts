@@ -131,28 +131,14 @@ test('warmup: concurrent triggers deduplicate to ONE status→deploy run', async
 
 /* ------------------------------------------------- first-use approval ask */
 
-/** A transport whose exec answers exactly the deployCore command ladder. */
-function deployTransport(): SshTransport & { commands: string[] } {
-  const commands: string[] = []
-  const outcome = (stdout = ''): ExecOutcome => ({ exitCode: 0, signal: null, stdout, stderr: '' })
-  const transport = {
-    endpoint: 'u@h',
-    cwd: '/home/u',
-    getClient: async () => ({}) as never,
-    getSftp: async () => ({ writeFile: (_path: string, _data: Buffer, cb: (error?: Error) => void) => cb() }),
-    getRemoteEnvironment: async () => ({}),
-    exec: async (command: string) => {
-      commands.push(command)
-      if (command === 'uname -s; uname -m') return outcome('Linux\nx86_64\n')
-      if (command.includes('command -v rg')) return outcome('RG\nBWRAP\n')
-      if (command.includes('dsh-core version')) {
-        return outcome(`${JSON.stringify({ version: CORE_ARTIFACT_VERSION, arch: 'x86_64', proto: 1, caps: [] })}\n`)
-      }
-      return outcome()
-    },
-    resolveRemoteCwd: (cwd?: string) => cwd ?? '/home/u',
+/** Records what the injected deploy saw; the real deployCore ladder is covered by test/core-deploy. */
+function fakeDeploy(results: Array<{ ok: boolean; version?: string; detail?: string }>) {
+  const transports: unknown[] = []
+  const deploy = async (transport: unknown): Promise<CoreStatusView> => {
+    transports.push(transport)
+    return results[transports.length - 1] ?? { ok: true, version: CORE_ARTIFACT_VERSION }
   }
-  return { ...transport, commands } as SshTransport & { commands: string[] }
+  return { deploy: deploy as never, transports }
 }
 
 function gapCtx(options: {
@@ -168,7 +154,7 @@ function gapCtx(options: {
 }
 
 test('asker: no approval service composed ⇒ false (fail closed, no deploy)', async () => {
-  const ctx = gapCtx({ approval: null, initiator: { id: 'a1' }, transport: deployTransport() })
+  const ctx = gapCtx({ approval: null, initiator: { id: 'a1' }, transport: {} })
   const closed: string[] = []
   const ask = createCoreGapAsker(ctx, () => ({ close: (id: string) => { closed.push(id) } }) as never)
   assert.equal(await ask('c1', { found: undefined, expected: CORE_ARTIFACT_VERSION }), false)
@@ -181,8 +167,9 @@ test('asker: no initiating agent ⇒ false (outside a tool call nobody can answe
   assert.equal(await ask('c1', { found: '0.0.1-old', expected: CORE_ARTIFACT_VERSION }), false)
 })
 
-test('asker: allowed-once deploys, closes stale serves, and reports the gap solved', async () => {
-  const transport = deployTransport()
+test('asker: allowed-once deploys on the registry connection, closes stale serves, reports solved', async () => {
+  const registryTransport = { endpoint: 'u@h' }
+  const { deploy, transports } = fakeDeploy([{ ok: true, version: CORE_ARTIFACT_VERSION }])
   const asks: Array<{ toolName: string; reason: string }> = []
   const ctx = gapCtx({
     approval: {
@@ -192,10 +179,10 @@ test('asker: allowed-once deploys, closes stale serves, and reports the gap solv
       },
     },
     initiator: { id: 'a1' },
-    transport,
+    transport: registryTransport,
   })
   const closed: string[] = []
-  const ask = createCoreGapAsker(ctx, () => ({ close: (id: string) => { closed.push(id) } }) as never)
+  const ask = createCoreGapAsker(ctx, () => ({ close: (id: string) => { closed.push(id) } }) as never, deploy)
   const solved = await ask('c1', { found: '0.0.1-old', expected: CORE_ARTIFACT_VERSION })
   assert.equal(solved, true)
   assert.equal(asks.length, 1)
@@ -203,42 +190,45 @@ test('asker: allowed-once deploys, closes stale serves, and reports the gap solv
   assert.match(asks[0]?.reason ?? '', new RegExp(CORE_DEPLOY_ASK_MARKER.replace('[', '\\[').replace(']', '\\]')))
   assert.match(asks[0]?.reason ?? '', /0\.0\.1-old/)
   assert.match(asks[0]?.reason ?? '', new RegExp(CORE_ARTIFACT_VERSION.replaceAll('.', '\\.')))
-  // The deploy ladder ran on the registry connection (real artifact on disk).
-  assert.ok(transport.commands.some(command => command.includes('ln -sfn')), 'the install script ran')
+  assert.deepEqual(transports, [registryTransport], 'the deploy runs on the registry connection')
   assert.deepEqual(closed, ['c1'], 'stale serves are dropped after the flip')
 })
 
 test('asker: a rejected ask deploys nothing', async () => {
-  const transport = deployTransport()
+  const { deploy, transports } = fakeDeploy([{ ok: true }])
   const ctx = gapCtx({
     approval: { request: async () => 'rejected' },
     initiator: { id: 'a1' },
-    transport,
+    transport: {},
   })
-  const ask = createCoreGapAsker(ctx, () => undefined)
+  const ask = createCoreGapAsker(ctx, () => undefined, deploy)
   assert.equal(await ask('c1', { found: undefined, expected: CORE_ARTIFACT_VERSION }), false)
-  assert.equal(transport.commands.length, 0)
+  assert.equal(transports.length, 0)
 })
 
 test('asker: a failed deploy answers false (the hub keeps the fail-closed error)', async () => {
-  const transport = deployTransport()
-  // Break the ladder: uname refuses, deployCore returns ok:false before writing.
-  const original = transport.exec
-  transport.exec = async (command: string) => {
-    if (command === 'uname -s; uname -m') {
-      return { exitCode: 0, signal: null, stdout: 'Darwin\narm64\n', stderr: '' }
-    }
-    return await original(command)
-  }
+  const { deploy } = fakeDeploy([{ ok: false, detail: 'connection refused' }])
   const ctx = gapCtx({
     approval: { request: async () => 'allowed-once' },
     initiator: { id: 'a1' },
-    transport,
+    transport: {},
   })
   const closed: string[] = []
-  const ask = createCoreGapAsker(ctx, () => ({ close: (id: string) => { closed.push(id) } }) as never)
+  const ask = createCoreGapAsker(ctx, () => ({ close: (id: string) => { closed.push(id) } }) as never, deploy)
   assert.equal(await ask('c1', { found: undefined, expected: CORE_ARTIFACT_VERSION }), false)
-  assert.deepEqual(closed, [])
+  assert.deepEqual(closed, [], 'a failed deploy must not drop serves')
+})
+
+test('asker: an ask whose request throws (no open turn) answers false without deploying', async () => {
+  const { deploy, transports } = fakeDeploy([{ ok: true }])
+  const ctx = gapCtx({
+    approval: { request: async () => { throw new Error('no open turn') } },
+    initiator: { id: 'a1' },
+    transport: {},
+  })
+  const ask = createCoreGapAsker(ctx, () => undefined, deploy)
+  assert.equal(await ask('c1', { found: undefined, expected: CORE_ARTIFACT_VERSION }), false)
+  assert.equal(transports.length, 0)
 })
 
 test('asker: the ask reason is NOT the remote-gate marker (the AI answerer must not auto-grant it)', () => {

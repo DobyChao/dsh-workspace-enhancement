@@ -114,10 +114,14 @@ export function coreDeployAskReason(facts: { machineId: string; found: string | 
  *
  * @param hubOf - late-bound hub handle (the hub is still constructing when
  *   this resolver is handed to it); used to drop stale serves post-deploy.
+ * @param deploy - the deploy call (injectable in tests; defaults to
+ *   {@link deployCore} on the registry connection).
  */
 export function createCoreGapAsker(
   ctx: Context,
   hubOf: () => CoreHub | undefined,
+  deploy: (transport: SshTransport, signal?: AbortSignal) => Promise<CoreStatusView> = (transport, signal) =>
+    deployCore(transport, signal !== undefined ? { signal } : {}),
 ): (connectionId: string, facts: { found: string | undefined; expected: string; signal?: AbortSignal | undefined }) => Promise<boolean> {
   return async (connectionId, facts): Promise<boolean> => {
     try {
@@ -152,7 +156,7 @@ export function createCoreGapAsker(
         return false
       }
       if (outcome !== 'allowed-once') return false
-      const view = await deployCore(connection as SshTransport, facts.signal !== undefined ? { signal: facts.signal } : {})
+      const view = await deploy(connection as SshTransport, facts.signal)
       if (!view.ok) return false
       // Stale serves (old `current`) and their cached refusals must not
       // outlive the flip — the retry re-execs the new binary.
