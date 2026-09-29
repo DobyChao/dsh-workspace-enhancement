@@ -24,7 +24,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-10 | 0.2.0 家族对齐 | todo | P1 | 09-29 缺包补齐后 boot 实证：0.2.0 宿主**强制 peer**（不符即 skip 插件；0.1.x 只警告）；联合 pin 副本探针 **SMOKE PASS** ⇒ 运行时兼容，唯一缺口=pin。待办：拍 pin（联合或等 latest 翻整体升）+ upstream.yml 家族点名与 YAML 校验入闸门。drift next 在 pin 改前预期红（#49 追踪） |
 | INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 + 接续 | todo | P2 | 2026-09-28 定调：点名 N 条 = **恰好一个 PR**；用户合并；用户发版。落地：AGENTS.md §7 写死点名派发；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失标 `agent-missing:<cap>` 进 §3 不跳过；**接续**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明；开发/测试可拆 agent。协议只依赖仓库内文件 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
@@ -54,6 +53,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | done | P0 | PR #44（含 UPSTREAM-9，原 #45 并入关闭）。契约从磁盘权威源（`@next` scratch）核出并锁进 fixture 测试。**尾巴**：0.1.7 侧为契约级验证，真机 UAT 待用户（后台 bash/sw_exec + `job_output` 有字节 + zh 会话标记现为 EN）。档案 [R41](./rounds/R41-upstream8-9-017-adaptation.md) |
+| UPSTREAM-10 | 0.2.0 家族对齐 | done | P1 | PR #50（A 案联合 pin）。0.2.0 宿主强制 peer ⇒ `^0.1.7-rc.2`+`^0.2.0-rc.1`；真仓库对 0.2.0-rc.1 boot 哨兵 SMOKE PASS；pinned 通道 + workflow 闸门随行。**尾巴**：0.2.0 宿主上 L1（M3/M4）走查。档案 R43 |
 | UPSTREAM-9 | `latest` 翻 0.1.7-rc.2：peer/dev 升 pin `^0.1.7-rc.2` | done | P0 | 同 PR #44。家族信号以宿主包 `latest` 为准（seam 自身 latest 不作数）。34 range + cordis/schemastery 升；0.1.7 主家族全门绿；boot 哨兵 0.1.5 宿主仍 PASS。档案 R41 |
 | INFRA-1 | 真相源入库 | done | P0 | `AGENTS.md` + `docs/`。收口见 `INFRA-13` |
 | REQ-I19 | 主/副工作区区域权限：工具绑世界 | done | P2 | PR #31。矩阵 [ADR-0028](./decisions/ADR-0028-region-permission-matrix.md)。UAT [R37](./uat/R37-req-i19-region-permissions.md) Windows 18/18；Linux 复跑 2026-09-25 用户确认收口。档案 [R37](./rounds/R37-req-i19-region-permissions.md) |

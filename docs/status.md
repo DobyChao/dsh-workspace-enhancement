@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-29 02:48 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-29 03:38 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.2` |
-| npm 已发布版本 | `0.2.2` |
+| npm 已发布版本 | `unknown (offline or unpublished)` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `chore/upstream10-union-pin` / `e93c549` |
-| HEAD 提交 | `docs: 0.2.0-rc.1 boot verdict — runtime-compatible, the pin is the only gap` (2026-09-29) |
+| 分支 / HEAD | `master` / `7333586` |
+| HEAD 提交 | `feat: union peer pin — installable on 0.2.0 hosts the day they enforce peers (#50)` (2026-09-29) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -22,16 +22,16 @@
 | 单测用例（静态计数） | 650 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 42 |
+| 轮次报告 | 43 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 14 |
+| `todo` | 13 |
 | `doing` | 2 |
 | `blocked` | 5 |
-| `done` | 60 |
+| `done` | 61 |
 | `shipped` | 9 |
 | `dropped` | 15 |
 
