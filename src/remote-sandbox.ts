@@ -551,6 +551,15 @@ export const REMOTE_SANDBOX_MESSAGES = {
    */
   coreMissing:
     'The fenced core is not installed on the remote (or its directory was removed) — deploy it from the plugin settings (core.deploy) and retry; a core session that is still running is stale once its directory is gone.',
+  /**
+   * REQ-I17 core version gate: a fenced session may only run THIS plugin's
+   * artifact. Group kill (BUG-9) and the CAS version hash (BUG-7) live in the
+   * core, so a stale binary is not "an older but valid fence" — it is an
+   * unfixed fence. `danger`/`off` degrade to SFTP elsewhere, never via this
+   * text.
+   */
+  coreVersionMismatch:
+    'The fenced core on the remote reports version "{found}" but this plugin ships "{expected}" — a stale core cannot be trusted to fence; deploy the matching core (plugin settings → deploy, or core.deploy) and retry, or reconnect the machine so the deploy warmup updates it.',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',
@@ -598,7 +607,7 @@ export class RemoteSandboxPolicyError extends RemoteSandboxError {
 }
 
 /** Interpolate `{name}` placeholders (same rule as the locale lookup). */
-function interpolate(text: string, params: Record<string, unknown>): string {
+export function interpolate(text: string, params: Record<string, unknown>): string {
   return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match))
 }
 

@@ -35,6 +35,7 @@ import { channelRouteOf, isAlreadyRegistered } from './web-channel.ts'
 import type { ChannelDispatch, ChannelResult, ChannelRoute } from './web-channel.ts'
 import { ensureCoreHub } from './core-hub.ts'
 import type { CoreHub } from './core-hub.ts'
+import { createCoreWarmup } from './core-provision.ts'
 import { deployCore } from './core-deploy.ts'
 import { isCoreMissingError } from './remote-policy.ts'
 import type { SshTransport } from './transport.ts'
@@ -351,6 +352,28 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
    */
   void new SessionMachineConnections(ctx)
   const hub = (): CoreHub => ensureCoreHub(ctx)
+  /**
+   * REQ-I14 connection warmup: a fenced machine connected to a session gets a
+   * background `core.status` → `core.deploy` run, so the first tool call finds
+   * a current core instead of a fail-closed refusal. Fire-and-forget by
+   * design — a connect must not pay upload latency, and a failed warmup only
+   * leaves the status quo (the first-use approval ask still covers the gap).
+   */
+  const warmup = createCoreWarmup({
+    machine: (id) => registry().listMachines().machines.find(machine => machine.id === id),
+    connection: (id) => {
+      const connection = registry().get(id)
+      return connection === undefined ? undefined : (connection as unknown as SshTransport)
+    },
+    status: (id, signal) => hub().status(id, signal),
+    deploy: (id, signal) => {
+      const connection = registry().get(id)
+      if (connection === undefined) return Promise.resolve({ ok: false, detail: 'machine is not usable as a registry connection' })
+      return deployCore(connection as unknown as SshTransport, signal !== undefined ? { signal } : {})
+    },
+    afterDeploy: (id) => { hub().close(id) },
+    warn: (text) => { ctx.logger.warn(text) },
+  })
   /** R5: a remote side workspace must name a registered machine. */
   const requireRemoteMachine = (rootKey: string): void => {
     const route = parseSshRoute(rootKey)
@@ -693,6 +716,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const [id] = requireRegisteredMachines([input.id])
           if (id === undefined) throw new Error(`dsw: ${t('rpc.connMachineEmpty')}`)
           connStore().connect(input.sessionId.trim(), id)
+          warmup(id)
           return { ok: true, value: connItems(input.sessionId.trim()) }
         }
         case 'session.conn.disconnect': {
@@ -707,8 +731,15 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           // including `ids: []` = disconnect everything.
           const input = requirePayload(payload, isSessionConnSetPayload, 'session.conn.set')
           const ids = requireRegisteredMachines(input.ids)
-          connStore().set(input.sessionId.trim(), ids)
-          return { ok: true, value: connItems(input.sessionId.trim()) }
+          const sessionId = input.sessionId.trim()
+          const previously = new Set(connStore().listFor(sessionId))
+          connStore().set(sessionId, ids)
+          // REQ-I14: only the NEWLY connected machines warm up — re-setting an
+          // already-connected set must not re-upload the artifact.
+          for (const id of ids) {
+            if (!previously.has(id)) warmup(id)
+          }
+          return { ok: true, value: connItems(sessionId) }
         }
         case 'core.status': {
           const input = requirePayload(payload, isIdPayload, 'core.status')
@@ -769,5 +800,6 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     registry,
     () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined,
     () => ctx.get('sessionConnections', false) as SessionConnectionsFace | undefined,
+    warmup,
   )
 }

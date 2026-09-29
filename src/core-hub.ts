@@ -29,7 +29,9 @@ import {
 } from './core-session.ts'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { parseSshRoute } from './registry.ts'
+import { createCoreGapAsker } from './core-provision.ts'
 import { quoteShellArg, startExec } from './ssh-core.ts'
+import type { ExecOutcome } from './ssh-core.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import {
   effectiveModeOf,
@@ -48,6 +50,7 @@ import type { CoreServeSandbox } from './remote-policy.ts'
 import {
   REMOTE_SANDBOX_MESSAGES,
   RemoteSandboxError,
+  interpolate,
 } from './remote-sandbox.ts'
 import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import type { SshTransport } from './transport.ts'
@@ -71,6 +74,22 @@ export interface CoreOpenRequest {
 }
 
 export type CoreSessionOpener = (request: CoreOpenRequest) => Promise<CoreClient>
+
+/**
+ * REQ-I14 first-use approval: the hub asks this once when a **confined** open
+ * fails and the ON-DISK artifact is verifiably missing or stale. Resolving
+ * `true` means "the matching core is deployed now; retry the open" — the hub
+ * then re-execs `current` exactly once. Any other ending (no approval service,
+ * denied, deploy failed) falls through to the original fail-closed error.
+ */
+export type CoreGapResolver = (connectionId: string, facts: {
+  /** Disk-reported core version; `undefined` when no core answered. */
+  found: string | undefined
+  /** The version this plugin ships and requires. */
+  expected: string
+  /** Cancellation lifetime of the blocked operation, when one exists. */
+  signal?: AbortSignal | undefined
+}) => Promise<boolean>
 
 export interface CoreRequireOpts {
   /** Session / spawn cwd — may mint a sibling workspace-write jail. */
@@ -163,11 +182,14 @@ export function createCoreHub(
     open?: CoreSessionOpener
     statusOf?: (connectionId: string, signal?: AbortSignal) => Promise<CoreStatusView>
     idleMs?: number
+    /** REQ-I14: approval-backed core deploy on a confined open's missing/stale gap. */
+    resolveGap?: CoreGapResolver
   } = {},
 ): CoreHub {
   const deps = options.deps ?? remoteSandboxDepsOf(ctx)
   const open = options.open ?? openOverSsh
   const idleMs = options.idleMs ?? CORE_IDLE_MS
+  const resolveGap = options.resolveGap
   const live = new Map<string, LiveSession>()
   const known = new Map<string, Set<string>>()
   const opening = new Map<string, Promise<CoreClient>>()
@@ -269,6 +291,35 @@ export function createCoreHub(
     scheduleIdle(session)
   }
 
+  /** Minimal exec face the on-disk artifact probe needs. */
+  interface DiskProbeFace {
+    exec(command: string, opts?: { signal?: AbortSignal }): Promise<ExecOutcome>
+  }
+
+  /**
+   * REQ-I14: what `~/.dsh-core/current/dsh-core version` says on disk. `ok`
+   * false means "no usable artifact answered" — the gap the deploy path owns.
+   */
+  const diskVersionOf = async (
+    connection: DiskProbeFace,
+    signal: AbortSignal | undefined,
+  ): Promise<{ ok: boolean; version: string | undefined }> => {
+    try {
+      const outcome = await connection.exec(
+        coreVersionCommand(),
+        signal !== undefined ? { signal } : undefined,
+      )
+      if (outcome.exitCode !== 0) return { ok: false, version: undefined }
+      const parsed = JSON.parse(outcome.stdout) as { version?: unknown }
+      return {
+        ok: true,
+        version: typeof parsed.version === 'string' ? parsed.version : undefined,
+      }
+    } catch {
+      return { ok: false, version: undefined }
+    }
+  }
+
   const requireSession = async (
     connectionId: string,
     opts?: CoreRequireOpts,
@@ -280,8 +331,15 @@ export function createCoreHub(
     const key = coreSessionKey(connectionId, serve, workspace)
     const existing = live.get(key)
     if (existing !== undefined) {
-      scheduleIdle(existing)
-      return existing.client
+      // REQ-I17: a live serve that outlived a `current` flip is a stale fence.
+      // The cached hello names the binary the serve was exec'd from, so this
+      // reuse check is one cache read — never an RPC.
+      const cachedHello = await existing.client.hello().catch(() => undefined)
+      if (cachedHello === undefined || cachedHello.version === CORE_ARTIFACT_VERSION) {
+        scheduleIdle(existing)
+        return existing.client
+      }
+      drop(existing, true)
     }
     const cached = blocked.get(key)
     if (cached !== undefined) throw cached
@@ -298,41 +356,88 @@ export function createCoreHub(
       if (serve === 'workspace-write' && (workspace === undefined || workspace === '' || workspace === '/')) {
         throw remoteSandboxUnavailable(refuseMode, REMOTE_SANDBOX_MESSAGES.workspaceRootRequired)
       }
-      let client: CoreClient | undefined
-      try {
-        client = await open({
-          connectionId,
-          mode: serve,
-          transport: connection as unknown as SshTransport,
-          ...(workspace !== undefined ? { workspace } : {}),
-          ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
-        })
-        // Hello is the serve's birth certificate (ADR-0024). Do not tie it to
-        // the first tool's AbortSignal — that signal aborting used to kill the
-        // channel (`core stdout closed`) and fail the whole turn.
-        const hello = await client.hello()
-        if (hello.proto !== CORE_PROTO) {
-          throw remoteSandboxUnavailable(refuseMode, `core proto ${String(hello.proto)} is not ${CORE_PROTO}`)
-        }
-        for (const cap of CORE_CAPS) {
-          if (!hello.caps.includes(cap)) {
-            throw remoteSandboxUnavailable(refuseMode, `core is missing cap ${cap}`)
+
+      const openOnce = async (): Promise<CoreClient> => {
+        let client: CoreClient | undefined
+        try {
+          client = await open({
+            connectionId,
+            mode: serve,
+            transport: connection as unknown as SshTransport,
+            ...(workspace !== undefined ? { workspace } : {}),
+            ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
+          })
+          // Hello is the serve's birth certificate (ADR-0024). Do not tie it to
+          // the first tool's AbortSignal — that signal aborting used to kill the
+          // channel (`core stdout closed`) and fail the whole turn.
+          const hello = await client.hello()
+          if (hello.proto !== CORE_PROTO) {
+            throw remoteSandboxUnavailable(refuseMode, `core proto ${String(hello.proto)} is not ${CORE_PROTO}`)
           }
-        }
-      } catch (error) {
-        client?.close()
-        if (error instanceof RemoteSandboxError) {
-          if (confined) blocked.set(key, error)
+          for (const cap of CORE_CAPS) {
+            if (!hello.caps.includes(cap)) {
+              throw remoteSandboxUnavailable(refuseMode, `core is missing cap ${cap}`)
+            }
+          }
+          // REQ-I17 version gate: confined work only ever runs THIS plugin's
+          // artifact. danger/off degrade to SFTP through CoreMissingError —
+          // the ADR's "danger/off 不挡" — instead of an old binary.
+          if (hello.version !== CORE_ARTIFACT_VERSION) {
+            const detail = interpolate(REMOTE_SANDBOX_MESSAGES.coreVersionMismatch, {
+              found: hello.version,
+              expected: CORE_ARTIFACT_VERSION,
+            })
+            if (!confined) throw new CoreMissingError(detail)
+            throw remoteSandboxUnavailable(refuseMode, detail)
+          }
+          if (client === undefined) {
+            throw remoteSandboxUnavailable(refuseMode, 'core session opened without a client')
+          }
+          return client
+        } catch (error) {
+          client?.close()
           throw error
         }
+      }
+
+      const mapOpenError = (error: unknown): Error => {
+        if (error instanceof RemoteSandboxError) {
+          if (confined) blocked.set(key, error)
+          return error
+        }
         const detail = error instanceof Error ? error.message : String(error)
-        if (!confined) throw new CoreMissingError(detail)
+        if (!confined) return new CoreMissingError(detail)
         const refusal = remoteSandboxUnavailable(refuseMode, detail)
         blocked.set(key, refusal)
-        throw refusal
+        return refusal
       }
-      if (client === undefined) {
-        throw remoteSandboxUnavailable(refuseMode, 'core session opened without a client')
+
+      let client: CoreClient
+      try {
+        client = await openOnce()
+      } catch (error) {
+        // REQ-I14 first-use approval: only when the DISK artifact is verifiably
+        // missing/stale (a bwrap-less host or a dead network is not a deploy
+        // gap), only once per attempt, and only for confined callers.
+        if (!confined || resolveGap === undefined) throw mapOpenError(error)
+        const disk = await diskVersionOf(connection, opts?.signal)
+        if (disk.ok && disk.version === CORE_ARTIFACT_VERSION) throw mapOpenError(error)
+        let resolved = false
+        try {
+          resolved = await resolveGap(connectionId, {
+            found: disk.version,
+            expected: CORE_ARTIFACT_VERSION,
+            ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
+          })
+        } catch {
+          resolved = false
+        }
+        if (!resolved) throw mapOpenError(error)
+        try {
+          client = await openOnce()
+        } catch (retryError) {
+          throw mapOpenError(retryError)
+        }
       }
       remember(connectionId, workspace)
       blocked.delete(key)
@@ -459,11 +564,18 @@ export function coreHubOf(ctx: Context): CoreHub | undefined {
  * Return the process-wide hub, creating and `ctx.provide`-ing it on first use
  * so the aggregate row, the web channel, and the directory picker share one
  * session cache. Effect-bound: unloading the row drops the name.
+ *
+ * The production hub carries the REQ-I14 first-use approval resolver (ask the
+ * platform approval service, deploy, retry once); tests that build their own
+ * hub via {@link createCoreHub} stay resolver-free.
  */
 export function ensureCoreHub(ctx: Context): CoreHub {
   const existing = coreHubOf(ctx)
   if (existing !== undefined) return existing
-  const hub = createCoreHub(ctx)
+  let created: CoreHub | undefined
+  const resolveGap = createCoreGapAsker(ctx, () => created)
+  const hub = createCoreHub(ctx, { resolveGap })
+  created = hub
   if (typeof ctx.provide !== 'function') return hub
   try {
     ctx.provide('coreHub', hub)

@@ -6,6 +6,15 @@
 
 ### 新增
 
+- **核心部署无感化（`REQ-I14`）**：围栏≠off 的机器连进会话（`sw_connect` / 面板开关 / `session.conn.*`）即触发后台预热——`core.status` 发现缺核心或版本过期就自动 `core.deploy`（fire-and-forget，连接时延不为上传买单；并发去重、失败仅告警留现状）。围栏打开撞上磁盘工件确证缺失/过期时走**首用审批**：经平台 approval 问一次（`[dsw-core-deploy]` 标记，与 AI 应答器的 gate 标记不同——给远端装二进制永远人拍板），`allowed-once` 才部署并自动重试；其余结局落回原 fail-closed 拒绝。升级改**探测翻链**：解压到版本目录后先探 `dsh-core version`（退出 0）才翻 `current` 符号链接——坏工件永远搁浅不了机器。ADR-0024 §3/§6.1 的「自动安装禁止」随之修订（区别：装的是本插件第一方工件、经用户自己的 SSH 通道；模型工具路径上的安装仍禁止）。
+- **backlog 表格断行闸门（`INFRA-22`）**：`npm run check:static` 的 backlog 布局检查新增两条规则——同一分节的表格行必须连续（表中断行会让后续行渲染成散文本）、全文不得有连续空行（本轮 HEAD 里两者都已发生而旧解析器对非行行静默跳过、不可见）；顺手清掉 ba56c88 带入的断行与双空行。
+
+### 变更
+
+- **核心版本门（`REQ-I17`）**：围栏档（read-only / workspace-write）的 spawn 与写面现在只认本插件随包的 `CORE_ARTIFACT_VERSION`——活会话 `hello.version` 对不上即 `SANDBOX_UNAVAILABLE`，文案带实测/期望版本并提示部署（设置页或重连触发预热）；存活旧 serve 复用时同样被丢弃重 exec（读缓存 hello，不加 RPC）。`danger-full-access` 与 `off` 不挡（经 `CoreMissingError` 落回 SFTP，绝不默默跑旧核）；读面降级仍是 `REQ-I15`。远端运行旧核心时 Write/bash 会被拒——这是有意的 fail-closed（组杀、CAS `version` 算法都在核心里，旧二进制等于没修），部署或重连即恢复。
+
+### 新增
+
 - **跨 agent 协作协议（`INFRA-21`）**：AGENTS.md §7 写死交互模型——**一轮 = 用户点名的一组 backlog ID = 恰好一个 PR**（同会话顺手改动折进同一 PR）；**开工先跑 `npm run preflight`**（新增能力预检脚本：node/npm/git/gh/wsl/端口/lab/打包产物；browser-use 由 agent 自报——探测不了的诚实边界），缺能力 ⇒ 对应 backlog 行标 `agent-missing:<cap>` 进 §3，**绝不静默跳过**；**跨 agent 接续协议**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明，项目状态不依赖任何 agent 的会话记忆；**脚本化文档编辑一律走 `scripts/lib/doc-edit.mjs`**（`replaceOrThrow`/`mustInclude`，不命中/不唯一/无变化必抛）——R41–R43 三次裸 replace 静默丢编辑的教训，本轮修 backlog 时即拦下两次失配。
 
 ### 变更

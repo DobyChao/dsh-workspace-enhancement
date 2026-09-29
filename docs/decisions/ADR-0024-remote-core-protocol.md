@@ -92,14 +92,28 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   `npm run check` 在 pack 冒烟前构建 tarball——通过 npm 安装的实例开箱即可
   `core.deploy`，且包里**没有**第三方二进制。
 - 远端：`~/.dsh-core/<version>/` + `current` 符号链接。不需要 root。
-- 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`，**不**在模型
-  第一次调用时偷偷装。
+- 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`。
+  **（2026-09-29 修订，`REQ-I14`）**：上面「不在模型第一次调用时偷偷装」的原表述由
+  下面的部署无感化条目取代——装仍不发生在模型工具路径里，但也不再要求用户手工。
+- **部署无感化（2026-09-29，`REQ-I14`）**：围栏≠off 的机器被连进会话
+  （`sw_connect` / 面板开关 / `session.conn.*`）后，后台跑一次 `core.status`：
+  缺核心或版本≠`CORE_ARTIFACT_VERSION` 就 `core.deploy`（fire-and-forget，连接时延
+  不为上传买单；失败只留下现状）。**首用审批**：围栏打开撞上磁盘工件确证缺失/过期
+  时，经平台 approval 问一次（`[dsw-core-deploy]` 标记，**不是** AI 应答器的
+  gate 标记——给远端装二进制永远是人拍板），`allowed-once` 才部署并重试一次；
+  其余结局落回原 fail-closed 拒绝（文案即 REQ-I17 的部署提示）。
+  **探测翻链**：升级时先解压到 `~/.dsh-core/<version>/`，版本化路径探针
+  （`dsh-core version` 退出 0）通过才 `ln -sfn current`——坏工件永远搁浅不了机器。
+  本条修订 §6.1 的「自动安装禁止」行；第三方来源策略（bwrap 永不由我们提供、
+  rg 官方件）等其余红线不变。
 - **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
   `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
   对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
   **禁止默默跑旧核心**（组杀、`version` 算法都在核心里，旧二进制等于没修）。
-  读面仍走 REQ-I15（SFTP）。`danger` / `off` 不走核心，不挡。无感升级仍是
-  `REQ-I14`——本条是升级完成前的 fail-closed。
+  读面仍走 REQ-I15（SFTP）。`danger` / `off` 不挡（经 `CoreMissingError` 落回
+  SFTP，而非跑旧核）。无感升级是 `REQ-I14`——本条是升级完成前的 fail-closed。
+  活会话复用时也查缓存的 `hello.version`（不发电）：`current` 被翻链后，
+  存活旧 serve 会被丢弃重 exec。
 - v1 只认 `linux` + `x86_64`/`amd64`（`uname`）。aarch64 是第二架构，本轮不做。
 - Windows 远端与 `off`：今天的 SFTP + 审批门；健康面写「无围栏核心」。
 
@@ -141,7 +155,7 @@ flowchart TB
 | 空闲 | 最后一次 RPC 之后 **10 分钟**（`CORE_IDLE_MS`，常量，暂不上设置页）且没有未结束的 spawn job，杀掉该 serve。根身份记得住，下次 `require` 再拉同一 `--workspace`。不做 systemd user service。 |
 | `core.status` | 有活会话时发 **不走缓存** 的 `hello`（证明进程在）。只有缓存 hello 不能当活着。无活会话则 `dsh-core version`（只证明产物在）。 |
 | SSH keepalive | **不**改 `keepaliveInterval` 默认 0。TCP keepalive 是机器配置；核心活着靠 channel + 空闲重启。不为核心单独再做 RPC ping 循环。 |
-| 自动安装 | **禁止**。Cursor 的 `cursor-server` 随连接静默安装；本插件只认设置页「部署核心」。 |
+| 自动安装 | **2026-09-29 修订（`REQ-I14`，见 §3「部署无感化」）**：围栏≠off 机器连进会话后后台预热部署第一方工件；模型工具路径上的安装仍禁止——那条路走的是首用审批（人拍板）。原表述「禁止。Cursor 的 `cursor-server` 随连接静默安装；本插件只认设置页『部署核心』」由预热+审批取代：区别在于装的是本插件自己的第一方工件、且经用户自己的 SSH 通道，不是从第三方源拉软件。 |
 
 ### 6.2 工作区键
 
