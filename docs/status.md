@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-29 12:05 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-29 12:13 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `chore/infra21-agent-protocol` / `51f76cb` |
-| HEAD 提交 | `docs(backlog): backfill UPSTREAM-11 — desktop is an Electron shell over the web composition, zero code changes needed` (2026-09-29) |
-| 与远端 | 4 ahead / 0 behind origin/master |
+| 分支 / HEAD | `master` / `4b10e3e` |
+| HEAD 提交 | `feat: cross-agent protocol — preflight, named dispatch, handoff, asserting doc edits (#51)` (2026-09-29) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -22,16 +22,16 @@
 | 单测用例（静态计数） | 655 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 43 |
+| 轮次报告 | 44 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 17 |
-| `doing` | 1 |
+| `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 63 |
+| `done` | 64 |
 | `shipped` | 9 |
 | `dropped` | 15 |
 
