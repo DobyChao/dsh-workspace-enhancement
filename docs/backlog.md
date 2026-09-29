@@ -16,7 +16,9 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | doing | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
+| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | doing | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
+| INFRA-22 | backlog 表格断行闸门 | doing | P3 | 2026-09-29：HEAD 里表格中插空行断渲染（ba56c88 带入），闸门解析器跳过非行行不可见。加「表格连续块」+「连续空行」检查，顺手清掉 HEAD 里的断行与双空行 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -26,10 +28,6 @@
 | PUB-8 | 0.2.3 发布 | todo | P1 | 2026-09-29 用户拍板发版窗口：**REQ-I14 + REQ-I17 做完即发**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
-| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` 。**下一轮：I14+I17 一轮一 PR→PUB-8 发版** |
-
-| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见。**下一轮：I14+I17 一 PR→PUB-8** |
-
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |

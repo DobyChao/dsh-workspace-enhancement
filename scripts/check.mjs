@@ -331,10 +331,12 @@ for (const file of walk('.github/workflows', ['.yml'], [])) {
     [...new Set(duplicated)].join(', '))
 }
 
-// ---- 12. backlog layout (section ↔ status, note cap, §2 priority order) ----
+// ---- 12. backlog layout (section ↔ status, note cap, §2 priority order,
+// ----      table continuity + consecutive blank lines — INFRA-22) ----
 // A literal `|` inside the note cell (it must be written `\|`) silently splits
-// the row into extra columns. Rules live in scripts/lib/backlog.mjs so
-// `npm run status` and this gate cannot drift.
+// the row into extra columns; a blank line inside a table splits the TABLE and
+// every later row renders as loose text. Rules live in scripts/lib/backlog.mjs
+// so `npm run status` and this gate cannot drift.
 try {
   const result = auditBacklog(read('docs/backlog.md'))
   check(
