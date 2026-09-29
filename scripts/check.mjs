@@ -229,7 +229,13 @@ check('@deepseek-ai/dsh-* devDependencies declare one range', devRanges.size ===
 
 const peerCore = [...peerRanges.keys()][0] ?? ''
 const devCore = [...devRanges.keys()][0] ?? ''
-const peerFamilies = peerCore.split('||').map(part => part.trim()).filter(Boolean)
+// A union range spells each alternative with its own operator (`^0.1.7-rc.2 || ^0.2.0-rc.1`);
+// the FAMILY identity of an alternative is the bare version, so strip the
+// operator per alternative (UPSTREAM-10) — the workflow probe check greps for
+// the bare family string.
+const peerFamilies = peerCore.split('||')
+  .map(part => part.trim().replace(/^[\^~>=<\s]+/, ''))
+  .filter(Boolean)
 check('devDependencies range is one of the peer range alternatives',
   devCore === '' || peerFamilies.includes(devCore),
   `dev=${devCore || '(none)'} peer=${peerCore || '(none)'}`)
@@ -304,6 +310,26 @@ const FORBIDDEN_ROOT = ['nul', 'smoke-install.txt', 'dsh-ssh-connections.json.ba
 const rootEntries = new Set(readdirSync(ROOT))
 const stray = FORBIDDEN_ROOT.filter(name => rootEntries.has(name))
 check('repository root has no stray artifacts', stray.length === 0, stray.join(', '))
+
+// ---- 11b. workflow files: top-level keys are unique -------------------------
+// 2026-09-28 lesson (UPSTREAM-10): the tag-watch insertion opened a SECOND
+// top-level `jobs:` mapping; GitHub rejects the whole workflow file, so neither
+// the daily tag watch nor the weekly drift ran — and ci.yml never validates
+// upstream.yml, so master carried the broken file for hours. A column-0 key
+// scan catches the duplicate-key class without a YAML dependency: block
+// scalars nest indented and comments carry a leading `#`, so column-0
+// `key:` lines are structural.
+for (const file of walk('.github/workflows', ['.yml'], [])) {
+  const keys = []
+  for (const line of read(file).split('\n')) {
+    if (line.startsWith('#') || line.trim() === '') continue
+    const match = /^([A-Za-z_][\w-]*):/.exec(line)
+    if (match !== null) keys.push(match[1])
+  }
+  const duplicated = keys.filter((key, index) => keys.indexOf(key) !== index)
+  check(`workflow top-level keys unique (${file.replaceAll('\\', '/')})`, duplicated.length === 0,
+    [...new Set(duplicated)].join(', '))
+}
 
 // ---- 12. backlog layout (section ↔ status, note cap, §2 priority order) ----
 // A literal `|` inside the note cell (it must be written `\|`) silently splits

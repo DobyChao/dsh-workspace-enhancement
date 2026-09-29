@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 变更
+
+- **peer 联合 pin：0.1.7 + 0.2.0 双家族（`UPSTREAM-10`）**：0.2.0 宿主在 boot 时**强制执行**插件 peerDependencies——不符即整 bundle 跳过、通道静默 404（0.1.x 仅 pnpm 警告；boot 哨兵 09-29 实证）。13 个 peer 改为 `^0.1.7-rc.2 || ^0.2.0-rc.1`，联合 pin 副本对 0.2.0-rc.1 宿主 boot 哨兵 **SMOKE PASS**；devDependencies 留 `^0.1.7-rc.2`（主家族不变）。`upstream.yml` 为联合范围补**固定版本 drift 通道**（`pinned-0.1.7-rc.2`；0.2.0 线随 `next` tag 探），闸门的家族点名检查随之按备选归一化。静态闸门新增 **workflow 顶层键唯一性检查**——2026-09-28 重复 `jobs:` 键曾让整个 upstream.yml 失效（tag-watch 与 drift 全部静默不跑），而 CI 不校验此文件；该检查已在本地对重建的坏文件做过负向验证。
+
 ### 新增
 
 - **实机测试矩阵 + WSL Linux lab（`INFRA-19`）**：`docs/uat/matrix.md` 成为实机 case 的唯一清单——L1 每 PR 冒烟（7 条，锚点全为真实事故：F1/F2、BUG-5/7/9、UPSTREAM-8 ①②）+ L2 发版前全量（12 条 + 双 lab 对拍）；执行协议跨 agent（能力缺失 → `agent-missing:<cap>` 标 blocked，不静默跳过）。新增 `scripts/dev-lab-wsl.ps1` / `dev-lab-wsl.sh`：WSL 内起 **Linux 宿主** lab（端口 50600，家族校验跟 peer pin、自动重装错家族 CLI、代填宿主 `allowBuilds` 占位、smoke = token 兑换 + `/api/dsw` 通道断言）——本机已真机 PASS（0.1.7-rc.2 Linux 宿主）。

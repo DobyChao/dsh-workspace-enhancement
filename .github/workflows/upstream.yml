@@ -154,6 +154,10 @@ jobs:
         # → 404 → boot smoke died).
         # `tag:` resolves every host-shared package through a dist-tag; `family:`
         # pins them all to one exact version.
+        # UPSTREAM-10: the union peer pin claims TWO families — 0.2.0-rc.1 rides
+        # the moving `next` tag (that is where the 0.2.0 line ships today), while
+        # 0.1.7-rc.2 stays covered by an exact-version channel so the claim can
+        # never outrun its probe after `next` moves on.
         include:
           - channel: next
             tag: next
@@ -161,6 +165,9 @@ jobs:
           - channel: alpha
             tag: alpha
             family: ''
+          - channel: pinned-0.1.7-rc.2
+            tag: ''
+            family: 0.1.7-rc.2
     steps:
       - uses: actions/checkout@v4
 
