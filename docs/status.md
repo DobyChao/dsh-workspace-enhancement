@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-29 04:41 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-29 11:34 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `chore/infra21-agent-protocol` / `a8cf74b` |
-| HEAD 提交 | `docs: close UPSTREAM-10 after PR #50 and record R43` (2026-09-29) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `chore/infra21-agent-protocol` / `c97a318` |
+| HEAD 提交 | `feat: cross-agent protocol — preflight, named dispatch, handoff, asserting doc edits` (2026-09-29) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 13 |
+| `todo` | 15 |
 | `doing` | 1 |
 | `blocked` | 5 |
 | `done` | 63 |
