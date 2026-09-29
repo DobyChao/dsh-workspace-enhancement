@@ -24,7 +24,8 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
-| REQ-I21 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/req-i21-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
+| PUB-8 | 0.2.3 发布 | todo | P1 | 2026-09-29 用户拍板发版窗口：**REQ-I14 + REQ-I17 做完即发**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
+| UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |

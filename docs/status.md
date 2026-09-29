@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-29 11:45 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-29 12:05 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `chore/infra21-agent-protocol` / `fddba11` |
-| HEAD 提交 | `docs(backlog): record REQ-I21 (sidebar row badges — key anchor + official session-row slots) with the survey` (2026-09-29) |
-| 与远端 | 3 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/infra21-agent-protocol` / `51f76cb` |
+| HEAD 提交 | `docs(backlog): backfill UPSTREAM-11 — desktop is an Electron shell over the web composition, zero code changes needed` (2026-09-29) |
+| 与远端 | 4 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 16 |
+| `todo` | 17 |
 | `doing` | 1 |
 | `blocked` | 5 |
 | `done` | 63 |
