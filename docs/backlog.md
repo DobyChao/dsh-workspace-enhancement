@@ -16,8 +16,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | doing | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
-| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | doing | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。验收：远端仍旧核心时 Write/bash 拒且提示可见 |
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | doing | P2 | **PR #54 CI 绿，待 owner 合并**。围栏≠off 连接后后台 `core.status`→`core.deploy`；升级先探版本目录才翻 `current`；缺核心首用走 approval（人拍板）。ADR-0024 §3/§6.1 已修订。合并后 →§4、R45 |
+| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | doing | P2 | **PR #54 CI 绿，待 owner 合并**（同 I14）。`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`（含活会话复用检查）；danger/off 走 `CoreMissingError` 落 SFTP。验收 matrix N8 待 L1/L2 实机 |
 | INFRA-22 | backlog 表格断行闸门 | doing | P3 | 2026-09-29：HEAD 里表格中插空行断渲染（ba56c88 带入），闸门解析器跳过非行行不可见。加「表格连续块」+「连续空行」检查，顺手清掉 HEAD 里的断行与双空行 |
 
 ## 2. 已排期（todo，按优先级）
