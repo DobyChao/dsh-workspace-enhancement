@@ -24,7 +24,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-10 | 0.2.0 家族对齐 | todo | P1 | 2026-09-28 `next`=`0.2.0-rc.1`。契约四面与 0.1.7-rc.2 一致（UPSTREAM-8 适配覆盖），CI 静态+单测+build 绿；boot 挡在上游：`dsh-web-app@0.2.0-rc.1` 钉未发布的 settings-account 包 ⇒ 宿主树不完整（drift #49）。`^0.1.7-rc.2` 上限 <0.2.0，latest 翻前需拍 pin。详见 compatibility.md 当日行 |
+| UPSTREAM-10 | 0.2.0 家族对齐 | todo | P1 | 09-29 缺包补齐后 boot 实证：0.2.0 宿主**强制 peer**（不符即 skip 插件；0.1.x 只警告）；联合 pin 副本探针 **SMOKE PASS** ⇒ 运行时兼容，唯一缺口=pin。待办：拍 pin（联合或等 latest 翻整体升）+ upstream.yml 家族点名与 YAML 校验入闸门。drift next 在 pin 改前预期红（#49 追踪） |
 | INFRA-21 | 跨 agent 协作协议：能力预检 + 点名派发 + 接续 | todo | P2 | 2026-09-28 定调：点名 N 条 = **恰好一个 PR**；用户合并；用户发版。落地：AGENTS.md §7 写死点名派发；能力预检（shell/wsl/browser-use/gh/npm）进 round 报告，缺失标 `agent-missing:<cap>` 进 §3 不跳过；**接续**：交接 = WIP 提交到分支 + backlog 备注现状与下一步 + PR 评论留交接说明；开发/测试可拆 agent。协议只依赖仓库内文件 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | todo | P2 | 2026-09-21 拍板。围栏档 spawn/写：`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`，文案促 `core.deploy`。danger/off 不挡。读面仍 `REQ-I15`。修订 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。I14 是无感升级，本项先 fail-closed。验收：远端仍旧核心时 Write/bash 拒且提示可见 |

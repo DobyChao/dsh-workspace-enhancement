@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-28 12:46 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-29 02:14 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `master` / `d468f78` |
-| HEAD 提交 | `fix(ci): drop the duplicated jobs key that invalidated upstream.yml` (2026-09-28) |
+| 分支 / HEAD | `master` / `4e6cd62` |
+| HEAD 提交 | `docs: record the 0.2.0-rc.1 first contact (UPSTREAM-10)` (2026-09-28) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
