@@ -23,7 +23,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 2026-09-29 用户提出。子代理调查中：桌面版形态/包名、profile 机制（现只挂 web）、我方耦合面（/api/dsw 通道、客户端槽位、dsh-base 补丁、bundles）在两种情景下的存续与适配方案。结论回填后拍方案 |
+| UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
 | REQ-I21 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/req-i21-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | todo | P2 | 围栏≠off 时连接后后台 `core.status`→`core.deploy`；升级探测通过才翻 `current`；缺核心首用走 `approval`。红线见 [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) §3。版本门是 `REQ-I17` |
