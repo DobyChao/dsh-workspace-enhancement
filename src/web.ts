@@ -353,11 +353,12 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
   void new SessionMachineConnections(ctx)
   const hub = (): CoreHub => ensureCoreHub(ctx)
   /**
-   * REQ-I14 connection warmup: a fenced machine connected to a session gets a
-   * background `core.status` → `core.deploy` run, so the first tool call finds
-   * a current core instead of a fail-closed refusal. Fire-and-forget by
-   * design — a connect must not pay upload latency, and a failed warmup only
-   * leaves the status quo (the first-use approval ask still covers the gap).
+   * REQ-I14 connection warmup (the PANEL/CHANNEL connect paths — `sw_connect`
+   * provisions synchronously in its own tool call since REQ-I21): a fenced
+   * machine connected via a session toggle gets a background
+   * `core.status` → `core.deploy` run. Fire-and-forget by design — a UI toggle
+   * must not pay upload latency, and a failed warmup only leaves the status
+   * quo (the first-use approval ask still covers the gap).
    */
   const warmup = createCoreWarmup({
     machine: (id) => registry().listMachines().machines.find(machine => machine.id === id),
@@ -800,6 +801,5 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     registry,
     () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined,
     () => ctx.get('sessionConnections', false) as SessionConnectionsFace | undefined,
-    warmup,
   )
 }

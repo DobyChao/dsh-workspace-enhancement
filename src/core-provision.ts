@@ -1,17 +1,24 @@
 /**
- * REQ-I14: making the remote-core deployment invisible.
+ * REQ-I14/REQ-I21: making the remote-core deployment invisible.
  *
- * Two halves share one policy — the fence owns the machine, so the core it
- * runs is THIS plugin's provisioning problem, never the operator's manual
- * chore (ADR-0024 §3/§6.1, revised 2026-09-29):
+ * Two halves share one policy — the core the fence runs is THIS plugin's
+ * provisioning problem, never the operator's manual chore (ADR-0024 §3/§6.1,
+ * revised 2026-09-29/30):
  *
- *  1. **Connection warmup** ({@link createCoreWarmup}): when a fenced machine
- *     is connected to a session, a background `core.status` → `core.deploy`
- *     run installs or upgrades the first-party artifact before the first tool
- *     call needs it. Fire-and-forget: connect latency must not pay for an
- *     upload, and a failed warmup only means the status quo (fail-closed
- *     refusal at use time).
- *  2. **First-use approval** ({@link createCoreGapAsker}): when a confined
+ *  1. **Connection warmup** ({@link createCoreWarmup}): when a machine is
+ *     connected via the PANEL/channel paths, a background `core.status` →
+ *     `core.deploy` run installs or upgrades the first-party artifact before
+ *     the first tool call needs it. Fire-and-forget: a UI toggle must not pay
+ *     for an upload, and a failed warmup only means the status quo.
+ *  2. **The synchronous tool channel** ({@link provisionRemoteCore}, REQ-I21):
+ *     `sw_connect` awaits the same ladder per reachable machine and reports
+ *     the outcome in its own tool output; `sw_status` reports the per-machine
+ *     core state. This is the remediation channel that always works — the
+ *     approval ask (below) depends on a chain of runtime preconditions that
+ *     fails SILENTLY (2026-09-30 lab report: no approval audit pair ⇒ the
+ *     request never fired; every false path now warns).
+ *
+ *  3. **First-use approval** ({@link createCoreGapAsker}): when a confined
  *     open fails on a verifiably missing/stale disk artifact, the hub asks the
  *     platform approval service once; `allowed-once` deploys and retries, every
  *     other ending falls through to the original `SANDBOX_UNAVAILABLE` with
@@ -32,10 +39,6 @@ import type {
   RemoteApprovalServiceFace,
   RemoteApprovalOutcome,
 } from './remote-approval-gate.ts'
-import {
-  isRemoteSandboxEnabled,
-  normalizeRemoteSandbox,
-} from './remote-sandbox.ts'
 import type { RemoteSandboxMode } from './remote-sandbox.ts'
 
 /** The approval `toolName` for a core deploy ask (an operator action, not a model tool). */
@@ -66,10 +69,58 @@ export interface CoreWarmupDeps {
   warn?(text: string): void
 }
 
+/** What one synchronous provision run decided about one machine. */
+export interface CoreProvisionOutcome {
+  /** The machine id that was provisioned. */
+  id: string
+  /** `true` when nothing ran: unfenced/unknown machine, or hub-free composition. */
+  skipped: boolean
+  /** `true` when this run uploaded and installed a new artifact. */
+  deployed: boolean
+  /** Post-action disk version (absent when the probe/install failed). */
+  version: string | undefined
+  /** Failure detail (deploy or probe); also set for skips that matter. */
+  detail: string | undefined
+}
+
 /**
- * The fire-and-forget warmup closure. Deduplicates per machine id: N connects
- * racing on one machine produce ONE status→deploy run; the promise leaves the
- * map when it settles, so a later reconnect warms again.
+ * REQ-I21: one machine's synchronous provision — the status→deploy ladder the
+ * `sw_connect` tool awaits and reports per machine. Never throws: a failed
+ * deploy is an outcome (`deployed: false`, `detail`), not an exception, so a
+ * broken remote can never fail the connect itself (reads still work via SFTP).
+ *
+ * Gating note (2026-09-30 lab fix): the machine's `remoteSandbox` field is
+ * deliberately NOT consulted. Confinement that requires the core follows the
+ * SESSION (`resolveRemoteSessionMode`, fail-safe `read-only` — ADR-0025), so
+ * an `off`-fielded machine still fences a confined session and needs the
+ * core; the field keeps governing terminals, the legacy fence, and display.
+ * Unknown machines are the only skip.
+ */
+export async function provisionRemoteCore(
+  deps: CoreWarmupDeps,
+  id: string,
+  signal?: AbortSignal,
+): Promise<CoreProvisionOutcome> {
+  const machine = deps.machine(id)
+  if (machine === undefined) return { id, skipped: true, deployed: false, version: undefined, detail: 'unknown machine' }
+  const status = await deps.status(id, signal)
+  if (status.ok && status.version === CORE_ARTIFACT_VERSION) {
+    return { id, skipped: false, deployed: false, version: status.version, detail: undefined }
+  }
+  const view = await deps.deploy(id, signal)
+  if (view.ok) {
+    deps.afterDeploy?.(id)
+    return { id, skipped: false, deployed: true, version: view.version ?? CORE_ARTIFACT_VERSION, detail: view.detail }
+  }
+  return { id, skipped: false, deployed: false, version: undefined, detail: view.detail ?? 'deploy failed' }
+}
+
+/**
+ * The fire-and-forget warmup closure (REQ-I14, the UI/channel connect paths —
+ * the `sw_connect` tool uses the synchronous {@link provisionRemoteCore}
+ * instead). Deduplicates per machine id: N connects racing on one machine
+ * produce ONE status→deploy run; the promise leaves the map when it settles,
+ * so a later reconnect warms again.
  *
  * @returns the trigger; it never throws and never blocks the caller.
  */
@@ -77,19 +128,13 @@ export function createCoreWarmup(deps: CoreWarmupDeps): (id: string) => void {
   const inFlight = new Map<string, Promise<void>>()
   return (id: string): void => {
     if (inFlight.has(id)) return
-    const run = (async (): Promise<void> => {
-      const machine = deps.machine(id)
-      if (machine === undefined) return
-      if (!isRemoteSandboxEnabled(normalizeRemoteSandbox(machine.remoteSandbox))) return
-      const status = await deps.status(id)
-      if (status.ok && status.version === CORE_ARTIFACT_VERSION) return
-      const view = await deps.deploy(id)
-      if (view.ok) {
-        deps.afterDeploy?.(id)
-      } else {
-        deps.warn?.(`dsw: core warmup deploy failed on ${id}: ${view.detail ?? 'unknown detail'}`)
-      }
-    })()
+    const run = provisionRemoteCore(deps, id)
+      .then(outcome => {
+        if (outcome.skipped || outcome.deployed) return
+        if (outcome.detail !== undefined) {
+          deps.warn?.(`dsw: core warmup deploy failed on ${id}: ${outcome.detail}`)
+        }
+      })
       .catch(error => {
         deps.warn?.(`dsw: core warmup failed on ${id}: ${error instanceof Error ? error.message : String(error)}`)
       })
@@ -123,22 +168,42 @@ export function createCoreGapAsker(
   deploy: (transport: SshTransport, signal?: AbortSignal) => Promise<CoreStatusView> = (transport, signal) =>
     deployCore(transport, signal !== undefined ? { signal } : {}),
 ): (connectionId: string, facts: { found: string | undefined; expected: string; signal?: AbortSignal | undefined }) => Promise<boolean> {
+  /** REQ-I21 observability: the 2026-09-30 lab report showed a silent false
+   *  path is undiagnosable from artifacts (no approval audit pair ⇒ request()
+   *  never called, but WHICH precondition failed stayed invisible). */
+  const note = (text: string): void => {
+    const logger = (ctx as { logger?: { warn?: (message: string) => void } }).logger
+    try {
+      logger?.warn?.(text)
+    } catch {
+      // A broken sink must not turn a fail-closed answer into a throw.
+    }
+  }
   return async (connectionId, facts): Promise<boolean> => {
     try {
       const approval = typeof ctx.get === 'function'
         ? ctx.get('approval', false) as RemoteApprovalServiceFace | undefined
         : undefined
-      if (approval === undefined) return false
+      if (approval === undefined) {
+        note(`dsw: core-deploy approval skipped on ${connectionId}: no approval service is composed`)
+        return false
+      }
       const agents = typeof ctx.get === 'function'
         ? ctx.get('agents', false) as { currentInitiator?: () => RemoteApprovalAgentFace | undefined } | undefined
         : undefined
       const agent = agents?.currentInitiator?.()
-      if (agent === undefined) return false
+      if (agent === undefined) {
+        note(`dsw: core-deploy approval skipped on ${connectionId}: no initiating agent (outside a tool-call initiator boundary)`)
+        return false
+      }
       const registry = typeof ctx.get === 'function'
         ? ctx.get('sshRegistry', false) as { get?: (id: string) => unknown } | undefined
         : undefined
       const connection = registry?.get?.(connectionId)
-      if (connection === undefined) return false
+      if (connection === undefined) {
+        note(`dsw: core-deploy approval skipped on ${connectionId}: the registry cannot build the connection`)
+        return false
+      }
       let outcome: RemoteApprovalOutcome
       try {
         outcome = await approval.request({
@@ -151,18 +216,26 @@ export function createCoreGapAsker(
           }),
           ...(facts.signal !== undefined ? { signal: facts.signal } : {}),
         })
-      } catch {
+      } catch (error) {
         // No open turn / no answerer composed: not a deploy decision, fail closed.
+        note(`dsw: core-deploy approval request failed on ${connectionId}: ${error instanceof Error ? error.message : String(error)}`)
         return false
       }
-      if (outcome !== 'allowed-once') return false
+      if (outcome !== 'allowed-once') {
+        note(`dsw: core-deploy approval answered '${String(outcome)}' on ${connectionId} — keeping the fail-closed refusal`)
+        return false
+      }
       const view = await deploy(connection as SshTransport, facts.signal)
-      if (!view.ok) return false
+      if (!view.ok) {
+        note(`dsw: approved core deploy failed on ${connectionId}: ${view.detail ?? 'unknown detail'}`)
+        return false
+      }
       // Stale serves (old `current`) and their cached refusals must not
       // outlive the flip — the retry re-execs the new binary.
       hubOf()?.close(connectionId)
       return true
-    } catch {
+    } catch (error) {
+      note(`dsw: core-deploy approval path errored on ${connectionId}: ${error instanceof Error ? error.message : String(error)}`)
       return false
     }
   }

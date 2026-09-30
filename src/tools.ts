@@ -25,10 +25,15 @@ import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
+import type { SshTransport } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 import { coreHubOf } from './core-hub.ts'
 import type { CoreHub, CoreStatusView } from './core-hub.ts'
+import { provisionRemoteCore } from './core-provision.ts'
+import type { CoreProvisionOutcome } from './core-provision.ts'
+import { coreStatusViaExec, deployCore } from './core-deploy.ts'
+import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -406,13 +411,45 @@ export function registerWorkspaceTools(
   registry: () => SshRegistry,
   sides: () => SessionSideWorkspaceStore | undefined,
   connections: () => SessionConnectionsFace | undefined,
-  /** REQ-I14: per-machine core warmup fired when `sw_connect` reaches machines. */
-  warmCore?: (id: string) => void,
+  /** REQ-I21: per-machine core provision awaited inside `sw_connect` (tests inject a fake). */
+  provisionCore?: (id: string, signal?: AbortSignal) => Promise<CoreProvisionOutcome>,
 ): void {
   const locale = hostLocaleOf(ctx)
   const t = locale.t
   const machineFaceOf = (id: string): PromptMachineFace | undefined =>
     registry().listMachines().machines.find(entry => entry.id === id)
+  /** The registry connection cast to the deploy transport (SshConnection satisfies it structurally). */
+  const transportOf = (id: string): SshTransport | undefined => {
+    const connection = registry().get(id)
+    return connection === undefined ? undefined : (connection as unknown as SshTransport)
+  }
+  /** On-disk artifact probe: the shared hub when composed, else a plain exec probe. */
+  const coreStatusOf = async (id: string, signal?: AbortSignal): Promise<CoreStatusView> => {
+    const hub = coreHubOf(ctx)
+    const budget = signal !== undefined ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000)
+    if (hub !== undefined) return hub.status(id, budget)
+    const transport = transportOf(id)
+    if (transport === undefined) return { ok: false, detail: 'machine is not usable as a registry connection' }
+    return coreStatusViaExec(transport, budget)
+  }
+  /**
+   * REQ-I21: the synchronous provision `sw_connect` awaits per reachable
+   * machine — status, deploy when the fenced machine is missing/stale, drop
+   * stale serves after the flip. Injected fakes keep the tool tests hermetic.
+   */
+  const provisionOf = provisionCore ?? ((id: string, signal?: AbortSignal): Promise<CoreProvisionOutcome> =>
+    provisionRemoteCore({
+      machine: (mid) => registry().listMachines().machines.find(entry => entry.id === mid),
+      connection: transportOf,
+      status: coreStatusOf,
+      deploy: (mid, sig) => {
+        const transport = transportOf(mid)
+        if (transport === undefined) return Promise.resolve({ ok: false, detail: 'machine is not usable as a registry connection' })
+        return deployCore(transport, sig !== undefined ? { signal: sig } : {})
+      },
+      afterDeploy: (mid) => { coreHubOf(ctx)?.close(mid) },
+      warn: (text) => { ctx.logger.warn(text) },
+    }, id, signal))
   /** REQ-I11: the session's connected ids (store ∪ implicit main machine). */
   const connectedIdsOf = (sessionId: string | undefined, cwd: string | undefined): string[] => {
     if (sessionId === undefined) return []
@@ -462,6 +499,33 @@ export function registerWorkspaceTools(
         ]
         lines.push((await pingActive(instance, t)).text)
         lines.push(await remoteEnvLine(instance, coreHubOf(ctx)))
+        // REQ-I21: one core line per CONNECTED machine — the disk artifact's
+        // version versus the one this plugin ships, so the model can diagnose
+        // a version-gate refusal without leaving the tool surface. Not gated on
+        // the machine's remoteSandbox field: confinement follows the SESSION
+        // (fail-safe read-only), so every connected machine may fence.
+        for (const id of connectedIdsOf(sessionId, cwd)) {
+          if (machineFaceOf(id) === undefined) continue
+          let view: CoreStatusView
+          try {
+            view = await coreStatusOf(id, (exec as { signal?: AbortSignal }).signal)
+          } catch (error) {
+            view = { ok: false, detail: error instanceof Error ? error.message : String(error) }
+          }
+          if (view.ok && view.version === CORE_ARTIFACT_VERSION) {
+            lines.push(t('tool.sw_status.core.current', { id, version: view.version }))
+          } else if (view.ok) {
+            lines.push(t('tool.sw_status.core.mismatch', {
+              id,
+              found: view.version ?? 'unknown',
+              expected: CORE_ARTIFACT_VERSION,
+            }))
+          } else if ((view.detail ?? '').includes('not installed')) {
+            lines.push(t('tool.sw_status.core.missing', { id }))
+          } else {
+            lines.push(t('tool.sw_status.core.error', { id, detail: view.detail ?? 'unknown detail' }))
+          }
+        }
         return { text: lines.join('\n') }
       },
     }),
@@ -511,12 +575,13 @@ export function registerWorkspaceTools(
           throw new Error(t('tool.sw_connect.error.allUnreachable', { details }))
         }
         store.set(sessionId, reachable.map(probe => probe.id))
-        // REQ-I14: every machine that just became reachable to this session
-        // gets the background core warmup (fenced machines only; the closure
-        // itself reads the fence mode and re-checks the installed version).
-        for (const probe of reachable) warmCore?.(probe.id)
         // Honest per-machine report: the resulting connected set, one line each,
         // including the machines that did NOT answer (they are not connected).
+        // REQ-I21: every reachable FENCED machine is provisioned SYNCHRONOUSLY
+        // (status → deploy when missing/stale) and the outcome rides the report
+        // — the model sees the core state it will fence with, and a failed
+        // deploy is a report line, never a failed connect (reads still work).
+        const signal = (exec as { signal?: AbortSignal }).signal
         const lines = [t('tool.sw_connect.output.heading')]
         for (const probe of probes) {
           const endpoint = `${machineFaceOf(probe.id)?.username ?? '<user>'}@${machineFaceOf(probe.id)?.host ?? '<host>'}`
@@ -526,6 +591,27 @@ export function registerWorkspaceTools(
               id: probe.id,
               detail: probe.detail === '' ? t('tool.sw_connect.error.noDetail') : probe.detail,
             }))
+          if (!probe.ok) continue
+          let outcome: CoreProvisionOutcome
+          try {
+            outcome = await provisionOf(probe.id, signal)
+          } catch (error) {
+            outcome = {
+              id: probe.id,
+              skipped: false,
+              deployed: false,
+              version: undefined,
+              detail: error instanceof Error ? error.message : String(error),
+            }
+          }
+          if (outcome.skipped) continue
+          if (outcome.deployed) {
+            lines.push(t('tool.sw_connect.output.coreDeployed', { version: outcome.version ?? CORE_ARTIFACT_VERSION }))
+          } else if (outcome.version !== undefined) {
+            lines.push(t('tool.sw_connect.output.coreCurrent', { version: outcome.version }))
+          } else {
+            lines.push(t('tool.sw_connect.output.coreFailed', { detail: outcome.detail ?? 'unknown detail' }))
+          }
         }
         return { text: lines.join('\n') }
       },

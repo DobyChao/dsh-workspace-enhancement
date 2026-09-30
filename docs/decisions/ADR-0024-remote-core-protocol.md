@@ -95,7 +95,7 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 - 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`。
   **（2026-09-29 修订，`REQ-I14`）**：上面「不在模型第一次调用时偷偷装」的原表述由
   下面的部署无感化条目取代——装仍不发生在模型工具路径里，但也不再要求用户手工。
-- **部署无感化（2026-09-29，`REQ-I14`）**：围栏≠off 的机器被连进会话
+- **部署无感化（2026-09-29，`REQ-I14`；2026-09-30 修订，`REQ-I21`）**：围栏≠off 的机器被连进会话
   （`sw_connect` / 面板开关 / `session.conn.*`）后，后台跑一次 `core.status`：
   缺核心或版本≠`CORE_ARTIFACT_VERSION` 就 `core.deploy`（fire-and-forget，连接时延
   不为上传买单；失败只留下现状）。**首用审批**：围栏打开撞上磁盘工件确证缺失/过期
@@ -106,6 +106,20 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   （`dsh-core version` 退出 0）通过才 `ln -sfn current`——坏工件永远搁浅不了机器。
   本条修订 §6.1 的「自动安装禁止」行；第三方来源策略（bwrap 永不由我们提供、
   rg 官方件）等其余红线不变。
+  **REQ-I21 修订（2026-09-30 用户 lab 实测）**：首用审批的运行时前提链
+  （approval 服务 + 人应答器 + initiator ALS + open turn）任何一环断掉都会**静默**
+  落回 fail-closed——实测就是这样（转录无 approval 审计对 ⇒ `request()` 未达，
+  且当时 asker 零日志不可定位）。因此模型工具渠道不再只赌审批：
+  **`sw_connect` 对每台可达机器同步 `core.status`→`core.deploy` 并把结果
+  写进工具输出**（部署失败是报告行，绝不是 connect 失败；首用审批 ask 保留为
+  能弹则弹的零触摸补充，其全部 false 路径补 warn 日志）；**`sw_status` 对每台
+  已连接的机器报告核心版本/缺口**；REQ-I17 的 fail-closed 文案改为先指
+  `sw_connect`（模型可执行），设置页/core.deploy 仍作为操作员出路。
+  **同轮门控修正**：核心供给（预热/同步/状态行）一律**不再看机器的
+  `remoteSandbox` 字段**——实测用户会话以 workspace-write 围栏时机器字段是
+  `off`，按字段门控把部署全挡了。围栏跟着**会话**走（`resolveRemoteSessionMode`
+  fail-safe `read-only`，ADR-0025），任何已连接机器都可能围栏 ⇒ 都供给；
+  机器字段继续只管终端守卫、旧路径 fence 与状态显示。
 - **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
   `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
   对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
