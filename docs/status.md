@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-29 13:07 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-30 15:01 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.2.2` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `master` / `ba56c88` |
-| HEAD 提交 | `docs: close INFRA-21 after PR #51 and record R44` (2026-09-29) |
+| 分支 / HEAD | `master` / `f9def11` |
+| HEAD 提交 | `feat(tools): core provisioning joins the tool surface — sw_connect deploys, sw_status reports (REQ-I21) (#55)` (2026-09-30) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 55 |
-| 单测用例（静态计数） | 655 |
+| 单测文件 | 57 |
+| 单测用例（静态计数） | 698 |
 | E2E 场景文件 | 8 |
 | ADR | 28 |
-| 轮次报告 | 44 |
+| 轮次报告 | 46 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 17 |
+| `todo` | 15 |
 | `doing` | 0 |
 | `blocked` | 5 |
-| `done` | 64 |
+| `done` | 68 |
 | `shipped` | 9 |
 | `dropped` | 15 |
 

@@ -16,17 +16,12 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I21 | 核心供给并入 sw_connect/sw_status；部署必问 | doing | P1 | 双根因（审批静默未弹 + 供给门看机器字段）已修；用户终拍板三条规则：**尝试部署必问**（拒绝=报告行、可再问）、**danger 不尝试部署**、**已是最新不问**。`sw_connect` 同步梯子接 approve 门；后台预热降级纯探测（turn 外问不了）；`sw_status` 报核心态；版本门放宽为同 major.minor 线可用（patch 漂移不问不装）；sha256 白名单溯源门（compatHashes，dist 未登记必红） |
-| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | doing | P2 | **PR #54 CI 绿，待 owner 合并**。围栏≠off 连接后后台 `core.status`→`core.deploy`；升级先探版本目录才翻 `current`；缺核心首用走 approval（人拍板）。ADR-0024 §3/§6.1 已修订。合并后 →§4、R45 |
-| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | doing | P2 | **PR #54 CI 绿，待 owner 合并**（同 I14）。`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`（含活会话复用检查）；danger/off 走 `CoreMissingError` 落 SFTP。验收 matrix N8 待 L1/L2 实机 |
-| INFRA-22 | backlog 表格断行闸门 | doing | P3 | 2026-09-29：HEAD 里表格中插空行断渲染（ba56c88 带入），闸门解析器跳过非行行不可见。加「表格连续块」+「连续空行」检查，顺手清掉 HEAD 里的断行与双空行 |
-
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
-| PUB-8 | 0.2.3 发布 | todo | P1 | 2026-09-29 用户拍板发版窗口：**REQ-I14 + REQ-I17 做完即发**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
+| PUB-8 | 0.2.3 发布 | todo | P1 | 09-30 I14/I17/I21/INFRA-22 全部合入（PR #54/#55）——**内容齐备，待 owner 推 tag + Actions Approve**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
@@ -55,6 +50,10 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I21 | 核心供给并入 sw_connect/sw_status；部署必问 + sha256 溯源 | done | P1 | PR #55（四次拍板）。`sw_connect` 同步供给报结果、`sw_status` 报核心态；部署必问；版本门同 major.minor 线；sha256 白名单（构建自登记）。**尾巴**：弹问闭环 UAT 待实机。档案 R46 |
+| REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | done | P2 | PR #54。探测翻链（探版本目录才翻 current）；预热/审批后被 REQ-I21 重塑为「问不了的路径不部署」+ 纯探测告警；ADR-0024 §3/§6.1 修订。档案 R45/R46 |
+| REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | done | P2 | PR #54（放宽与溯源门随 PR #55）。同 major.minor 线可用（patch 漂移零打扰）、跨线拒；sha256 白名单；danger 落 SFTP。档案 R45/R46 |
+| INFRA-22 | backlog 表格断行闸门 | done | P3 | PR #54。表格连续块 + 连续空行两条规则入 auditBacklog。档案 R45 |
 | UPSTREAM-8 | 0.1.7-rc.2 实机两断点：locale 读取 + 后台 jobs owner | done | P0 | PR #44（含 UPSTREAM-9，原 #45 并入关闭）。契约从磁盘权威源（`@next` scratch）核出并锁进 fixture 测试。**尾巴**：0.1.7 侧为契约级验证，真机 UAT 待用户（后台 bash/sw_exec + `job_output` 有字节 + zh 会话标记现为 EN）。档案 [R41](./rounds/R41-upstream8-9-017-adaptation.md) |
 | INFRA-19 | 实机测试矩阵：win32 lab + WSL Linux lab + browser-use | done | P1 | PR #47。`docs/uat/matrix.md` 为实机 case 唯一清单（L1 7/L2 12+双 lab，锚点=事故史）；WSL lab 真机 smoke PASS（0.1.7-rc.2）。**尾巴**：L1/L2 首轮 browser-use 执行未跑。档案 R42 |
 | INFRA-20 | 上游信号升级：tag 每日轻探 + 真实家族形状契约 | done | P1 | 同 PR #47。tag-watch 每日 + settings 家族面契约测试进 `npm test`（drift 周跑）。首日实战三哨兵全响（#46/#48/#49）。档案 R42 |
