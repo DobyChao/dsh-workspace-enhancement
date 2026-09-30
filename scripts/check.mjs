@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { runCapture } from './lib/run.mjs'
 import { auditBacklog } from './lib/backlog.mjs'
+import { distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
 
 const ROOT = dirname(fileURLToPath(new URL('.', import.meta.url)))
 const HAN = /[\p{Script=Han}]/u
@@ -391,6 +392,16 @@ try {
   check('generated core manifests match core/artifact.json + core/vendor.json',
     sync.status === 0,
     sync.status === 0 ? '' : (sync.stderr.trim() || sync.stdout.trim()).slice(0, 200))
+  // REQ-I17 provenance gate: the fence only runs binaries registered in
+  // compatHashes, so a BUILT dist binary that is not registered is a core
+  // bump that forgot its own hash — it must never ship. Skipped when no
+  // local tarball exists (CI static runs before the build); pack-smoke
+  // re-enforces it at pack time where the tarball is guaranteed.
+  const distSha = distCoreSha256()
+  if (distSha !== null) {
+    check('built core binary is registered in compatHashes',
+      readArtifactMeta().compatHashes.includes(distSha), distSha)
+  }
 } catch (error) {
   check('core manifest sources readable', false, String(error.message || error))
 }

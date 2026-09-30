@@ -95,7 +95,7 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 - 首次上传允许 SFTP。设置页按钮 + `core.deploy` / `core.status`。
   **（2026-09-29 修订，`REQ-I14`）**：上面「不在模型第一次调用时偷偷装」的原表述由
   下面的部署无感化条目取代——装仍不发生在模型工具路径里，但也不再要求用户手工。
-- **部署无感化（2026-09-29，`REQ-I14`）**：围栏≠off 的机器被连进会话
+- **部署无感化（2026-09-29，`REQ-I14`；2026-09-30 修订，`REQ-I21`）**：围栏≠off 的机器被连进会话
   （`sw_connect` / 面板开关 / `session.conn.*`）后，后台跑一次 `core.status`：
   缺核心或版本≠`CORE_ARTIFACT_VERSION` 就 `core.deploy`（fire-and-forget，连接时延
   不为上传买单；失败只留下现状）。**首用审批**：围栏打开撞上磁盘工件确证缺失/过期
@@ -106,9 +106,45 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   （`dsh-core version` 退出 0）通过才 `ln -sfn current`——坏工件永远搁浅不了机器。
   本条修订 §6.1 的「自动安装禁止」行；第三方来源策略（bwrap 永不由我们提供、
   rg 官方件）等其余红线不变。
-- **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
-  `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
-  对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
+  **REQ-I21 修订（2026-09-30 用户 lab 实测）**：首用审批的运行时前提链
+  （approval 服务 + 人应答器 + initiator ALS + open turn）任何一环断掉都会**静默**
+  落回 fail-closed——实测就是这样（转录无 approval 审计对 ⇒ `request()` 未达，
+  且当时 asker 零日志不可定位）。因此模型工具渠道不再只赌审批：
+  **`sw_connect` 对每台可达机器同步 `core.status`→`core.deploy` 并把结果
+  写进工具输出**（部署失败是报告行，绝不是 connect 失败；首用审批 ask 保留为
+  能弹则弹的零触摸补充，其全部 false 路径补 warn 日志）；**`sw_status` 对每台
+  已连接的机器报告核心版本/缺口**；REQ-I17 的 fail-closed 文案改为先指
+  `sw_connect`（模型可执行），设置页/core.deploy 仍作为操作员出路。
+  **同轮门控修正**：核心供给（预热/同步/状态行）一律**不再看机器的
+  `remoteSandbox` 字段**——实测用户会话以 workspace-write 围栏时机器字段是
+  `off`，按字段门控把部署全挡了。围栏跟着**会话**走（`resolveRemoteSessionMode`
+  fail-safe `read-only`，ADR-0025），任何已连接机器都可能围栏 ⇒ 都供给；
+  机器字段继续只管终端守卫、旧路径 fence 与状态显示。
+  **溯源门（2026-09-30 用户拍板，sha256 白名单）**：版本串是核心**自报**的，
+  hash 不是——打开 serve 后插件经控制通道 `sha256sum` 磁盘二进制，不在
+  `core/artifact.json` 的 `compatHashes` 白名单内即拒（围栏档 `SANDBOX_UNAVAILABLE`、
+  danger 落 SFTP，都不运行来历不明二进制）；活会话复用不重查（进程在它自己的
+  open 时已验，事后换文件改不了运行中的 inode）。部署侧收口：装后校验
+  安装哈希 = MANIFEST 声明值。清单维护是**构建自登记**：Go 构建跨工具链不可
+  字节复现（CI 首日实锤：重建产物 hash 与本地不同），所以 `ensure-core`
+  在保证 tarball 在场后把其二进制 hash 登进 `compatHashes` 并重投影 TS 常量
+  （`npm run build` 因此先 ensure 后编译）；pack-smoke 再断言**包内自洽**——
+  投影（即 lib 所编译、随包发布的清单）必须包含 dist 里那个二进制的 hash，
+  陈旧投影（登记晚于编译）发不出去。诚实边界：插件侧
+  `sha256sum` 依赖远端 coreutils 诚实，防的是误换/损坏/伪造版本串，不是
+  全面攻陷的远端。
+  **同日用户终拍板（部署必问）**：部署是审批动作，三条规则——①凡**尝试部署**
+  必先经平台 approval 问（`sw_connect` 同步梯子与首用 gap 都接同一 ask；
+  拒绝=报告行+保持现状，再跑会再问）；②**danger-full-access 会话不尝试部署**
+  （核心非必需）；③**磁盘已是当前版本不问也不装**。后台预热（面板/通道路径）
+  在模型 turn 之外**问不了** ⇒ 降级为纯探测+告警（日志点名缺口），部署只发生在
+  能问的路径上。自动安装与「无感化」表述就此作废——本条为准。
+- **核心版本门（2026-09-21，`REQ-I17`；宽度放宽 2026-09-30 用户拍板）**：围栏档
+  只认本插件随包 `CORE_ARTIFACT_VERSION` 的 **major.minor 线**——patch 漂移
+  （新旧皆可）按依赖语义直接可用，不问不部署；跨 minor/major 才
+  spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
+  （原「逐字精确匹配」表述由本条取代；如某 patch 修复必须强制，
+  预留 `core/artifact.json` 加 `min` 字段收紧的口子，本轮不做）
   **禁止默默跑旧核心**（组杀、`version` 算法都在核心里，旧二进制等于没修）。
   读面仍走 REQ-I15（SFTP）。`danger` / `off` 不挡（经 `CoreMissingError` 落回
   SFTP，而非跑旧核）。无感升级是 `REQ-I14`——本条是升级完成前的 fail-closed。

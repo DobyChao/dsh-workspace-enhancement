@@ -353,11 +353,12 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
   void new SessionMachineConnections(ctx)
   const hub = (): CoreHub => ensureCoreHub(ctx)
   /**
-   * REQ-I14 connection warmup: a fenced machine connected to a session gets a
-   * background `core.status` → `core.deploy` run, so the first tool call finds
-   * a current core instead of a fail-closed refusal. Fire-and-forget by
-   * design — a connect must not pay upload latency, and a failed warmup only
-   * leaves the status quo (the first-use approval ask still covers the gap).
+   * REQ-I14/REQ-I21 background core-gap probe (the PANEL/CHANNEL connect
+   * paths): these run OUTSIDE any model turn, so the deploy approval ask can
+   * never fire there — and per the 2026-09-30 user policy a deploy that
+   * cannot ask must not deploy. The probe only names the gap in the host log;
+   * the next tool-path provision (sw_connect, or the hub's first-use ask)
+   * offers the ask-gated deploy.
    */
   const warmup = createCoreWarmup({
     machine: (id) => registry().listMachines().machines.find(machine => machine.id === id),
@@ -800,6 +801,5 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
     registry,
     () => ctx.get('sideWorkspaces', false) as SessionSideWorkspaceStore | undefined,
     () => ctx.get('sessionConnections', false) as SessionConnectionsFace | undefined,
-    warmup,
   )
 }

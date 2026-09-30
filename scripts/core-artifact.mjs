@@ -10,7 +10,9 @@
  * generated from it (`scripts/sync-core-version.mjs`) and `npm run check:static`
  * fails when that projection is stale.
  */
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -32,6 +34,10 @@ export function readArtifactMeta() {
       throw new Error(`core/artifact.json: "${key}" must be a non-empty string`)
     }
   }
+  if (!Array.isArray(meta.compatHashes) || meta.compatHashes.length === 0
+    || meta.compatHashes.some(hash => !/^[0-9a-f]{64}$/.test(hash))) {
+    throw new Error('core/artifact.json: "compatHashes" must be a non-empty array of lowercase sha256 values (every dsh-core binary the fence may run — REQ-I17 provenance gate)')
+  }
   return meta
 }
 
@@ -42,4 +48,25 @@ export function readArtifactMeta() {
  */
 export function artifactName(meta) {
   return `dsh-core-${meta.version}-${meta.arch}.tar.gz`
+}
+
+/**
+ * sha256 of the dsh-core member inside the built dist tarball, or `null` when
+ * the tarball is absent or unreadable (REQ-I17 provenance gate: the fence only
+ * runs registered binaries, and a built binary must be registered).
+ * @param meta - validated artifact meta (defaults to the file's).
+ */
+export function distCoreSha256(meta = readArtifactMeta()) {
+  const name = artifactName(meta)
+  const dir = join(ROOT, 'core', 'dist')
+  if (!existsSync(join(dir, name))) return null
+  // Relative name + cwd: an absolute Windows path carries a drive-letter
+  // colon that GNU tar parses as a remote host ("Cannot connect to D:").
+  for (const member of ['./dsh-core', 'dsh-core']) {
+    const out = spawnSync('tar', ['-xzOf', name, member], { cwd: dir, maxBuffer: 64 * 1024 * 1024 })
+    if (out.status === 0 && out.stdout.length > 0) {
+      return createHash('sha256').update(out.stdout).digest('hex')
+    }
+  }
+  return null
 }

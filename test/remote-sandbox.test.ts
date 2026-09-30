@@ -547,7 +547,9 @@ test('fenceMissingHint: a missing core is a deploy problem, not a bubblewrap pro
   assert.match(String(fenceMissingHint("env: 'bwrap': No such file or directory")), /no bubblewrap/)
   assert.equal(fenceMissingHint('bwrap: Permission denied'), undefined, 'no signature ⇒ no hint')
   const refusal = remoteSandboxUnavailableError('workspace-write', coreGone)
-  assert.match(refusal.message, /deploy it from the plugin settings \(core\.deploy\)/)
+  // REQ-I21: the remediation is model-actionable first (re-run sw_connect),
+  // settings/core.deploy stays as the operator alternative.
+  assert.match(refusal.message, /re-run sw_connect to redeploy it \(or use the plugin settings \/ core\.deploy\)/)
   assert.equal(/apt-get install|pacman|zypper|dnf install/.test(refusal.message), false,
     'a deleted core must not be reported as a missing bubblewrap')
 

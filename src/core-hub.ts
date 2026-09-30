@@ -16,6 +16,8 @@ import {
   CORE_ARTIFACT_ARCH,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
+  CORE_COMPAT_HASHES,
+  coreVersionAccepted,
   CORE_ERROR_SANDBOX,
   CORE_PROTO,
   CORE_REMOTE_HOME,
@@ -134,6 +136,16 @@ export function coreServeCommand(mode: CoreServeSandbox, workspace?: string): st
 
 export function coreVersionCommand(): string {
   return '"$HOME"/.dsh-core/current/dsh-core version'
+}
+
+/** On-disk binary hash probe for the REQ-I17 provenance gate. */
+export function coreBinaryHashCommand(): string {
+  return 'sha256sum -- "$HOME"/.dsh-core/current/dsh-core'
+}
+
+/** Whether a hashed binary is one this plugin shipped (the compat list). */
+export function isKnownCoreBinary(hash: string | undefined): boolean {
+  return hash !== undefined && (CORE_COMPAT_HASHES as readonly string[]).includes(hash.toLowerCase())
 }
 
 export function coreArtifactName(): string {
@@ -320,6 +332,29 @@ export function createCoreHub(
     }
   }
 
+  /**
+   * REQ-I17 provenance gate: hash the on-disk binary the serve was exec'd
+   * from (`current`) over the control channel — the version string is
+   * self-reported, the sha256 of the file is not. A live serve stays trusted
+   * without re-checks: the running process was vetted at ITS open, and a later
+   * file swap cannot change an already-running inode.
+   */
+  const coreBinaryHashOf = async (
+    connection: DiskProbeFace,
+    signal: AbortSignal | undefined,
+  ): Promise<string | undefined> => {
+    try {
+      const outcome = await connection.exec(
+        coreBinaryHashCommand(),
+        signal !== undefined ? { signal } : undefined,
+      )
+      if (outcome.exitCode !== 0) return undefined
+      return /^([0-9a-f]{64})\b/u.exec(outcome.stdout.trim().toLowerCase())?.[1]
+    } catch {
+      return undefined
+    }
+  }
+
   const requireSession = async (
     connectionId: string,
     opts?: CoreRequireOpts,
@@ -335,7 +370,7 @@ export function createCoreHub(
       // The cached hello names the binary the serve was exec'd from, so this
       // reuse check is one cache read — never an RPC.
       const cachedHello = await existing.client.hello().catch(() => undefined)
-      if (cachedHello === undefined || cachedHello.version === CORE_ARTIFACT_VERSION) {
+      if (cachedHello === undefined || coreVersionAccepted(cachedHello.version)) {
         scheduleIdle(existing)
         return existing.client
       }
@@ -379,13 +414,26 @@ export function createCoreHub(
               throw remoteSandboxUnavailable(refuseMode, `core is missing cap ${cap}`)
             }
           }
-          // REQ-I17 version gate: confined work only ever runs THIS plugin's
-          // artifact. danger/off degrade to SFTP through CoreMissingError —
-          // the ADR's "danger/off 不挡" — instead of an old binary.
-          if (hello.version !== CORE_ARTIFACT_VERSION) {
+          // REQ-I17 version gate (width relaxed 2026-09-30): confined work
+          // runs cores of the SHIPPED major.minor — patch drift is
+          // dependency-style compatible; a minor/major step refuses.
+          // danger/off degrade to SFTP through CoreMissingError —
+          // the ADR's "danger/off 不挡" — instead of an out-of-range binary.
+          if (!coreVersionAccepted(hello.version)) {
             const detail = interpolate(REMOTE_SANDBOX_MESSAGES.coreVersionMismatch, {
               found: hello.version,
               expected: CORE_ARTIFACT_VERSION,
+            })
+            if (!confined) throw new CoreMissingError(detail)
+            throw remoteSandboxUnavailable(refuseMode, detail)
+          }
+          // REQ-I17 provenance gate: same refusal ladder as the version gate —
+          // confined refuses, danger falls back to SFTP (never runs the
+          // untrusted binary either way).
+          const binaryHash = await coreBinaryHashOf(connection, opts?.signal)
+          if (!isKnownCoreBinary(binaryHash)) {
+            const detail = interpolate(REMOTE_SANDBOX_MESSAGES.coreProvenance, {
+              found: binaryHash ?? 'unreadable',
             })
             if (!confined) throw new CoreMissingError(detail)
             throw remoteSandboxUnavailable(refuseMode, detail)
@@ -421,7 +469,7 @@ export function createCoreHub(
         // gap), only once per attempt, and only for confined callers.
         if (!confined || resolveGap === undefined) throw mapOpenError(error)
         const disk = await diskVersionOf(connection, opts?.signal)
-        if (disk.ok && disk.version === CORE_ARTIFACT_VERSION) throw mapOpenError(error)
+        if (disk.ok && coreVersionAccepted(disk.version ?? '')) throw mapOpenError(error)
         let resolved = false
         try {
           resolved = await resolveGap(connectionId, {

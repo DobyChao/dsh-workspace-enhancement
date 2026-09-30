@@ -550,7 +550,7 @@ export const REMOTE_SANDBOX_MESSAGES = {
    * apt-get bubblewrap for a core that had simply been deleted (2026-09-17).
    */
   coreMissing:
-    'The fenced core is not installed on the remote (or its directory was removed) — deploy it from the plugin settings (core.deploy) and retry; a core session that is still running is stale once its directory is gone.',
+    'The fenced core is not installed on the remote (or its directory was removed) — re-run sw_connect to redeploy it (or use the plugin settings / core.deploy) and retry; a core session that is still running is stale once its directory is gone.',
   /**
    * REQ-I17 core version gate: a fenced session may only run THIS plugin's
    * artifact. Group kill (BUG-9) and the CAS version hash (BUG-7) live in the
@@ -559,7 +559,15 @@ export const REMOTE_SANDBOX_MESSAGES = {
    * text.
    */
   coreVersionMismatch:
-    'The fenced core on the remote reports version "{found}" but this plugin ships "{expected}" — a stale core cannot be trusted to fence; deploy the matching core (plugin settings → deploy, or core.deploy) and retry, or reconnect the machine so the deploy warmup updates it.',
+    'The fenced core on the remote reports version "{found}" but this plugin needs the {expected} line (major.minor must match; patch drift is fine) — re-run sw_connect to redeploy the matching core (or use the plugin settings / core.deploy) and retry.',
+  /**
+   * REQ-I17 provenance gate (2026-09-30): the version string is self-reported;
+   * the sha256 of the binary on disk is not. A core whose hash is not on the
+   * plugin's compat list is not trusted to be the fence — it may be a foreign
+   * or tampered binary wearing our version string.
+   */
+  coreProvenance:
+    'The fenced core binary on the remote (sha256 {found}) is not one this plugin shipped — refusing to trust it as the fence; re-run sw_connect to redeploy the official core, or remove the foreign ~/.dsh-core.',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',

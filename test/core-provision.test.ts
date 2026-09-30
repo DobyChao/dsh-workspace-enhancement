@@ -14,6 +14,7 @@ import {
   coreDeployAskReason,
   createCoreGapAsker,
   createCoreWarmup,
+  provisionRemoteCore,
 } from '../src/core-provision.ts'
 import type { CoreStatusView } from '../src/core-hub.ts'
 import type { ExecOutcome } from '../src/ssh-core.ts'
@@ -47,11 +48,14 @@ function warmupHarness(machine: { remoteSandbox?: string } | undefined, status: 
   return { warm, log }
 }
 
-test('warmup: an unfenced machine never touches the disk', async () => {
-  const { warm, log } = warmupHarness({ remoteSandbox: 'off' }, { ok: false }, { ok: true })
+test('warmup: an off-FIELD machine is still probed (confinement follows the session)', async () => {
+  // 2026-09-30 lab fix: the machine field said 'off' while the user's session
+  // fenced workspace-write — the field must not gate provisioning.
+  const { warm, log } = warmupHarness({ remoteSandbox: 'off' }, { ok: false }, { ok: true, version: CORE_ARTIFACT_VERSION })
   warm('c1')
   await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(log, { status: [], deploys: [], closed: [], warns: [] })
+  assert.deepEqual(log.status, ['c1'])
+  assert.equal(log.warns.length, 1)
 })
 
 test('warmup: a machine without a record (unknown) is skipped', async () => {
@@ -61,7 +65,7 @@ test('warmup: a machine without a record (unknown) is skipped', async () => {
   assert.equal(log.status.length, 0)
 })
 
-test('warmup: current artifact on disk deploys nothing', async () => {
+test('warmup: current artifact on disk stays silent (no warn, no deploy)', async () => {
   const { warm, log } = warmupHarness(
     { remoteSandbox: 'read-only' },
     { ok: true, version: CORE_ARTIFACT_VERSION },
@@ -71,9 +75,13 @@ test('warmup: current artifact on disk deploys nothing', async () => {
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(log.status, ['c1'])
   assert.equal(log.deploys.length, 0)
+  assert.equal(log.warns.length, 0)
 })
 
-test('warmup: a fenced machine with a stale/missing core deploys and drops stale serves', async () => {
+// 2026-09-30 user decision: the background warmup runs outside any model
+// turn, so it cannot ask — and a deploy that cannot ask must not deploy. It
+// only probes and names the gap for the next tool-path provision.
+test('warmup: a gap is PROBED and warned, never deployed (no turn ⇒ no ask ⇒ no deploy)', async () => {
   const { warm, log } = warmupHarness(
     { remoteSandbox: 'workspace-write' },
     { ok: true, version: '0.0.1-old' },
@@ -82,26 +90,26 @@ test('warmup: a fenced machine with a stale/missing core deploys and drops stale
   warm('c1')
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(log.status, ['c1'])
-  assert.deepEqual(log.deploys, ['c1'])
-  assert.deepEqual(log.closed, ['c1'], 'afterDeploy must drop stale serves (old current)')
-  assert.equal(log.warns.length, 0)
+  assert.deepEqual(log.deploys, [], 'the background probe never deploys')
+  assert.deepEqual(log.closed, [])
+  assert.equal(log.warns.length, 1)
+  assert.match(log.warns[0] ?? '', /core gap on c1 \(0\.0\.1-old\)/)
 })
 
-test('warmup: a failed deploy warns and keeps the status quo', async () => {
+test('warmup: a missing core is probed and warned as a gap', async () => {
   const { warm, log } = warmupHarness(
     { remoteSandbox: 'read-only' },
     { ok: false, detail: 'core not installed' },
-    { ok: false, detail: 'connection refused' },
+    { ok: true },
   )
   warm('c1')
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(log.deploys.length, 1)
-  assert.deepEqual(log.closed, [], 'a failed deploy must not drop serves')
+  assert.equal(log.deploys.length, 0)
   assert.equal(log.warns.length, 1)
-  assert.match(log.warns[0] ?? '', /connection refused/)
+  assert.match(log.warns[0] ?? '', /core gap on c1 \(not installed\)/)
 })
 
-test('warmup: concurrent triggers deduplicate to ONE status→deploy run', async () => {
+test('warmup: concurrent triggers deduplicate to ONE probe run', async () => {
   const log: WarmupLog = { status: [], deploys: [], closed: [], warns: [] }
   let release: (() => void) | undefined
   const gate = new Promise<void>(resolve => { release = resolve })
@@ -125,8 +133,112 @@ test('warmup: concurrent triggers deduplicate to ONE status→deploy run', async
   warm('c1')
   release?.()
   await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(log.status, ['c1'])
-  assert.deepEqual(log.deploys, ['c1'])
+  assert.deepEqual(log.status, ['c1'], 'three racing triggers produce ONE probe')
+  assert.deepEqual(log.deploys, [])
+})
+
+/* -------------------------------------------- REQ-I21: synchronous provision */
+
+test('provisionRemoteCore: outcome ladder — skipped / current / deployed / failed', async () => {
+  const mk = (
+    machine: { remoteSandbox?: string } | undefined,
+    status: CoreStatusView,
+    deployResult: CoreStatusView,
+  ) => {
+    const calls = { status: 0, deploy: 0, closed: 0 }
+    const deps = {
+      machine: (id: string) => (id === 'c1' ? machine as never : undefined),
+      connection: (id: string) => (id === 'c1' ? ({} as SshTransport) : undefined),
+      status: async (id: string) => { calls.status += 1; void id; return status },
+      deploy: async (id: string) => { calls.deploy += 1; void id; return deployResult },
+      afterDeploy: () => { calls.closed += 1 },
+    }
+    return { deps, calls }
+  }
+
+  // An off-FIELD machine still provisions (confinement is session-side);
+  // only an UNKNOWN machine skips.
+  const off = mk({ remoteSandbox: 'off' }, { ok: true, version: CORE_ARTIFACT_VERSION }, { ok: true })
+  assert.deepEqual(await provisionRemoteCore(off.deps, 'c1'), {
+    id: 'c1', skipped: false, deployed: false, declined: false, version: CORE_ARTIFACT_VERSION, detail: undefined,
+  })
+
+  const unknown = mk(undefined, { ok: false }, { ok: true })
+  const unknownOutcome = await provisionRemoteCore(unknown.deps, 'c1')
+  assert.equal(unknownOutcome.skipped, true)
+  assert.match(unknownOutcome.detail ?? '', /unknown machine/)
+  assert.equal(unknown.calls.status, 0)
+
+  const current = mk({ remoteSandbox: 'read-only' }, { ok: true, version: CORE_ARTIFACT_VERSION }, { ok: true })
+  assert.deepEqual(await provisionRemoteCore(current.deps, 'c1'), {
+    id: 'c1', skipped: false, deployed: false, version: CORE_ARTIFACT_VERSION, declined: false, detail: undefined,
+  })
+  assert.equal(current.calls.deploy, 0)
+
+  const stale = mk({ remoteSandbox: 'workspace-write' }, { ok: true, version: '0.0.1-old' }, { ok: true, version: CORE_ARTIFACT_VERSION })
+  const staleOutcome = await provisionRemoteCore(stale.deps, 'c1')
+  assert.equal(staleOutcome.deployed, true)
+  assert.equal(staleOutcome.version, CORE_ARTIFACT_VERSION)
+  assert.equal(stale.calls.closed, 1, 'a successful deploy drops stale serves')
+
+  // Version-gate width (2026-09-30): same major.minor is dependency-style
+  // compatible — patch drift neither asks nor deploys.
+  const patchDrift = mk({ remoteSandbox: 'read-only' }, { ok: true, version: '0.2.9' }, { ok: true })
+  assert.deepEqual(await provisionRemoteCore(patchDrift.deps, 'c1'), {
+    id: 'c1', skipped: false, deployed: false, declined: false, version: '0.2.9', detail: undefined,
+  })
+  assert.equal(patchDrift.calls.deploy, 0)
+
+  const failed = mk({ remoteSandbox: 'read-only' }, { ok: false, detail: 'core not installed' }, { ok: false, detail: 'connection refused' })
+  const failedOutcome = await provisionRemoteCore(failed.deps, 'c1')
+  assert.equal(failedOutcome.deployed, false)
+  assert.equal(failedOutcome.version, undefined)
+  assert.match(failedOutcome.detail ?? '', /connection refused/)
+  assert.equal(failed.calls.closed, 0)
+})
+
+// The user's three rules (2026-09-30): deploy attempts ask; a current core
+// never asks; a declined ask deploys nothing and reports the kept state.
+test('provisionRemoteCore: the approve gate — current never asks, declined never deploys, allowed deploys', async () => {
+  const asks: Array<{ found: string | undefined }> = []
+  const mkApproved = (allowed: boolean, status: CoreStatusView) => ({
+    machine: () => ({ remoteSandbox: 'off' }) as never,
+    connection: () => ({} as SshTransport),
+    status: async () => status,
+    deploy: async () => ({ ok: true, version: CORE_ARTIFACT_VERSION }),
+    approve: async (_id: string, facts: { found: string | undefined }) => {
+      asks.push({ found: facts.found })
+      return allowed
+    },
+  })
+
+  const current = mkApproved(true, { ok: true, version: CORE_ARTIFACT_VERSION })
+  assert.deepEqual(await provisionRemoteCore(current, 'c1'), {
+    id: 'c1', skipped: false, deployed: false, declined: false, version: CORE_ARTIFACT_VERSION, detail: undefined,
+  })
+  assert.deepEqual(asks, [], 'a current core asks nothing')
+
+  const declined = mkApproved(false, { ok: true, version: '0.0.1-old' })
+  const declinedOutcome = await provisionRemoteCore(declined, 'c1')
+  assert.equal(declinedOutcome.declined, true)
+  assert.equal(declinedOutcome.deployed, false)
+  assert.equal(declinedOutcome.version, '0.0.1-old', 'the kept disk state is reported')
+  assert.deepEqual(asks, [{ found: '0.0.1-old' }])
+
+  const allowed = mkApproved(true, { ok: false, detail: 'core not installed' })
+  const allowedOutcome = await provisionRemoteCore(allowed, 'c1')
+  assert.equal(allowedOutcome.deployed, true)
+  assert.deepEqual(asks, [{ found: '0.0.1-old' }, { found: undefined }])
+})
+
+test('provisionRemoteCore: a throwing status becomes a thrown promise (the connect tool wraps it)', async () => {
+  const deps = {
+    machine: () => ({ remoteSandbox: 'read-only' }) as never,
+    connection: () => ({} as SshTransport),
+    status: async () => { throw new Error('ssh dead') },
+    deploy: async () => ({ ok: true }) as CoreStatusView,
+  }
+  await assert.rejects(() => provisionRemoteCore(deps, 'c1'), /ssh dead/)
 })
 
 /* ------------------------------------------------- first-use approval ask */

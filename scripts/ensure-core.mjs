@@ -22,9 +22,9 @@
  * forbids, so the guard stays spawn-light on purpose.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ROOT, artifactName, readArtifactMeta } from './core-artifact.mjs'
+import { ROOT, artifactName, distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
 
 const optional = process.argv.includes('--optional')
 const meta = readArtifactMeta()
@@ -43,7 +43,34 @@ function build() {
   return built.status === 0
 }
 
+/**
+ * REQ-I17 provenance self-registration: Go builds are not byte-reproducible
+ * across toolchains, so a static hash list would reject a legitimately
+ * rebuilt artifact (CI proved this on day one). Instead, whoever ENSURES the
+ * tarball also registers its binary hash in `core/artifact.json` and
+ * re-projects the TS constants — every built artifact is by definition one we
+ * shipped, and the shipped package can never distrust its own core.
+ */
+function registerBuiltHash() {
+  const sha = distCoreSha256()
+  if (sha === null) return
+  const metaNow = readArtifactMeta()
+  if (metaNow.compatHashes.includes(sha)) return
+  metaNow.compatHashes.push(sha)
+  writeFileSync(
+    join(ROOT, 'core', 'artifact.json'),
+    JSON.stringify(metaNow, null, 2) + '\n',
+  )
+  const sync = spawnSync(process.execPath, [join(ROOT, 'scripts/sync-core-manifest.mjs')], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] })
+  if (sync.status !== 0) {
+    console.error('[ensure-core] WARN could not re-project the core manifests after hash registration')
+  } else {
+    console.error(`[ensure-core] registered core binary sha256 ${sha.slice(0, 12)}… in compatHashes`)
+  }
+}
+
 if (existsSync(artifact)) {
+  registerBuiltHash()
   // stderr on purpose: `npm pack --json` parses OUR stdout, and a lifecycle
   // script that prints to stdout corrupts that JSON (caught by pack-smoke).
   console.error(`[ensure-core] ${artifactName(meta)} is present`)
@@ -51,6 +78,7 @@ if (existsSync(artifact)) {
 }
 
 if (build() && existsSync(artifact)) {
+  registerBuiltHash()
   console.error(`[ensure-core] built ${artifact}`)
   process.exit(0)
 }

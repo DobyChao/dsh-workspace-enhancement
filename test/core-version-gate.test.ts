@@ -16,7 +16,7 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from '../src/core-client.ts'
 import { serveFakeCore } from '../src/core-fake.ts'
-import { CORE_ARTIFACT_VERSION } from '../src/core-protocol.ts'
+import { CORE_ARTIFACT_VERSION, CORE_COMPAT_HASHES, coreVersionAccepted } from '../src/core-protocol.ts'
 import { createCoreHub } from '../src/core-hub.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { CoreMissingError, isCoreMissingError } from '../src/remote-policy.ts'
@@ -40,7 +40,7 @@ function execOutcome(stdout = '', exitCode = 0): ExecOutcome {
  * A connection face whose `exec` answers the on-disk version probe with the
  * canned `diskVersion` (exit 1 = no core installed) and nothing else.
  */
-function diskConnection(diskVersion: string | null): { exec(command: string): Promise<ExecOutcome> } {
+function diskConnection(diskVersion: string | null, binaryHash: string | null = CORE_COMPAT_HASHES[0]): { exec(command: string): Promise<ExecOutcome> } {
   return {
     exec: async (command: string) => {
       if (command.includes('dsh-core version')) {
@@ -48,14 +48,19 @@ function diskConnection(diskVersion: string | null): { exec(command: string): Pr
           ? execOutcome('not found', 1)
           : execOutcome(`${JSON.stringify({ version: diskVersion, arch: 'x86_64', proto: 1, caps: [] })}\n`)
       }
+      if (command.startsWith('sha256sum')) {
+        return binaryHash === null
+          ? execOutcome('', 1)
+          : execOutcome(`${binaryHash}  /home/uuz/.dsh-core/current/dsh-core\n`)
+      }
       return execOutcome()
     },
   }
 }
 
-function deps(diskVersion: string | null = null): RemoteSandboxDeps {
+function deps(diskVersion: string | null = null, binaryHash: string | null = CORE_COMPAT_HASHES[0]): RemoteSandboxDeps {
   const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'read-only', workspace: '/work', cwd: '/work' }
-  const connection = diskConnection(diskVersion)
+  const connection = diskConnection(diskVersion, binaryHash)
   return {
     machine: (id) => (id === 'c1' ? machine : undefined),
     connection: (id) => (id === 'c1' ? connection as never : undefined),
@@ -127,6 +132,69 @@ test('REQ-I17: danger policy degrades a stale core to CoreMissingError (SFTP fal
     (error: unknown) => isCoreMissingError(error) && !(error instanceof RemoteSandboxError),
   )
   stale.close()
+})
+
+// REQ-I17 provenance gate (2026-09-30, user decision): the version string is
+// self-reported; the sha256 of the on-disk binary is not. Only binaries on the
+// plugin's compat list may fence — a foreign binary wearing our version
+// string refuses.
+test('REQ-I17 provenance: a foreign binary hash refuses confined work', async () => {
+  const foreign = pair(root(), CORE_ARTIFACT_VERSION)
+  const foreignHash = 'f'.repeat(64)
+  const hub = createCoreHub(ctxWith(), {
+    deps: deps(CORE_ARTIFACT_VERSION, foreignHash),
+    open: async () => foreign,
+  })
+  await assert.rejects(
+    () => hub.require('c1'),
+    (error: unknown) => error instanceof RemoteSandboxError
+      && error.code === REMOTE_SANDBOX_UNAVAILABLE
+      && error.message.includes(foreignHash)
+      && error.message.includes('not one this plugin shipped'),
+  )
+  foreign.close()
+})
+
+test('REQ-I17 provenance: an unreadable hash (no sha256sum / dead channel) also refuses', async () => {
+  const fine = pair(root())
+  const hub = createCoreHub(ctxWith(), {
+    deps: deps(CORE_ARTIFACT_VERSION, null),
+    open: async () => fine,
+  })
+  await assert.rejects(() => hub.require('c1'), RemoteSandboxError)
+  fine.close()
+})
+
+test('REQ-I17 provenance: danger falls back to SFTP instead of running the foreign binary', async () => {
+  const foreign = pair(root(), CORE_ARTIFACT_VERSION)
+  const hub = createCoreHub(ctxWith(), {
+    deps: deps(CORE_ARTIFACT_VERSION, 'e'.repeat(64)),
+    open: async () => foreign,
+  })
+  await assert.rejects(
+    () => hub.require('c1', { policy: 'danger-full-access' }),
+    (error: unknown) => isCoreMissingError(error) && !(error instanceof RemoteSandboxError),
+  )
+  foreign.close()
+})
+
+test('REQ-I17 width: same-major.minor patch drift opens (dependency-style range)', async () => {
+  const drifted = pair(root(), '0.2.9')
+  const hub = createCoreHub(ctxWith(), { deps: deps(), open: async () => drifted })
+  const client = await hub.require('c1')
+  assert.equal(client, drifted)
+  drifted.close()
+})
+
+test('coreVersionAccepted: the range rule in one place', () => {
+  assert.equal(coreVersionAccepted(CORE_ARTIFACT_VERSION), true)
+  assert.equal(coreVersionAccepted('0.2.0'), true, 'older patch of the same line')
+  assert.equal(coreVersionAccepted('0.2.99'), true, 'newer patch of the same line')
+  assert.equal(coreVersionAccepted('0.3.0'), false, 'minor step refuses')
+  assert.equal(coreVersionAccepted('0.1.9'), false, 'older line refuses')
+  assert.equal(coreVersionAccepted('1.2.2'), false, 'major step refuses')
+  assert.equal(coreVersionAccepted('not-a-version'), false, 'unparseable falls back to exact-equality refusal')
+  assert.equal(coreVersionAccepted('weird', 'weird'), true, 'identical unparseable spellings still match exactly')
 })
 
 test('REQ-I17: the matching artifact still opens (the gate is exact, not paranoid)', async () => {

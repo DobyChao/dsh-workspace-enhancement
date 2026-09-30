@@ -15,7 +15,7 @@ import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } fr
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import { artifactName, readArtifactMeta } from './core-artifact.mjs'
+import { artifactName, distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(new URL('.', import.meta.url))))
 
@@ -129,6 +129,27 @@ for (const wanted of MUST_INCLUDE) {
 
 const leaked = files.filter(path => MUST_EXCLUDE.some(re => re.test(path)))
 check('tarball leaks no private paths', leaked.length === 0, leaked.slice(0, 8).join(', '))
+
+// REQ-I17 provenance gate, pack-time enforcement: the fence only runs
+// binaries registered in core/artifact.json compatHashes. The tarball is
+// guaranteed here (prepack ran ensure-core), so an unregistered build is RED.
+{
+  const distSha = distCoreSha256()
+  check('built core binary is registered in compatHashes (provenance gate)',
+    distSha !== null && readArtifactMeta().compatHashes.includes(distSha),
+    distSha ?? 'cannot read the dist core binary')
+
+
+  // Self-consistency: the package must trust its OWN core — the projection
+  // (which lib/ compiles from, i.e. what ships) has to list the very binary
+  // sitting in core/dist. A stale projection (registration after tsc)
+  // would ship a plugin that refuses the artifact it carries.
+  if (distSha !== null) {
+    const projection = readFileSync(join(ROOT, 'src', 'core-artifact.ts'), 'utf8')
+    check('projection lists the built core hash (package self-consistency)',
+      projection.includes(distSha), distSha)
+  }
+}
 
 const sizeMb = (report.size ?? 0) / 1024 / 1024
 // Raised from 5 MB in INFRA-15: the bundled core tarball (~4.7 MB) now ships.

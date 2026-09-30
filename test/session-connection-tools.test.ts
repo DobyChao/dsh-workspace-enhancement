@@ -36,6 +36,8 @@ import {
 } from '../src/exec-tools.ts'
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
 import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
+import type { CoreProvisionOutcome } from '../src/core-provision.ts'
+import { runWithRemoteSpawnPolicy } from '../src/remote-spawn-policy.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
@@ -209,9 +211,10 @@ async function runTool(definition: ToolDefinition, args: unknown, exec: RunConte
 function mountWorkspaceTools(
   store: () => SessionConnectionsFace | undefined,
   registry: unknown = fakeRegistry(),
+  provisionCore?: (id: string, signal?: AbortSignal) => Promise<CoreProvisionOutcome>,
 ): FakeCtx {
   const mounted = fakeHostCtx()
-  registerWorkspaceTools(mounted.ctx, () => registry as never, () => undefined, store)
+  registerWorkspaceTools(mounted.ctx, () => registry as never, () => undefined, store, provisionCore)
   return mounted
 }
 
@@ -486,4 +489,136 @@ test('renderSessionWorkspaceContext: a machine with no registry fact falls back 
 test('renderSessionWorkspaceContext: an unreachable machine is marked honestly', () => {
   const text = renderSessionWorkspaceContext([{ id: 'c1', endpoint: 'root@10.0.0.5', reachable: false }], [])
   assert.ok(text.includes('was unreachable at connect time'), text)
+})
+
+/* --------------------- REQ-I21: core provision inside the tool surface ----- */
+
+/** One canned provision outcome builder. */
+function outcomeOf(id: string, patch: Partial<CoreProvisionOutcome>): CoreProvisionOutcome {
+  return { id, skipped: true, deployed: false, declined: false, version: undefined, detail: undefined, ...patch }
+}
+
+test('REQ-I21 sw_connect: every reachable machine is provisioned and the outcome rides the report', async () => {
+  const store = new FakeStore()
+  const calls: string[] = []
+  const outcomes: Record<string, CoreProvisionOutcome> = {
+    c1: outcomeOf('c1', { skipped: false, deployed: true, version: '0.2.2-test' }),
+    c2: outcomeOf('c2', {}),
+  }
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry({ get: (id: string) => (id === 'c2' ? conn(id, 'cable cut') : conn(id)) }),
+    async (id) => { calls.push(id); return outcomes[id] ?? outcomeOf(id, {}) },
+  )
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1', 'c2'] }, runContext(SESSION))
+  assert.deepEqual(calls, ['c1'], 'only the REACHABLE machine is provisioned')
+  assert.ok(text.includes('core: deployed 0.2.2-test (fenced tools ready)'), text)
+  assert.equal(text.split('core:').length - 1, 1, `the unreachable machine gets no core line: ${text}`)
+  assert.deepEqual(store.listFor(SESSION), ['c1'])
+})
+
+test('REQ-I21 sw_connect: a current core and a failed deploy render their own lines, connect still succeeds', async () => {
+  const store = new FakeStore()
+  const outcomes: Record<string, CoreProvisionOutcome> = {
+    c1: outcomeOf('c1', { skipped: false, deployed: false, version: '0.2.2-test' }),
+    c2: outcomeOf('c2', { skipped: false, deployed: false, version: undefined, detail: 'connection refused' }),
+  }
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async (id) => outcomes[id] ?? outcomeOf(id, {}),
+  )
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1', 'c2'] }, runContext(SESSION))
+  assert.ok(text.includes('core: 0.2.2-test (already current, nothing deployed)'), text)
+  assert.ok(text.includes('core: deploy failed — connection refused'), text)
+  assert.match(text, /re-run sw_connect to retry/)
+  assert.deepEqual(store.listFor(SESSION), ['c1', 'c2'], 'a failed provision never fails the connect')
+})
+
+test('REQ-I21 sw_connect: a provision that THROWS becomes a failed-outcome line (the tool must not die)', async () => {
+  const store = new FakeStore()
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async () => { throw new Error('ssh dead mid-deploy') },
+  )
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
+  assert.ok(text.includes('core: deploy failed — ssh dead mid-deploy'), text)
+  assert.deepEqual(store.listFor(SESSION), ['c1'])
+})
+
+test('REQ-I21 sw_connect: a DECLINED deploy keeps the disk state and says so', async () => {
+  const store = new FakeStore()
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async (id) => outcomeOf(id, { skipped: false, declined: true, version: '0.0.1-old' }),
+  )
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
+  assert.ok(text.includes('core: deploy was not approved (left at 0.0.1-old'), text)
+  assert.ok(text.includes('it will ask again'), text)
+  assert.deepEqual(store.listFor(SESSION), ['c1'], 'the machine stays connected — only the deploy was declined')
+})
+
+test('REQ-I21 sw_connect: a danger-full-access session never attempts a provision', async () => {
+  const store = new FakeStore()
+  let provisioned = 0
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async (id) => { provisioned += 1; return outcomeOf(id, {}) },
+  )
+  const text = await runWithRemoteSpawnPolicy('danger-full-access', () =>
+    runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION)) as Promise<{ text: string }>)
+  assert.equal(provisioned, 0, 'danger sessions do not attempt deploys')
+  assert.ok(!text.includes('core:'), text)
+  assert.deepEqual(store.listFor(SESSION), ['c1'], 'the connect itself is unaffected')
+})
+
+/** A fenced machine row for the sw_status core-line tests. */
+function fencedRegistry(version: string | null): unknown {
+  const machines = [{ ...MACHINE_TABLE[0], remoteSandbox: 'read-only' as const }, MACHINE_TABLE[1]]
+  const connection = {
+    ...conn('c1'),
+    exec: async (command: string): Promise<ExecOutcome> => {
+      if (command.includes('dsh-core version')) {
+        if (version === null) return { exitCode: 127, signal: null, stdout: '', stderr: 'No such file or directory' }
+        return { exitCode: 0, signal: null, stdout: `${JSON.stringify({ version, arch: 'x86_64', proto: 1, caps: [] })}\n`, stderr: '' }
+      }
+      return { exitCode: 0, signal: null, stdout: 'ok\n', stderr: '' }
+    },
+  }
+  return fakeRegistry({ listMachines: () => ({ machines, currentId: null }), get: (id: string) => (id === 'c1' ? connection : conn(id)) })
+}
+
+async function statusTextOf(registry: unknown): Promise<string> {
+  const store = new FakeStore()
+  store.set(SESSION, ['c1'])
+  const mounted = mountWorkspaceTools(() => store as unknown as SessionConnectionsFace, registry)
+  return runTool(toolOf(mounted, 'sw_status'), {}, runContext(SESSION))
+}
+
+test('REQ-I21 sw_status: a fenced connected machine reports its core version state', async () => {
+  const stale = await statusTextOf(fencedRegistry('0.0.1-old'))
+  assert.ok(stale.includes('core(c1): 0.0.1-old, this plugin ships'), stale)
+  assert.ok(stale.includes('re-run sw_connect to redeploy'), stale)
+
+  const missing = await statusTextOf(fencedRegistry(null))
+  assert.ok(missing.includes('core(c1): not installed — re-run sw_connect to deploy'), missing)
+
+  const healthy = await statusTextOf(fencedRegistry('0.2.2'))
+  assert.ok(healthy.includes('core(c1): 0.2.2 — current'), healthy)
+
+  // Version-gate width: patch drift reports the ACTUAL version as current.
+  const drifted = await statusTextOf(fencedRegistry('0.2.9'))
+  assert.ok(drifted.includes('core(c1): 0.2.9 — current'), drifted)
+})
+
+test('REQ-I21 sw_status: field-less machines get a core line too (confinement is session-side)', async () => {
+  // 2026-09-30 lab fix: the machine remoteSandbox field must not gate the
+  // report — the user's session fenced workspace-write on an 'off'-fielded
+  // machine. The fake conn answers the version probe with junk, so the honest
+  // line here is the probe-failed shape.
+  const text = await statusTextOf(fakeRegistry())
+  assert.ok(text.includes('core(c1): probe failed —'), text)
 })
