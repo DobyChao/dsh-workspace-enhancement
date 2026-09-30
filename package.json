@@ -70,7 +70,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc && tsdown && node scripts/ensure-core.mjs --optional",
+    "build": "node scripts/ensure-core.mjs --optional && tsc && tsdown",
     "build:core": "node scripts/build-core.mjs",
     "check": "npm run check:static && npm run typecheck && npm test && npm run build && npm run build:core && node scripts/pack-smoke.mjs",
     "check:static": "node scripts/check.mjs",

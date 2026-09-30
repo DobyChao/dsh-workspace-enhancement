@@ -125,8 +125,12 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   `core/artifact.json` 的 `compatHashes` 白名单内即拒（围栏档 `SANDBOX_UNAVAILABLE`、
   danger 落 SFTP，都不运行来历不明二进制）；活会话复用不重查（进程在它自己的
   open 时已验，事后换文件改不了运行中的 inode）。部署侧收口：装后校验
-  安装哈希 = MANIFEST 声明值；静态闸门 + pack-smoke 双断言 **dist 里的二进制
-  必须已登记**——核心升级忘了登 hash 必红，发不出去。诚实边界：插件侧
+  安装哈希 = MANIFEST 声明值。清单维护是**构建自登记**：Go 构建跨工具链不可
+  字节复现（CI 首日实锤：重建产物 hash 与本地不同），所以 `ensure-core`
+  在保证 tarball 在场后把其二进制 hash 登进 `compatHashes` 并重投影 TS 常量
+  （`npm run build` 因此先 ensure 后编译）；pack-smoke 再断言**包内自洽**——
+  投影（即 lib 所编译、随包发布的清单）必须包含 dist 里那个二进制的 hash，
+  陈旧投影（登记晚于编译）发不出去。诚实边界：插件侧
   `sha256sum` 依赖远端 coreutils 诚实，防的是误换/损坏/伪造版本串，不是
   全面攻陷的远端。
   **同日用户终拍板（部署必问）**：部署是审批动作，三条规则——①凡**尝试部署**

@@ -138,6 +138,17 @@ check('tarball leaks no private paths', leaked.length === 0, leaked.slice(0, 8).
   check('built core binary is registered in compatHashes (provenance gate)',
     distSha !== null && readArtifactMeta().compatHashes.includes(distSha),
     distSha ?? 'cannot read the dist core binary')
+
+
+  // Self-consistency: the package must trust its OWN core — the projection
+  // (which lib/ compiles from, i.e. what ships) has to list the very binary
+  // sitting in core/dist. A stale projection (registration after tsc)
+  // would ship a plugin that refuses the artifact it carries.
+  if (distSha !== null) {
+    const projection = readFileSync(join(ROOT, 'src', 'core-artifact.ts'), 'utf8')
+    check('projection lists the built core hash (package self-consistency)',
+      projection.includes(distSha), distSha)
+  }
 }
 
 const sizeMb = (report.size ?? 0) / 1024 / 1024
