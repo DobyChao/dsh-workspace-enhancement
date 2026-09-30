@@ -61,7 +61,7 @@ function registerBuiltHash() {
     join(ROOT, 'core', 'artifact.json'),
     JSON.stringify(metaNow, null, 2) + '\n',
   )
-  const sync = spawnSync(process.execPath, [join(ROOT, 'scripts', 'sync-core-manifest.mjs')], { cwd: ROOT, stdio: 'inherit' })
+  const sync = spawnSync(process.execPath, [join(ROOT, 'scripts/sync-core-manifest.mjs')], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] })
   if (sync.status !== 0) {
     console.error('[ensure-core] WARN could not re-project the core manifests after hash registration')
   } else {
