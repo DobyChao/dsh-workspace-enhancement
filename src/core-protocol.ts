@@ -29,7 +29,7 @@ export const CORE_MAX_FRAME = 16 * 1024 * 1024
  * version`). Re-exported here so every consumer keeps importing it from the
  * protocol module.
  */
-export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-artifact.ts'
+export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION, CORE_COMPAT_HASHES } from './core-artifact.ts'
 
 /**
  * REQ-I17 gate width (relaxed 2026-09-30, user decision): a fenced session

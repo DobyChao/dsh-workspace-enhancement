@@ -560,6 +560,14 @@ export const REMOTE_SANDBOX_MESSAGES = {
    */
   coreVersionMismatch:
     'The fenced core on the remote reports version "{found}" but this plugin needs the {expected} line (major.minor must match; patch drift is fine) — re-run sw_connect to redeploy the matching core (or use the plugin settings / core.deploy) and retry.',
+  /**
+   * REQ-I17 provenance gate (2026-09-30): the version string is self-reported;
+   * the sha256 of the binary on disk is not. A core whose hash is not on the
+   * plugin's compat list is not trusted to be the fence — it may be a foreign
+   * or tampered binary wearing our version string.
+   */
+  coreProvenance:
+    'The fenced core binary on the remote (sha256 {found}) is not one this plugin shipped — refusing to trust it as the fence; re-run sw_connect to redeploy the official core, or remove the foreign ~/.dsh-core.',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',

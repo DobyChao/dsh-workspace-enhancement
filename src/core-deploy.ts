@@ -231,6 +231,16 @@ export async function deployCore(
   if (outcome.exitCode !== 0) {
     return { ok: false, detail: (outcome.stderr || outcome.stdout || 'extract failed').trim() }
   }
+  // REQ-I17 provenance: the installed binary must be the byte-exact artifact
+  // the MANIFEST describes — a corrupt upload/extraction can never become
+  // `current`-trusted. (The static gate keeps the shipped sha on the plugin's
+  // compat list, so a verified install is a fence-trusted install.)
+  const expectedSha = (manifest as { files?: Record<string, string> }).files?.['dsh-core']
+  const installed = await transport.exec('sha256sum -- "$HOME"/.dsh-core/current/dsh-core', execOptions)
+  const installedSha = /^([0-9a-f]{64})\b/u.exec(installed.stdout.trim().toLowerCase())?.[1]
+  if (installed.exitCode !== 0 || installedSha !== expectedSha) {
+    return { ok: false, version, detail: `installed binary hash mismatch (expected ${expectedSha ?? '?'}, got ${installedSha ?? 'unreadable'})` }
+  }
   const ver = await transport.exec('"$HOME"/.dsh-core/current/dsh-core version', execOptions)
   if (ver.exitCode !== 0) {
     return { ok: false, version, detail: (ver.stderr || ver.stdout || 'version probe failed').trim() }

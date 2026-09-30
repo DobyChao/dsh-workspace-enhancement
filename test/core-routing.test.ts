@@ -22,6 +22,7 @@ import { coreServeCommand } from '../src/core-hub.ts'
 import { SshFileSystemEngine } from '../src/filesystem.ts'
 import { MixedFileSystem } from '../src/mixed.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
+import { CORE_COMPAT_HASHES } from '../src/core-protocol.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps, RemoteSandboxMachineFace } from '../src/remote-sandbox-fence.ts'
 import { isSandboxUnavailableError, sftpFallbackForCoreGap, CoreMissingError } from '../src/remote-policy.ts'
@@ -41,7 +42,12 @@ function transport(): SshTransport {
     getClient: async () => ({}) as never,
     getSftp: async () => { throw new Error('SFTP must not run on a fenced machine') },
     getRemoteEnvironment: async () => ({}),
-    exec: async () => ({ exitCode: 0, signal: null, stdout: '', stderr: '' }),
+    exec: async (command: string) => ({
+      exitCode: 0,
+      signal: null,
+      stdout: command.startsWith('sha256sum') ? `${CORE_COMPAT_HASHES[0]}  dsh-core\n` : '',
+      stderr: '',
+    }),
     resolveRemoteCwd: (cwd?: string) => cwd ?? '/work',
   } as unknown as SshTransport
 }
@@ -536,7 +542,12 @@ test('BUG-6: core.status answers from the artifact, never from a live session', 
     stdout: '{"version":"0.2.0-dev","arch":"linux-x86_64","proto":1,"caps":["fs"]}',
     stderr: '',
   }
-  const probing = { ...base, exec: async () => probe } as unknown as SshTransport
+  const probing = {
+    ...base,
+    exec: async (command: string) => (command.startsWith('sha256sum')
+      ? { exitCode: 0, signal: null, stdout: `${CORE_COMPAT_HASHES[0]}  dsh-core\n`, stderr: '' }
+      : probe),
+  } as unknown as SshTransport
   const hub = createCoreHub(ctxWith(probing), {
     idleMs: 0,
     deps: deps('workspace-write', probing),

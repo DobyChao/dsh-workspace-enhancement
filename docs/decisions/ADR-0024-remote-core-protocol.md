@@ -120,6 +120,15 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   `off`，按字段门控把部署全挡了。围栏跟着**会话**走（`resolveRemoteSessionMode`
   fail-safe `read-only`，ADR-0025），任何已连接机器都可能围栏 ⇒ 都供给；
   机器字段继续只管终端守卫、旧路径 fence 与状态显示。
+  **溯源门（2026-09-30 用户拍板，sha256 白名单）**：版本串是核心**自报**的，
+  hash 不是——打开 serve 后插件经控制通道 `sha256sum` 磁盘二进制，不在
+  `core/artifact.json` 的 `compatHashes` 白名单内即拒（围栏档 `SANDBOX_UNAVAILABLE`、
+  danger 落 SFTP，都不运行来历不明二进制）；活会话复用不重查（进程在它自己的
+  open 时已验，事后换文件改不了运行中的 inode）。部署侧收口：装后校验
+  安装哈希 = MANIFEST 声明值；静态闸门 + pack-smoke 双断言 **dist 里的二进制
+  必须已登记**——核心升级忘了登 hash 必红，发不出去。诚实边界：插件侧
+  `sha256sum` 依赖远端 coreutils 诚实，防的是误换/损坏/伪造版本串，不是
+  全面攻陷的远端。
   **同日用户终拍板（部署必问）**：部署是审批动作，三条规则——①凡**尝试部署**
   必先经平台 approval 问（`sw_connect` 同步梯子与首用 gap 都接同一 ask；
   拒绝=报告行+保持现状，再跑会再问）；②**danger-full-access 会话不尝试部署**

@@ -1,5 +1,8 @@
 {
   "version": "0.2.2",
   "arch": "linux-x64",
-  "manifestArch": "linux-x86_64"
+  "manifestArch": "linux-x86_64",
+  "compatHashes": [
+    "a0f28eaef7e608b2339fb6691ec9569c192ccd02ed20ffda894762a598ebf62d"
+  ]
 }

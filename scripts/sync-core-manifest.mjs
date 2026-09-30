@@ -61,6 +61,17 @@ export const CORE_ARTIFACT_VERSION = '${meta.version}'
 
 /** Filename arch segment of the core tarball. */
 export const CORE_ARTIFACT_ARCH = '${meta.arch}'
+
+/**
+ * sha256 of every dsh-core binary the fence may run (REQ-I17 provenance
+ * gate, 2026-09-30). The serve-open path hashes the remote binary and
+ * refuses anything not on this list; the static gate additionally fails when
+ * the dist tarball's own binary is missing from it (a core bump that forgot
+ * to register its hash can never ship).
+ */
+export const CORE_COMPAT_HASHES = [
+${meta.compatHashes.map((hash) => `  '${hash}',`).join('\n')}
+] as const
 `
 }
 
