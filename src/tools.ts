@@ -406,6 +406,8 @@ export function registerWorkspaceTools(
   registry: () => SshRegistry,
   sides: () => SessionSideWorkspaceStore | undefined,
   connections: () => SessionConnectionsFace | undefined,
+  /** REQ-I14: per-machine core warmup fired when `sw_connect` reaches machines. */
+  warmCore?: (id: string) => void,
 ): void {
   const locale = hostLocaleOf(ctx)
   const t = locale.t
@@ -509,6 +511,10 @@ export function registerWorkspaceTools(
           throw new Error(t('tool.sw_connect.error.allUnreachable', { details }))
         }
         store.set(sessionId, reachable.map(probe => probe.id))
+        // REQ-I14: every machine that just became reachable to this session
+        // gets the background core warmup (fenced machines only; the closure
+        // itself reads the fence mode and re-checks the installed version).
+        for (const probe of reachable) warmCore?.(probe.id)
         // Honest per-machine report: the resulting connected set, one line each,
         // including the machines that did NOT answer (they are not connected).
         const lines = [t('tool.sw_connect.output.heading')]

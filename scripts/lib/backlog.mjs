@@ -72,11 +72,55 @@ export function parseBacklog(markdown) {
 }
 
 /**
+ * Layout rules the row parser cannot see (INFRA-22): markdown tables stop at
+ * the first blank line, so a blank line inside a table splits it in two and
+ * every later row renders as loose text. One section = ONE contiguous block of
+ * `|`-lines. Consecutive blank lines are the other half of the same regression
+ * (they crept into HEAD via a scripted edit in ba56c88 and nothing flagged
+ * them), so they are rejected file-wide.
+ *
+ * @param {string} markdown
+ * @returns {string[]} errors (empty = layout clean)
+ */
+export function auditBacklogTables(markdown) {
+  const errors = []
+  const sectionTables = new Map()
+  let section = 0
+  let inTable = false
+  let previousBlank = false
+  for (const [index, line] of markdown.split(/\r?\n/).entries()) {
+    const heading = line.match(SECTION_HEADING)
+    if (heading !== null) {
+      section = Number(heading[1])
+      inTable = false
+      previousBlank = false
+      continue
+    }
+    const blank = line.trim() === ''
+    if (blank && previousBlank) {
+      errors.push(`line ${index + 1}: consecutive blank lines`)
+    }
+    previousBlank = blank
+    if (line.startsWith('|')) {
+      if (!inTable && sectionTables.has(section)) {
+        errors.push(`line ${index + 1}: §${section || '?'} table rows appear in a second, separate block — a blank line inside the table breaks rendering`)
+      }
+      sectionTables.set(section, true)
+      inTable = true
+    } else {
+      inTable = false
+    }
+  }
+  return errors
+}
+
+/**
  * @param {string} markdown
  * @returns {{ ok: boolean, rows: number, errors: string[] }}
  */
 export function auditBacklog(markdown) {
   const { rows, errors } = parseBacklog(markdown)
+  errors.push(...auditBacklogTables(markdown))
   const seen = new Set()
   let lastTodoRank = -1
   for (const row of rows) {

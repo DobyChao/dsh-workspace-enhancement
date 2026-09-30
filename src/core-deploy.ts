@@ -94,9 +94,15 @@ function sftpWrite(sftp: SFTPWrapper, remote: string, data: Buffer): Promise<voi
 }
 
 /**
- * Remote extract + chmod + current symlink. Windows-built tarballs land as 644,
- * so every executable must be chmod'ed explicitly; `vendors` are the extra
+ * Remote extract + chmod + current symlink. Windows-built tarballs land as
+ * 644, so every executable must be chmod'ed explicitly; `vendors` are the extra
  * tools uploaded for this deploy (only what we actually pushed is listed).
+ *
+ * REQ-I14 probe-then-flip: the freshly extracted `<version>/dsh-core` must
+ * ANSWER (`dsh-core version`, exit 0) before `current` is repointed. A failed
+ * probe stops the `&&` chain with `current` still on the previous install, so
+ * a corrupt or unexecutable artifact can never strand the machine without a
+ * working core.
  */
 export function coreInstallScript(version: string, remoteTar: string, vendors: readonly VendorFile[] = []): string {
   const prefix = `"$HOME"/.dsh-core/${version}`
@@ -111,6 +117,7 @@ export function coreInstallScript(version: string, remoteTar: string, vendors: r
     }
   }
   steps.push(`chmod +x -- ${prefix}/dsh-core ${vendors.map(vendor => `${prefix}/${vendor.relative}`).join(' ')}`.trimEnd())
+  steps.push(`${prefix}/dsh-core version`)
   steps.push(`ln -sfn -- ${quoteShellArg(version)} "$HOME"/.dsh-core/current`)
   steps.push(`rm -f -- ${quoteShellArg(remoteTar)} ${vendors.map(vendor => quoteShellArg(vendor.temp)).join(' ')}`.trimEnd())
   return steps.join(' && ')

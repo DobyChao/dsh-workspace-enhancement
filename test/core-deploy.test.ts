@@ -48,6 +48,18 @@ test('coreInstallScript: pushed vendor files are copied in and chmod-ed, then cl
   assert.match(script, /rm -f -- '[^']*dsh-core-0\.2\.0-dev-linux-x64\.tar\.gz' '\/tmp\/dsh-core-rg-15\.2\.0'/)
 })
 
+// REQ-I14 probe-then-flip: a freshly extracted binary must ANSWER before
+// `current` is repointed, so a corrupt artifact cannot strand the machine.
+test('coreInstallScript: probes the versioned binary before flipping current', () => {
+  const script = coreInstallScript('0.2.0-dev', '/tmp/dsh-core-0.2.0-dev-linux-x64.tar.gz')
+  const probe = script.indexOf('"$HOME"/.dsh-core/0.2.0-dev/dsh-core version')
+  const chmod = script.indexOf('chmod +x --')
+  const flip = script.indexOf('ln -sfn --')
+  assert.ok(probe > chmod, 'the probe runs after chmod (an unexecutable binary must fail it)')
+  assert.ok(probe < flip, 'the probe runs before current is repointed')
+  assert.ok(flip > -1 && chmod > -1)
+})
+
 const sha = 'a'.repeat(64)
 
 test('manifestIssues: the first-party core alone is a complete manifest (INFRA-15)', () => {

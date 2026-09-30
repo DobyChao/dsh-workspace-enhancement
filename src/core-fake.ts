@@ -40,6 +40,12 @@ export interface FakeCoreOptions {
   workspace?: string
   /** Capability set advertised by hello (default: all v1 caps). */
   caps?: readonly string[]
+  /**
+   * Version advertised by hello (default: the real {@link CORE_ARTIFACT_VERSION}).
+   * Test seam for the REQ-I17 version gate — a stale value makes the hub refuse
+   * confined work exactly like an outdated remote binary.
+   */
+  version?: string
 }
 
 function hostPath(root: string, posixPath: string): string {
@@ -153,7 +159,7 @@ export function serveFakeCore(stdin: Readable, stdout: Writable, options: FakeCo
       case CORE_METHODS.hello:
         return {
           proto: CORE_PROTO,
-          version: CORE_ARTIFACT_VERSION,
+          version: options.version ?? CORE_ARTIFACT_VERSION,
           arch: 'x86_64',
           caps: [...caps],
           sandbox: options.sandbox,

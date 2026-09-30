@@ -41,3 +41,25 @@ test('backlog audit: a well-formed todo row passes', () => {
   assert.equal(result.ok, true)
   assert.equal(result.rows, 1)
 })
+
+// INFRA-22: markdown tables stop at the first blank line — a blank row inside
+// a table splits it and every later row renders as loose text. The row parser
+// skips blank lines, so this regression class needs its own layout rule.
+test('backlog audit: a blank line inside a table is rejected', () => {
+  const result = auditBacklog(skeleton(
+    '| REQ-I14 | warmup | todo | P2 | after connect |\n\n| REQ-I17 | gate | todo | P2 | fail closed |\n',
+  ))
+  assert.equal(result.ok, false)
+  assert.match(result.errors.join('\n'), /second, separate block/)
+})
+
+test('backlog audit: consecutive blank lines are rejected', () => {
+  const result = auditBacklog('# Backlog\n\n\n## 1. doing\n')
+  assert.equal(result.ok, false)
+  assert.match(result.errors.join('\n'), /consecutive blank lines/)
+})
+
+test('backlog audit: one blank line between sections is fine', () => {
+  const result = auditBacklog(skeleton('| BUG-8 | tar | todo | P2 | ok |\n'))
+  assert.equal(result.ok, true)
+})
