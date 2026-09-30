@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-09-30 15:01 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-09-30 15:25 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.2` |
+| package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.2` |
 | 最新 tag | `v0.2.2` |
-| 分支 / HEAD | `master` / `f9def11` |
-| HEAD 提交 | `feat(tools): core provisioning joins the tool surface — sw_connect deploys, sw_status reports (REQ-I21) (#55)` (2026-09-30) |
+| 分支 / HEAD | `master` / `ff79b88` |
+| HEAD 提交 | `docs: close REQ-I14/I17/I21 + INFRA-22 after PR #54/#55, record R45-R46` (2026-09-30) |
 | 与远端 | in sync with origin/master |
 
 ## 质量

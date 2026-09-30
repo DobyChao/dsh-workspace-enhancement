@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { artifactName, readArtifactMeta } from './core-artifact.mjs'
+import { artifactName, distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
 
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const coreDir = join(root, 'core')
@@ -28,6 +28,16 @@ const dist = join(coreDir, 'dist')
 const meta = readArtifactMeta()
 const version = meta.version
 const artifact = artifactName(meta)
+
+// `npm run check` calls this after ensure-core: on a developer machine the
+// tarball already exists and is registered, and Go builds are not
+// byte-reproducible — rebuilding would churn the compatHashes list for no
+// gain. Fresh checkouts (CI) have no tarball and build normally; --force
+// rebuilds explicitly.
+if (!process.argv.includes('--force') && distCoreSha256() !== null) {
+  console.error(`[build-core] ${artifact} already built and registered — pass --force to rebuild`)
+  process.exit(0)
+}
 
 rmSync(staging, { recursive: true, force: true })
 mkdirSync(staging, { recursive: true })
@@ -63,7 +73,10 @@ writeFileSync(join(staging, 'MANIFEST.json'), `${JSON.stringify({
   files,
 }, null, 2)}\n`)
 
-const tar = spawnSync('tar', ['-czf', join(dist, artifact), '-C', staging, '.'], { encoding: 'utf8' })
+// Relative output name + cwd: an absolute Windows path carries a drive-letter
+// colon that GNU tar parses as a remote host ("Cannot connect to D:") — the
+// same trap distCoreSha256 avoids.
+const tar = spawnSync('tar', ['-czf', artifact, '-C', staging, '.'], { cwd: dist, encoding: 'utf8' })
 // The staging tree holds an UNPACKED copy of the same binary plus its MANIFEST.
 // `files: ["core/dist/*.tar.gz"]` keeps it out of the npm package, and removing
 // it here keeps it off disk too (2026-09-17: a `core/dist` glob shipped it).

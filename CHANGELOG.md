@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+## [0.2.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-30)
+
+0.2.2 之后的供给线重做：**可在 0.2.0 宿主上安装**（peer 联合 pin `^0.1.7-rc.2 || ^0.2.0-rc.1`，
+0.2.0 宿主 boot 时强制执行 peer，npm 上的 0.2.2 装不上——这是本版的发版动机）、0.1.7 两处运行时
+断点修复、上游信号升级（tag 每日轻探 + 家族形状契约）、跨 agent 协作协议，以及核心部署的四次
+行为拍板（工具渠道 / 部署必问 / 版本线放宽 / sha256 溯源）。
+
+核心工件仍为 `0.2.2`（本版未改核心）：已部署 0.2.x 核心的远端**无需重部署**——版本门现按
+major.minor 线接受；升级后首次连接触发的部署询问属新行为（问不了就不装）。
+
 ### 新增
 
 - **核心供给并入工具面（`REQ-I21`）**：2026-09-30 用户 lab 实测发现首用审批会**静默**不弹（转录无 approval 审计对 ⇒ `request()` 从未被调用，而 asker 的全部 false 路径零日志、不可定位）。本轮把模型工具渠道做实：**`sw_connect` 对每台可达的围栏机器同步执行 `core.status` → 缺失/过期即 `core.deploy`**，结果逐机写进工具输出（`core: deployed 0.2.x（围栏工具就绪）` / `已是当前版本` / `部署失败 — <原因>（重跑 sw_connect 可重试）`）——部署失败是报告行，绝不会让 connect 失败；**`sw_status` 对每台已连接的围栏机器报告核心版本/缺口**（当前 / 版本不符 / 未安装，均附模型可执行的修复指向）；REQ-I17 的两条 fail-closed 文案改为**先指 `sw_connect`**（设置页 / `core.deploy` 仍作为操作员出路）。首用审批 ask 保留为能弹则弹的零触摸补充，其全部 false 路径（无 approval 服务 / 无 initiator / 无连接 / 请求失败 / 非 allowed-once）现在都会打 warn 日志；后台预热（面板/通道连接路径）语义不变。**同轮门控修正（实机第二根因）**：供给此前按机器 `remoteSandbox` 字段门控，而围栏跟**会话**走（fail-safe read-only）——用户会话以 workspace-write 围栏时机器字段为 `off`，预热与审批双双被挡；现改为已知机器一律供给（状态探针保证幂等开销），机器字段只继续管终端守卫/旧路径 fence/状态显示。**再修（同日用户终拍板：部署必问）**：`sw_connect` 的部署尝试现接平台 approval——拒绝输出 `core: deploy was not approved (left at <现状>)` 报告行（机器保持连接，重跑会再问）；danger-full-access 会话跳过供给（核心非必需）；已是当前版本不问不装；后台预热（面板/通道路径在 turn 外问不了）降级为纯探测+告警，部署只发生在能问的路径。**版本门放宽（同日拍板）**：围栏接受随包版本的 **major.minor 线**内任意 patch（新旧皆可，依赖语义）——同线 patch 漂移不再询问/部署，跨 minor 才拒绝并走询问；跨线判定与兜底集中在 `coreVersionAccepted`（无法解析的版本串回退精确匹配）。**溯源门（sha256 白名单）**：版本串是自报的、hash 不是——serve 打开后插件经控制通道 `sha256sum` 远端二进制，不在 `core/artifact.json` `compatHashes` 内即拒（danger 落 SFTP 也不运行）；装后校验安装哈希 = MANIFEST 值；静态闸门 + pack-smoke 断言 dist 二进制已登记且**包内自洽**（投影清单必须包含 dist 二进制的 hash，陈旧投影发不出去）；清单由 `ensure-core` **构建自登记**维护（Go 构建跨工具链不可字节复现——CI 首日即抓到重建产物 hash 不同于本地，故登记跟随构建而非手维护；`npm run build` 改为先 ensure 后编译）。

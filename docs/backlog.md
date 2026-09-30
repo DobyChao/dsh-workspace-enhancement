@@ -21,7 +21,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
-| PUB-8 | 0.2.3 发布 | todo | P1 | 09-30 I14/I17/I21/INFRA-22 全部合入（PR #54/#55）——**内容齐备，待 owner 推 tag + Actions Approve**（CHANGELOG Unreleased 已攒 UPSTREAM-8/9、INFRA-19/20、UPSTREAM-10、INFRA-21/REQ-A6 调查等）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上 |
+| PUB-8 | 0.2.3 发布 | todo | P1 | 09-30 prep 就绪：版本 bump + CHANGELOG 折版 + `npm run check` 全绿（含 build-core Windows tar 修复）。**待 owner：`git tag v0.2.3 && git push origin v0.2.3` → Actions Approve**。发版动机：0.2.0 宿主强制 peer，npm 0.2.2 装不上。发布后 →shipped、R47 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
