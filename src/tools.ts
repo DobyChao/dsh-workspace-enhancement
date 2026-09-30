@@ -33,7 +33,7 @@ import type { CoreHub, CoreStatusView } from './core-hub.ts'
 import { provisionRemoteCore, createCoreDeployAsk } from './core-provision.ts'
 import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
-import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
+import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
 import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
 import { currentRemoteSpawnPolicy } from './remote-spawn-policy.ts'
 
@@ -518,7 +518,7 @@ export function registerWorkspaceTools(
           } catch (error) {
             view = { ok: false, detail: error instanceof Error ? error.message : String(error) }
           }
-          if (view.ok && view.version === CORE_ARTIFACT_VERSION) {
+          if (view.ok && coreVersionAccepted(view.version ?? '')) {
             lines.push(t('tool.sw_status.core.current', { id, version: view.version }))
           } else if (view.ok) {
             lines.push(t('tool.sw_status.core.mismatch', {

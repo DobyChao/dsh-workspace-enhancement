@@ -559,7 +559,7 @@ export const REMOTE_SANDBOX_MESSAGES = {
    * text.
    */
   coreVersionMismatch:
-    'The fenced core on the remote reports version "{found}" but this plugin ships "{expected}" — a stale core cannot be trusted to fence; re-run sw_connect to redeploy the matching core (or use the plugin settings / core.deploy) and retry.',
+    'The fenced core on the remote reports version "{found}" but this plugin needs the {expected} line (major.minor must match; patch drift is fine) — re-run sw_connect to redeploy the matching core (or use the plugin settings / core.deploy) and retry.',
   /** `workspace-write` without a usable absolute remote workspace root. */
   workspaceRootRequired:
     'remote sandbox refused: mode "workspace-write" requires an absolute remote workspace root to bind, and none was resolved; refusing to run the command unconfined',

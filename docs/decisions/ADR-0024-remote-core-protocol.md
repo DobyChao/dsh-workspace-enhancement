@@ -126,9 +126,12 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   （核心非必需）；③**磁盘已是当前版本不问也不装**。后台预热（面板/通道路径）
   在模型 turn 之外**问不了** ⇒ 降级为纯探测+告警（日志点名缺口），部署只发生在
   能问的路径上。自动安装与「无感化」表述就此作废——本条为准。
-- **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
-  `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
-  对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
+- **核心版本门（2026-09-21，`REQ-I17`；宽度放宽 2026-09-30 用户拍板）**：围栏档
+  只认本插件随包 `CORE_ARTIFACT_VERSION` 的 **major.minor 线**——patch 漂移
+  （新旧皆可）按依赖语义直接可用，不问不部署；跨 minor/major 才
+  spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；
+  （原「逐字精确匹配」表述由本条取代；如某 patch 修复必须强制，
+  预留 `core/artifact.json` 加 `min` 字段收紧的口子，本轮不做）
   **禁止默默跑旧核心**（组杀、`version` 算法都在核心里，旧二进制等于没修）。
   读面仍走 REQ-I15（SFTP）。`danger` / `off` 不挡（经 `CoreMissingError` 落回
   SFTP，而非跑旧核）。无感升级是 `REQ-I14`——本条是升级完成前的 fail-closed。

@@ -608,6 +608,10 @@ test('REQ-I21 sw_status: a fenced connected machine reports its core version sta
 
   const healthy = await statusTextOf(fencedRegistry('0.2.2'))
   assert.ok(healthy.includes('core(c1): 0.2.2 — current'), healthy)
+
+  // Version-gate width: patch drift reports the ACTUAL version as current.
+  const drifted = await statusTextOf(fencedRegistry('0.2.9'))
+  assert.ok(drifted.includes('core(c1): 0.2.9 — current'), drifted)
 })
 
 test('REQ-I21 sw_status: field-less machines get a core line too (confinement is session-side)', async () => {

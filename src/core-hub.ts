@@ -16,6 +16,7 @@ import {
   CORE_ARTIFACT_ARCH,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
+  coreVersionAccepted,
   CORE_ERROR_SANDBOX,
   CORE_PROTO,
   CORE_REMOTE_HOME,
@@ -335,7 +336,7 @@ export function createCoreHub(
       // The cached hello names the binary the serve was exec'd from, so this
       // reuse check is one cache read — never an RPC.
       const cachedHello = await existing.client.hello().catch(() => undefined)
-      if (cachedHello === undefined || cachedHello.version === CORE_ARTIFACT_VERSION) {
+      if (cachedHello === undefined || coreVersionAccepted(cachedHello.version)) {
         scheduleIdle(existing)
         return existing.client
       }
@@ -379,10 +380,12 @@ export function createCoreHub(
               throw remoteSandboxUnavailable(refuseMode, `core is missing cap ${cap}`)
             }
           }
-          // REQ-I17 version gate: confined work only ever runs THIS plugin's
-          // artifact. danger/off degrade to SFTP through CoreMissingError —
-          // the ADR's "danger/off 不挡" — instead of an old binary.
-          if (hello.version !== CORE_ARTIFACT_VERSION) {
+          // REQ-I17 version gate (width relaxed 2026-09-30): confined work
+          // runs cores of the SHIPPED major.minor — patch drift is
+          // dependency-style compatible; a minor/major step refuses.
+          // danger/off degrade to SFTP through CoreMissingError —
+          // the ADR's "danger/off 不挡" — instead of an out-of-range binary.
+          if (!coreVersionAccepted(hello.version)) {
             const detail = interpolate(REMOTE_SANDBOX_MESSAGES.coreVersionMismatch, {
               found: hello.version,
               expected: CORE_ARTIFACT_VERSION,
@@ -421,7 +424,7 @@ export function createCoreHub(
         // gap), only once per attempt, and only for confined callers.
         if (!confined || resolveGap === undefined) throw mapOpenError(error)
         const disk = await diskVersionOf(connection, opts?.signal)
-        if (disk.ok && disk.version === CORE_ARTIFACT_VERSION) throw mapOpenError(error)
+        if (disk.ok && coreVersionAccepted(disk.version ?? '')) throw mapOpenError(error)
         let resolved = false
         try {
           resolved = await resolveGap(connectionId, {

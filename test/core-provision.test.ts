@@ -181,6 +181,14 @@ test('provisionRemoteCore: outcome ladder — skipped / current / deployed / fai
   assert.equal(staleOutcome.version, CORE_ARTIFACT_VERSION)
   assert.equal(stale.calls.closed, 1, 'a successful deploy drops stale serves')
 
+  // Version-gate width (2026-09-30): same major.minor is dependency-style
+  // compatible — patch drift neither asks nor deploys.
+  const patchDrift = mk({ remoteSandbox: 'read-only' }, { ok: true, version: '0.2.9' }, { ok: true })
+  assert.deepEqual(await provisionRemoteCore(patchDrift.deps, 'c1'), {
+    id: 'c1', skipped: false, deployed: false, declined: false, version: '0.2.9', detail: undefined,
+  })
+  assert.equal(patchDrift.calls.deploy, 0)
+
   const failed = mk({ remoteSandbox: 'read-only' }, { ok: false, detail: 'core not installed' }, { ok: false, detail: 'connection refused' })
   const failedOutcome = await provisionRemoteCore(failed.deps, 'c1')
   assert.equal(failedOutcome.deployed, false)

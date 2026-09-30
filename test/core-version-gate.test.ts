@@ -16,7 +16,7 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from '../src/core-client.ts'
 import { serveFakeCore } from '../src/core-fake.ts'
-import { CORE_ARTIFACT_VERSION } from '../src/core-protocol.ts'
+import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from '../src/core-protocol.ts'
 import { createCoreHub } from '../src/core-hub.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { CoreMissingError, isCoreMissingError } from '../src/remote-policy.ts'
@@ -127,6 +127,25 @@ test('REQ-I17: danger policy degrades a stale core to CoreMissingError (SFTP fal
     (error: unknown) => isCoreMissingError(error) && !(error instanceof RemoteSandboxError),
   )
   stale.close()
+})
+
+test('REQ-I17 width: same-major.minor patch drift opens (dependency-style range)', async () => {
+  const drifted = pair(root(), '0.2.9')
+  const hub = createCoreHub(ctxWith(), { deps: deps(), open: async () => drifted })
+  const client = await hub.require('c1')
+  assert.equal(client, drifted)
+  drifted.close()
+})
+
+test('coreVersionAccepted: the range rule in one place', () => {
+  assert.equal(coreVersionAccepted(CORE_ARTIFACT_VERSION), true)
+  assert.equal(coreVersionAccepted('0.2.0'), true, 'older patch of the same line')
+  assert.equal(coreVersionAccepted('0.2.99'), true, 'newer patch of the same line')
+  assert.equal(coreVersionAccepted('0.3.0'), false, 'minor step refuses')
+  assert.equal(coreVersionAccepted('0.1.9'), false, 'older line refuses')
+  assert.equal(coreVersionAccepted('1.2.2'), false, 'major step refuses')
+  assert.equal(coreVersionAccepted('not-a-version'), false, 'unparseable falls back to exact-equality refusal')
+  assert.equal(coreVersionAccepted('weird', 'weird'), true, 'identical unparseable spellings still match exactly')
 })
 
 test('REQ-I17: the matching artifact still opens (the gate is exact, not paranoid)', async () => {

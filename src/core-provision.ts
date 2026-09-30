@@ -22,7 +22,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
+import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
 import { deployCore } from './core-deploy.ts'
 import type { CoreStatusView, CoreHub } from './core-hub.ts'
 import type { SshTransport } from './transport.ts'
@@ -115,7 +115,7 @@ export async function provisionRemoteCore(
   const machine = deps.machine(id)
   if (machine === undefined) return { id, skipped: true, deployed: false, declined: false, version: undefined, detail: 'unknown machine' }
   const status = await deps.status(id, signal)
-  if (status.ok && status.version === CORE_ARTIFACT_VERSION) {
+  if (status.ok && coreVersionAccepted(status.version ?? '')) {
     return { id, skipped: false, deployed: false, declined: false, version: status.version, detail: undefined }
   }
   if (deps.approve !== undefined) {
@@ -154,7 +154,7 @@ export function createCoreWarmup(deps: CoreWarmupDeps): (id: string) => void {
     const run = (async (): Promise<void> => {
       if (deps.machine(id) === undefined) return
       const status = await deps.status(id)
-      if (status.ok && status.version === CORE_ARTIFACT_VERSION) return
+      if (status.ok && coreVersionAccepted(status.version ?? '')) return
       const found = status.ok ? status.version ?? 'unreadable version' : 'not installed'
       deps.warn?.(`dsw: core gap on ${id} (${found}); the deploy will ask on the next sw_connect / confined first use`)
     })()

@@ -15,6 +15,8 @@
 export const CORE_PROTO = 1
 
 /** Single-frame payload cap (bytes of JSON, not including the length prefix). */
+import { CORE_ARTIFACT_VERSION as SHIPPED_CORE_VERSION } from './core-artifact.ts'
+
 export const CORE_MAX_FRAME = 16 * 1024 * 1024
 
 /**
@@ -28,6 +30,30 @@ export const CORE_MAX_FRAME = 16 * 1024 * 1024
  * protocol module.
  */
 export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-artifact.ts'
+
+/**
+ * REQ-I17 gate width (relaxed 2026-09-30, user decision): a fenced session
+ * accepts ANY core of the same `major.minor` as the shipped artifact — patch
+ * drift in either direction is dependency-style compatible (`0.2.1` remote
+ * with `0.2.2` shipped, and vice versa); only a minor/major step refuses and
+ * rides the ask-gated redeploy. The proto + caps checks at open still catch a
+ * genuinely incompatible newer core. Versions that do not parse as plain
+ * `X.Y.Z` fall back to exact equality (conservative).
+ *
+ * A tighter floor stays available later via `core/artifact.json` (a `min`
+ * field for a must-have patch fix); this round deliberately ships none.
+ */
+export function coreVersionAccepted(remote: string, shipped: string = SHIPPED_CORE_VERSION): boolean {
+  if (remote === shipped) return true
+  const parse = (value: string): [number, number] | undefined => {
+    const match = /^(\d+)\.(\d+)\.\d+(?:[-+][\w.-]+)?$/u.exec(value.trim())
+    return match === null ? undefined : [Number(match[1]), Number(match[2])]
+  }
+  const a = parse(remote)
+  const b = parse(shipped)
+  if (a === undefined || b === undefined) return false
+  return a[0] === b[0] && a[1] === b[1]
+}
 
 /** v1 capability names advertised by `hello`. */
 export const CORE_CAPS = ['fs', 'spawn', 'rg'] as const
