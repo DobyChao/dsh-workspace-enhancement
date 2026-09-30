@@ -37,6 +37,7 @@ import {
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
 import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
 import type { CoreProvisionOutcome } from '../src/core-provision.ts'
+import { runWithRemoteSpawnPolicy } from '../src/remote-spawn-policy.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
@@ -494,7 +495,7 @@ test('renderSessionWorkspaceContext: an unreachable machine is marked honestly',
 
 /** One canned provision outcome builder. */
 function outcomeOf(id: string, patch: Partial<CoreProvisionOutcome>): CoreProvisionOutcome {
-  return { id, skipped: true, deployed: false, version: undefined, detail: undefined, ...patch }
+  return { id, skipped: true, deployed: false, declined: false, version: undefined, detail: undefined, ...patch }
 }
 
 test('REQ-I21 sw_connect: every reachable machine is provisioned and the outcome rides the report', async () => {
@@ -544,6 +545,34 @@ test('REQ-I21 sw_connect: a provision that THROWS becomes a failed-outcome line 
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
   assert.ok(text.includes('core: deploy failed — ssh dead mid-deploy'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'])
+})
+
+test('REQ-I21 sw_connect: a DECLINED deploy keeps the disk state and says so', async () => {
+  const store = new FakeStore()
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async (id) => outcomeOf(id, { skipped: false, declined: true, version: '0.0.1-old' }),
+  )
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
+  assert.ok(text.includes('core: deploy was not approved (left at 0.0.1-old'), text)
+  assert.ok(text.includes('it will ask again'), text)
+  assert.deepEqual(store.listFor(SESSION), ['c1'], 'the machine stays connected — only the deploy was declined')
+})
+
+test('REQ-I21 sw_connect: a danger-full-access session never attempts a provision', async () => {
+  const store = new FakeStore()
+  let provisioned = 0
+  const mounted = mountWorkspaceTools(
+    () => store as unknown as SessionConnectionsFace,
+    fakeRegistry(),
+    async (id) => { provisioned += 1; return outcomeOf(id, {}) },
+  )
+  const text = await runWithRemoteSpawnPolicy('danger-full-access', () =>
+    runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION)) as Promise<{ text: string }>)
+  assert.equal(provisioned, 0, 'danger sessions do not attempt deploys')
+  assert.ok(!text.includes('core:'), text)
+  assert.deepEqual(store.listFor(SESSION), ['c1'], 'the connect itself is unaffected')
 })
 
 /** A fenced machine row for the sw_status core-line tests. */

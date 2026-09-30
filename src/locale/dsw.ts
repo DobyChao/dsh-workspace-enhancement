@@ -372,6 +372,8 @@ export const zh = {
   'tool.sw_connect.output.coreDeployed': '  核心：已部署 {version}（围栏工具就绪）',
   'tool.sw_connect.output.coreCurrent': '  核心：{version}（已是当前版本，无需部署）',
   'tool.sw_connect.output.coreFailed': '  核心：部署失败 — {detail}（核心就位前围栏内写/spawn 将被拒；重跑 sw_connect 可重试）',
+  'tool.sw_connect.output.coreDeclined': '  核心：部署未获批准（保持 {state}；需要围栏时重跑 sw_connect 会再次询问）',
+  'tool.sw_connect.output.coreNone': '未安装',
   'tool.sw_connect.error.noSession': 'sw_connect: 无法解析本会话 id——拒绝改动连接状态',
   'tool.sw_connect.error.storeMissing': 'sw_connect: 会话连接存储未挂载（是否已挂载 dsw/web？）',
   'tool.sw_connect.error.unknownMachine': 'sw_connect: 未知机器 id：{ids} — 已知：{known}',

@@ -120,6 +120,12 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   `off`，按字段门控把部署全挡了。围栏跟着**会话**走（`resolveRemoteSessionMode`
   fail-safe `read-only`，ADR-0025），任何已连接机器都可能围栏 ⇒ 都供给；
   机器字段继续只管终端守卫、旧路径 fence 与状态显示。
+  **同日用户终拍板（部署必问）**：部署是审批动作，三条规则——①凡**尝试部署**
+  必先经平台 approval 问（`sw_connect` 同步梯子与首用 gap 都接同一 ask；
+  拒绝=报告行+保持现状，再跑会再问）；②**danger-full-access 会话不尝试部署**
+  （核心非必需）；③**磁盘已是当前版本不问也不装**。后台预热（面板/通道路径）
+  在模型 turn 之外**问不了** ⇒ 降级为纯探测+告警（日志点名缺口），部署只发生在
+  能问的路径上。自动安装与「无感化」表述就此作废——本条为准。
 - **核心版本门（2026-09-21，`REQ-I17`）**：围栏档只认本插件随包的
   `CORE_ARTIFACT_VERSION`。磁盘 `dsh-core version` / 活会话 `hello.version`
   对不上 ⇒ spawn 与写面 `SANDBOX_UNAVAILABLE`，文案提示设置页部署最新核心；

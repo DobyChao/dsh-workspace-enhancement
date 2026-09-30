@@ -30,10 +30,12 @@ import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 import { coreHubOf } from './core-hub.ts'
 import type { CoreHub, CoreStatusView } from './core-hub.ts'
-import { provisionRemoteCore } from './core-provision.ts'
+import { provisionRemoteCore, createCoreDeployAsk } from './core-provision.ts'
 import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
 import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
+import { currentRemoteSpawnPolicy } from './remote-spawn-policy.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -434,9 +436,12 @@ export function registerWorkspaceTools(
   }
   /**
    * REQ-I21: the synchronous provision `sw_connect` awaits per reachable
-   * machine — status, deploy when the fenced machine is missing/stale, drop
-   * stale serves after the flip. Injected fakes keep the tool tests hermetic.
+   * machine — status, ASK when a deploy is actually needed (user policy
+   * 2026-09-30: deploys always ask; no ask face ⇒ no deploy), deploy on
+   * `allowed-once`, drop stale serves after the flip. Injected fakes keep the
+   * tool tests hermetic.
    */
+  const coreDeployAsk = createCoreDeployAsk(ctx)
   const provisionOf = provisionCore ?? ((id: string, signal?: AbortSignal): Promise<CoreProvisionOutcome> =>
     provisionRemoteCore({
       machine: (mid) => registry().listMachines().machines.find(entry => entry.id === mid),
@@ -448,6 +453,7 @@ export function registerWorkspaceTools(
         return deployCore(transport, sig !== undefined ? { signal: sig } : {})
       },
       afterDeploy: (mid) => { coreHubOf(ctx)?.close(mid) },
+      approve: (mid, facts) => coreDeployAsk(mid, facts),
       warn: (text) => { ctx.logger.warn(text) },
     }, id, signal))
   /** REQ-I11: the session's connected ids (store ∪ implicit main machine). */
@@ -577,11 +583,15 @@ export function registerWorkspaceTools(
         store.set(sessionId, reachable.map(probe => probe.id))
         // Honest per-machine report: the resulting connected set, one line each,
         // including the machines that did NOT answer (they are not connected).
-        // REQ-I21: every reachable FENCED machine is provisioned SYNCHRONOUSLY
-        // (status → deploy when missing/stale) and the outcome rides the report
-        // — the model sees the core state it will fence with, and a failed
-        // deploy is a report line, never a failed connect (reads still work).
+        // REQ-I21: every reachable machine gets the synchronous provision
+        // ladder (status → ASK when a deploy is needed → deploy on approval)
+        // and the outcome rides the report — the model sees the core state it
+        // will fence with; declined/failed deploys are report lines, never a
+        // failed connect (reads still work via SFTP). A danger-full-access
+        // session never attempts a deploy (the core is not needed there).
         const signal = (exec as { signal?: AbortSignal }).signal
+        const sessionMode = resolveRemoteSessionMode(ctx, currentRemoteSpawnPolicy())
+        const provisionWanted = isConfinedSandboxMode(sessionMode)
         const lines = [t('tool.sw_connect.output.heading')]
         for (const probe of probes) {
           const endpoint = `${machineFaceOf(probe.id)?.username ?? '<user>'}@${machineFaceOf(probe.id)?.host ?? '<host>'}`
@@ -591,7 +601,7 @@ export function registerWorkspaceTools(
               id: probe.id,
               detail: probe.detail === '' ? t('tool.sw_connect.error.noDetail') : probe.detail,
             }))
-          if (!probe.ok) continue
+          if (!probe.ok || !provisionWanted) continue
           let outcome: CoreProvisionOutcome
           try {
             outcome = await provisionOf(probe.id, signal)
@@ -600,6 +610,7 @@ export function registerWorkspaceTools(
               id: probe.id,
               skipped: false,
               deployed: false,
+              declined: false,
               version: undefined,
               detail: error instanceof Error ? error.message : String(error),
             }
@@ -607,6 +618,10 @@ export function registerWorkspaceTools(
           if (outcome.skipped) continue
           if (outcome.deployed) {
             lines.push(t('tool.sw_connect.output.coreDeployed', { version: outcome.version ?? CORE_ARTIFACT_VERSION }))
+          } else if (outcome.declined) {
+            lines.push(t('tool.sw_connect.output.coreDeclined', {
+              state: outcome.version ?? t('tool.sw_connect.output.coreNone'),
+            }))
           } else if (outcome.version !== undefined) {
             lines.push(t('tool.sw_connect.output.coreCurrent', { version: outcome.version }))
           } else {

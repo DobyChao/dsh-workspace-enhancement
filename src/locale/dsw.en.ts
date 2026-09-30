@@ -363,6 +363,8 @@ const en: Record<DswKey, string> = {
   'tool.sw_connect.output.coreDeployed': '  core: deployed {version} (fenced tools ready)',
   'tool.sw_connect.output.coreCurrent': '  core: {version} (already current, nothing deployed)',
   'tool.sw_connect.output.coreFailed': '  core: deploy failed — {detail} (fenced writes/spawn refuse until the core is in place; re-run sw_connect to retry)',
+  'tool.sw_connect.output.coreDeclined': '  core: deploy was not approved (left at {state}; re-run sw_connect when the fence is needed — it will ask again)',
+  'tool.sw_connect.output.coreNone': 'not installed',
   'tool.sw_connect.error.noSession': 'sw_connect: cannot resolve this session id — refusing to change connection state',
   'tool.sw_connect.error.storeMissing': 'sw_connect: the session-connection store is not mounted (is dsw/web mounted?)',
   'tool.sw_connect.error.unknownMachine': 'sw_connect: unknown machine id(s): {ids} — known: {known}',

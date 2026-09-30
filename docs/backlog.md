@@ -16,7 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I21 | 核心供给并入 sw_connect/sw_status（模型工具渠道） | doing | P1 | 2026-09-30 双根因：①首用审批静默未弹（转录无审计对 ⇒ request() 未达，asker 零日志）；②供给门按机器字段门控，而围栏跟**会话**走（会话 workspace-write、机器字段 off）⇒ 全被挡。修：`sw_connect` 同步供给逐机报结果、`sw_status` 报核心态、门改已知机器一律供给、文案指 sw_connect、假路径补日志 |
+| REQ-I21 | 核心供给并入 sw_connect/sw_status；部署必问 | doing | P1 | 双根因（审批静默未弹 + 供给门看机器字段）已修；用户终拍板三条规则：**尝试部署必问**（拒绝=报告行、可再问）、**danger 不尝试部署**、**已是最新不问**。`sw_connect` 同步梯子接 approve 门；后台预热降级纯探测（turn 外问不了）；`sw_status` 报核心态 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | doing | P2 | **PR #54 CI 绿，待 owner 合并**。围栏≠off 连接后后台 `core.status`→`core.deploy`；升级先探版本目录才翻 `current`；缺核心首用走 approval（人拍板）。ADR-0024 §3/§6.1 已修订。合并后 →§4、R45 |
 | REQ-I17 | 核心版本门：非本插件工件即拒执行 + 提示部署 | doing | P2 | **PR #54 CI 绿，待 owner 合并**（同 I14）。`hello.version` ≠ `CORE_ARTIFACT_VERSION` 即 `SANDBOX_UNAVAILABLE`（含活会话复用检查）；danger/off 走 `CoreMissingError` 落 SFTP。验收 matrix N8 待 L1/L2 实机 |
 | INFRA-22 | backlog 表格断行闸门 | doing | P3 | 2026-09-29：HEAD 里表格中插空行断渲染（ba56c88 带入），闸门解析器跳过非行行不可见。加「表格连续块」+「连续空行」检查，顺手清掉 HEAD 里的断行与双空行 |
