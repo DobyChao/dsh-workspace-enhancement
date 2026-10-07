@@ -1,10 +1,10 @@
 {
   "$comment": "Acknowledged @deepseek-ai/* composition of the host packages, per dist-tag. The scope watch (upstream.yml) diffs live registry data against this file and opens an issue on drift; regenerate with `node scripts/upstream-watch.mjs --write-baseline` to acknowledge.",
-  "recordedAt": "2026-09-29",
+  "recordedAt": "2026-10-07",
   "hosts": {
     "@deepseek-ai/dsh": {
       "latest": {
-        "version": "0.1.7-rc.2",
+        "version": "0.2.0-rc.2",
         "deps": [
           "@deepseek-ai/cordis",
           "@deepseek-ai/cordis-plugin-include",
@@ -27,6 +27,7 @@
           "@deepseek-ai/dsh-cordis-client-runner",
           "@deepseek-ai/dsh-experimental-agent-team-profile",
           "@deepseek-ai/dsh-experimental-auto-review",
+          "@deepseek-ai/dsh-experimental-schedule-bundle",
           "@deepseek-ai/dsh-experimental-voice-input-bundle",
           "@deepseek-ai/dsh-fs-local",
           "@deepseek-ai/dsh-goal",
@@ -87,7 +88,7 @@
         ]
       },
       "next": {
-        "version": "0.2.0-rc.1",
+        "version": "0.2.0-rc.2",
         "deps": [
           "@deepseek-ai/cordis",
           "@deepseek-ai/cordis-plugin-include",
@@ -171,7 +172,7 @@
         ]
       },
       "alpha": {
-        "version": "0.1.7-alpha.2",
+        "version": "0.2.1-alpha.1",
         "deps": [
           "@deepseek-ai/cordis",
           "@deepseek-ai/cordis-plugin-include",
@@ -193,6 +194,8 @@
           "@deepseek-ai/dsh-compaction-tool-result-pruner",
           "@deepseek-ai/dsh-cordis-client-runner",
           "@deepseek-ai/dsh-experimental-agent-team-profile",
+          "@deepseek-ai/dsh-experimental-auto-review",
+          "@deepseek-ai/dsh-experimental-inspector-profile",
           "@deepseek-ai/dsh-experimental-voice-input-bundle",
           "@deepseek-ai/dsh-fs-local",
           "@deepseek-ai/dsh-goal",
@@ -237,6 +240,7 @@
           "@deepseek-ai/dsh-tool-pwsh",
           "@deepseek-ai/dsh-tool-pwsh-persistent",
           "@deepseek-ai/dsh-tool-ralph",
+          "@deepseek-ai/dsh-tool-schedule",
           "@deepseek-ai/dsh-tool-skill",
           "@deepseek-ai/dsh-tool-str-replace-editor",
           "@deepseek-ai/dsh-tool-subagent",
@@ -309,7 +313,7 @@
         ]
       },
       "next": {
-        "version": "0.2.0-rc.1",
+        "version": "0.2.0-rc.2",
         "deps": [
           "@deepseek-ai/cordis",
           "@deepseek-ai/cordis-plugin-loader",
@@ -443,7 +447,7 @@
         ]
       },
       "alpha": {
-        "version": "0.1.7-alpha.2",
+        "version": "0.2.1-alpha.1",
         "deps": [
           "@deepseek-ai/cordis",
           "@deepseek-ai/cordis-plugin-loader",
@@ -465,7 +469,9 @@
           "@deepseek-ai/dsh-client-hmr",
           "@deepseek-ai/dsh-client-locale",
           "@deepseek-ai/dsh-client-modules",
+          "@deepseek-ai/dsh-client-product-analytics",
           "@deepseek-ai/dsh-client-resources",
+          "@deepseek-ai/dsh-client-shortcuts",
           "@deepseek-ai/dsh-client-ui-agent-preset",
           "@deepseek-ai/dsh-client-ui-approval",
           "@deepseek-ai/dsh-client-ui-attachment",
@@ -498,9 +504,11 @@
           "@deepseek-ai/dsh-client-ui-settings-models",
           "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
           "@deepseek-ai/dsh-client-ui-settings-plugins",
+          "@deepseek-ai/dsh-client-ui-settings-session-log",
           "@deepseek-ai/dsh-client-ui-settings-shell",
           "@deepseek-ai/dsh-client-ui-settings-subagent",
           "@deepseek-ai/dsh-client-ui-settings-web-search",
+          "@deepseek-ai/dsh-client-ui-shortcuts",
           "@deepseek-ai/dsh-client-ui-sidebar",
           "@deepseek-ai/dsh-client-ui-sidebar-browser",
           "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
@@ -530,6 +538,7 @@
           "@deepseek-ai/dsh-host-frontend-static",
           "@deepseek-ai/dsh-host-open-in-app",
           "@deepseek-ai/dsh-host-plugin-inventory",
+          "@deepseek-ai/dsh-host-product-telemetry-otel",
           "@deepseek-ai/dsh-host-webserver",
           "@deepseek-ai/dsh-launch-environment",
           "@deepseek-ai/dsh-message-feedback",
@@ -537,6 +546,7 @@
           "@deepseek-ai/dsh-persona",
           "@deepseek-ai/dsh-plan-mode",
           "@deepseek-ai/dsh-plugin-manager",
+          "@deepseek-ai/dsh-schedule",
           "@deepseek-ai/dsh-session-log-export",
           "@deepseek-ai/dsh-session-reference",
           "@deepseek-ai/dsh-session-stats",
@@ -547,6 +557,7 @@
           "@deepseek-ai/dsh-system-prompt",
           "@deepseek-ai/dsh-terminal",
           "@deepseek-ai/dsh-terminal-bash",
+          "@deepseek-ai/dsh-time-context",
           "@deepseek-ai/dsh-tool-ask-user",
           "@deepseek-ai/dsh-tool-bash",
           "@deepseek-ai/dsh-tool-bash-persistent",
@@ -559,6 +570,7 @@
           "@deepseek-ai/dsh-tool-pwsh",
           "@deepseek-ai/dsh-tool-pwsh-persistent",
           "@deepseek-ai/dsh-tool-ralph",
+          "@deepseek-ai/dsh-tool-schedule",
           "@deepseek-ai/dsh-tool-skill",
           "@deepseek-ai/dsh-tool-subagent",
           "@deepseek-ai/dsh-tool-subagent-control",

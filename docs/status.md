@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-03 09:23 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-07 14:53 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `master` / `8755167` |
-| HEAD 提交 | `chore(release): prepare npm v0.2.3` (2026-09-30) |
+| 分支 / HEAD | `master` / `83ebd3c` |
+| HEAD 提交 | `docs: close PUB-8 after v0.2.3; claim latest=0.2.0-rc.2 + alpha=0.2.1-alpha.1 (#56 #57)` (2026-10-03) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
