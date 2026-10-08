@@ -29,13 +29,13 @@
 
 下列行为已在 `docs/decisions/` 与 `docs/compatibility.md` 记录，属于**已知边界**：
 
-- **副工作区无权限语义**（`ADR-0019`，2026-09-12 拍板）：副根是薄声明清单，不设 fs/exec 档位。
-  远程会话内同机任意绝对路径本就可达，逐根限权是 advisory 且挡不住 shell（旧门的已知绕过记录见
-  `ADR-0012`，已作废）。真正的隔离手段是每会话 `sandbox/mode`（本地沙箱）与操作者对模型的信任边界；
-  远程命令围栏在 `AUDIT-6` / `REQ-I9` 线上推进。
-- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 核心时，围栏档的**写与 spawn** fail-closed、不退 SFTP；**读**可见降级到 SFTP（`REQ-I15`，否则宿主项目根探测会挡住纯聊天）。`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
+- **副工作区 = 工作区的延伸**（`ADR-0019` / `ADR-0028` §5 / `REQ-I24`）：不设逐根 fs/exec 档位
+  （旧门的已知绕过见 `ADR-0012`，已作废）。workspace-write 下，一次写（按目标路径）或一条命令（按 cwd）
+  落在本会话挂的哪个根，就以哪个根为可写根，本机与远程同规则；**挂副根即放宽写范围**，所以挂载只开放给
+  面板上的人，模型工具不能挂。在主根里跑的命令写并列副根要提权。完整真值表见 `docs/architecture.md` §4.1。
+- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 远程组件（代码与协议中仍称 core）时，围栏档的**写与 spawn** fail-closed、不退 SFTP；**读**可见降级到 SFTP（`REQ-I15`，否则宿主项目根探测会挡住纯聊天）。`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
   shell 形状的远程命令与远程终端执行前经平台审批服务决定。该门**明确不覆盖**（诚实边界，`ADR-0020` D1）：
-  1. **审批门不覆盖 fs 写**——围栏档的写由核心 jail 覆盖；danger 且无核心时仍是 SFTP；
+  1. **审批门不覆盖 fs 写**——围栏档的写由远程组件 jail 覆盖；danger 且无远程组件时仍是 SFTP；
   2. **插件自有固定探针**不设门（注册表 `probe`/`reconnect`、`sw_status` 环境自检、`sw_exec` 的
      OS 探针、连接测试）——走 `connection.exec` 直连通道，命令文本是插件常量、非模型输入；
   3. ~~`sw_connect save:false` 临时连接不设门~~——**该路径已退役**（`ADR-0021` §1/§5：临时连接整体
@@ -56,10 +56,10 @@
   这是**结构性**的：`SubprocessSpawnSpec` 不携带会话身份，门面在 spawn 时无从判别会话，所以门只能
   做在工具层（用户 2026-09-12 拍板「门控只做在工具层与提示层」）。命令级仍有审批门兜底（该路径
   argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与 `REQ-I9` 的远端围栏
-  （`remoteSandbox ≠ off` 时命令**与文件工具**同进核心 jail；`off` 仍走 SFTP）。
+  （`remoteSandbox ≠ off` 时命令**与文件工具**同进远程组件 jail；`off` 仍走 SFTP）。
 - SSH 固有：远端 pid / 前台进程组不可见。
-- 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进核心 tarball，由设置页 `core.deploy`
-  上传。核心缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
+- 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进远程组件 tarball，由设置页 `core.deploy`
+  上传。远程组件缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
   `read-only` 下官方 `write` 工作区外失败且文件不存在）。`off` / 非 linux-x86_64 仍是 SFTP +
   裸 exec。交互终端在围栏档仍拒绝。供应链（二进制来源、签名、校验和）是新信任根。
 - **宿主静默项目根探测会铸出比会话更宽的 workspace-write jail**（`BUG-4`，2026-09-15 R27）：

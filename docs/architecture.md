@@ -60,7 +60,7 @@
 |---|---|---|
 | 入口 | `index.ts` `plugin.ts` `css-modules.d.ts` | 公共 API、聚合行、混合 provider 安装 |
 | SSH 世界 | `runtime.ts` `ssh-core.ts` `connection.ts` `transport.ts` `subprocess.ts` `process.ts` `terminal.ts` `output.ts` `environment.ts` `filesystem.ts` `fs-version.ts` `listing.ts` `picker.ts` | 跳板链、exec/SFTP/PTY、环境、目录遍历、`ssh://<id>/<path>` 路由、跨传输 `FsVersion` |
-| 远端核心 | `core-protocol.ts` `core-client.ts` `core-fake.ts` `core-session.ts` `core-hub.ts` `core-fs.ts` `core-process.ts` `core-deploy.ts` `gzip-tar.ts` | 成帧 RPC、jail 身份、会话缓存、围栏档 fs/spawn、设置页部署、宿主侧 gzip/ustar |
+| 远程组件（代码中称 core） | `core-protocol.ts` `core-client.ts` `core-fake.ts` `core-session.ts` `core-hub.ts` `core-fs.ts` `core-process.ts` `core-deploy.ts` `gzip-tar.ts` | 成帧 RPC、jail 身份、会话缓存、围栏档 fs/spawn、设置页部署、宿主侧 gzip/ustar |
 | 注册表与密钥 | `registry.ts` `hostkey.ts` `credential.ts` | machines.json、TOFU、OS 钥匙串、`~/.ssh/config` |
 | 混合门面 | `mixed.ts` | `ctx.subprocess` / `ctx.fs` 的唯一实现：按 cwd / targetKey 路由 |
 | 会话状态 | `session-workspaces.ts` `session-connections.ts` `session-remote-context.ts` | 副根清单、本会话已连接机器、提示注入判定 |
@@ -73,7 +73,7 @@
 |---|---|---|
 | 入口 | `index.ts` | 词典、槽位、行徽标层 |
 | 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` | 连接侧栏 + 目录浏览；本机目录走 `uiWorkspace` |
-| 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、核心状态文案 |
+| 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、远程组件状态文案 |
 | 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
 | 状态与徽标 | `status.tsx` `row-badges.ts` `sandbox-badge.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、围栏档位、会话头远程状态 |
 | 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
@@ -93,20 +93,63 @@
 | 会话连接门 | `sw_connect` 只接受**已注册**机器 id（`machines: string[]`），决定本会话看见哪些远程工具与提示。凭据永不进模型参数面。这是可见性门，不是强制门。 | `session-connections.ts` [ADR-0021](./decisions/ADR-0021-session-machine-connections.md) |
 | 副工作区 | 薄声明清单：挂/卸 + label + 远程根路由。无 fs/exec 档位。 | `session-workspaces.ts` [ADR-0019](./decisions/ADR-0019-side-workspace-permission-retirement.md) |
 | 审批门 | 混合 subprocess 远程分支上的可选门（`remoteApproval: off\|human\|ai`，默认 `off`）。拦 shell 形状的 spawn 与远程终端；SFTP 写路径不设门。 | `remote-approval-gate.ts` [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
-| 远端围栏 | 权限跟会话 `/permission` + 官方 `sandbox_permissions` 提权（ADR-0025）。有 Linux 核心则 fs/spawn/browse 走 RPC，`--sandbox` 来自本次 policy（`danger` → `off`）。无核心且围栏档 → 写/spawn `SANDBOX_UNAVAILABLE`，**读**降 SFTP（REQ-I15）；无核心且 danger → 今天的 SFTP + SSH。机器 `remoteSandbox` 可读可忽略。交互终端在围栏档拒绝。活 `serve` 按 `(machine, mode, workspaceRoot?)` 缓存。写面与 spawn 都吃一次提权：官方 bash/pwsh 经 shell 上的 `sandboxPolicy`，win32 bash / `sw_exec` 自带两参（`REQ-I18`）。宿主静默项目根探测见 [`notes/host-silent-fs.md`](./notes/host-silent-fs.md)（`BUG-4` 已修）。 | `core-*.ts` `core/` `remote-policy.ts` `remote-confine.ts` `remote-spawn-policy.ts` [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) |
+| 远端围栏 | 权限跟会话 `/permission` + 官方 `sandbox_permissions` 提权（ADR-0025）。有 Linux 远程组件则 fs/spawn/browse 走 RPC，`--sandbox` 来自本次 policy（`danger` → `off`）。无组件且围栏档 → 写/spawn `SANDBOX_UNAVAILABLE`，**读**降 SFTP（REQ-I15）；无组件且 danger → 今天的 SFTP + SSH。逐格见 §4.1。交互终端在围栏档拒绝。活 `serve` 按 `(machine, mode, workspaceRoot?)` 缓存。写面与 spawn 都吃一次提权：官方 bash/pwsh 经 shell 上的 `sandboxPolicy`，win32 bash / `sw_exec` 自带两参（`REQ-I18`）。宿主静默项目根探测见 [`notes/host-silent-fs.md`](./notes/host-silent-fs.md)（`BUG-4` 已修）。 | `core-*.ts` `core/` `remote-policy.ts` `remote-confine.ts` `remote-spawn-policy.ts` [ADR-0025](./decisions/ADR-0025-remote-session-sandbox.md) [ADR-0024](./decisions/ADR-0024-remote-core-protocol.md) |
 | 浏览器通道 | 官方共享 `/api` 上的精确 Fetch 路由 `/api/dsw/<endpoint>`（`connection.fetch.register`）。端点清单以 `web.ts` 的 `CHANNEL_ENDPOINTS` 为准，含 `session.ws.*`、`session.conn.*`、`core.deploy` / `core.status`。 | `web.ts` `web-channel.ts` [ADR-0018](./decisions/ADR-0018-browser-channel-on-shared-api.md) |
 | `sw_*` 工具 | `sw_status` / `sw_connect` / `sw_exec`；win32 宿主按会话 cwd 注入 `bash`（本地不出现，远程 Linux 工作区才注册）。工作区目录是会话 cwd，不是工具。提示按会话事实按需注入，纯本地零噪音。 | `tools.ts` `exec-tools.ts` `model-prompts.ts` [ADR-0027](./decisions/ADR-0027-sunset-sw-pick-workspace.md) [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
 | i18n | 人类面走 `dsw` 词典（设置页 Language）；系统提示与工具 schema 是英文常量（ADR-0014 / `UX-6`）。执行错误与工具输出仍按宿主语言。 | `src/locale/` `src/tool-schema.ts` [ADR-0010](./decisions/ADR-0010-runtime-i18n-dsw-namespace.md) [ADR-0014](./decisions/ADR-0014-model-facing-prompts-are-english.md) |
+
+### 4.1 权限真值表（AUDIT-7）
+
+「本次档」= 会话 `/permission`，若这次调用带了已批准的 `sandbox_permissions` 则以它为准
+（单次提权，下一次调用回到会话档）。远程组件 = 部署到远端的 Linux 二进制（代码与协议中称 core）。
+
+**A. 远程世界：谁执行、拦什么**
+
+| 本次档 | 远程组件 | 文件读 | 文件写 | 命令 | 交互终端 | 证据 |
+|---|---|---|---|---|---|---|
+| read-only | 可用 | 组件 RPC | 拒，`FS_SANDBOX_DENIED` + 提权提示 | 组件 jail `--sandbox read-only` | 拒 | `core-routing.test.ts`、UAT R27 |
+| workspace-write | 可用 | 组件 RPC | 目标所在根内可写（见表 B），其余拒 + 提权提示 | 组件 jail `--sandbox workspace-write --workspace <根>` | 拒 | `core-routing.test.ts`、`mixed-routing.test.ts`、UAT R27 / R37 |
+| danger-full-access | 可用 | 组件 RPC | 组件 RPC，`--sandbox off` | 组件 `--sandbox off` | 允许（裸 SSH PTY） | `core-routing.test.ts`（`--sandbox off`） |
+| read-only / workspace-write | 不可用 | 降级 SFTP（REQ-I15） | `SANDBOX_UNAVAILABLE` | `SANDBOX_UNAVAILABLE` | 拒 | `core-routing.test.ts`（REQ-I15）、UAT R35 |
+| danger-full-access | 不可用 | SFTP | SFTP | 裸 SSH | 允许 | `core-routing.test.ts`、`core-version-gate.test.ts` |
+
+「不可用」含：未部署、非 linux x86_64、版本跨 major.minor 线、sha256 不在白名单（REQ-I17 / REQ-I21）。
+
+**B. workspace-write 下的可写区域**（ADR-0028 §5；本机副根随 `REQ-I24` 改为与远程同规则）
+
+| 区域 | 本机 | 远程 |
+|---|---|---|
+| 主根（会话 cwd） | 可写 | 可写（主根一条 serve） |
+| 副根，嵌套在主根下 | 可写 | 可写（共用主根 serve） |
+| 副根，与主根并列 | 写入目标或命令 cwd 落在该副根内即可写；在主根里跑的命令写不了它 | 同左（该副根一条 serve） |
+| 其余路径 | 拒 + 提权；`/tmp` 与 `os.tmpdir()` 可写 | 拒 + 提权；shell 写 `/tmp` 落 jail 内 tmpfs（serve 重启即丢） |
+
+粒度是「一次写 / 一条命令只写一个根」；一条命令同时写主根和并列副根要提权（ADR-0029 §4.3）。
+
+**C. 单次提权覆盖的入口**
+
+| 入口 | 怎么带到执行处 |
+|---|---|
+| 官方 Write / Edit | 写接口自带 `sandboxPolicy` |
+| 官方 bash / pwsh（0.1.7：`shell.run` / `start`；0.2.0：`shell.resolve` + `execute`） | `remote-spawn-policy.ts` 包住上述方法，本次策略经 `AsyncLocalStorage` 进入 spawn（BUG-12 补上 0.2.0 形状） |
+| win32 `bash`、`sw_exec` | 工具自己审批后写入同一存储 |
+
+**D. 拦不住的（诚实边界）**
+
+- 会话连接门只管可见性：模型直接拼 `ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
+- 档位只管文件效果：网络与进程可见性不在其内（与官方 `dsh-sandbox` 同义）。
+- 可选审批门（`remoteApproval`，默认 `off`）不是围栏；界面已移除（`UX-7`），执行门保留。
+- 挂副根即放宽写范围：挂载只能由人在面板上做，模型工具不能挂副根。
 
 ## 5. 已知边界
 
 完整安全模型与诚实边界在 [`SECURITY.md`](../SECURITY.md)。这里只列接手时必须知道的：
 
-1. **远端权限跟会话 `/permission`**——与本地同一套提权卡；无核心的围栏档写/spawn fail-closed，读面降 SFTP（ADR-0025 / REQ-I15）。可选审批门默认 `off`，与提权卡同时开会弹两张。Write、官方 bash/pwsh、win32 bash、`sw_exec` 都可以一次提权（`REQ-I18`，2026-09-22 用户 lab 简验）；没有 overlay 的下一次调用仍跟会话档。
+1. **远端权限跟会话 `/permission`**——与本地同一套提权卡；无远程组件的围栏档写/spawn fail-closed，读面降 SFTP（ADR-0025 / REQ-I15）。可选审批门默认 `off`，与提权卡同时开会弹两张。Write、官方 bash/pwsh、win32 bash、`sw_exec` 都可以一次提权（`REQ-I18`，2026-09-22 用户 lab 简验）；没有 overlay 的下一次调用仍跟会话档。
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
-3. **副根无权限语义**（ADR-0019）。真正隔离是本地 `sandbox/mode`、审批门、远端核心 jail、操作者信任边界。
-4. **远端前置**：围栏档要先从设置页部署核心（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 核心。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
-5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`），不把 OS pid 交给宿主；有核心时 danger 仍走核心 RPC（`--sandbox off`）。
+3. **副根 = 工作区的延伸**（ADR-0019 / ADR-0028 §5 / `REQ-I24`）：没有逐根开关；workspace-write 下一次写（按目标）或一条命令（按 cwd）落在哪个根就以哪个根为准，本机与远程同规则。挂副根即放宽写范围，只能由人在面板上挂（表 §4.1 D）。
+4. **远端前置**：围栏档要先从设置页部署远程组件（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 版组件。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
+5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`），不把 OS pid 交给宿主；有远程组件时 danger 仍走组件 RPC（`--sandbox off`）。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。
 7. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。
 8. **宿主会静默 `ctx.fs.resolve` 往上找 `.git`**（定 `AGENTS.md` / skills 根，轨迹里没有 Git 工具）。探测路径不得当成 workspace-write jail 根（`BUG-4` 已修：只传 `path`）。专题附录 [`notes/host-silent-fs.md`](./notes/host-silent-fs.md)。无 `.git` 的远程会话实机尾巴仍待验。
