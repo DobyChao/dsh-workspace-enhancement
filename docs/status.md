@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-08 11:38 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-08 12:09 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `chore/UPSTREAM-6-positioning-review` / `4d11c44` |
-| HEAD 提交 | `docs: positioning review - refine UPSTREAM-6 options (ADR-0029) and record R48` (2026-10-08) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `chore/UPSTREAM-6-positioning-review` / `ee3dee4` |
+| HEAD 提交 | `docs: record A' implementation shape, side-root rule and remote component naming` (2026-10-08) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,12 +28,12 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 24 |
+| `todo` | 23 |
 | `doing` | 0 |
 | `blocked` | 6 |
 | `done` | 68 |
 | `shipped` | 10 |
-| `dropped` | 15 |
+| `dropped` | 16 |
 
 ## 被挡住 / 待拍板
 

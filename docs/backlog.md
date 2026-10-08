@@ -43,8 +43,6 @@
 | REQ-I23 | Spike：本地接缝交还官方 | todo | P3 | 验证混合门面能否只挂远程世界，本地 `subprocess` / `fs` / picker 交还官方（受 Cordis 同名服务只能注册一次约束）。可行 → 每代上游适配面缩小。产出 ADR。见 [R48](./rounds/R48-project-direction-review.md) §1 |
 | INFRA-25 | 文档流程减负 | todo | P3 | round 报告只在里程碑 / 事故写，小 PR 用 PR 描述；复评纯格式闸门（备注限长等）性价比。改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | UX-9 | 术语：「核心」改称「远程组件」 | todo | P3 | 所有者 10-08 定。范围：用户可见文案（`dsw` 词典 zh 18 处 + en 对应）+ README + 现行文档；代码标识符 / 线协议 / 工件名不改。面向模型的 6 处 `core` 是否跟改，开工时定 |
-| UPSTREAM-12 | 向上游提多根写策略需求 | todo | P3 | 副根第二级（一条命令同时写主根 + 副根）需 `SandboxExecutionPolicy` 能表达多根（如 `extraWritableRoots`）。上游接受则删掉我方按根选择逻辑。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3 |
-
 ## 3. 被挡住 / 待拍板（blocked）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -144,6 +142,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | REQ-A2 | 向上游提 PR（行级槽位） | dropped | — | `ADR-0011`；改 DOM 增辉层 |
+| UPSTREAM-12 | 向上游提多根写策略需求 | dropped | — | 上游不接受 issue（所有者 10-08）。副根停在第一级，跨根写走提权。ADR-0029 §4.3 |
 | REQ-X1 | 镜像/同步 | dropped | — | `ADR-0003` |
 | REQ-X2 | 审计日志 | dropped | — | `ADR-0004` |
 | REQ-X3 | 更新检查 | dropped | — | 上游节奏太快 |
