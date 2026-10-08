@@ -58,6 +58,10 @@
 
 ## 5. workspace-write 可写集
 
+> **2026-10-08 修订（预期，未实现）**：本机副根 2 / 9 将改为与远程副根同规则（按目标路径或命令
+> 工作目录选根，该根内可写），见 [ADR-0029](./ADR-0029-positioning-review.md) §4.3、backlog `REQ-I24`。
+> 下文「2、9 不是可写集」在实现前仍是现状。
+
 本机副根 **维持现状**（ADR-0019）：**2、9 不是可写集**。cwd 可以到那里，写应 sandbox denied（2 是 1 的子孙时除外）。本机另加官方 `/tmp` 与 `os.tmpdir()`（Windows 上真正能写的是 `%TEMP%`）。情况 1 的本机可写根是 **1**。3 与 10 同样要提权。
 
 本机 9（以及非子孙的 2）没有不提权的做法。上游 `writableRoots`（`@deepseek-ai/dsh-sandbox`）只含 `policy.workspaceRoot`（来自 `session.header.cwd`）、`/tmp`、`os.tmpdir()`。远程主会话的 cwd 是 `dsw-routes/<id>/…` 占位目录，9 在其外。插件不拥有这份允许列表；把会话 cwd 改成 9 会换掉主根。WW 下写 9 被拒，I18 一次提权（或 sticky danger）是出路。Linux 本机副根相同。

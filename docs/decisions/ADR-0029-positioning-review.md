@@ -1,6 +1,7 @@
 # ADR-0029: 项目定位复评——官方 SSH 家族进 rc 后的 A/B/C 细化对比
 
-- 状态: proposed（**事实已核实**；§3 推荐待所有者拍板，拍板即关 `UPSTREAM-6`）
+- 状态: proposed（**事实已核实**；§3 推荐待所有者拍板，拍板即关 `UPSTREAM-6`。
+  §4.3 的副根规则、无标记不围栏的收窄、术语改名已由所有者确认）
 - 日期: 2026-10-08
 - 范围: 官方 SSH 四包进 `next` 通道后，我方路线的成本 / 收益对比；拍板对命名、
   远程围栏、待办排序的连带后果
@@ -88,13 +89,44 @@ ADR-0026 的 A/B/C 之外补两个变体：**A′**（A + 契约对齐）与 **B
 
 ### 4.2 远程围栏
 
-A′ 下：`BUG-12` 不单修，作为「围栏改走 `confine`」spike 的验收用例；先做权限真值表与
+A′ 下：`BUG-12` 的提权一半不单修，作为「围栏改走 `confine`」spike 的验收用例（另一半见 §4.3 第 5 条）；先做权限真值表与
 重叠机制清理（遗留 bwrap 向量、`remoteSandbox` 字段、审批门 UI），再动执行路径。
 条目见 backlog `AUDIT-7` / `REQ-I22`。
 
-### 4.3 不受影响
+### 4.3 A′ 的实施形状（2026-10-08 与所有者讨论定稿，未实现）
 
-`INFRA-23`（L1 实机冒烟进 CI）、`INFRA-24`（拍板队列）与选项无关，可先行。
+**副根权限（所有者拍板：第一级）**：副根是工作区的延伸，与主根同档。粒度是「一次写 /
+一条命令只写一个根」：文件工具按目标路径、命令按工作目录做最长前缀匹配选根，
+跨根写走一次提权。本机与远程对称（远程即 ADR-0024 §6.2 的每根一条 serve）。
+「一条命令同时写主根 + 副根」是第二级，需上游策略能表达多根，只作需求提给上游。
+
+**远程命令路径**：
+
+```text
+工具 → ctx.sandbox.confine(argv, policy)   远程会话：返回带标记的远程组件命令
+        （danger 由调用方跳过 confine，argv 原样）
+     → ctx.subprocess.spawn(spec)           有标记：解出 mode/root，按 cwd 重选根，发对应 serve
+                                            无标记：--sandbox off
+```
+
+1. 标记 argv 形如 `dsh-core run --sandbox <mode> --workspace <root> -- <argv>`，由我方
+   `confine` 产出、我方 spawn 解析；远端协议与 `CORE_ARTIFACT_VERSION` 不变。
+2. **无标记 = 不围栏**，与官方本地语义一致。相对现状是收窄，**所有者已接受**；验证轮须列清
+   spawn 前不调 `confine` 的上游调用方（磁盘权威源搜 `.confine(` / `subprocess.spawn`），写进
+   `SECURITY.md`。
+3. **防伪造**：模型能自己拼出同形前缀，故只认进程内登记过的 `confine` 产物，不认字符串前缀。
+4. `sw_exec` / win32 `bash` 改为与官方 bash 同形：批准提权后 danger 跳过 `confine`，否则带本次
+   策略调 `confine`。`remote-spawn-policy.ts` 的权限旁路存储退役；按世界钉 workdir（ADR-0028）保留。
+5. `BUG-12` 有两半：提权没带到（本方案根治）+ pwsh 省略 workdir 被送远端（钉 workdir 同样只包了
+   `run` / `start`，漏 `shell.execute`）。后一半另修：补包 `shell.execute` 或把钉 workdir 下沉到 spawn。
+6. 交互终端是否经 `confine` 待验证轮核实，围栏档拒 PTY 的现行为届时重定。
+
+**术语**：用户可见文案里的「核心」改称「远程组件」（所有者 2026-10-08）；代码标识符、线协议、
+工件名不改。条目 `UX-9`。
+
+### 4.4 不受影响
+
+`INFRA-23`（L1 实机冒烟进 CI）、`INFRA-24`（拍板队列）、`UX-9`（术语改名）与选项无关，可先行。
 
 ## 5. 重评触发（更新 ADR-0026 §5）
 

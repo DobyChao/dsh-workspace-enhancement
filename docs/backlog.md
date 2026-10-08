@@ -20,14 +20,15 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | todo | P1 | 宿主 0.2.0-rc.2 官方 pwsh 走 `shell.execute`，REQ-I18 一次提权只挂 `shell.run`。远程会话省略 workdir 时 danger 已批，远端仍要 workspace-write，报 no remote sandbox runner。验收：WW 仍拒绝；提权后该命令执行完。10-08：不单修，作 `REQ-I22` 验收用例 |
+| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | todo | P1 | 0.2.0-rc.2 官方 pwsh 走 `shell.execute`，未被包。远程会话省略 workdir、danger 已批，远端仍按 WW 报 no remote sandbox runner。验收：WW 仍拒；提权后执行完。10-08 拆两半：提权没带到 → `REQ-I22` 根治；pwsh 被送远端（钉 workdir 漏 `shell.execute`）→ 本条另修。见 ADR-0029 §4.3 |
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
-| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | todo | P1 | `architecture.md` 加「世界 × 核心有无 × 会话档 × 单次提权」真值表（谁执行 / 拦什么 / 拦不住什么）；删遗留 bwrap 向量与 `remoteSandbox` 字段，连同 `UX-7`。验收：每格有单测或 UAT 指针。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.2 |
-| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | todo | P1 | 对齐 `dsh-sandbox-ssh@0.2.0-rc.2`：远程 `confine` 返回核心 argv，spawn 不再自施围栏，danger 由消费者跳过。列清不经 `confine` 的消费者。`BUG-12` 作验收。产出 ADR（可行 → 退役 `remote-spawn-policy.ts`）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §3 |
+| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | todo | P1 | `architecture.md` 加「世界 × 主根/副根/其余 × 远程组件有无 × 会话档 × 单次提权」真值表（谁执行 / 拦什么 / 拦不住什么）；删遗留 bwrap 向量与 `remoteSandbox` 字段，连同 `UX-7`。验收：每格有单测或 UAT 指针。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.2 |
+| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | todo | P1 | 形状已定（[ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3）：`confine` 出标记 argv，spawn 解标记按 cwd 选根；无标记不围栏（已接受）；只认进程内登记的产物。待核：不调 `confine` 的上游调用方、交互终端。`BUG-12` 提权半作验收。产出 ADR |
 | INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | todo | P1 | M3–M7 卡人的根因是要真 LLM 驱动会话。方案：脚本化假模型（固定工具调用）或直驱工具执行 + Actions sshd 服务容器，进 `npm run e2e`。验收：M3–M7 在 CI 确定性断言。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | INFRA-24 | 拍板队列 + 可逆决定默认期限 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕。先定落点（backlog §3 加列或独立文件）与「可逆」判据。见 [R48](./rounds/R48-project-direction-review.md) §3 |
+| REQ-I24 | 本机副根与主根同权（第一级） | todo | P2 | 所有者已拍：一次写 / 一条命令只写一个根。文件工具按目标路径换 `policy.workspaceRoot`；命令在 spawn 时按 cwd 重调官方 `confine`。**先验** windows-acl 对副根目录的持久授权（是否要管理员、卸载怎么收回）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
@@ -41,6 +42,8 @@
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
 | REQ-I23 | Spike：本地接缝交还官方 | todo | P3 | 验证混合门面能否只挂远程世界，本地 `subprocess` / `fs` / picker 交还官方（受 Cordis 同名服务只能注册一次约束）。可行 → 每代上游适配面缩小。产出 ADR。见 [R48](./rounds/R48-project-direction-review.md) §1 |
 | INFRA-25 | 文档流程减负 | todo | P3 | round 报告只在里程碑 / 事故写，小 PR 用 PR 描述；复评纯格式闸门（备注限长等）性价比。改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
+| UX-9 | 术语：「核心」改称「远程组件」 | todo | P3 | 所有者 10-08 定。范围：用户可见文案（`dsw` 词典 zh 18 处 + en 对应）+ README + 现行文档；代码标识符 / 线协议 / 工件名不改。面向模型的 6 处 `core` 是否跟改，开工时定 |
+| UPSTREAM-12 | 向上游提多根写策略需求 | todo | P3 | 副根第二级（一条命令同时写主根 + 副根）需 `SandboxExecutionPolicy` 能表达多根（如 `extraWritableRoots`）。上游接受则删掉我方按根选择逻辑。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3 |
 
 ## 3. 被挡住 / 待拍板（blocked）
 
