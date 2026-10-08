@@ -512,8 +512,8 @@ test('REQ-I21 sw_connect: every reachable machine is provisioned and the outcome
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1', 'c2'] }, runContext(SESSION))
   assert.deepEqual(calls, ['c1'], 'only the REACHABLE machine is provisioned')
-  assert.ok(text.includes('core: deployed 0.2.2-test (fenced tools ready)'), text)
-  assert.equal(text.split('core:').length - 1, 1, `the unreachable machine gets no core line: ${text}`)
+  assert.ok(text.includes('remote component: deployed 0.2.2-test (fenced tools ready)'), text)
+  assert.equal(text.split('remote component:').length - 1, 1, `the unreachable machine gets no core line: ${text}`)
   assert.deepEqual(store.listFor(SESSION), ['c1'])
 })
 
@@ -529,8 +529,8 @@ test('REQ-I21 sw_connect: a current core and a failed deploy render their own li
     async (id) => outcomes[id] ?? outcomeOf(id, {}),
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1', 'c2'] }, runContext(SESSION))
-  assert.ok(text.includes('core: 0.2.2-test (already current, nothing deployed)'), text)
-  assert.ok(text.includes('core: deploy failed — connection refused'), text)
+  assert.ok(text.includes('remote component: 0.2.2-test (already current, nothing deployed)'), text)
+  assert.ok(text.includes('remote component: deploy failed — connection refused'), text)
   assert.match(text, /re-run sw_connect to retry/)
   assert.deepEqual(store.listFor(SESSION), ['c1', 'c2'], 'a failed provision never fails the connect')
 })
@@ -543,7 +543,7 @@ test('REQ-I21 sw_connect: a provision that THROWS becomes a failed-outcome line 
     async () => { throw new Error('ssh dead mid-deploy') },
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
-  assert.ok(text.includes('core: deploy failed — ssh dead mid-deploy'), text)
+  assert.ok(text.includes('remote component: deploy failed — ssh dead mid-deploy'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'])
 })
 
@@ -555,7 +555,7 @@ test('REQ-I21 sw_connect: a DECLINED deploy keeps the disk state and says so', a
     async (id) => outcomeOf(id, { skipped: false, declined: true, version: '0.0.1-old' }),
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
-  assert.ok(text.includes('core: deploy was not approved (left at 0.0.1-old'), text)
+  assert.ok(text.includes('remote component: deploy was not approved (left at 0.0.1-old'), text)
   assert.ok(text.includes('it will ask again'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'], 'the machine stays connected — only the deploy was declined')
 })
@@ -571,7 +571,7 @@ test('REQ-I21 sw_connect: a danger-full-access session never attempts a provisio
   const text = await runWithRemoteSpawnPolicy('danger-full-access', () =>
     runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION)) as Promise<{ text: string }>)
   assert.equal(provisioned, 0, 'danger sessions do not attempt deploys')
-  assert.ok(!text.includes('core:'), text)
+  assert.ok(!text.includes('remote component:'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'], 'the connect itself is unaffected')
 })
 
@@ -600,18 +600,18 @@ async function statusTextOf(registry: unknown): Promise<string> {
 
 test('REQ-I21 sw_status: a fenced connected machine reports its core version state', async () => {
   const stale = await statusTextOf(fencedRegistry('0.0.1-old'))
-  assert.ok(stale.includes('core(c1): 0.0.1-old, this plugin ships'), stale)
+  assert.ok(stale.includes('remote component (c1): 0.0.1-old, this plugin ships'), stale)
   assert.ok(stale.includes('re-run sw_connect to redeploy'), stale)
 
   const missing = await statusTextOf(fencedRegistry(null))
-  assert.ok(missing.includes('core(c1): not installed — re-run sw_connect to deploy'), missing)
+  assert.ok(missing.includes('remote component (c1): not installed — re-run sw_connect to deploy'), missing)
 
   const healthy = await statusTextOf(fencedRegistry('0.2.2'))
-  assert.ok(healthy.includes('core(c1): 0.2.2 — current'), healthy)
+  assert.ok(healthy.includes('remote component (c1): 0.2.2 — current'), healthy)
 
   // Version-gate width: patch drift reports the ACTUAL version as current.
   const drifted = await statusTextOf(fencedRegistry('0.2.9'))
-  assert.ok(drifted.includes('core(c1): 0.2.9 — current'), drifted)
+  assert.ok(drifted.includes('remote component (c1): 0.2.9 — current'), drifted)
 })
 
 test('REQ-I21 sw_status: field-less machines get a core line too (confinement is session-side)', async () => {
@@ -620,5 +620,5 @@ test('REQ-I21 sw_status: field-less machines get a core line too (confinement is
   // machine. The fake conn answers the version probe with junk, so the honest
   // line here is the probe-failed shape.
   const text = await statusTextOf(fakeRegistry())
-  assert.ok(text.includes('core(c1): probe failed —'), text)
+  assert.ok(text.includes('remote component (c1): probe failed —'), text)
 })
