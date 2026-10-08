@@ -59,7 +59,7 @@ function diskConnection(diskVersion: string | null, binaryHash: string | null = 
 }
 
 function deps(diskVersion: string | null = null, binaryHash: string | null = CORE_COMPAT_HASHES[0]): RemoteSandboxDeps {
-  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'read-only', workspace: '/work', cwd: '/work' }
+  const machine: RemoteSandboxMachineFace = { id: 'c1', workspace: '/work', cwd: '/work' }
   const connection = diskConnection(diskVersion, binaryHash)
   return {
     machine: (id) => (id === 'c1' ? machine : undefined),

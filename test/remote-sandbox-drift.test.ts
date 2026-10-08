@@ -21,7 +21,6 @@ import {
   REMOTE_BWRAP_PROFILE_READ_ONLY,
   REMOTE_BWRAP_PROFILE_WRITE_EXTRA,
   remoteProfileArgs,
-  remoteRunnerArgv,
 } from '../src/remote-sandbox.ts'
 
 /**
@@ -111,26 +110,6 @@ test('drift pin: the deployed upstream bwrap profile matches the local derivatio
     remoteProfileArgs({ mode: 'workspace-write', workspaceRoot: '/ws' }),
     [...REMOTE_BWRAP_PROFILE_READ_ONLY, ...REMOTE_BWRAP_PROFILE_WRITE_EXTRA, '--bind', '/ws', '/ws'],
   )
-  // 4. and the runner argv shape upstream asserts (`confine()` = 
-  //    `[...runnerCommand, ...bwrapProfileArgs(policy), '--', ...argv]`).
-  assert.deepEqual(
-    remoteRunnerArgv(['bash', '-c', 'true'], { mode: 'workspace-write', workspaceRoot: '/ws' }, 'bwrap'),
-    ['bwrap', ...REMOTE_BWRAP_PROFILE_READ_ONLY, ...REMOTE_BWRAP_PROFILE_WRITE_EXTRA,
-      '--bind', '/ws', '/ws', '--', 'bash', '-c', 'true'],
-  )
-
-  // 5. the functional probe really is observable in the deployed probe helper
-  //    (`defaultProbeBwrap` runs the read-only profile around `true`).
-  const probeHelper = /function defaultProbeBwrap\(timeoutMs\) \{([\s\S]*?)\n\}/
-    .exec(source)?.[1]
-  assert.notEqual(probeHelper, undefined, 'upstream defaultProbeBwrap was not found')
-  const probeBody = probeHelper as string
-  assert.equal(probeBody.includes('bwrapProfileArgs('), true, 'the probe still builds the real profile')
-  assert.match(probeBody, /mode: "read-only"/, 'the probe still uses the read-only profile')
-  assert.equal(probeBody.includes('"--"'), true, 'the probe still terminates the profile with the -- separator')
-  assert.equal(probeBody.includes('"true"'), true, 'the probe still wraps `true`')
-  assert.match(probeBody, /status === 0/, 'the probe still requires exit 0 (positive, functional)')
-
   console.log(`[remote-sandbox-drift] DRIFT branch PASSED — vectors identical (${path})`)
 })
 

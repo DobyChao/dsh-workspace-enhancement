@@ -135,6 +135,17 @@ export class SshSubprocessEngine {
   }
 
   /**
+   * The injected hub, else the process-wide `coreHub` service (a subpath row
+   * mounted beside the aggregate shares it). None ⇒ the fence refuses
+   * confined sessions; there is no host-side bwrap fallback (AUDIT-7).
+   */
+  private coreHub(): CoreHub | undefined {
+    if (this.hub !== undefined) return this.hub
+    if (typeof this.ctx.get !== 'function') return undefined
+    return this.ctx.get('coreHub', false) as CoreHub | undefined
+  }
+
+  /**
    * The terminal twin of {@link sandboxFence} (same explicit-dep-wins rule).
    */
   private sandboxTerminalGuard(): RemoteSandboxTerminalGuard {
@@ -261,9 +272,9 @@ export class SshSubprocessEngine {
     // REQ-I18: a one-shot grant (shell spec, or our own tool) outranks the
     // sticky session mode. Absent store → session `/permission`.
     const policy = resolveRemoteSessionMode(this.ctx, currentRemoteSpawnPolicy())
-    if (this.hub !== undefined && route.connectionId !== undefined) {
+    const hub = this.coreHub()
+    if (hub !== undefined && route.connectionId !== undefined) {
       const connectionId = route.connectionId
-      const hub = this.hub
       const sshFallback = isConfinedSandboxMode(policy)
         ? undefined
         : () => new SshSubprocessHandle(
