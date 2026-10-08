@@ -26,7 +26,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
 import { zhBaseline } from './status.tsx'
 import { machinePayload } from './machine-payload.ts'
-import type { MachineFormState, RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
+import type { MachineFormState } from './machine-payload.ts'
 import { AlertIcon, CheckIcon, ChevronIcon, SpinnerIcon } from './icons.tsx'
 import styles from './machine-form.module.css'
 
@@ -70,10 +70,6 @@ export interface MachineFormInitial {
   passphrase?: string
   workspace?: string
   hostKeyMode?: '' | 'accept-new' | 'verify' | 'off'
-  /** AUDIT-6 approval-gate mode (edit prefills the stored value). */
-  remoteApproval?: RemoteApprovalMode
-  /** REQ-I9 remote sandbox fence mode (edit prefills the stored value). */
-  remoteSandbox?: RemoteSandboxMode
   encryptPassword?: boolean
   jumpText?: string
   /** Preferred auth tab ('password' when the machine records password auth). */
@@ -310,7 +306,6 @@ const FIELD_IDS = {
   passphrase: 'dsw-field-passphrase',
   password: 'dsw-field-password',
   hostKey: 'dsw-field-hostkey',
-  remoteApproval: 'dsw-field-approval',
   jump: 'dsw-field-jump',
 } as const
 
@@ -329,8 +324,6 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
     workspace: initial?.workspace ?? '',
     hostKeyMode: initial?.hostKeyMode ?? '',
     encryptPassword: initial?.encryptPassword ?? false,
-    remoteApproval: initial?.remoteApproval ?? 'off',
-    remoteSandbox: initial?.remoteSandbox ?? 'off',
   })
   const [form, setForm] = useState<MachineFormState>(initialState)
   // F3: an edit of a password/keychain machine (recorded via `auth`, or a
@@ -344,9 +337,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
   const [advanced, setAdvanced] = useState(
     (initial?.hostKeyMode !== undefined && initial.hostKeyMode !== '')
     || (initial?.jumpText !== undefined && initial.jumpText !== '')
-    || initial?.encryptPassword === true
-    || (initial?.remoteApproval !== undefined && initial.remoteApproval !== 'off')
-    || (initial?.remoteSandbox !== undefined && initial.remoteSandbox !== 'off'),
+    || initial?.encryptPassword === true,
   )
   const [revealed, setRevealed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -852,32 +843,6 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
               <option value="verify">{t('form.hostKey.verify')}</option>
               <option value="off">{t('form.hostKey.off')}</option>
             </select>
-          </div>
-
-          {/* AUDIT-6 (ADR-0020 D2): per-machine remote-command approval gate. */}
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor={FIELD_IDS.remoteApproval}>{t('form.label.remoteApproval')}</label>
-            <select
-              id={FIELD_IDS.remoteApproval}
-              className={`${styles.input} ${styles.select}`}
-              value={form.remoteApproval}
-              disabled={busy}
-              onChange={event => { setForm(prev => ({ ...prev, remoteApproval: event.target.value as MachineFormState['remoteApproval'] })) }}
-            >
-              <option value="off">{t('form.remoteApproval.off')}</option>
-              <option value="human">{t('form.remoteApproval.human')}</option>
-              <option value="ai">{t('form.remoteApproval.ai')}</option>
-            </select>
-            <span className={styles.hint}>{t('form.remoteApproval.hint')}</span>
-          </div>
-
-          {/* REQ-I13 (ADR-0025): session /permission is the permission axis.
-              The machine remoteSandbox field is leftover and not shown as a
-              control so it cannot fight the composer chip. Deploy-core stays
-              on the settings list. */}
-          <div className={styles.field}>
-            <span className={styles.fieldLabel}>{t('form.label.remoteSandbox')}</span>
-            <span className={styles.hint}>{t('form.remoteSandbox.hint')}</span>
           </div>
 
           <div className={styles.field}>

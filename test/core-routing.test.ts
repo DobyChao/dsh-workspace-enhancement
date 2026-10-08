@@ -52,8 +52,9 @@ function transport(): SshTransport {
   } as unknown as SshTransport
 }
 
-function deps(mode: RemoteSandboxMachineFace['remoteSandbox'], connection = transport()): RemoteSandboxDeps {
-  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: mode, workspace: '/work', cwd: '/work' }
+/** `_mode` is the session-mode label of the call site; machines carry no mode. */
+function deps(_mode?: string, connection = transport()): RemoteSandboxDeps {
+  const machine: RemoteSandboxMachineFace = { id: 'c1', workspace: '/work', cwd: '/work' }
   return {
     machine: (id) => (id === 'c1' ? machine : undefined),
     connection: (id) => (id === 'c1' ? connection : undefined),
@@ -239,7 +240,7 @@ function delay(ms: number): Promise<void> {
 test('createCoreHub: a remembered sibling is dropped once the machine workspace moves', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsw-core-forget-'))
   const t = transport()
-  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'workspace-write', workspace: '/S', cwd: '/S' }
+  const machine: RemoteSandboxMachineFace = { id: 'c1', workspace: '/S', cwd: '/S' }
   const opened: Array<string | undefined> = []
   const hub = createCoreHub(ctxWith(t), {
     idleMs: 0,
@@ -492,7 +493,7 @@ test('coreServeCommand: workspace-write without a root omits --workspace', () =>
 test('createCoreHub: workspace-write with no usable root does not open serve', async () => {
   const t = transport()
   const opened: string[] = []
-  const machine: RemoteSandboxMachineFace = { id: 'c1', remoteSandbox: 'workspace-write' }
+  const machine: RemoteSandboxMachineFace = { id: 'c1' }
   const hub = createCoreHub(ctxWith(t), {
     idleMs: 0,
     deps: {
@@ -556,7 +557,6 @@ test('BUG-6: core.status answers from the artifact, never from a live session', 
   const live = await hub.require('c1', { cwd: '/work', policy: 'workspace-write' })
   const installed = await hub.status('c1')
   assert.equal(installed.ok, true)
-  assert.equal(installed.sandbox, 'workspace-write')
 
   // The operator deletes `~/.dsh-core/<version>/` while the exec'd serve is
   // still alive (it outlives its own directory until the idle kill).

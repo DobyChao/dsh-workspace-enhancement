@@ -103,21 +103,16 @@ test('composeWorkspacePrompt: AUDIT-6 — the gate expectation sentence appears 
 
 test('composeWorkspacePrompt: REQ-I13 — every remote session states session sandbox + fail-closed', () => {
   const base = { username: 'uuz', host: '127.0.0.1' }
-  const off = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'off' }, [])
-  assert.ok(off.includes('follow this session\'s /permission sandbox'))
-  assert.ok(off.includes('FAIL CLOSED'))
-  assert.ok(off.includes('Reads then fall back to unfenced SFTP'))
-  const readOnly = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'read-only' }, [])
-  assert.equal(readOnly.includes('remote sandbox fence (`read-only`)'), false, 'machine fence sentence is gone')
-  const write = composeWorkspacePrompt('ssh://c1/srv/work', { ...base, remoteSandbox: 'workspace-write' }, [])
-  assert.ok(write.includes('/permission'))
-  const absent = composeWorkspacePrompt('ssh://c1/srv/work', base, [])
-  assert.ok(absent.includes('/permission'))
+  const text = composeWorkspacePrompt('ssh://c1/srv/work', base, [])
+  assert.ok(text.includes('follow this session\'s /permission sandbox'))
+  assert.ok(text.includes('FAIL CLOSED'))
+  assert.ok(text.includes('Reads then fall back to unfenced SFTP'))
+  assert.equal(text.includes('remote sandbox fence'), false, 'no per-machine fence axis in prompts')
 })
 
 test('renderConnectedMachines: machines are listed without a leftover fence note', () => {
   const facts = [
-    connectedMachineFact('c1', { username: 'u', host: 'h1', remoteSandbox: 'workspace-write' }),
+    connectedMachineFact('c1', { username: 'u', host: 'h1' }),
     connectedMachineFact('c2', { username: 'u', host: 'h2' }),
   ]
   const text = renderConnectedMachines(facts)

@@ -35,11 +35,7 @@ import { createCoreGapAsker } from './core-provision.ts'
 import { quoteShellArg, startExec } from './ssh-core.ts'
 import type { ExecOutcome } from './ssh-core.ts'
 import { remoteRouteFromCwd } from './transport.ts'
-import {
-  effectiveModeOf,
-  remoteSandboxDepsOf,
-  remoteSandboxUnavailable,
-} from './remote-sandbox-fence.ts'
+import { remoteSandboxDepsOf, remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps } from './remote-sandbox-fence.ts'
 import {
   CoreMissingError,
@@ -54,7 +50,6 @@ import {
   RemoteSandboxError,
   interpolate,
 } from './remote-sandbox.ts'
-import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import type { SshTransport } from './transport.ts'
 
 export interface CoreStatusView {
@@ -63,7 +58,6 @@ export interface CoreStatusView {
   arch?: string | undefined
   proto?: number | undefined
   caps?: readonly string[] | undefined
-  sandbox?: RemoteSandboxMode | undefined
   detail?: string | undefined
 }
 
@@ -104,7 +98,6 @@ export interface CoreRequireOpts {
 }
 
 export interface CoreHub {
-  modeOf(connectionId: string | undefined): RemoteSandboxMode
   require(connectionId: string, opts?: CoreRequireOpts): Promise<CoreClient>
   peek(connectionId: string, opts?: CoreRequireOpts): CoreClient | undefined
   /** Keep the matching serve off the idle timer until the disposer runs (spawn jobs). */
@@ -207,9 +200,6 @@ export function createCoreHub(
   const opening = new Map<string, Promise<CoreClient>>()
   /** Confined open failures (missing binary/cap). Cleared by close/deploy. */
   const blocked = new Map<string, Error>()
-
-  const modeOf = (connectionId: string | undefined): RemoteSandboxMode =>
-    effectiveModeOf(deps, connectionId)
 
   const remember = (connectionId: string, workspace: string | undefined): void => {
     if (workspace === undefined || workspace === '/') return
@@ -549,7 +539,6 @@ export function createCoreHub(
   }
 
   return {
-    modeOf,
     require: requireSession,
     peek,
     hold,
@@ -585,7 +574,6 @@ export function createCoreHub(
           arch: parsed.arch,
           proto: parsed.proto,
           caps: parsed.caps,
-          sandbox: modeOf(connectionId),
         }
       } catch (error) {
         return { ok: false, detail: error instanceof Error ? error.message : String(error) }

@@ -58,6 +58,17 @@
 
 ## 5. workspace-write 可写集
 
+> **2026-10-08 修订（`REQ-I24` 已实现）**：本机副根 2 / 9 与远程副根同规则——写按目标路径、命令按
+> 工作目录选根，该根内可写；在主根里跑的命令写并列副根仍要提权（[ADR-0029](./ADR-0029-positioning-review.md) §4.3）。
+> 实现：`side-root-policy.ts` 把本次策略的 `workspaceRoot` 换成该副根，再交给官方 `SandboxedFileSystem` /
+> `ctx.sandbox.confine` 执行；只认本会话挂的副根。下文「2、9 不是可写集」作废。
+>
+> Windows ACL 后端的代价（只影响命令；文件工具不调 `confine`，不动 OS 权限）：副根第一次跑命令时，
+> 官方后端在该根上下一条**常驻、可继承**的写 ACE + Low 完整性标签 + 子目录 Everyone 拒 `FILE_DELETE_CHILD`；
+> 卸副根、卸插件都不撤，`icacls` 也删不掉（`dsh-sandbox-windows-acl` README）。首次授权同步传播整棵树，
+> 大目录会卡住宿主进程数十秒。因此**祖先副根**（包含主根的）与**盘符根**永不被选为替身根，
+> 命令落在那里照旧拒 + 提权（`localSideRootFor`）。
+
 本机副根 **维持现状**（ADR-0019）：**2、9 不是可写集**。cwd 可以到那里，写应 sandbox denied（2 是 1 的子孙时除外）。本机另加官方 `/tmp` 与 `os.tmpdir()`（Windows 上真正能写的是 `%TEMP%`）。情况 1 的本机可写根是 **1**。3 与 10 同样要提权。
 
 本机 9（以及非子孙的 2）没有不提权的做法。上游 `writableRoots`（`@deepseek-ai/dsh-sandbox`）只含 `policy.workspaceRoot`（来自 `session.header.cwd`）、`/tmp`、`os.tmpdir()`。远程主会话的 cwd 是 `dsw-routes/<id>/…` 占位目录，9 在其外。插件不拥有这份允许列表；把会话 cwd 改成 9 会换掉主根。WW 下写 9 被拒，I18 一次提权（或 sticky danger）是出路。Linux 本机副根相同。

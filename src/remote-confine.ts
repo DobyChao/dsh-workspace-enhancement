@@ -11,11 +11,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import { initiatorSessionOf } from './remote-policy.ts'
-import { isHostLocalShellExec } from './remote-spawn-policy.ts'
+import { currentShellWorkdir, isHostLocalShellExec } from './remote-spawn-policy.ts'
+import { widenPolicyToSideRoot } from './side-root-policy.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 
 interface ConfineHost {
-  confine(argv: readonly string[], policy: SandboxPolicy): ConfinedArgv
+  confine(argv: readonly string[], policy: SandboxPolicy, ...rest: unknown[]): ConfinedArgv
 }
 
 const patched = new WeakSet<object>()
@@ -63,9 +64,10 @@ function patchSandbox(owner: Context): void {
   if (patched.has(sandbox)) return
   patched.add(sandbox)
   const original = sandbox.confine.bind(sandbox)
-  sandbox.confine = (argv, policy) => {
+  sandbox.confine = (argv, policy, ...rest) => {
     if (shouldPassthroughRemoteConfine(owner)) return passthroughConfinedArgv(argv)
-    return original(argv, policy)
+    // REQ-I24: a command whose cwd is in a local side root gets that root.
+    return original(argv, widenPolicyToSideRoot(owner, policy, currentShellWorkdir()), ...rest)
   }
 }
 

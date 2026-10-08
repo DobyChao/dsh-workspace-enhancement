@@ -17,10 +17,12 @@ import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import { initiatorSessionOf } from './remote-policy.ts'
 import { pinBashWorkdir, pinPwshWorkdir, sessionLocalCwd } from './region-exec.ts'
+import { sessionLocalSideRoots } from './side-root-policy.ts'
 
 const storage = new AsyncLocalStorage<unknown>()
 /** Set while `sw_exec(server: "local")` is inside the host shell. */
 const hostLocalExec = new AsyncLocalStorage<true>()
+const workdirStore = new AsyncLocalStorage<string>()
 
 /** True only inside a host-local shell call (`dswLocalExec`). */
 export function isHostLocalShellExec(): boolean {
@@ -45,6 +47,10 @@ export function runWithRemoteSpawnPolicy<T>(policy: unknown, fn: () => T): T {
 interface ShellFace {
   run?: (spec: ShellSpec) => unknown
   start?: (spec: ShellSpec) => unknown
+  /** 0.2.0 family: request → spec; drops fields it does not know. */
+  resolve?: (request: ShellSpec) => ShellSpec
+  /** 0.2.0 family: the only spawn entry (`run` / `start` are gone). */
+  execute?: (spec: ShellSpec) => unknown
 }
 
 interface ShellSpec {
@@ -55,20 +61,15 @@ interface ShellSpec {
   [key: string]: unknown
 }
 
-function localSideRootsOf(ctx: Context): string[] {
-  if (typeof ctx.get !== 'function') return []
-  const session = initiatorSessionOf(ctx) as { header?: { id?: string } } | undefined
-  const sessionId = session?.header?.id
-  if (sessionId === undefined) return []
-  const store = ctx.get('sideWorkspaces', false) as {
-    listFor?: (id: string) => readonly { kind: string; rootKey: string }[]
-  } | undefined
-  if (store === undefined || typeof store.listFor !== 'function') return []
-  const roots: string[] = []
-  for (const item of store.listFor(sessionId)) {
-    if (item.kind === 'local') roots.push(item.rootKey)
-  }
-  return roots
+/** The workdir of the shell call being confined (REQ-I24 side-root pick). */
+export function currentShellWorkdir(): string | undefined {
+  return workdirStore.getStore()
+}
+
+/** Enter the one-shot policy and the workdir around one shell entry. */
+function enterShellCall<T>(spec: ShellSpec, fn: () => T): T {
+  const withPolicy = () => runWithRemoteSpawnPolicy(spec.sandboxPolicy, fn)
+  return typeof spec.workdir === 'string' ? workdirStore.run(spec.workdir, withPolicy) : withPolicy()
 }
 
 /**
@@ -84,7 +85,7 @@ export function adjustShellSpec(ctx: Context, spec: ShellSpec): ShellSpec {
   }
   const sessionCwd = initiatorSessionOf(ctx)?.header?.cwd
   if (process.platform === 'win32') {
-    const next = pinPwshWorkdir(spec.workdir, sessionLocalCwd(localSideRootsOf(ctx), homedir()))
+    const next = pinPwshWorkdir(spec.workdir, sessionLocalCwd(sessionLocalSideRoots(ctx), homedir()))
     if (next === spec.workdir) return spec
     return { ...spec, ...(next !== undefined ? { workdir: next } : {}) }
   }
@@ -105,7 +106,7 @@ function patchShell(owner: Context): void {
     shell.run = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => enterShellCall(next, () => original(next))
       return local ? hostLocalExec.run(true, call) : call()
     }
   }
@@ -114,7 +115,28 @@ function patchShell(owner: Context): void {
     shell.start = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => enterShellCall(next, () => original(next))
+      return local ? hostLocalExec.run(true, call) : call()
+    }
+  }
+  // BUG-12: the 0.2.0 tools call `resolve` then `execute`. The world pin runs
+  // on the resolved spec (its workdir is always filled), and the local flag is
+  // re-stamped because the official `resolve` drops unknown fields.
+  if (typeof shell.resolve === 'function') {
+    const original = shell.resolve.bind(shell)
+    shell.resolve = (request) => {
+      const local = request?.dswLocalExec === true
+      const resolved = original(adjustShellSpec(owner, request ?? {}))
+      if (local) return { ...resolved, dswLocalExec: true }
+      return adjustShellSpec(owner, resolved)
+    }
+  }
+  if (typeof shell.execute === 'function') {
+    const original = shell.execute.bind(shell)
+    shell.execute = (spec) => {
+      const local = spec?.dswLocalExec === true
+      const next = adjustShellSpec(owner, spec ?? {})
+      const call = () => enterShellCall(next, () => original(next))
       return local ? hostLocalExec.run(true, call) : call()
     }
   }

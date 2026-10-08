@@ -16,30 +16,40 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | doing | P1 | 已补 0.2.0 `shell.resolve` + `execute` 桥。剩：lab 0.2.0 宿主实机复验远程会话 pwsh 提权后执行完、WW 仍拒。PR 见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
+| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | doing | P1 | 真值表进 `architecture.md` §4.1；宿主侧 bwrap 与 `remoteSandbox` 字段已删，远程只剩远程组件一条路。剩：lab 复验子路径行与无 `sandboxPolicy` 组合按档拒绝。见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
+| REQ-I24 | 本机副根与主根同权（第一级） | doing | P2 | 已实现（文件按目标、命令按 shell 入口 workdir 换根）。剩：lab win32 实机验 ACL 首次授权耗时与卸载不收回，脚本 [R49](./uat/R49-side-root-sandbox-batch.md)。见 ADR-0028 §5 |
+| UX-7 | 去掉设置页「远程命令审批」 | doing | P3 | 表单下拉、hint、列表徽标已删；执行门保留，machines.json 旧值仍生效。剩：lab 目测设置页 |
+| REQ-I23 | Spike：本地接缝交还官方 | doing | P3 | 结论：路由层必须留作唯一提供者，推荐改默认转发，见 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md)。实现另立 `REQ-I25`。剩：所有者拍 ADR |
+| UX-9 | 术语：「核心」改称「远程组件」 | doing | P3 | 用户可见文案、README、现行文档已改；代码标识符、线协议、工件名与面向模型的 `core` 不改。剩：合并 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
+| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | todo | P1 | 形状已定（[ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3）：`confine` 出标记 argv，spawn 解标记按 cwd 选根；无标记不围栏（已接受）；只认进程内登记的产物。待核：不调 `confine` 的上游调用方、交互终端。`BUG-12` 提权半作验收。产出 ADR |
+| INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | todo | P1 | M3–M7 卡人的根因是要真 LLM 驱动会话。方案：脚本化假模型（固定工具调用）或直驱工具执行 + Actions sshd 服务容器，进 `npm run e2e`。验收：M3–M7 在 CI 确定性断言。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
+| INFRA-24 | 拍板队列 + 可逆决定默认期限 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕。先定落点（backlog §3 加列或独立文件）与「可逆」判据。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
 | UX-5 | 刚添加完机器，编辑页立即出现「请填写主机名」 | todo | P3 | 先查初值 vs 校验时机。验收：打开编辑页零警告，改后或提交时才触发 |
-| UX-7 | 去掉设置页「远程命令审批」 | todo | P3 | 2026-09-22。机器表单高级下拉、hint、列表徽标删掉（`machine-form` / `settings`）。UI 不再写入 `remoteApproval`，缺省仍 off。执行门本项不删，见 [ADR-0020](./decisions/ADR-0020-remote-approval-gate.md) |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
 | REQ-A5 | 顺手清理旧占位树 | todo | P3 | 确认无引用后删旧 `dsh-ssh-routes/` 与 `$DSH_HOME` 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
 | UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | todo | P3 | `status.tsx` 仍硬编码 hex。证据 PR #20。验收：双主题走宿主语义 token |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
-
+| REQ-I25 | 混合门面未知方法默认转发本地委托 | todo | P3 | ADR-0030 选项 B：仍是唯一提供者，只拦带路径 / cwd 的方法，其余默认转发；`sandboxMode` 等 getter 单列。验收：纯本地会话与官方一致，三条矩阵行保持，boot-smoke 过。挡于 ADR-0030 拍板 |
+| INFRA-25 | 文档流程减负 | todo | P3 | round 报告只在里程碑 / 事故写，小 PR 用 PR 描述；复评纯格式闸门（备注限长等）性价比。改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 ## 3. 被挡住 / 待拍板（blocked）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 2026-09-24 复看：四包 `next`=`0.1.7-rc.1`，`dsh-ssh` 仍在 `lib/index.js:46` 拒非 linux/darwin。未进 `dsh` 与 `dsh-web-app` 依赖。**待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。现况仍倾向 A |
+| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 10-08 复核：四包 `next`=`0.2.0-rc.2` 已进 rc，仍拒 win32 宿主、未接 Web、不进默认组合。细化对比（含 A′/B′）见 [ADR-0029](./decisions/ADR-0029-positioning-review.md)，推荐 A′。**待所有者**拍板；拍定即解挡 `REQ-A7` |
+| REQ-A7 | 包改名为远程工作区类名称 | blocked | P2 | 候选 `dsh-remote-workspace`，旧包 `npm deprecate` 指向新包；`sw_` / `dsw` 不动。**挡于** `UPSTREAM-6`（A/A′/C 才改，B 另议）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.1 |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
 
@@ -133,6 +143,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | REQ-A2 | 向上游提 PR（行级槽位） | dropped | — | `ADR-0011`；改 DOM 增辉层 |
+| UPSTREAM-12 | 向上游提多根写策略需求 | dropped | — | 上游不接受 issue（所有者 10-08）。副根停在第一级，跨根写走提权。ADR-0029 §4.3 |
 | REQ-X1 | 镜像/同步 | dropped | — | `ADR-0003` |
 | REQ-X2 | 审计日志 | dropped | — | `ADR-0004` |
 | REQ-X3 | 更新检查 | dropped | — | 上游节奏太快 |
