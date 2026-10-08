@@ -20,9 +20,14 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | todo | P1 | 宿主 0.2.0-rc.2 官方 pwsh 走 `shell.execute`，REQ-I18 一次提权只挂 `shell.run`。远程会话省略 workdir 时 danger 已批，远端仍要 workspace-write，报 no remote sandbox runner。验收：WW 仍拒绝；提权后该命令执行完。10-08：不单修，作 `REQ-I22` 验收用例 |
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
+| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | todo | P1 | `architecture.md` 加「世界 × 核心有无 × 会话档 × 单次提权」真值表（谁执行 / 拦什么 / 拦不住什么）；删遗留 bwrap 向量与 `remoteSandbox` 字段，连同 `UX-7`。验收：每格有单测或 UAT 指针。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.2 |
+| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | todo | P1 | 对齐 `dsh-sandbox-ssh@0.2.0-rc.2`：远程 `confine` 返回核心 argv，spawn 不再自施围栏，danger 由消费者跳过。列清不经 `confine` 的消费者。`BUG-12` 作验收。产出 ADR（可行 → 退役 `remote-spawn-policy.ts`）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §3 |
+| INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | todo | P1 | M3–M7 卡人的根因是要真 LLM 驱动会话。方案：脚本化假模型（固定工具调用）或直驱工具执行 + Actions sshd 服务容器，进 `npm run e2e`。验收：M3–M7 在 CI 确定性断言。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
+| INFRA-24 | 拍板队列 + 可逆决定默认期限 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕。先定落点（backlog §3 加列或独立文件）与「可逆」判据。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
@@ -34,12 +39,15 @@
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
 | UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | todo | P3 | `status.tsx` 仍硬编码 hex。证据 PR #20。验收：双主题走宿主语义 token |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
+| REQ-I23 | Spike：本地接缝交还官方 | todo | P3 | 验证混合门面能否只挂远程世界，本地 `subprocess` / `fs` / picker 交还官方（受 Cordis 同名服务只能注册一次约束）。可行 → 每代上游适配面缩小。产出 ADR。见 [R48](./rounds/R48-project-direction-review.md) §1 |
+| INFRA-25 | 文档流程减负 | todo | P3 | round 报告只在里程碑 / 事故写，小 PR 用 PR 描述；复评纯格式闸门（备注限长等）性价比。改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 
 ## 3. 被挡住 / 待拍板（blocked）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 2026-09-24 复看：四包 `next`=`0.1.7-rc.1`，`dsh-ssh` 仍在 `lib/index.js:46` 拒非 linux/darwin。未进 `dsh` 与 `dsh-web-app` 依赖。**待所有者**拍 [ADR-0026](./decisions/ADR-0026-upstream-ssh-runtime.md) §5 的 A/B/C。现况仍倾向 A |
+| UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 10-08 复核：四包 `next`=`0.2.0-rc.2` 已进 rc，仍拒 win32 宿主、未接 Web、不进默认组合。细化对比（含 A′/B′）见 [ADR-0029](./decisions/ADR-0029-positioning-review.md)，推荐 A′。**待所有者**拍板；拍定即解挡 `REQ-A7` |
+| REQ-A7 | 包改名为远程工作区类名称 | blocked | P2 | 候选 `dsh-remote-workspace`，旧包 `npm deprecate` 指向新包；`sw_` / `dsw` 不动。**挡于** `UPSTREAM-6`（A/A′/C 才改，B 另议）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.1 |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
 

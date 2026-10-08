@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-07 14:53 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-08 09:58 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `master` / `83ebd3c` |
-| HEAD 提交 | `docs: close PUB-8 after v0.2.3; claim latest=0.2.0-rc.2 + alpha=0.2.1-alpha.1 (#56 #57)` (2026-10-03) |
+| 分支 / HEAD | `chore/UPSTREAM-6-positioning-review` / `8be8b4a` |
+| HEAD 提交 | `docs: claim the composition drift — schedule enters latest, seam family untouched (#58)` (2026-10-07) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -21,16 +21,16 @@
 | 单测文件 | 57 |
 | 单测用例（静态计数） | 698 |
 | E2E 场景文件 | 8 |
-| ADR | 28 |
-| 轮次报告 | 47 |
+| ADR | 29 |
+| 轮次报告 | 48 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 14 |
+| `todo` | 21 |
 | `doing` | 0 |
-| `blocked` | 5 |
+| `blocked` | 6 |
 | `done` | 68 |
 | `shipped` | 10 |
 | `dropped` | 15 |
@@ -38,6 +38,7 @@
 ## 被挡住 / 待拍板
 
 - UPSTREAM-6 — 官方 SSH 运行时定位拍板
+- REQ-A7 — 包改名为远程工作区类名称
 - INFRA-8 — AgentTeams 标准 profile 注册
 - AUDIT-5 — 分组视图下会话子行拿不到 compact 徽标
 - INFRA-8a — `dsw-round` profile
