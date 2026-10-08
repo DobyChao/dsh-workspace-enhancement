@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-13 | 直连停止线读到假 EOF，无远程组件的远端命令必现 SIGTERM | doing | P1 | #59。作业控制关闭时后台 cat 的 stdin 接到 /dev/null，几毫秒假 EOF 后组杀。修法：真 stdin 复制到 fd 4，用户命令关掉 fd 4。有远程组件的腿不走 steward。剩：无 core 远端实机，脚本 [BUG-13](./uat/BUG-13-steward-stdin.md) |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -23,6 +24,7 @@
 | UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
+| REQ-I26 | 远程组件覆盖 linux-arm64 | todo | P2 | ADR-0023 §2.7 的第二架构。现只构建部署 linux-x86_64（`assertLinuxAmd64`），aarch64 被拒后走直连腿（#59 的现场）。验收：按 `uname -m` 选工件、每架构独立 sha256、CI 出 linux-arm64 tarball、部署门放行 aarch64。Windows 远端仍不做（无 bwrap） |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |

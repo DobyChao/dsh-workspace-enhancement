@@ -106,7 +106,7 @@
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
 3. **副根无权限语义**（ADR-0019）。真正隔离是本地 `sandbox/mode`、审批门、远端核心 jail、操作者信任边界。
 4. **远端前置**：围栏档要先从设置页部署核心（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 核心。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
-5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`），不把 OS pid 交给宿主；有核心时 danger 仍走核心 RPC（`--sandbox off`）。
+5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`；watcher 读的是复制出来的 fd，避免后台列表把 stdin 接到 `/dev/null`，`BUG-13`），不把 OS pid 交给宿主；有核心时 danger 仍走核心 RPC（`--sandbox off`）。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。
 7. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。
 8. **宿主会静默 `ctx.fs.resolve` 往上找 `.git`**（定 `AGENTS.md` / skills 根，轨迹里没有 Git 工具）。探测路径不得当成 workspace-write jail 根（`BUG-4` 已修：只传 `path`）。专题附录 [`notes/host-silent-fs.md`](./notes/host-silent-fs.md)。无 `.git` 的远程会话实机尾巴仍待验。

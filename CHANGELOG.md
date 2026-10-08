@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 修复
+
+- **直连停止线假 EOF（`BUG-13`，#59）**：没有远程组件的远端上，`bash` / `sw_exec` / `glob` 一启动就被 SIGTERM 杀掉。原因是作业控制关闭时，后台 `cat` 的 stdin 被接到 `/dev/null`，几毫秒内读到假 EOF 就组杀。现在先把真实 stdin 复制到 fd 4，停止线读这个副本；用户命令不继承它。stdin 真的关闭时仍会组杀。
+
 ## [0.2.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-30)
 
 0.2.2 之后的供给线重做：**可在 0.2.0 宿主上安装**（peer 联合 pin `^0.1.7-rc.2 || ^0.2.0-rc.1`，
