@@ -1146,17 +1146,21 @@ interface LocalShellProcess {
   sandbox?: { mode?: string; denied?: boolean; runnerFailed?: boolean }
 }
 
+interface LocalShellRunResult {
+  exitCode?: number | null
+  signal?: string | null
+  timedOut?: boolean
+  stdout?: { text?: string; truncated?: boolean; spillPath?: string }
+  stderr?: { text?: string; truncated?: boolean; spillPath?: string }
+  sandbox?: { mode?: string; denied?: boolean }
+}
+
 interface LocalShell {
   resolve?: (request: Record<string, unknown>) => Record<string, unknown>
-  run?: (spec: Record<string, unknown>) => Promise<{
-    exitCode?: number | null
-    signal?: string | null
-    timedOut?: boolean
-    stdout?: { text?: string; truncated?: boolean; spillPath?: string }
-    stderr?: { text?: string; truncated?: boolean; spillPath?: string }
-    sandbox?: { mode?: string; denied?: boolean }
-  }>
+  run?: (spec: Record<string, unknown>) => Promise<LocalShellRunResult>
   start?: (spec: Record<string, unknown>) => LocalShellProcess
+  /** 0.2.0 family: replaces `run` / `start`; the handle carries `result()`. */
+  execute?: (spec: Record<string, unknown>) => Promise<LocalShellProcess & { result(): Promise<LocalShellRunResult> }>
 }
 
 /** Settled host-shell process → the `ctx.jobs` outcome vocabulary. */
@@ -1219,7 +1223,9 @@ async function runLocalSwExec(
     ? explicit
     : sessionLocalCwd(items.filter(item => item.kind === 'local').map(item => item.rootKey))
   const shell = ctx.get('shell', false) as LocalShell | undefined
-  if (shell?.run === undefined) throw new Error(SW_EXEC_LOCAL_SHELL_MISSING)
+  if (shell === undefined || (shell.run === undefined && shell.execute === undefined)) {
+    throw new Error(SW_EXEC_LOCAL_SHELL_MISSING)
+  }
   const granted = await grantedModeOf(ctx, args, exec, 'sw_exec')
   if (signalAborted(exec.signal)) throw toolAbortError()
   const policyService = ctx.get('sandboxPolicy', false) as {
@@ -1243,10 +1249,13 @@ async function runLocalSwExec(
     workdir,
     ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
     ...(sandboxPolicy !== undefined ? { sandboxPolicy } : {}),
+    dswLocalExec: true,
   }
   if (args.run_in_background === true) {
     if (!backgroundEnabled) throw new Error(tr('tool.error.backgroundDisabled'))
-    if (typeof shell.start !== 'function') throw new Error(SW_EXEC_LOCAL_START_MISSING)
+    if (typeof shell.start !== 'function' && typeof shell.execute !== 'function') {
+      throw new Error(SW_EXEC_LOCAL_START_MISSING)
+    }
     const jobs = jobsOf(ctx, tr)
     if (signalAborted(exec.signal)) throw toolAbortError()
     let started: LocalShellProcess | undefined
@@ -1259,15 +1268,37 @@ async function runLocalSwExec(
       // `readOutput` instead. Only one of the two ever consumes the deltas.
       output: [deltaRingSource(() => (started === undefined ? '' : localShellRead(started, tr)))],
       run: () => {
+        const failed = (error: unknown) => ({
+          status: 'failed' as const,
+          detail: error instanceof Error ? error.message : String(error),
+        })
+        if (typeof shell.start !== 'function') {
+          const backgroundRequest = { ...request, onExpiry: 'none' }
+          const resolved = typeof shell.resolve === 'function' ? shell.resolve(backgroundRequest) : backgroundRequest
+          let cancelled = false
+          const pending = shell.execute!({ ...resolved, dswLocalExec: true }).then((proc) => {
+            started = proc
+            if (cancelled) proc.kill()
+            return proc
+          })
+          return {
+            cancel: () => {
+              cancelled = true
+              started?.kill()
+            },
+            done: pending.then(
+              proc => proc.done.then(() => localShellOutcome(proc, tr)),
+              failed,
+            ),
+            readOutput: () => (started === undefined ? '' : localShellRead(started, tr)),
+          }
+        }
         const resolved = typeof shell.resolve === 'function' ? shell.resolve(request) : request
-        const proc = shell.start!({ ...resolved, dswLocalExec: true })
+        const proc = shell.start({ ...resolved, dswLocalExec: true })
         started = proc
         return {
           cancel: () => { proc.kill() },
-          done: proc.done.then(
-            () => localShellOutcome(proc, tr),
-            error => ({ status: 'failed' as const, detail: error instanceof Error ? error.message : String(error) }),
-          ),
+          done: proc.done.then(() => localShellOutcome(proc, tr), failed),
           readOutput: () => localShellRead(proc, tr),
         }
       },
@@ -1279,7 +1310,9 @@ async function runLocalSwExec(
     ...(exec.signal !== undefined ? { signal: exec.signal } : {}),
   }
   const resolved = typeof shell.resolve === 'function' ? shell.resolve(foregroundRequest) : foregroundRequest
-  const result = await shell.run({ ...resolved, dswLocalExec: true })
+  const result = typeof shell.run === 'function'
+    ? await shell.run({ ...resolved, dswLocalExec: true })
+    : await (await shell.execute!({ ...resolved, dswLocalExec: true })).result()
   const foreground: SwExecForeground = {
     kind: 'foreground',
     server: 'local',

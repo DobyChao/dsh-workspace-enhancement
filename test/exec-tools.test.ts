@@ -181,6 +181,7 @@ function fakeToolContext(options: {
       kill(): boolean
       sandbox?: { mode?: string; denied?: boolean; runnerFailed?: boolean }
     }
+    execute?: (spec: Record<string, unknown>) => Promise<unknown>
   }
 } = {}): {
   ctx: Context
@@ -588,6 +589,84 @@ test('registerSwExec: server "local" background registers a host-shell job', asy
   assert.deepEqual(await hooks.done, { status: 'completed', detail: 'exit code: 0' })
   hooks.cancel()
   assert.equal(proc.status, 'killed')
+})
+
+/** A 0.2.0-family host shell: only `resolve` + `execute`; `resolve` drops unknown fields. */
+function executeOnlyShell(executed: Record<string, unknown>[], result: Record<string, unknown> = {}) {
+  let settled: (value?: unknown) => void = () => {}
+  const proc = {
+    status: 'running',
+    exitCode: null as number | null,
+    signal: null as string | null,
+    done: new Promise<unknown>(resolve => { settled = resolve }),
+    readOutput: () => ({ delta: 'hi\n', lossy: false }),
+    kill: () => {
+      proc.status = 'killed'
+      return true
+    },
+    result: () => Promise.resolve({ exitCode: 0, signal: null, timedOut: false, stdout: { text: 'ok' }, stderr: { text: '' }, ...result }),
+  }
+  return {
+    proc,
+    settle: () => {
+      proc.status = 'completed'
+      proc.exitCode = 0
+      settled()
+    },
+    shell: {
+      resolve: (request: Record<string, unknown>) => ({
+        command: request.command,
+        workdir: request.workdir,
+        onExpiry: request.onExpiry ?? 'kill',
+        sandboxPolicy: request.sandboxPolicy,
+        ...(request.dswLocalExec === true ? { dswLocalExec: true } : {}),
+      }),
+      execute: (spec: Record<string, unknown>) => {
+        executed.push(spec)
+        return Promise.resolve(proc)
+      },
+    },
+  }
+}
+
+test('BUG-12: server "local" foreground runs through shell.execute when run is gone (0.2.0)', async () => {
+  const executed: Record<string, unknown>[] = []
+  const host = executeOnlyShell(executed)
+  const fake = fakeToolContext({ shell: host.shell })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', server: 'local', workdir: '/home/me' },
+    execFace('ssh://c1/srv'),
+  ) as { kind: string; exitCode: number | null }
+  assert.equal(result.kind, 'foreground')
+  assert.equal(result.exitCode, 0)
+  assert.equal(executed[0]?.dswLocalExec, true)
+  assert.equal(executed[0]?.workdir, '/home/me')
+})
+
+test('BUG-12: server "local" background runs through shell.execute without a deadline (0.2.0)', async () => {
+  const started: { run(): { cancel: (reason?: string) => void; done: Promise<unknown>; readOutput?: () => string } }[] = []
+  const executed: Record<string, unknown>[] = []
+  const host = executeOnlyShell(executed)
+  const fake = fakeToolContext({ shell: host.shell, jobs: { start(spec) { started.push(spec); return 'sw-exec-1' } } })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }), { platform: 'linux' })
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'make', description: 'Build', server: 'local', workdir: '/home/me', run_in_background: true },
+    execFace('ssh://c1/srv'),
+  )
+  assert.deepEqual(result, { kind: 'background', jobId: 'sw-exec-1', server: 'local', endpoint: 'local' })
+  const hooks = started[0]?.run()
+  assert.ok(hooks !== undefined)
+  assert.equal(hooks.readOutput?.(), '', 'nothing to read before execute publishes the handle')
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(executed[0]?.onExpiry, 'none')
+  assert.equal(executed[0]?.dswLocalExec, true)
+  assert.equal(hooks.readOutput?.(), 'hi\n')
+  host.settle()
+  assert.deepEqual(await hooks.done, { status: 'completed', detail: 'exit code: 0' })
+  hooks.cancel()
+  assert.equal(host.proc.status, 'killed')
 })
 
 /* --------------------------- 6b) UPSTREAM-8: 0.1.7 ring-family jobs owner/output */

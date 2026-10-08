@@ -45,6 +45,10 @@ export function runWithRemoteSpawnPolicy<T>(policy: unknown, fn: () => T): T {
 interface ShellFace {
   run?: (spec: ShellSpec) => unknown
   start?: (spec: ShellSpec) => unknown
+  /** 0.2.0 family: request → spec; drops fields it does not know. */
+  resolve?: (request: ShellSpec) => ShellSpec
+  /** 0.2.0 family: the only spawn entry (`run` / `start` are gone). */
+  execute?: (spec: ShellSpec) => unknown
 }
 
 interface ShellSpec {
@@ -112,6 +116,27 @@ function patchShell(owner: Context): void {
   if (typeof shell.start === 'function') {
     const original = shell.start.bind(shell)
     shell.start = (spec) => {
+      const local = spec?.dswLocalExec === true
+      const next = adjustShellSpec(owner, spec ?? {})
+      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      return local ? hostLocalExec.run(true, call) : call()
+    }
+  }
+  // BUG-12: the 0.2.0 tools call `resolve` then `execute`. The world pin runs
+  // on the resolved spec (its workdir is always filled), and the local flag is
+  // re-stamped because the official `resolve` drops unknown fields.
+  if (typeof shell.resolve === 'function') {
+    const original = shell.resolve.bind(shell)
+    shell.resolve = (request) => {
+      const local = request?.dswLocalExec === true
+      const resolved = original(adjustShellSpec(owner, request ?? {}))
+      if (local) return { ...resolved, dswLocalExec: true }
+      return adjustShellSpec(owner, resolved)
+    }
+  }
+  if (typeof shell.execute === 'function') {
+    const original = shell.execute.bind(shell)
+    shell.execute = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
       const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
