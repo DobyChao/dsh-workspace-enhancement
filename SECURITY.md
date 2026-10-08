@@ -43,7 +43,8 @@
      会话级连接门（`ADR-0021` §2.5）；
   4. 非壳形状的远程 spawn（LSP、宿主自组 argv 的进程）不拦——威胁面是**模型撰写的命令文本**，
      shell `-c` 形状正是它的唯一常规载体。
-  审批门与 sandbox 提权同时开启会弹两张卡。设置页「远程命令审批」下拉的去留是 `UX-7`；门本身仍是 `ADR-0020`，默认 `off`。
+  审批门与 sandbox 提权同时开启会弹两张卡。设置页「远程命令审批」下拉已移除（`UX-7`）；门本身仍是
+  `ADR-0020`，默认 `off`，只能由 machines.json 中已有的 `remoteApproval` 值开启。
 - **会话级「已连接机器」门是可见性门，不是强制门**（`ADR-0021` §2.7，2026-09-13 实测取证）：
   `sw_connect` 的连接集合决定**本会话看到什么**（`sw_exec` 是否可用、提示词里有没有机器清单），
   但它**拦不住**会拼路径的模型，两条已验证的绕行：
@@ -55,13 +56,14 @@
      传 `workdir: "ssh://c1/…"`（`c1` = 注册表机器 id）就能在已注册机器上执行命令。
   这是**结构性**的：`SubprocessSpawnSpec` 不携带会话身份，门面在 spawn 时无从判别会话，所以门只能
   做在工具层（用户 2026-09-12 拍板「门控只做在工具层与提示层」）。命令级仍有审批门兜底（该路径
-  argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与 `REQ-I9` 的远端围栏
-  （`remoteSandbox ≠ off` 时命令**与文件工具**同进远程组件 jail；`off` 仍走 SFTP）。
+  argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与远程组件 jail
+  （会话 `/permission` 为 `read-only` / `workspace-write` 时命令**与文件工具**同进 jail；
+  `danger-full-access` 走 SFTP + 裸 exec）。
 - SSH 固有：远端 pid / 前台进程组不可见。
 - 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进远程组件 tarball，由设置页 `core.deploy`
   上传。远程组件缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
-  `read-only` 下官方 `write` 工作区外失败且文件不存在）。`off` / 非 linux-x86_64 仍是 SFTP +
-  裸 exec。交互终端在围栏档仍拒绝。供应链（二进制来源、签名、校验和）是新信任根。
+  `read-only` 下官方 `write` 工作区外失败且文件不存在），读仍走 SFTP；只有 `danger-full-access`
+  是 SFTP + 裸 exec。宿主组合里没有 `sandboxPolicy` 服务时按 `read-only` 处理（fail-safe）。交互终端在围栏档仍拒绝。供应链（二进制来源、签名、校验和）是新信任根。
 - **宿主静默项目根探测会铸出比会话更宽的 workspace-write jail**（`BUG-4`，2026-09-15 R27）：
   `dsh-agent-instructions` 等在组上下文时沿目录 `resolve(…/.git)`，轨迹不可见。插件把探测路径当
   `cwd` 后会对 `/home`、`$HOME` 做 `--bind`。官方 Write 打进会话 jail 时工作区外拒绝仍可能成立；

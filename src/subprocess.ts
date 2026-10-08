@@ -154,11 +154,10 @@ export class SshSubprocessEngine {
   }
 
   /**
-   * The REQ-I9 terminal-refusal decision for one route: the message to raise,
-   * or `undefined` when the route is unfenced. An explicitly injected guard
-   * wins; otherwise the guard derived from the context decides (the machine's
-   * `remoteSandbox`, read through the registry's secret-free views, exactly
-   * like the gate). An unfenced machine and the local world stay as they were.
+   * The terminal-refusal decision for one route: the message to raise, or
+   * `undefined` when the session may open a terminal. An explicitly injected
+   * guard wins; otherwise the context-derived guard decides from the session
+   * mode (a confined session has no fenced PTY).
    */
   private terminalRefusal(connectionId: string | undefined): string | undefined {
     return this.sandboxTerminalGuard()(connectionId, 'off')
@@ -359,12 +358,11 @@ export class SshSubprocessEngine {
  * bare subpath deployment asks and falls through to the deployment's human
  * answerer (fail closed), it just never auto-grants.
  *
- * REQ-I9 (ADR-0022): the `fence` / `terminalGuard` deps are optional and are
- * resolved from the context (lazily, memoized) when absent, so EVERY mount form
- * fences a machine whose `remoteSandbox` is set — the aggregate row passes both
- * explicitly; a hand-mounted subpath row gets the context-derived pair. With
- * both absent AND no registry machine in scope, an `'off'` machine still runs
- * exactly as before (identity argv, zero probes).
+ * The `fence` / `terminalGuard` deps are optional and are resolved from the
+ * context (lazily, memoized) when absent, so EVERY mount form follows the
+ * session mode through the remote component — the aggregate row passes both
+ * explicitly; a hand-mounted subpath row gets the context-derived pair, which
+ * refuses confined sessions when no `coreHub` is mounted.
  */
 export class SshSubprocessRuntime extends SubprocessRuntime {
   static inject = ['ssh']

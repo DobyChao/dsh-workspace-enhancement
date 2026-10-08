@@ -22,7 +22,6 @@ import { modelPrompt } from './model-prompts.ts'
 import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from './session-remote-context.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
-import type { RemoteSandboxMode } from './remote-sandbox.ts'
 import type { SshRegistry } from './registry.ts'
 import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
 import type { SshTransport } from './transport.ts'
@@ -51,8 +50,6 @@ export interface PromptMachineFace {
   workspace?: string
   /** AUDIT-6 gate mode of the routed machine (absent ⇒ treat as `'off'`). */
   remoteApproval?: RemoteApprovalMode
-  /** REQ-I9 fence mode of the machine (absent ⇒ treat as `'off'`). */
-  remoteSandbox?: RemoteSandboxMode
 }
 
 /**
@@ -155,8 +152,6 @@ export interface ConnectedMachineFact {
   id: string
   endpoint: string
   reachable?: boolean | null
-  /** REQ-I9: the machine's fence mode when it is not `off` (absent ⇒ no fence). */
-  sandbox?: RemoteSandboxMode
 }
 
 /** Pure prompt projection of one connected registry machine. */
@@ -507,9 +502,8 @@ export function registerWorkspaceTools(
         lines.push(await remoteEnvLine(instance, coreHubOf(ctx)))
         // REQ-I21: one core line per CONNECTED machine — the disk artifact's
         // version versus the one this plugin ships, so the model can diagnose
-        // a version-gate refusal without leaving the tool surface. Not gated on
-        // the machine's remoteSandbox field: confinement follows the SESSION
-        // (fail-safe read-only), so every connected machine may fence.
+        // a version-gate refusal without leaving the tool surface. Confinement
+        // follows the SESSION (fail-safe read-only), so every connected machine may fence.
         for (const id of connectedIdsOf(sessionId, cwd)) {
           if (machineFaceOf(id) === undefined) continue
           let view: CoreStatusView

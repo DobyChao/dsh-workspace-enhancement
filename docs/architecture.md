@@ -64,7 +64,7 @@
 | 注册表与密钥 | `registry.ts` `hostkey.ts` `credential.ts` | machines.json、TOFU、OS 钥匙串、`~/.ssh/config` |
 | 混合门面 | `mixed.ts` | `ctx.subprocess` / `ctx.fs` 的唯一实现：按 cwd / targetKey 路由 |
 | 会话状态 | `session-workspaces.ts` `session-connections.ts` `session-remote-context.ts` | 副根清单、本会话已连接机器、提示注入判定 |
-| 远程策略 | `remote-approval-gate.ts` `remote-sandbox.ts` `remote-sandbox-fence.ts` `remote-policy.ts` `remote-confine.ts` | 审批门；legacy bwrap 向量；会话 `/permission`→核心 `--sandbox`；远程 cwd 上 confine 短路 |
+| 远程策略 | `remote-approval-gate.ts` `remote-sandbox.ts` `remote-sandbox-fence.ts` `remote-policy.ts` `remote-confine.ts` | 审批门；远程组件拒绝文案与 bwrap 档位常量；会话 `/permission`→远程组件 `--sandbox`；远程 cwd 上 confine 短路 |
 | 通道与工具 | `web.ts` `web-channel.ts` `tools.ts` `exec-tools.ts` `model-prompts.ts` | `/api/dsw/*`、`sw_*`、win32 `bash`、model-facing 英文常量 |
 
 ### 3.2 客户端
@@ -75,7 +75,7 @@
 | 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` | 连接侧栏 + 目录浏览；本机目录走 `uiWorkspace` |
 | 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、远程组件状态文案 |
 | 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
-| 状态与徽标 | `status.tsx` `row-badges.ts` `sandbox-badge.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、围栏档位、会话头远程状态 |
+| 状态与徽标 | `status.tsx` `row-badges.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、会话头远程状态 |
 | 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
 
 ### 3.3 词典（`src/locale/`）
@@ -113,7 +113,11 @@
 | read-only / workspace-write | 不可用 | 降级 SFTP（REQ-I15） | `SANDBOX_UNAVAILABLE` | `SANDBOX_UNAVAILABLE` | 拒 | `core-routing.test.ts`（REQ-I15）、UAT R35 |
 | danger-full-access | 不可用 | SFTP | SFTP | 裸 SSH | 允许 | `core-routing.test.ts`、`core-version-gate.test.ts` |
 
-「不可用」含：未部署、非 linux x86_64、版本跨 major.minor 线、sha256 不在白名单（REQ-I17 / REQ-I21）。
+「不可用」含：未部署、非 linux x86_64、版本跨 major.minor 线、sha256 不在白名单（REQ-I17 / REQ-I21），
+以及组合里没挂 `coreHub`（子路径行）或调用没有注册表连接 id（聚合传输）。宿主没有 `sandboxPolicy`
+服务时本次档按 `read-only`（fail-safe）。远程执行只有这一条路径：机器字段 `remoteSandbox` 与宿主侧
+bwrap 包装已删除（AUDIT-7），旧 machines.json 里的该键读入时忽略、下次保存时丢弃。
+证据：`remote-sandbox-wiring.test.ts`、`registry-remote-sandbox-legacy.test.ts`。
 
 **B. workspace-write 下的可写区域**（ADR-0028 §5；本机副根随 `REQ-I24` 改为与远程同规则）
 

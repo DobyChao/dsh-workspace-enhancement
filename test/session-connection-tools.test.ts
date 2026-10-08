@@ -577,7 +577,7 @@ test('REQ-I21 sw_connect: a danger-full-access session never attempts a provisio
 
 /** A fenced machine row for the sw_status core-line tests. */
 function fencedRegistry(version: string | null): unknown {
-  const machines = [{ ...MACHINE_TABLE[0], remoteSandbox: 'read-only' as const }, MACHINE_TABLE[1]]
+  const machines = [MACHINE_TABLE[0], MACHINE_TABLE[1]]
   const connection = {
     ...conn('c1'),
     exec: async (command: string): Promise<ExecOutcome> => {
