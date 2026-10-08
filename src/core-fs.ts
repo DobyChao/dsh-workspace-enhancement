@@ -31,8 +31,9 @@ import {
   sftpFallbackForCoreGap,
 } from './remote-policy.ts'
 import type { RemoteFsFace } from './remote-policy.ts'
+import { remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 import type { CoreHub } from './core-hub.ts'
-import { SshFileSystemEngine } from './filesystem.ts'
+import type { SshFileSystemEngine } from './filesystem.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
 import type { FileSystemBranch } from './mixed.ts'
 
@@ -443,7 +444,13 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
     face: RemoteFsFace = 'read',
   ): Promise<FileSystemBranch> {
     const policy = resolveRemoteSessionMode(this.ctx, opts?.sandboxPolicy)
-    if (connectionId === undefined) return this.sftp
+    if (connectionId === undefined) {
+      // AUDIT-7: the aggregate transport has no remote component to jail a write.
+      if (face === 'write' && isConfinedSandboxMode(policy)) {
+        throw remoteSandboxUnavailable(policy === 'workspace-write' ? 'workspace-write' : 'read-only', 'no registry connection is associated with this route')
+      }
+      return this.sftp
+    }
     const sessionCwd = opts?.cwd ?? initiatorSessionOf(this.ctx)?.header?.cwd
     try {
       const client = await this.hub.require(connectionId, {

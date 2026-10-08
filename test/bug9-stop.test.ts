@@ -283,7 +283,6 @@ function coreHubFake(client: FakeCoreClient, options: {
   peekClient?: () => FakeCoreClient | undefined
 } = {}): CoreHub {
   return {
-    modeOf: () => 'read-only',
     require: async () => { await options.requireGate?.(); return client as unknown as CoreClient },
     peek: () => (options.peekClient !== undefined ? options.peekClient() : client) as unknown as CoreClient,
     hold: () => () => {},

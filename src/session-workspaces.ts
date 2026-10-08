@@ -28,7 +28,7 @@
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, posix, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, parse, posix, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { dshHome } from './hostkey.ts'
 import { parseSshRoute } from './registry.ts'
@@ -255,6 +255,38 @@ export function sideWorkspaceOf(
     return bestMatchingRoot(roots, root => !root.startsWith('ssh://') && isUnderRoot(root, key, insensitive))
   }
   return undefined
+}
+
+/**
+ * REQ-I24 (ADR-0028 §5): the session's LOCAL side root that stands in for the
+ * workspace root of one write or one command — the longest of `localRoots`
+ * holding `path`. A path the main root already holds keeps the main root (a
+ * nested side root shares it). `undefined` = keep the policy's own root.
+ *
+ * Never chosen: a side root that CONTAINS the main root, and a filesystem
+ * root. The Windows ACL backend grants an inheritable, never-revoked write
+ * ACE on the chosen root, so either would let one command write the main
+ * root too, or leave a permanent grant on a whole drive.
+ */
+export function localSideRootFor(
+  localRoots: readonly string[],
+  mainRoot: string | undefined,
+  path: string | undefined,
+): string | undefined {
+  if (localRoots.length === 0 || typeof path !== 'string' || !isAbsolute(path)) return undefined
+  if (process.platform === 'win32' && path.startsWith('/') && !path.startsWith('//')) return undefined
+  const insensitive = process.platform === 'win32'
+  const key = canonicalLocalPath(path)
+  const mainKey = typeof mainRoot === 'string' && isAbsolute(mainRoot) ? canonicalLocalPath(mainRoot) : undefined
+  if (mainKey !== undefined && isUnderRoot(mainKey, key, insensitive)) return undefined
+  let best: string | undefined
+  for (const root of localRoots) {
+    if (root.startsWith('ssh://') || !isUnderRoot(root, key, insensitive)) continue
+    if (parse(root).root === root) continue
+    if (mainKey !== undefined && isUnderRoot(root, mainKey, insensitive)) continue
+    if (best === undefined || root.length > best.length) best = root
+  }
+  return best
 }
 
 /** Pure validation/normalization of one record (persisted-file safety net). */

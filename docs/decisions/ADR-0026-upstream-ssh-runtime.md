@@ -38,6 +38,10 @@
 （默认组合仍装 `dsh-fs-local` / `dsh-subprocess-local`）⇒ 它们是**自定义 profile 的 opt-in 能力**，
 不是默认装配。
 
+> **2026-10-08 修订**：四包 `next` = **`0.2.0-rc.2`**（与宿主 `latest` 同版），平台判断与 README
+> 已知限制原样保留，`dsh` / `dsh-web-app` 依赖仍不含四包。§5 选项的细化对比（含变体 A′ / B′）
+> 与重评触发现状见 [ADR-0029](./ADR-0029-positioning-review.md)。
+>
 > **2026-09-24 修订**：四包 `next` 均为 **`0.1.7-rc.1`**（另有 `0.1.7-alpha.1` / `alpha.2`）。`@deepseek-ai/dsh` 的 `next` 同为 `0.1.7-rc.1`，`latest` 仍是 `0.1.5-rc.3`。`dsh-ssh@0.1.7-rc.1` `lib/index.js:46` 仍是 `process.platform !== linux/darwin` 即抛 `SSH runtime requires a POSIX client`。`dsh@0.1.7-rc.1` 与 `dsh-web-app@0.1.7-rc.1` 的依赖里没有 SSH 四包。§5 选项 A 仍然成立，拍板仍待所有者。
 >
 > **2026-09-25 修订**：`dsh-fs` 的 `next` 亦从 `0.1.5-rc.2` 跳到 **`0.1.7-rc.2`**（当日两次 dispatch 之间），

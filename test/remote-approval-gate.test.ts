@@ -420,6 +420,12 @@ function sentinelTransport(): { endpoint: string; cwd: string } & Record<string,
   }
 }
 
+/** An unconfined session: the sandbox fence stays out of these gate-ordering cases. */
+const DANGER_POLICY = {
+  defaultMode: 'danger-full-access',
+  resolve: () => ({ mode: 'danger-full-access', workspaceRoot: '/srv/work' }),
+}
+
 /** A minimal `sshRegistry` service face the gate and routing both consume. */
 function fakeRegistryService(machines: RemoteApprovalMachineFace[]): Record<string, unknown> {
   return {
@@ -456,6 +462,7 @@ test('engine spawn: an allowed-once ask proceeds past the gate (transport sentin
   ctx.provide('sshRegistry', fakeRegistryService([machine()]))
   ctx.provide('approval', fakeApproval({ outcome: 'allowed-once' }).service)
   ctx.provide('agents', { currentInitiator: () => AGENT })
+  ctx.provide('sandboxPolicy', DANGER_POLICY)
   const engine = new SshSubprocessEngine(ctx, createRemoteSpawnGate(ctx))
   const handle = engine.spawn(remoteSpawnSpec(buildShellArgv('linux', 'make'), 'ssh://c1/srv/work'))
   // The gate granted, so run() advanced to the remote-environment read — the
@@ -468,6 +475,7 @@ test('engine spawnTerminal: gated before the terminal exists; local cwd never re
   const gateCalls: Array<{ terminal?: boolean }> = []
   const gate: RemoteSpawnGate = async input => { gateCalls.push({ ...(input.terminal === true ? { terminal: true } : {}) }) }
   ctx.provide('sshRegistry', fakeRegistryService([machine()]))
+  ctx.provide('sandboxPolicy', DANGER_POLICY)
   const engine = new SshSubprocessEngine(ctx, gate)
   const spec: SubprocessTerminalSpawnSpec = {
     argv: ['bash'],
@@ -604,8 +612,7 @@ test('normalizeMachine: missing/invalid remoteApproval reads as off (zero migrat
   assert.equal('remoteApproval' in (persisted.list[0] as object), false, 'off omits the field entirely')
 })
 
-test('machine payload: the approval select always carries an explicit mode', () => {
-  assert.equal(EMPTY_MACHINE_FORM.remoteApproval, 'off')
-  assert.equal(machinePayload({ ...EMPTY_MACHINE_FORM, host: 'h', username: 'u' }).remoteApproval, 'off')
-  assert.equal(machinePayload({ ...EMPTY_MACHINE_FORM, host: 'h', username: 'u', remoteApproval: 'ai' }).remoteApproval, 'ai')
+test('machine payload: the form never writes remoteApproval (gate stays registry-only)', () => {
+  const payload = machinePayload({ ...EMPTY_MACHINE_FORM, host: 'h', username: 'u' })
+  assert.equal('remoteApproval' in payload, false)
 })

@@ -23,7 +23,6 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
-import type { RemoteApprovalMode, RemoteSandboxMode } from './machine-payload.ts'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
 import { coreStatusLabel } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
@@ -60,10 +59,6 @@ interface MachineView {
   jumpHosts: string[]
   hostKeyMode?: 'accept-new' | 'verify' | 'off'
   credentialBackend: string
-  /** AUDIT-6 approval-gate mode (wire rows always carry it; default 'off'). */
-  remoteApproval: RemoteApprovalMode
-  /** REQ-I9 remote sandbox fence mode (wire rows carry it; default 'off'). */
-  remoteSandbox: RemoteSandboxMode
   /** Encryption was requested but the OS backend failed (plaintext fallback). */
   encryptFallback?: boolean
   recentWorkspaces?: string[]
@@ -86,8 +81,6 @@ function asMachineView(value: unknown): MachineView | null {
     passwordSet: value.passwordSet === true,
     jumpHosts: Array.isArray(value.jumpHosts) ? value.jumpHosts.map(String) : [],
     credentialBackend: typeof value.credentialBackend === 'string' ? value.credentialBackend : 'plain',
-    remoteApproval: value.remoteApproval === 'human' || value.remoteApproval === 'ai' ? value.remoteApproval : 'off',
-    remoteSandbox: value.remoteSandbox === 'read-only' || value.remoteSandbox === 'workspace-write' ? value.remoteSandbox : 'off',
   }
   if (typeof value.cwd === 'string') machine.cwd = value.cwd
   if (typeof value.workspace === 'string') machine.workspace = value.workspace
@@ -116,8 +109,6 @@ function editInitialOf(machine: MachineView): MachineFormInitial {
     workspace: machine.workspace ?? machine.cwd ?? '',
     hostKeyMode: machine.hostKeyMode ?? '',
     encryptPassword: machine.credentialBackend !== '' && machine.credentialBackend !== 'plain',
-    remoteApproval: machine.remoteApproval ?? 'off',
-    remoteSandbox: machine.remoteSandbox ?? 'off',
     auth: machine.auth === 'password'
       || machine.passwordSet === true
       || (machine.credentialBackend !== '' && machine.credentialBackend !== 'plain')
@@ -387,9 +378,6 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                       <span className={styles.rowEndpoint}>{machine.username}@{machine.host}:{machine.port}</span>
                       {machine.encryptFallback === true
                         ? <span className={`${styles.coreChip} ${styles.coreChipWarn}`}>{t('settings.machines.encryptFallbackBadge')}</span>
-                        : null}
-                      {machine.remoteApproval !== 'off'
-                        ? <span className={styles.coreChip}>{t('settings.machines.gateBadge', { mode: machine.remoteApproval })}</span>
                         : null}
                       {core !== undefined
                         ? <span className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]}`} role="status">{core.label}</span>

@@ -27,6 +27,10 @@ import { quoteShellArg } from './ssh-core.ts'
 import { fileContentVersion, statsVersionMtimeMs } from './fs-version.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
 import type { SshTransport } from './transport.ts'
+import { CoreRoutingFileSystem } from './core-fs.ts'
+import type { CoreHub } from './core-hub.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
+import { remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 
 const BINARY_SAMPLE_BYTES = 8192
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
@@ -630,9 +634,8 @@ export function stagingCleanupCommand(directory: string): string {
 /**
  * Standalone SSH filesystem provider registered as `ctx.fs` — the pure-SSH
  * deployment form (also the engine behind the mixed provider's remote branch).
- * An incoming per-call sandbox policy is deliberately dropped: a remote write
- * cannot be fenced by the LOCAL sandbox, and the tool layer's policy is
- * resolved against the session's local placeholder root.
+ * Writes follow the session mode through the remote component (see
+ * `confinedWriter`); reads stay on SFTP in every mode.
  */
 export class SshFileSystem extends FileSystem {
   static inject = ['ssh']
@@ -701,24 +704,52 @@ export class SshFileSystem extends FileSystem {
     return this.engine.listDir(target, signal)
   }
 
-  writeText(
+  async writeText(
     target: FsTarget,
     content: string,
     expected?: FsWriteIntent,
     signal?: AbortSignal,
-    _sandboxPolicy?: unknown,
+    sandboxPolicy?: unknown,
   ): Promise<FsWriteOutcome> {
-    return this.engine.writeText(target, content, expected, signal)
+    const routed = this.confinedWriter(sandboxPolicy)
+    return routed === undefined
+      ? this.engine.writeText(target, content, expected, signal)
+      : routed.writeText(target, content, expected, signal, sandboxPolicy)
   }
 
-  editText(
+  async editText(
     target: FsTarget,
     edit: FsEditRequest,
     expected?: { version: FsVersion },
     signal?: AbortSignal,
-    _sandboxPolicy?: unknown,
+    sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome> {
-    return this.engine.editText(target, edit, expected, signal)
+    const routed = this.confinedWriter(sandboxPolicy)
+    return routed === undefined
+      ? this.engine.editText(target, edit, expected, signal)
+      : routed.editText(target, edit, expected, signal, sandboxPolicy)
+  }
+
+  private routed: CoreRoutingFileSystem | undefined
+
+  /**
+   * AUDIT-7: a write obeys the session mode on this row too. With the
+   * `coreHub` service the remote component decides (danger still lands on
+   * SFTP there); without it a confined write is refused, never sent bare.
+   * `undefined` = plain SFTP.
+   */
+  private confinedWriter(sandboxPolicy: unknown): CoreRoutingFileSystem | undefined {
+    const hub = this.ctx.get('coreHub', false) as CoreHub | undefined
+    if (hub !== undefined) {
+      this.routed ??= new CoreRoutingFileSystem(this.ctx, this.engine, hub)
+      return this.routed
+    }
+    const mode = resolveRemoteSessionMode(this.ctx, sandboxPolicy)
+    if (!isConfinedSandboxMode(mode)) return undefined
+    throw remoteSandboxUnavailable(
+      mode === 'workspace-write' ? 'workspace-write' : 'read-only',
+      'the remote component hub is not mounted in this composition',
+    )
   }
 }
 

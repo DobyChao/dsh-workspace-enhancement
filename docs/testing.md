@@ -85,8 +85,8 @@ dsh --profile <scratch> --dump-config   # 检查 bundle 行、patch 行、工具
 
 ## 6. 已知环境要求
 
-- 围栏档远端前置是**部署核心**（设置页 `core.deploy`，linux x86_64）。`off` 机器仍可用系统
-  `bash`/`pwsh`；搜索在围栏档走核心捆绑 `rg`。Go 单测：`core/` 下 `go test`（CI ubuntu 另 `go build` linux/amd64）。
+- 围栏档远端前置是**部署远程组件**（代码中称 core；设置页 `core.deploy`，linux x86_64）。`off` 机器仍可用系统
+  `bash`/`pwsh`；搜索在围栏档走远程组件捆绑 `rg`。Go 单测：`core/` 下 `go test`（CI ubuntu 另 `go build` linux/amd64）。
 - 本机 Playwright 浏览器二进制在 `%LOCALAPPDATA%\ms-playwright`；`@playwright/test` 是 devDependency。
 - Node ≥ 22.8（`--experimental-test-isolation` 与内置 TS transform 的最低要求）。
 

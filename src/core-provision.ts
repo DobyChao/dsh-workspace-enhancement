@@ -31,8 +31,6 @@ import type {
   RemoteApprovalServiceFace,
   RemoteApprovalOutcome,
 } from './remote-approval-gate.ts'
-import type { RemoteSandboxMode } from './remote-sandbox.ts'
-
 /** The approval `toolName` for a core deploy ask (an operator action, not a model tool). */
 export const CORE_DEPLOY_TOOL_NAME = 'core.deploy'
 
@@ -47,8 +45,8 @@ export const CORE_DEPLOY_ASK_MARKER = '[dsw-core-deploy]'
 
 /** Faceted deps: everything the provision ladder needs, injectable in tests. */
 export interface CoreWarmupDeps {
-  /** The machine view of one route (fence mode read), or `undefined`. */
-  machine(id: string): { remoteSandbox?: RemoteSandboxMode } | undefined
+  /** The machine view of one route, or `undefined` (unknown id). */
+  machine(id: string): { readonly id?: string } | undefined
   /** The live connection of one route — the deploy transport. */
   connection(id: string): SshTransport | undefined
   /** On-disk artifact probe (`CoreHub.status`). */
@@ -100,12 +98,9 @@ export interface CoreProvisionOutcome {
  *    is not needed when writes may fall back to SFTP);
  *  - a current core deploys nothing and asks nothing.
  *
- * Gating note (2026-09-30 lab fix): the machine's `remoteSandbox` field is
- * deliberately NOT consulted. Confinement that requires the core follows the
- * SESSION (`resolveRemoteSessionMode`, fail-safe `read-only` — ADR-0025), so
- * an `off`-fielded machine still fences a confined session and needs the
- * core; the field keeps governing terminals, the legacy fence, and display.
- * Unknown machines are the only skip.
+ * Gating note: confinement that requires the core follows the SESSION
+ * (`resolveRemoteSessionMode`, fail-safe `read-only` — ADR-0025), not any
+ * per-machine field. Unknown machines are the only skip.
  */
 export async function provisionRemoteCore(
   deps: CoreWarmupDeps,

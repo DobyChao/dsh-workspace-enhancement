@@ -29,5 +29,8 @@
 | [0023](./ADR-0023-one-remote-core.md) | 远端一个核心：围栏执行 + 远端读写共用可校验产物 | accepted |
 | [0024](./ADR-0024-remote-core-protocol.md) | 核心线协议、自 jail、进程寿命与工作区键 | accepted |
 | [0025](./ADR-0025-remote-session-sandbox.md) | 远端权限对齐会话 `/permission` 与官方提权 | accepted |
+| [0026](./ADR-0026-upstream-ssh-runtime.md) | 上游官方 SSH 运行时事实与我方定位（A/B/C） | proposed（§5 细化见 0029） |
 | [0027](./ADR-0027-sunset-sw-pick-workspace.md) | 日落 `sw_pick_workspace`；工具面只留 status/connect/exec | accepted |
 | [0028](./ADR-0028-region-permission-matrix.md) | 主/副工作区区域权限：工具绑世界；远程副根按根多开 WW | proposed（REQ-I19） |
+| [0029](./ADR-0029-positioning-review.md) | 官方 SSH 家族进 rc 后的定位细化对比；推荐 A′（并存 + 契约对齐） | proposed（UPSTREAM-6） |
+| [0030](./ADR-0030-local-seams-stay-routed.md) | 本地接缝不交还官方：路由层留作唯一提供者，改为默认转发 | proposed（REQ-I23） |
