@@ -24,7 +24,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
-import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
+import { SideRootSandboxedFileSystem } from './side-root-policy.ts'
 import SshRuntime from './runtime.ts'
 import type { Config } from './runtime.ts'
 import SshSubprocessRuntime from './subprocess.ts'
@@ -113,7 +113,7 @@ export function installMixedProviders(ctx: Context): void {
   // the mapping (and whose provide/set fiber pair is the same child fiber).
   if (ctx.get('sandboxPolicy', false) !== undefined) {
     ctx.inject(['sandboxPolicy'], (owner) => {
-      const localFs = new SandboxedFileSystem(owner, LOCAL_FS_CONFIG)
+      const localFs = new SideRootSandboxedFileSystem(owner, LOCAL_FS_CONFIG)
       installFs(owner, localFs)
     })
   } else {

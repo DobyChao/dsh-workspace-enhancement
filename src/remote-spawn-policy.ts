@@ -17,10 +17,12 @@ import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import { initiatorSessionOf } from './remote-policy.ts'
 import { pinBashWorkdir, pinPwshWorkdir, sessionLocalCwd } from './region-exec.ts'
+import { sessionLocalSideRoots } from './side-root-policy.ts'
 
 const storage = new AsyncLocalStorage<unknown>()
 /** Set while `sw_exec(server: "local")` is inside the host shell. */
 const hostLocalExec = new AsyncLocalStorage<true>()
+const workdirStore = new AsyncLocalStorage<string>()
 
 /** True only inside a host-local shell call (`dswLocalExec`). */
 export function isHostLocalShellExec(): boolean {
@@ -59,20 +61,15 @@ interface ShellSpec {
   [key: string]: unknown
 }
 
-function localSideRootsOf(ctx: Context): string[] {
-  if (typeof ctx.get !== 'function') return []
-  const session = initiatorSessionOf(ctx) as { header?: { id?: string } } | undefined
-  const sessionId = session?.header?.id
-  if (sessionId === undefined) return []
-  const store = ctx.get('sideWorkspaces', false) as {
-    listFor?: (id: string) => readonly { kind: string; rootKey: string }[]
-  } | undefined
-  if (store === undefined || typeof store.listFor !== 'function') return []
-  const roots: string[] = []
-  for (const item of store.listFor(sessionId)) {
-    if (item.kind === 'local') roots.push(item.rootKey)
-  }
-  return roots
+/** The workdir of the shell call being confined (REQ-I24 side-root pick). */
+export function currentShellWorkdir(): string | undefined {
+  return workdirStore.getStore()
+}
+
+/** Enter the one-shot policy and the workdir around one shell entry. */
+function enterShellCall<T>(spec: ShellSpec, fn: () => T): T {
+  const withPolicy = () => runWithRemoteSpawnPolicy(spec.sandboxPolicy, fn)
+  return typeof spec.workdir === 'string' ? workdirStore.run(spec.workdir, withPolicy) : withPolicy()
 }
 
 /**
@@ -88,7 +85,7 @@ export function adjustShellSpec(ctx: Context, spec: ShellSpec): ShellSpec {
   }
   const sessionCwd = initiatorSessionOf(ctx)?.header?.cwd
   if (process.platform === 'win32') {
-    const next = pinPwshWorkdir(spec.workdir, sessionLocalCwd(localSideRootsOf(ctx), homedir()))
+    const next = pinPwshWorkdir(spec.workdir, sessionLocalCwd(sessionLocalSideRoots(ctx), homedir()))
     if (next === spec.workdir) return spec
     return { ...spec, ...(next !== undefined ? { workdir: next } : {}) }
   }
@@ -109,7 +106,7 @@ function patchShell(owner: Context): void {
     shell.run = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => enterShellCall(next, () => original(next))
       return local ? hostLocalExec.run(true, call) : call()
     }
   }
@@ -118,7 +115,7 @@ function patchShell(owner: Context): void {
     shell.start = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => enterShellCall(next, () => original(next))
       return local ? hostLocalExec.run(true, call) : call()
     }
   }
@@ -139,7 +136,7 @@ function patchShell(owner: Context): void {
     shell.execute = (spec) => {
       const local = spec?.dswLocalExec === true
       const next = adjustShellSpec(owner, spec ?? {})
-      const call = () => runWithRemoteSpawnPolicy(next.sandboxPolicy, () => original(next))
+      const call = () => enterShellCall(next, () => original(next))
       return local ? hostLocalExec.run(true, call) : call()
     }
   }

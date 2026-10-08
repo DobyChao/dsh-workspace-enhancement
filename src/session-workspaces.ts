@@ -257,6 +257,32 @@ export function sideWorkspaceOf(
   return undefined
 }
 
+/**
+ * REQ-I24 (ADR-0028 §5): the session's LOCAL side root that stands in for the
+ * workspace root of one write or one command — the longest of `localRoots`
+ * holding `path`. A path the main root already holds keeps the main root (a
+ * nested side root shares it). `undefined` = keep the policy's own root.
+ */
+export function localSideRootFor(
+  localRoots: readonly string[],
+  mainRoot: string | undefined,
+  path: string | undefined,
+): string | undefined {
+  if (localRoots.length === 0 || typeof path !== 'string' || !isAbsolute(path)) return undefined
+  if (process.platform === 'win32' && path.startsWith('/') && !path.startsWith('//')) return undefined
+  const insensitive = process.platform === 'win32'
+  const key = canonicalLocalPath(path)
+  if (typeof mainRoot === 'string' && isAbsolute(mainRoot) && isUnderRoot(canonicalLocalPath(mainRoot), key, insensitive)) {
+    return undefined
+  }
+  let best: string | undefined
+  for (const root of localRoots) {
+    if (root.startsWith('ssh://') || !isUnderRoot(root, key, insensitive)) continue
+    if (best === undefined || root.length > best.length) best = root
+  }
+  return best
+}
+
 /** Pure validation/normalization of one record (persisted-file safety net). */
 export function normalizeSideWorkspaceRecord(raw: unknown): SideWorkspaceItem | null {
   if (typeof raw !== 'object' || raw === null) return null
