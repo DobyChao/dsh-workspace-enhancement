@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-08 12:09 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-08 12:59 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,26 +10,26 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `chore/UPSTREAM-6-positioning-review` / `ee3dee4` |
-| HEAD 提交 | `docs: record A' implementation shape, side-root rule and remote component naming` (2026-10-08) |
-| 与远端 | 2 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I24-side-root-sandbox-batch` / `2944a33` |
+| HEAD 提交 | `refactor(registry): drop the per-machine remoteSandbox field and the approval UI` (2026-10-08) |
+| 与远端 | 9 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 57 |
-| 单测用例（静态计数） | 698 |
+| 单测文件 | 60 |
+| 单测用例（静态计数） | 648 |
 | E2E 场景文件 | 8 |
-| ADR | 29 |
-| 轮次报告 | 48 |
+| ADR | 30 |
+| 轮次报告 | 49 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 23 |
-| `doing` | 0 |
+| `todo` | 18 |
+| `doing` | 6 |
 | `blocked` | 6 |
 | `done` | 68 |
 | `shipped` | 10 |

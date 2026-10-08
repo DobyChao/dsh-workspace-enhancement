@@ -4,6 +4,20 @@
 
 ## Unreleased
 
+### 新增
+
+- **本机副根与主根同权（`REQ-I24`）**：workspace-write 下，写入目标或命令 workdir 落在本会话挂的并列副根内即可写（一次写 / 一条命令只写一个根；同时写两个根仍要提权）。Windows ACL 后端会给副根一条持久授权，卸载副根不收回。
+
+### 变更
+
+- **远程只剩远程组件一条执行路径（`AUDIT-7`）**：机器字段 `remoteSandbox` 与宿主侧 bwrap 包装删除；远端权限只跟会话 `/permission`。旧 machines.json 的该键读入忽略、下次保存丢弃。子路径部署没挂远程组件时，围栏档的远程命令与写被拒；宿主组合没有 `sandboxPolicy` 服务时远程按 `read-only` 处理。`core.status` 不再返回 `sandbox` 字段。
+- **设置页去掉「远程命令审批」（`UX-7`）**：下拉与列表徽标删除；执行门保留，machines.json 里已有的值仍生效。
+- **术语（`UX-9`）**：用户可见文案中的「核心」改称「远程组件」。
+
+### 修复
+
+- **0.2.0 宿主上远程会话 pwsh 提权不生效（`BUG-12`）**：官方 shell 的 `resolve` / `execute` 接缝现在也带上单次提权与 workdir。
+
 ## [0.2.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-30)
 
 0.2.2 之后的供给线重做：**可在 0.2.0 宿主上安装**（peer 联合 pin `^0.1.7-rc.2 || ^0.2.0-rc.1`，
