@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-13 | 直连停止线读到假 EOF，无远程组件的远端命令必现 SIGTERM | doing | P1 | #59。作业控制关闭时后台 cat 的 stdin 接到 /dev/null，几毫秒假 EOF 后组杀。修法：真 stdin 复制到 fd 4，用户命令关掉 fd 4。有远程组件的腿不走 steward。剩：无 core 远端实机，脚本 [BUG-13](./uat/BUG-13-steward-stdin.md) |
 | BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | doing | P1 | 已补 0.2.0 `shell.resolve` + `execute` 桥。剩：lab 0.2.0 宿主实机复验远程会话 pwsh 提权后执行完、WW 仍拒。PR 见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
 | AUDIT-7 | 远程权限真值表 + 重叠机制清理 | doing | P1 | 真值表进 `architecture.md` §4.1；宿主侧 bwrap 与 `remoteSandbox` 字段已删，远程只剩远程组件一条路。剩：lab 复验子路径行与无 `sandboxPolicy` 组合按档拒绝。见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
 | REQ-I24 | 本机副根与主根同权（第一级） | doing | P2 | 已实现（文件按目标、命令按 shell 入口 workdir 换根）。剩：lab win32 实机验 ACL 首次授权耗时与卸载不收回，脚本 [R49](./uat/R49-side-root-sandbox-batch.md)。见 ADR-0028 §5 |
@@ -31,6 +32,7 @@
 | INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | todo | P1 | M3–M7 卡人的根因是要真 LLM 驱动会话。方案：脚本化假模型（固定工具调用）或直驱工具执行 + Actions sshd 服务容器，进 `npm run e2e`。验收：M3–M7 在 CI 确定性断言。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
+| REQ-I26 | 远程组件覆盖 linux-arm64 | todo | P2 | ADR-0023 §2.7 的第二架构。现只构建部署 linux-x86_64（`assertLinuxAmd64`），aarch64 被拒后走直连腿（#59 的现场）。验收：按 `uname -m` 选工件、每架构独立 sha256、CI 出 linux-arm64 tarball、部署门放行 aarch64。Windows 远端仍不做（无 bwrap） |
 | INFRA-24 | 拍板队列 + 可逆决定默认期限 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕。先定落点（backlog §3 加列或独立文件）与「可逆」判据。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |

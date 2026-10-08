@@ -154,7 +154,7 @@ bwrap 包装已删除（AUDIT-7），旧 machines.json 里的该键读入时忽�
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
 3. **副根 = 工作区的延伸**（ADR-0019 / ADR-0028 §5 / `REQ-I24`）：没有逐根开关；workspace-write 下一次写（按目标）或一条命令（按 cwd）落在哪个根就以哪个根为准，本机与远程同规则。挂副根即放宽写范围，只能由人在面板上挂（表 §4.1 D）。
 4. **远端前置**：围栏档要先从设置页部署远程组件（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 版组件。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
-5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`），不把 OS pid 交给宿主；有远程组件时 danger 仍走组件 RPC（`--sandbox off`）。
+5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`；watcher 读的是复制出来的 fd，避免后台列表把 stdin 接到 `/dev/null`，`BUG-13`），不把 OS pid 交给宿主；有远程组件时 danger 仍走组件 RPC（`--sandbox off`）。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。
 7. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。
 8. **宿主会静默 `ctx.fs.resolve` 往上找 `.git`**（定 `AGENTS.md` / skills 根，轨迹里没有 Git 工具）。探测路径不得当成 workspace-write jail 根（`BUG-4` 已修：只传 `path`）。专题附录 [`notes/host-silent-fs.md`](./notes/host-silent-fs.md)。无 `.git` 的远程会话实机尾巴仍待验。

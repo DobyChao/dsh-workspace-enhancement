@@ -152,7 +152,9 @@ test('BUG-9 direct: the serialized command wraps argv in a stdin-EOF steward', a
     / sh -c '[^']*kill -TERM 0[^']*' _ 'bash' '-c' 'echo hi' 3<<'DSW_STDIN_/,
     'kill -TERM 0 lives inside the quoted sh -c script; argv and the fd-3 here-doc follow',
   )
-  assert.doesNotMatch(command, /echo \$\$/, 'no remote pid is printed for the host')
+  assert.match(command, /exec 4<&0/, 'the watcher is pinned to a copy of the real stdin (BUG-13)')
+  assert.match(command, /cat <&4/, 'the background cat does not read the async-list stdin')
+  assert.match(command, /4<&-/, 'the user command does not inherit the stop wire')
   assert.doesNotMatch(command, /echo \$\$/, 'no remote pid is printed for the host')
   assert.equal(handle.pid, -1, 'the handle never exposes a remote pid')
   assert.equal(collectedOf(handle), 'hello', 'stdout is not peeled')

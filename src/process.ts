@@ -30,14 +30,20 @@ const KILL_CLOSE_FALLBACK_MS = 2_000
  * The user command reads fd 3, so a closed payload / `ignore` stdin cannot
  * be mistaken for a stop. OS pids never leave the remote machine.
  *
+ * BUG-13: with job control off, POSIX redirects an async list's unredirected
+ * stdin to `/dev/null`, so a bare `(cat >/dev/null …) &` sees EOF in a few
+ * milliseconds and kills the command before it runs. The real stdin is
+ * duplicated to fd 4 first, and the watcher reads that fd explicitly. The
+ * user command closes fd 4 so it does not inherit the stop wire.
+ *
  * `pipe` stdin cannot share that wire (the payload IS fd 0), so that shape
  * falls back to `exec` + channel signal/close.
  */
-const REMOTE_STOP_STEWARD = '"$@"'
-  + ' <&3 &'
+export const REMOTE_STOP_STEWARD = 'exec 4<&0; "$@"'
+  + ' <&3 4<&- &'
   + ' job=$!;'
   + ' exec 3<&-;'
-  + ' (cat >/dev/null; kill -TERM 0) &'
+  + ' (cat <&4 >/dev/null; kill -TERM 0) &'
   + ' watch=$!;'
   + ' wait $job;'
   + ' status=$?;'
