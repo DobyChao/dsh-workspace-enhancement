@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, parse } from 'node:path'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { installMixedProviders } from '../src/plugin.ts'
@@ -57,6 +57,16 @@ test('localSideRootFor: sibling side root wins; main root and nested roots keep 
   assert.equal(localSideRootFor([], main, join(sibling, 'x')), undefined)
   // A prefix that is not a path boundary is not "under" the root.
   assert.equal(localSideRootFor(roots, main, `${sibling}-twin${process.platform === 'win32' ? '\\' : '/'}x`), undefined)
+})
+
+test('localSideRootFor: an ancestor of the main root or a filesystem root is never the stand-in root', () => {
+  const { base, main, sibling } = layout()
+  // `base` holds both main and sibling: granting it would let one command write both.
+  assert.equal(localSideRootFor([base], main, join(sibling, 'x.txt')), undefined)
+  // A narrower eligible root still wins over an ineligible ancestor.
+  assert.equal(localSideRootFor([base, sibling], main, join(sibling, 'x.txt')), sibling)
+  const fsRoot = parse(sibling).root
+  assert.equal(localSideRootFor([fsRoot], join(fsRoot, 'nowhere-main'), join(sibling, 'x.txt')), undefined)
 })
 
 test('widenPolicyToSideRoot: only workspace-write swaps, and only for this session\'s roots', () => {
