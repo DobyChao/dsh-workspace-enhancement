@@ -16,13 +16,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-13 | 直连停止线读到假 EOF，无远程组件的远端命令必现 SIGTERM | doing | P1 | #59。作业控制关闭时后台 cat 的 stdin 接到 /dev/null，几毫秒假 EOF 后组杀。修法：真 stdin 复制到 fd 4，用户命令关掉 fd 4。有远程组件的腿不走 steward。剩：无 core 远端实机，脚本 [BUG-13](./uat/BUG-13-steward-stdin.md) |
-| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | doing | P1 | 已补 0.2.0 `shell.resolve` + `execute` 桥。剩：lab 0.2.0 宿主实机复验远程会话 pwsh 提权后执行完、WW 仍拒。PR 见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
-| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | doing | P1 | 真值表进 `architecture.md` §4.1；宿主侧 bwrap 与 `remoteSandbox` 字段已删，远程只剩远程组件一条路。剩：lab 复验子路径行与无 `sandboxPolicy` 组合按档拒绝。见 [R49](./rounds/R49-side-root-sandbox-batch.md) |
-| REQ-I24 | 本机副根与主根同权（第一级） | doing | P2 | 已实现（文件按目标、命令按 shell 入口 workdir 换根）。剩：lab win32 实机验 ACL 首次授权耗时与卸载不收回，脚本 [R49](./uat/R49-side-root-sandbox-batch.md)。见 ADR-0028 §5 |
-| UX-7 | 去掉设置页「远程命令审批」 | doing | P3 | 表单下拉、hint、列表徽标已删；执行门保留，machines.json 旧值仍生效。剩：lab 目测设置页 |
-| REQ-I23 | Spike：本地接缝交还官方 | doing | P3 | 结论：路由层必须留作唯一提供者，推荐改默认转发，见 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md)。实现另立 `REQ-I25`。剩：所有者拍 ADR |
-| UX-9 | 术语：「核心」改称「远程组件」 | doing | P3 | 用户可见文案、README、现行文档已改；代码标识符、线协议、工件名与面向模型的 `core` 不改。剩：合并 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -61,6 +54,13 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-13 | 直连停止线读到假 EOF，无远程组件的远端命令必现 SIGTERM | done | P1 | PR #62（#59）。真 stdin 复制到 fd 4，假 EOF 组杀去掉；真 EOF 仍组杀。**尾巴**：无 core 远端实机 [BUG-13](./uat/BUG-13-steward-stdin.md)。档案 [R50](./rounds/R50-bug13-steward-stdin.md) |
+| BUG-12 | 远程会话提权 pwsh 仍按 workspace-write 打远端围栏 | done | P1 | PR #61。0.2.0 `shell.resolve` / `execute` 带上单次提权与 workdir。**尾巴**：远程 pwsh 提权实机 [R49](./uat/R49-side-root-sandbox-batch.md)。档案 [R49](./rounds/R49-side-root-sandbox-batch.md) |
+| AUDIT-7 | 远程权限真值表 + 重叠机制清理 | done | P1 | PR #61。真值表 §4.1；远程只剩远程组件一条路。**尾巴**：子路径行实机。档案 [R49](./rounds/R49-side-root-sandbox-batch.md) |
+| REQ-I24 | 本机副根与主根同权（第一级） | done | P2 | PR #61。并列副根与主根同权；祖先目录与盘符根不放宽。**尾巴**：Windows ACL 实机 [R49](./uat/R49-side-root-sandbox-batch.md)。见 ADR-0028 §5 |
+| UX-7 | 去掉设置页「远程命令审批」 | done | P3 | PR #61。审批下拉与徽标已删；执行门保留，旧 `remoteApproval` 仍生效。**尾巴**：lab 目测。档案 R49 |
+| REQ-I23 | Spike：本地接缝交还官方 | done | P3 | PR #61。路由层留作唯一提供者，推荐默认转发，见 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md)（待拍板）。实现是 `REQ-I25`。档案 R49 |
+| UX-9 | 术语：「核心」改称「远程组件」 | done | P3 | PR #61。用户可见文案已改；标识符、线协议、面向模型的 core 不改。档案 R49 |
 | PUB-8 | 0.2.3 发布 | shipped | P1 | tag `v0.2.3`；publish run 36737916290（OIDC，owner Approve）。发布前终检九项全过（含 0.2.0-rc.2 宿主安装+boot 实证）。npm `latest=0.2.3`。档案 [R47](./rounds/R47-pub8-v0.2.3-release.md) |
 | REQ-I21 | 核心供给并入 sw_connect/sw_status；部署必问 + sha256 溯源 | done | P1 | PR #55（四次拍板）。`sw_connect` 同步供给报结果、`sw_status` 报核心态；部署必问；版本门同 major.minor 线；sha256 白名单（构建自登记）。**尾巴**：弹问闭环 UAT 待实机。档案 R46 |
 | REQ-I14 | 核心部署无感化：连接预热 + 探测翻链 + 首用审批 | done | P2 | PR #54。探测翻链（探版本目录才翻 current）；预热/审批后被 REQ-I21 重塑为「问不了的路径不部署」+ 纯探测告警；ADR-0024 §3/§6.1 修订。档案 R45/R46 |

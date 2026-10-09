@@ -1,7 +1,7 @@
 # R49 — 副根同权、远程单一执行路径、术语与 spike 一批
 
 > 用户点名的一组：`REQ-I24` `UX-9` `AUDIT-7` `REQ-I23` `BUG-12`，顺带 `UX-7`（AUDIT-7 备注里绑定）。
-> 一个 PR，叠在 R48（PR #60）分支上。日期：2026-10-08。`UPSTREAM-12` 按所有者指示删除（上游不收 issue）。
+> 与 R48 合成一个 PR，2026-10-08 合并为 [#61](https://github.com/DobyChao/dsh-workspace-enhancement/pull/61)（#60 并入后关闭）。`UPSTREAM-12` 按所有者指示删除（上游不收 issue）。
 
 ## 1. 做了什么
 
