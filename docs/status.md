@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-08 15:48 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-09 01:50 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `fix/BUG-13-steward-stdin` / `3979ecc` |
-| HEAD 提交 | `fix(remote): pin the direct-leg stop wire to the real stdin` (2026-10-08) |
-| 与远端 | 1 ahead / 1 behind origin/master |
+| 分支 / HEAD | `chore/close-61-62` / `49b41f6` |
+| HEAD 提交 | `fix(remote): pin the direct-leg stop wire to the real stdin (#62)` (2026-10-09) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -22,16 +22,16 @@
 | 单测用例（静态计数） | 652 |
 | E2E 场景文件 | 8 |
 | ADR | 30 |
-| 轮次报告 | 49 |
+| 轮次报告 | 50 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 19 |
-| `doing` | 7 |
+| `doing` | 0 |
 | `blocked` | 6 |
-| `done` | 68 |
+| `done` | 75 |
 | `shipped` | 10 |
 | `dropped` | 16 |
 
