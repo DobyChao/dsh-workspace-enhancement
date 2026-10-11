@@ -56,7 +56,7 @@
 |---|---|---|---|
 | L1 静态 | 所有 peer 必须声明**同一个**范围（可以是 `||` 联合）；dev 必须是该范围里的一个备选；peer 范围必须带 `-rc.`；宿主包不得进 `dependencies`；**联合范围里每个家族都必须在 `upstream.yml` 里被点名** | `scripts/check.mjs` #6 | 每次 `npm run check` |
 | L2 升级 | Renovate 把 `@deepseek-ai/*` 分组为一个 PR（peer 与 dev 同步升级），禁止自动合并 | `renovate.json` | 每周 |
-| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue。**scope watch**（`UPSTREAM-7`）：每周一同一 workflow 比对宿主包 `@deepseek-ai/*` 组成与 `scripts/upstream-baseline.json`，漂移即开 issue（SSH 四包收编单独点名，是 `UPSTREAM-6` 复评触发器） | `.github/workflows/upstream.yml` + `scripts/upstream-watch.mjs` | 每周一 + 每周四（alpha）+ 手动 |
+| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue。**scope watch**（`UPSTREAM-7`）：每周一同一 workflow 比对宿主包 `@deepseek-ai/*` 组成与 `scripts/upstream-baseline.json`，漂移即开 issue（SSH 四包收编单独点名，是 `UPSTREAM-6` 复评触发器）；**desktop watch**（`UPSTREAM-11`）每周一探 monorepo 桌面组合文件（§7.3）——private 桌面包的唯一覆盖 | `.github/workflows/upstream.yml` + `scripts/upstream-watch.mjs` | 每周一 + 每周四（alpha）+ 每日 tag-watch + 手动 |
 | L4 运行时 | 能力探测而非版本假设：可选服务 `ctx.get()` 判空、特性探测、双键回退、首用 fail-loud | `src/**`（见下） | 运行期 |
 
 L3 的判读：它红不代表要立刻改代码，而是**代表"上游已经变了，你需要看一眼"**——
@@ -176,7 +176,41 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
 4. **新包巡检（已自动化，`UPSTREAM-7`）**：`upstream.yml` 的 scope-watch 作业每周比对宿主包组成与 `scripts/upstream-baseline.json`（基线确认 = `node scripts/upstream-watch.mjs --write-baseline` 后提交）；SSH 四包被收编会在 issue 里单独点名（`UPSTREAM-6` 复评触发器）。手工核查仍可按 `ADR-0026` §6 的命令 `npm view`——
    通道"绿"只证明**接缝**兼容，不证明上游没换赛道。
 
-## 7. 维护本文件
+## 7. 桌面版（Electron 壳，`UPSTREAM-11`）
+
+**结论：架构零改动可用**（09-29 调查，档案 [`notes/upstream11-desktop-survey.md`](./notes/upstream11-desktop-survey.md)）：
+官方桌面版 = Electron 壳包**完整 web 应用**（RunAsNode 子进程跑共享 profile runner，加载
+`dsh-app://app/`）；`desktop` profile 由 `PROFILE_TEMPLATES.web` 初始化 ⇒ 与 web profile
+**同底座**（dsh-base + dsh-web-app + 插件）。我方四个耦合面（`/api/dsw` 通道、客户端槽位、
+`cordis.patch.yml` 的 disable 行、bundles 安装机制）**全部存续**。
+
+1. **安装入口受限**：`desktop` 是保留 profile 名，npm 装的 CLI 执行 `dsh plugin --profile desktop`
+   **永远拒绝**；装本插件走桌面应用内的 Plugins 设置页（或桌面自带 CLI 载体），且首次需先启动
+   桌面一次完成 profile 初始化。npm 上的 `dsh-desktop` 0.2.0（2026-08-13）是**社区占位包**，
+   与官方无关——官方桌面包 private 不发 npm、与 `dsh` 同版本同日发布、走应用内更新。
+2. **双端并跑与更新行为**：`$DSH_HOME` 两端共享，profile 目录有单实例锁独占；我方机器注册表在
+   `$DSH_HOME` 下，**双端同写注册表的并发行为未验证**（UAT D7 项）。桌面应用内更新走恢复流程：
+   `sanitizeProfile` 回 web 模板 bundles 并**禁用第三方 bundle** ⇒ 桌面大版本更新后本插件可能需
+   在 Plugins 页重启用（UAT D5 验证）。端口以应用内为准——档案写默认 19387，monorepo master
+   已改 `--port 0` 临时端口 + IPC 回传 URL（D6 实机记录，消除档案漂移）。
+3. **哨兵盲区 + 每周探测（已自动化）**：三通道哨兵（tag/scope/drift）对桌面**全盲**——private
+   包不发 npm、无 dist-tag。`upstream.yml` 的 desktop-watch 作业每周一 05:00 UTC 拉取官方
+   monorepo（`deepseek-ai/deepseek-harness`，public、default branch `master`）**四个**组合定义
+   文件——`apps/desktop/package.json`（版本；与 `dsh` 同版本同日发布）、`apps/desktop/src/
+   project-manager.ts`（**组合分叉最早信号**）、`apps/desktop/src/core-package-set.ts`（桌面
+   运行时核心包 pin 集——「桌面组合 vs 我们 pin 的 web 家族」的直接机制文件）、
+   `apps/desktop-host/src/index.ts`（壳内宿主接线）——比对
+   `scripts/upstream-desktop-baseline.json` 的 sha256/bytes/version 指纹，变化开 issue；并对
+   `project-manager.ts` 持有**语义断言**（必须仍含 `PROFILE_TEMPLATES.web`——不变量断裂时
+   issue 直接点名「方案 1 前提失效」）。基线确认 =
+   `node scripts/upstream-desktop.mjs --write-baseline` 后提交。2026-10-11 实测：桌面=web 等价
+   性在 master 仍成立（桌面 `0.2.1-alpha.2` == 宿主 `alpha` 同版本）。
+4. **实机 UAT 未跑（尾巴）**：桌面特有四点在 lab 复现不了——① Electron Node 进程里跑 ssh2
+   （原生构建受阻时纯 JS 兜底）、② `dsh-app://app/` 源下我们通道的转发、③ 双端并跑同写
+   注册表的并发、④ 被 disable 的 `-auto` picker 在桌面原生对话框语境下的行为。脚本：
+   [`docs/uat/UPSTREAM-11-desktop.md`](./uat/UPSTREAM-11-desktop.md)，需用户先装桌面版。
+
+## 8. 维护本文件
 
 - 每次发布：在 §1 增加一行（插件版本 × 宿主家族 × 状态），并把窗口收窄/放宽写清。
 - 每次踩到上游变更：在 §2 加一行（日期 / 变化 / 症状 / 处置 / 现在被什么挡住）。
@@ -186,3 +220,5 @@ alpha 的 issue 会一直挂着直到处理（自动开/评论，不用人肉记
   就如实写「目前无自动闸门」并说明人工比对方式**（例：§2 的 rc.2 槽位重排一行）——
   把「无守卫」写成「有守卫」比不写更危险。
 - §1 的「状态」列今后按**运行时证据**填写，不按 peer 声明填写（§1 表下的注记）。
+- 桌面（`UPSTREAM-11`）：事实变化进 §7；desktop-watch 认领若涉及 `project-manager.ts` /
+  `core-package-set.ts`，同步更新调查档案与 §7 的耦合面表。

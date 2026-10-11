@@ -1,0 +1,24 @@
+{
+  "$comment": "Acknowledged fingerprints of the desktop composition files (the npm-channel sentinels cannot see the private desktop packages — compatibility.md §7). The desktop watch (upstream.yml, weekly) diffs the live monorepo against this file and opens an issue on movement; regenerate with `node scripts/upstream-desktop.mjs --write-baseline` to acknowledge.",
+  "recordedAt": "2026-10-11",
+  "files": {
+    "apps/desktop/package.json": {
+      "sha256": "ae8547bde6dd5c42aebb857c6c583dd3897808754017eb6a9228a3817112b377",
+      "bytes": 3974,
+      "version": "0.2.1-alpha.2"
+    },
+    "apps/desktop/src/project-manager.ts": {
+      "sha256": "2ad0aacba5377e82c1ed2bd70f52003ffdf91fa0e287dd3d51cfd896f2249748",
+      "bytes": 7004,
+      "webTemplate": true
+    },
+    "apps/desktop/src/core-package-set.ts": {
+      "sha256": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667",
+      "bytes": 7936
+    },
+    "apps/desktop-host/src/index.ts": {
+      "sha256": "1f61890c63da8898cef678479450d7647163530c416751d161dde6b397c654d3",
+      "bytes": 6280
+    }
+  }
+}
