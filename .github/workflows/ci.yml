@@ -94,6 +94,61 @@ jobs:
           echo "example: fix(side-workspaces): keep the read-only gate under junction spellings"
           exit 1
 
+  e2e-l1:
+    name: e2e-l1 (L1 smoke, headless)
+    # INFRA-23: matrix.md §3 M3–M5 as DETERMINISTIC process-level assertions on
+    # every PR. The LLM is a scripted fake Anthropic Messages server
+    # (scripts/e2e-l1/fake-model.mjs); the host is the real `dsh` (0.2.0 family,
+    # pinned) running the real agent loop through dsh-headless against a
+    # services-container sshd target — the only layer the UPSTREAM-8 breaks hid
+    # from every fabricated test double. M6/M7's browser halves stay in the
+    # manual e2e job below.
+    # The ssh credential is a throwaway container password held in the
+    # DSW_E2E_SSH_PASSWORD repo secret (owner creates it once); until it exists
+    # the job self-skips with a notice instead of failing.
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      sshd:
+        image: lscr.io/linuxserver/openssh-server:latest
+        env:
+          PASSWORD_ACCESS: 'true'
+          USER_NAME: e2essh
+          USER_PASSWORD: ${{ secrets.DSW_E2E_SSH_PASSWORD }}
+        ports:
+          - 2222:2222
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Run the L1 process-level cases (M3–M5)
+        env:
+          DSW_E2E_SSH_PASSWORD: ${{ secrets.DSW_E2E_SSH_PASSWORD }}
+        run: |
+          if [ -z "$DSW_E2E_SSH_PASSWORD" ]; then
+            echo "::notice::DSW_E2E_SSH_PASSWORD is not configured — e2e-l1 self-skips. The repo owner creates this secret once (a throwaway password for the per-run sshd container); see docs/testing.md."
+            exit 0
+          fi
+          for i in $(seq 1 30); do
+            (echo > /dev/tcp/127.0.0.1/2222) 2>/dev/null && break
+            sleep 2
+          done
+          (echo > /dev/tcp/127.0.0.1/2222) 2>/dev/null || { echo "::error::sshd service container never listened on 2222"; exit 1; }
+          npm ci
+          npm run build
+          npm i -g @deepseek-ai/dsh@0.2.0-rc.2
+          CLI="$(npm root -g)/@deepseek-ai/dsh/lib/bin.js"
+          node scripts/e2e-l1/run-cases.mjs \
+            --cli "$CLI" \
+            --host 127.0.0.1 --port 2222 --username e2essh \
+            --password "$DSW_E2E_SSH_PASSWORD" \
+            --workspace /home/e2essh
+
   e2e:
     name: e2e (lab, manual)
     # Manual only: the browser suite needs a live DSH lab instance. Run it with
