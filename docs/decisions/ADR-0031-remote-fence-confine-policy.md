@@ -1,6 +1,6 @@
 # ADR-0031: 远程围栏改走 `confine` 逐次策略——spike 结论与实施形状
 
-- 状态: proposed（spike 完成、实施形状定稿；**实现待独立轮**，见 §7）
+- 状态: accepted（所有者 2026-10-11 点名实施（REQ-I27 并入 R51/PR #65）；§4 终端策略同日拍板）
 - 日期: 2026-10-11（R51）
 - 范围: REQ-I22 的两个待核问题（不调 `confine` 的上游调用方、交互终端）；
   A′（[ADR-0029](./ADR-0029-positioning-review.md) §4.3）落地设计；`BUG-12` 提权半的验收论证
@@ -155,6 +155,7 @@ policy 在 spec 上，不受入口形状影响。
 
 ## 7. 切分与未核实
 
-- **实施 = 独立轮**（backlog `REQ-I27`）：§3 全部 + SECURITY.md + 契约测试。本轮只落本 ADR。
+- **实施 = `REQ-I27`**（所有者 2026-10-11 决定并入 R51 同一 PR）：§3 全部 + SECURITY.md +
+  契约测试。WSL 侧测试按所有者指示 skip（CI ubuntu 承担 Linux 面）。
 - 未核实：0.1.7 消费者集合（磁盘无包）；`dsh-sandbox-ssh`/`dsh-subprocess-ssh` 的
   registry 现状（两磁盘源未装，ADR-0029 §6 pack 成功为旧证）——实施轮装机核。

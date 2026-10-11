@@ -1,7 +1,9 @@
-# R51 — 三个 P1 一轮：REQ-I22 围栏 spike + INFRA-23 L1 进 CI + UPSTREAM-11 桌面适配
+# R51 — 三个 P1 一轮 + REQ-I27 实施：confine spike → L1 进 CI → 桌面适配 → confine 落地
 
 > 一轮 = 用户点名三个 P1（2026-10-10「三个P1的你编排一下做」）= 一个 PR（分支
-> `feat/req-i22-confine-spike`，`Refs: REQ-I22 INFRA-23 UPSTREAM-11`）。
+> `feat/req-i22-confine-spike`，`Refs: REQ-I22 INFRA-23 UPSTREAM-11 REQ-I27`）。
+> 10-11 追加：ADR-0031 §4 终端策略拍板（人开终端放行）+ **REQ-I27 实施并入本 PR**
+> （「把这个做进去这个PR好了，同样wsl的测试先skip」），ADR-0031 转 accepted。
 > 基线 master `9012af2`。三个只读侦察子代理并行（上游 confine 调用面 / e2e 设计 / 桌面方案落地）。
 
 ## 0. preflight（INFRA-21）
@@ -33,7 +35,27 @@ node 24.18 ✓ / npm 11.16 ✓ / git ✓ / gh 已登录 ✓ / wsl bash 可用 �
 `BUG-12` 提权半作其验收。**未核实**：0.1.7 消费者集合（磁盘无包）；dsh-sandbox-ssh /
 dsh-subprocess-ssh registry 现状（两磁盘源未装，ADR-0029 §6 pack 成功为旧证）。
 
-## 2. INFRA-23 — L1 冒烟进 CI（假模型路线）
+## 2. REQ-I27 — confine 逐次策略实施（10-11 并入，ADR-0031 §3 全量）
+
+- **新模块 `src/remote-confine-policy.ts`**：进程内注册表（`WeakMap<argv 对象, {mode}>`）+
+  `markConfinedArgv` / `confinedSpawnMarkOf`；bwrap 拒绝方言常量随迁（remote-confine 再导出，
+  旧 import 路径不变）。**标记 = 对象身份，不进 argv 文本**（审批卡仍预览用户写的命令——
+  ADR-0031 §3.1 的「dsh-core run …」文本形在实现上收敛为注册表形，ADR 已注明）。
+- **`remote-confine.ts`**：远程分支从「恒等 argv」改为「登记 + 返回」——策略（会话档 +
+  一次性授予，官方消费者已合并）从此经 confine 产品流进 spawn。
+- **`subprocess.ts`**：`spawn` 的策略源 = 标记 ?? `danger-full-access`（**不再读会话档**——
+  无标记不围栏）；`spawnTerminal` 按标记判定（模型侧 confined 标记拒、人开无标记放行，
+  §4 拍板）；terminalGuard 机器退役（engine 构造器 4 参）。
+- **`remote-sandbox-fence.ts`**：fence 同改标记驱动；`createRemoteSandboxTerminalGuard` 删除。
+- **`remote-spawn-policy.ts`**：ALS 策略存储退役（`storage`/`runWithRemoteSpawnPolicy`/
+  `currentRemoteSpawnPolicy` 删）；保留 workdir 世界钉（ADR-0028）+ `dswLocalExec` 旁路。
+- **`exec-tools.ts`**：`sw_exec` / win32 `bash` 改官方同形（`spawnMarked`：confined 档经
+  `ctx.sandbox.confine` 带标记，danger 跳过）；`tools.ts` sw_connect 的 provision 判定改读纯会话档。
+- **SECURITY.md**：收窄清单落档（git 探针/ripgrep/worker/-local 不围；终端两半；danger=跳过=off）。
+- **测试**：5 个受影响文件迁移 + 新增 `test/req-i27-confine-policy.test.ts`（身份/防伪造/
+  无标记=off/终端两半）。
+
+## 3. INFRA-23 — L1 冒烟进 CI（假模型路线）
 
 **拍板**（设计侦察结论）：M3–M7 断言全是**工具/宿主行为**，但断言位置在真 agent-loop 的 render、
 真 jobs owner 契约、官方工具链里——直驱会自证。路线 = **脚本化假模型**：
@@ -62,7 +84,7 @@ CI 迭代）：占位树/注册表在 headless 组合的解析路径与 web 不�
 **待所有者**：repo secret `DSW_E2E_SSH_PASSWORD`（一次性建，即弃容器口令；建好前 e2e-l1 自跳过）。
 命名（`e2e:l1` 独立 vs 并进 `e2e`）按 B 建议取独立——`e2e` 的 L4 语义（testing.md）不动。
 
-## 3. UPSTREAM-11 — 桌面适配方案 1（所有者 10-10 点名执行）
+## 4. UPSTREAM-11 — 桌面适配方案 1（所有者 10-10 点名执行）
 
 - **每周探测**：`scripts/upstream-desktop.mjs`（+ 基线 + 9 用例单测）——monorepo
   （`deepseek-ai/deepseek-harness`，public/master，2026-10-11 实测三+1 文件全可达）**四文件**
@@ -79,14 +101,14 @@ CI 迭代）：占位树/注册表在 headless 组合的解析路径与 web 不�
 - **10-11 复核事实**：桌面=web 等价性在 master 仍成立（桌面 `0.2.1-alpha.2` == 宿主 alpha 同版本）；
   端口档案漂移（19387 vs master `--port 0`）做成 D6 实机记录而非猜测。
 
-## 4. 本轮验证
+## 5. 本轮验证
 
 `check:static` ALL PASS（lib/ WARN 为既有，本轮未动 src/）· `typecheck` 0 · `test:agent`
 602 pass / 0 fail（3 skip 为 JSX 沙箱常态）· `upstream-desktop` 9/9 · 桌面三+1 文件 raw 直取
 200 实测 · e2e-l1 管道在 WSL 半程验证（见 §2 blocked）。**WSL Linux 复验 blocked（网络）**，
 Linux 侧由 CI ubuntu（check 22/24 + e2e-l1）承担。
 
-## 5. 遗 tail（待用户/所有者）
+## 6. 遗 tail（待用户/所有者）
 
 | 事项 | 谁 |
 |---|---|
