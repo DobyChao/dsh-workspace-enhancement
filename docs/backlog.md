@@ -16,13 +16,14 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-11 | 桌面版 dsh 适配 | doing | P1 | R51：方案 1 所有者 10-10 点名执行——compatibility 桌面章节 + uat 脚本 + 每周 monorepo 探测；实机 UAT 需用户装桌面版。档案 [notes/upstream11-desktop-survey](./notes/upstream11-desktop-survey.md) |
+| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | doing | P1 | R51：侦察 confine 调用面/交互终端 + ADR-0031 草稿；A′ 形状按 ADR-0029 §4.3；BUG-12 提权半作验收 |
+| INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | doing | P1 | R51：假模型（headless+Anthropic 假服务器）+ run-cases 落 `scripts/e2e-l1/`，CI 挂 e2e-l1 job。**WSL 本地预验 blocked**（WSL dsh 停 0.1.7-rc.2 未升级 + WSL 网络栈坏，用户 10-11 指示停调）——首验走 CI。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-11 | 桌面版 dsh 适配 | todo | P1 | 09-29 调查完成（[档案](./notes/upstream11-desktop-survey.md)）：桌面=Electron 壳包完整 web 应用、desktop profile 用 web 模板 bundles ⇒ **架构零改动可用**（四耦合面全存续；npm CLI 管不了 desktop profile）。方案 1=文档+桌面真机 UAT+每周探 monorepo 防组合分叉。**待拍板**（UAT 需先装桌面版） |
-| REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | todo | P1 | 形状已定（[ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.3）：`confine` 出标记 argv，spawn 解标记按 cwd 选根；无标记不围栏（已接受）；只认进程内登记的产物。待核：不调 `confine` 的上游调用方、交互终端。`BUG-12` 提权半作验收。产出 ADR |
-| INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | todo | P1 | M3–M7 卡人的根因是要真 LLM 驱动会话。方案：脚本化假模型（固定工具调用）或直驱工具执行 + Actions sshd 服务容器，进 `npm run e2e`。验收：M3–M7 在 CI 确定性断言。见 [R48](./rounds/R48-project-direction-review.md) §3 |
+| REQ-I27 | 实施远程围栏 `confine` 逐次策略 | todo | P1 | ADR-0031 已定形状：标记 argv + 进程内注册表 + spawn 解码选根；`remote-spawn-policy` policy 旁路退役；`BUG-12` 提权半作验收。待 [ADR-0031](./decisions/ADR-0031-remote-fence-confine-policy.md) 拍板后开工 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | todo | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I26 | 远程组件覆盖 linux-arm64 | todo | P2 | ADR-0023 §2.7 的第二架构。现只构建部署 linux-x86_64（`assertLinuxAmd64`），aarch64 被拒后走直连腿（#59 的现场）。验收：按 `uname -m` 选工件、每架构独立 sha256、CI 出 linux-arm64 tarball、部署门放行 aarch64。Windows 远端仍不做（无 bwrap） |
