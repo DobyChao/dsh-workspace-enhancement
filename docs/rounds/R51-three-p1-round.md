@@ -21,8 +21,8 @@ node 24.18 ✓ / npm 11.16 ✓ / git ✓ / gh 已登录 ✓ / wsl bash 可用 �
    workspace-changes git 探针 ×3、tool-fs-search ripgrep、sensevoice worker；`-local` 执行器
    组合整体不围（执行器选择的属性）。fs 写不经 confine（进程内栅栏）——不属收窄。
 2. **交互终端两条路**：persistent shell 工具（`dsh-terminal-bash` `spawnArgv`）**经 confine**；
-   浏览器终端**不经**。⇒ 围栏档拒 PTY 现行为**保留**（ADR-0022 §2.4 维持；浏览器终端是否对齐
-   官方放开 = 留给所有者，ADR-0031 §4）。
+   浏览器终端**不经**。⇒ 终端策略**所有者 10-11 已拍**（ADR-0031 §4）：persistent shell
+   （模型侧）仍拒；浏览器终端（人开的）对齐官方**放行不设防**（「人开的终端当然不设限」）。
 3. **可行性**：两家族 `dsh-sandbox`/`dsh-subprocess` seam **SHA256 全等** ⇒ confine 模型可双家族
    同开；danger=消费者跳过 confine（三处同形证据）；官方无魔法前缀协议（policy 编进 runner
    flag、spawn 不解标记）——我方标记 argv 与官方 runner-argv **同构**；`SubprocessSpawnSpec`
@@ -91,7 +91,7 @@ Linux 侧由 CI ubuntu（check 22/24 + e2e-l1）承担。
 | 事项 | 谁 |
 |---|---|
 | 建 repo secret `DSW_E2E_SSH_PASSWORD`（e2e-l1 从自跳过转真跑） | 所有者 |
-| ADR-0031 拍板（含 §4 浏览器终端一句话）→ 解挡 `REQ-I27` 开工 | 所有者 |
+| ADR-0031 整册拍板（§4 终端策略已拍：persistent shell 拒、人开浏览器终端放行不设防）→ 解挡 `REQ-I27` 开工 | 所有者 |
 | 桌面 UAT D1–D7（先装官方桌面版；D5 等桌面下一版） | 用户 |
 | e2e-l1 CI 首跑红 → 修到绿（§2 的组合层假设） | 代理（本 PR 内迭代） |
 | WSL 修复（升级 dsh 到 0.2.0 线 + Mirrored 网络配置）后补本地预验 | 用户/环境 |

@@ -17,7 +17,8 @@
 2. **交互终端有两条路**：persistent shell 工具（`ctx.terminals` → `dsh-terminal-bash`
    `spawnArgv`）**经 confine**；浏览器/Web-UI 终端（`dsh-api-terminal-controller.spawn`）
    **裸 shell argv 直达 `spawnTerminal`，无 confine、无模式检查**。
-   ⇒ 围栏档拒 PTY 的现行为（ADR-0022 §2.4）**保留**，见 §4。
+   ⇒ 终端策略见 §4：**所有者 2026-10-11 已拍**——persistent shell（模型侧）拒；
+   浏览器终端（人开的）对齐官方**放行不设防**。
 3. **可行**：两家族（0.1.7-rc.2 / 0.2.0-rc.2）的 `dsh-sandbox` 契约**哈希级一致**
    （§1.4），confine 模型可同时启用；我方标记 argv 与官方 runner-argv **同构**（§3.1）。
 
@@ -113,29 +114,34 @@ policy 在 spec 上，不受入口形状影响。
 | 官方 bash/pwsh/PTC/persistent-PTY | 零改动自动覆盖（它们本来就调 confine / 跳过）——**BUG-12 整类消失** |
 | `sw_exec` / win32 `bash`（我方工具） | 改成与官方 bash 同形：批准提权后 danger 跳过 confine，否则带本次 policy 调 confine |
 | `remote-spawn-policy.ts` | policy 旁路存储（`storage`/`runWithRemoteSpawnPolicy`）**整体退役**；workdir 世界钉（`region-exec`，ADR-0028）**保留** |
-| `spawnTerminal` | §4：维持「会话 confined 即拒」 |
+| `spawnTerminal` | §4（已拍）：有标记（模型侧）即拒；无标记（人开的浏览器终端）放行不设防 |
 | fs 面 | **不动**（`CoreRoutingFileSystem` 的 core 路由是路径语义，非 argv 语义） |
 
 `BUG-12` 提权半验收论证：提权到 danger ⇒ 消费者跳过 confine ⇒ unmarked ⇒ `off`（正是
 授予语义）；提权到 workspace-write ⇒ 重新 confine 更宽 policy ⇒ 标记 ⇒ 按宽档执行。
 任何未来新入口只要走 confine 就自动带对策略——不再存在「漏接」。
 
-## 4. 交互终端的决定（ADR-0029 §4.3 第 6 条的答案）
+## 4. 交互终端的决定（ADR-0029 §4.3 第 6 条的答案；所有者 2026-10-11 拍板）
 
-- **persistent shell PTY**：官方经 confine ⇒ 我方 wrapper 会给出标记。但「bwrap 下的
-  fenced PTY」仍是 ADR-0022 §2.4 的未验证面 ⇒ **标记进 terminal argv 一律拒绝**（错误
-  文案指明原因），不试图围栏 PTY。
-- **浏览器终端**：上游本身不围（§0.1）也不查模式。我方**维持现行更严行为：会话
-  confined 即拒**（`remote-sandbox-fence` `createRemoteSandboxTerminalGuard`）。理由：
-  PTY 是任意命令入口且无法事后补救，与「防模型手滑」威胁模型一致；对齐官方的不围
-  语义属于潜在**放宽**，须所有者明示才改。
-  ⇒ **留给所有者一句话**：远程围栏档下浏览器终端，维持拒绝（推荐）还是对齐官方放开？
+- **persistent shell PTY（模型侧）**：官方经 confine ⇒ 我方 wrapper 会给出标记。
+  「bwrap 下的 fenced PTY」仍是 ADR-0022 §2.4 的未验证面 ⇒ **标记进 terminal argv
+  一律拒绝**（错误文案指明原因），不试图围栏 PTY。
+- **浏览器终端（人开的）**：**对齐官方，放行不设防**。所有者原话：「如果是人开的
+  终端，当然不设限」——围栏档会话里它是唯一不受围栏的入口，属**人的责任面**：模型
+  没有打开它的工具入口，人开它即人接管。随 REQ-I27 写进 `SECURITY.md` 已知放行清单。
+  实现上这是**简化**：`createRemoteSandboxTerminalGuard` 的「按会话档拒绝」对无标记
+  终端退役（A′ 的「无标记不围栏」自然涵盖），只保留「有标记（模型侧）即拒」。
+
+  > 拍板记录（2026-10-11 会话）：浏览器终端 = 官方面板（非 better-sidebar），远程
+  > danger 档自 REQ-I2 起经接缝直接可用；远期「围栏里的终端」（fenced PTY）若要做，
+  > 是独立能力项（ADR-0022 §2.4 口子），与本决定不冲突。
 
 ## 5. 收窄清单（相对现状；SECURITY.md 素材，所有者已接受 ADR-0029 §4.3-2）
 
 | 路径 | 现状 | A′ 后 |
 |---|---|---|
-| 浏览器终端（远程会话） | confined 拒 | **仍拒**（§4，不变） |
+| 浏览器终端（远程会话，**人开**） | confined 拒 | **放行不设防**（对齐官方；§4 已拍；SECURITY.md 登记） |
+| persistent shell（远程会话，**模型侧**） | confined 拒 | 仍拒（有标记即拒，§4） |
 | `workspace-changes` git 探针 / `tool-fs-search` ripgrep / sensevoice worker（远程会话内） | 随会话档被引擎围 | unmarked ⇒ `off`（不围）——与官方本地语义一致 |
 | `-local` 执行器组合 | 本就不围（本地） | 不变 |
 
