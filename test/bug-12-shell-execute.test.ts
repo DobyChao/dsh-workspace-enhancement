@@ -1,7 +1,9 @@
 /**
  * BUG-12: the 0.2.0 shell seam is `resolve` + `execute` (no `run` / `start`).
- * The bridge must pin the world on the resolved spec and carry the one-call
- * sandbox policy into the spawn that `execute` performs.
+ * The bridge pins the world on the resolved spec and re-stamps the local-exec
+ * flag. REQ-I27 retired its policy store: `spec.sandboxPolicy` now flows to
+ * the executor VERBATIM (no bridging needed) and the policy channel into the
+ * remote spawn is the confine mark registry instead (ADR-0031 §3.1).
  * @module test/bug-12-shell-execute
  */
 
@@ -9,11 +11,8 @@ import assert from 'node:assert/strict'
 import { homedir } from 'node:os'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import {
-  currentRemoteSpawnPolicy,
-  installRemoteSpawnPolicyBridge,
-  isHostLocalShellExec,
-} from '../src/remote-spawn-policy.ts'
+import { confinedSpawnMarkOf, markConfinedArgv } from '../src/remote-confine-policy.ts'
+import { installRemoteSpawnPolicyBridge, isHostLocalShellExec } from '../src/remote-spawn-policy.ts'
 
 type Spec = Record<string, unknown>
 
@@ -38,17 +37,30 @@ function shellOf(ctx: Context): { resolve: (r: Spec) => Spec; execute: (s: Spec)
   return ctx.get('shell') as { resolve: (r: Spec) => Spec; execute: (s: Spec) => Promise<unknown> }
 }
 
-test('BUG-12: execute keeps the one-call sandboxPolicy across await and clears it after', async () => {
+test('BUG-12/REQ-I27: execute receives spec.sandboxPolicy verbatim — no bridge store any more', async () => {
   const ctx = new Context()
-  provideShell(ctx, async () => {
+  let seen: unknown
+  provideShell(ctx, async (spec) => {
     await Promise.resolve()
-    return currentRemoteSpawnPolicy()
+    seen = spec.sandboxPolicy
   })
   installRemoteSpawnPolicyBridge(ctx)
   const shell = shellOf(ctx)
   const spec = shell.resolve({ command: 'echo', workdir: process.cwd(), sandboxPolicy: { mode: 'danger-full-access' } })
-  assert.deepEqual(await shell.execute(spec), { mode: 'danger-full-access' })
-  assert.equal(currentRemoteSpawnPolicy(), undefined)
+  await shell.execute(spec)
+  // The one-call policy rides the SPEC (official escalation stamps it there);
+  // the retired ALS bridge was only ever a workaround for spawns reading it.
+  assert.deepEqual(seen, { mode: 'danger-full-access' })
+})
+
+test('BUG-12/REQ-I27: the spawn policy channel is the confine mark — sandboxPolicy needs no bridging', () => {
+  // A danger grant SKIPS confine (official semantics) ⇒ the spawn argv stays
+  // UNMARKED ⇒ the remote spawn runs `--sandbox off` — exactly the grant.
+  const granted = ['pwsh', '-Command', 'Set-Content x']
+  assert.equal(confinedSpawnMarkOf(granted), undefined)
+  // A confined call goes THROUGH confine ⇒ the returned argv IS the mark.
+  const product = markConfinedArgv(['bash', '-c', 'make'], { mode: 'workspace-write' })
+  assert.deepEqual(confinedSpawnMarkOf(product.argv), { mode: 'workspace-write' })
 })
 
 test('BUG-12: resolve pins a remote workdir to the host world', () => {

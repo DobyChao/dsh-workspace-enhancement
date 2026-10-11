@@ -1,20 +1,23 @@
 /**
- * REQ-I9 / ADR-0022 → AUDIT-7 wiring tests (`src/process.ts` argv stage,
- * `src/subprocess.ts` fence + terminal guard, `src/remote-sandbox-fence.ts`,
+ * REQ-I9 / ADR-0022 → AUDIT-7 → REQ-I27 wiring tests (`src/process.ts` argv
+ * stage, `src/subprocess.ts` fence + terminal mark, `src/remote-sandbox-fence.ts`,
  * the subpath `SshFileSystem` write face).
  *
- * After AUDIT-7 there is ONE remote enforcement path: the session mode
- * (`/permission`, or a one-shot grant) decides, the remote component jails,
- * and anything that cannot be jailed in a confined mode is refused. The
- * per-machine `remoteSandbox` field and the host-side bwrap wrap are gone.
+ * After REQ-I27 (ADR-0031) the confine MARK — not the session mode — is the
+ * policy truth on the exec path: a registered `markConfinedArgv` product
+ * enforces its mode, unmarked argv runs `--sandbox off` (owner-accepted
+ * narrowing), and `spawnTerminal` refuses only MARKED confined argv (the
+ * model-side persistent shell) while the human browser terminal opens
+ * unfenced. The fs write face still reads the session policy service.
  *
  * What these tests pin:
  *  1. **The approval gate still sees the UNWRAPPED argv**, and runs before the
  *     fence (`preflight` → `resolveArgv`).
- *  2. **Fail closed.** A confined session with no remote component hub (subpath
+ *  2. **Fail closed.** A confined MARK with no remote component hub (subpath
  *     row, degraded path) or no registry connection is refused before any
- *     command text reaches the transport — for spawn, terminal AND writes.
- *  3. **danger-full-access stays the plain path** (identity argv, SFTP writes).
+ *     command text reaches the transport — for spawn, marked terminals AND
+ *     writes.
+ *  3. **Unmarked argv stays the plain path** (identity argv, SFTP writes).
  *
  * No live SSH host is required: transport, registry and hub are fakes.
  * @module test/remote-sandbox-wiring
@@ -39,9 +42,9 @@ import type { ExecOutcome } from '../src/ssh-core.ts'
 import { RemoteGateError } from '../src/remote-approval-gate.ts'
 import type { RemoteSpawnGate } from '../src/remote-approval-gate.ts'
 import { REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
-import { createRemoteSandboxFence, createRemoteSandboxTerminalGuard } from '../src/remote-sandbox-fence.ts'
+import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
 import type { RemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
-import { runWithRemoteSpawnPolicy } from '../src/remote-spawn-policy.ts'
+import { markConfinedArgv } from '../src/remote-confine-policy.ts'
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -102,6 +105,13 @@ const spawnSpec = (argv: readonly string[], cwd = 'ssh://c1/srv/work'): Subproce
   stdio: { stdin: { data: '' }, stdout: { maxBytes: 64 }, stderr: { maxBytes: 64 } },
   graceMs: 1000,
 })
+
+/**
+ * A spawn spec whose argv IS a registered confine product (REQ-I27: the mark
+ * rides the array object, so the spec must carry it BY REFERENCE).
+ */
+const markedSpawnSpec = (argv: readonly string[], mode: Mode, cwd = 'ssh://c1/srv/work'): SubprocessSpawnSpec =>
+  ({ ...spawnSpec(argv, cwd), argv: markConfinedArgv(argv, { mode }).argv })
 
 const terminalSpec = (argv: readonly string[]): SubprocessTerminalSpawnSpec => ({
   argv: [...argv],
@@ -257,99 +267,109 @@ test('the route cwd reaches the fence, placeholder spelling included', async () 
 /* ----------------------- 3) the context-derived fence (no injected dep) */
 
 for (const mode of ['read-only', 'workspace-write'] as const) {
-  test(`subpath row, ${mode} session, no remote component hub: spawn is refused before any SSH activity`, async () => {
-    const engine = new SshSubprocessEngine(hostContext(mode))
-    await assert.rejects(() => engine.spawn(spawnSpec(COMMAND_ARGV)).done, isUnavailable)
+  test(`subpath row, ${mode} MARK, no remote component hub: spawn is refused before any SSH activity`, async () => {
+    const engine = new SshSubprocessEngine(hostContext())
+    await assert.rejects(() => engine.spawn(markedSpawnSpec(COMMAND_ARGV, mode)).done, isUnavailable)
   })
 }
 
-test('subpath row, no sandboxPolicy service at all: fail-safe read-only refuses too', async () => {
-  const engine = new SshSubprocessEngine(hostContext())
-  await assert.rejects(() => engine.spawn(spawnSpec(COMMAND_ARGV)).done, isUnavailable)
-})
-
-test('subpath row, danger session: identity argv reaches the transport', async () => {
-  const engine = new SshSubprocessEngine(hostContext('danger-full-access'))
+test('subpath row: the fence ignores the session policy service — only the mark decides', async () => {
+  // A workspace-write session service with an UNMARKED argv runs `off`
+  // (the owner-accepted narrowing, ADR-0031 §3.1); the inverse of the old
+  // fail-safe read-only refusal, which the fs write face still keeps.
+  const engine = new SshSubprocessEngine(hostContext('workspace-write'))
   await assert.rejects(() => engine.spawn(spawnSpec(COMMAND_ARGV)).done, /TRANSPORT-REACHED: getRemoteEnvironment/)
 })
 
-test('subpath row: a one-shot danger grant over a workspace-write session runs the command', async () => {
-  const engine = new SshSubprocessEngine(hostContext('workspace-write'))
-  const handle = runWithRemoteSpawnPolicy({ mode: 'danger-full-access', workspaceRoot: '/srv/work' }, () => engine.spawn(spawnSpec(COMMAND_ARGV)))
-  await assert.rejects(() => handle.done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+test('subpath row, unmarked argv: identity reaches the transport (a danger grant skips confine)', async () => {
+  const engine = new SshSubprocessEngine(hostContext())
+  await assert.rejects(() => engine.spawn(spawnSpec(COMMAND_ARGV)).done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+})
+
+test('subpath row: a DANGER mark behaves like unmarked — never fenced, never refused', async () => {
+  const engine = new SshSubprocessEngine(hostContext())
+  await assert.rejects(() => engine.spawn(markedSpawnSpec(COMMAND_ARGV, 'danger-full-access')).done, /TRANSPORT-REACHED: getRemoteEnvironment/)
 })
 
 test('SshSubprocessRuntime (gate-only constructor) derives the same fence', async () => {
-  const ctx = hostContext('read-only')
+  const ctx = hostContext()
   const runtime = new SshSubprocessRuntime(ctx, async () => {})
-  await assert.rejects(() => runtime.spawn(spawnSpec(COMMAND_ARGV)).done, isUnavailable)
+  await assert.rejects(() => runtime.spawn(markedSpawnSpec(COMMAND_ARGV, 'read-only')).done, isUnavailable)
 })
 
-test('aggregate-transport route (no connection id): confined refuses, danger runs', async () => {
-  const confined = new SshSubprocessEngine(hostContext('workspace-write'))
-  await assert.rejects(() => confined.spawn(spawnSpec(COMMAND_ARGV, '/srv/work')).done, isUnavailable)
-  const danger = new SshSubprocessEngine(hostContext('danger-full-access'))
-  await assert.rejects(() => danger.spawn(spawnSpec(COMMAND_ARGV, '/srv/work')).done, /TRANSPORT-REACHED: getRemoteEnvironment/)
+test('aggregate-transport route (no connection id): a confined MARK refuses, unmarked runs', async () => {
+  const confined = new SshSubprocessEngine(hostContext())
+  await assert.rejects(() => confined.spawn(markedSpawnSpec(COMMAND_ARGV, 'workspace-write', '/srv/work')).done, isUnavailable)
+  const plain = new SshSubprocessEngine(hostContext())
+  await assert.rejects(() => plain.spawn(spawnSpec(COMMAND_ARGV, '/srv/work')).done, /TRANSPORT-REACHED: getRemoteEnvironment/)
 })
 
-test('fence with a hub: confined sessions require a jailed session (policy + cwd) and keep the argv', async () => {
-  const ctx = hostContext('workspace-write')
+test('fence with a hub: a confined MARK requires a jailed session (policy + cwd) and keeps the argv', async () => {
+  const ctx = hostContext()
   const { hub, calls } = fakeHub()
   const fence = createRemoteSandboxFence(ctx, { hub: hub as never })
-  const argv = await fence({ connectionId: 'c1', cwd: '/srv/work/app', argv: COMMAND_ARGV })
-  assert.deepEqual(argv, [...COMMAND_ARGV])
+  const marked = markConfinedArgv(COMMAND_ARGV, { mode: 'workspace-write' })
+  const argv = await fence({ connectionId: 'c1', cwd: '/srv/work/app', argv: marked.argv })
+  assert.deepEqual(argv, marked.argv)
   assert.equal(calls.length, 1)
   assert.equal(calls[0]?.[0], 'c1')
   assert.deepEqual(calls[0]?.[1], { policy: 'workspace-write', cwd: '/srv/work/app' })
 })
 
 test('fence: the coreHub service is used when no hub is injected', async () => {
-  const ctx = hostContext('read-only')
+  const ctx = hostContext()
   const { hub, calls } = fakeHub()
   ctx.provide('coreHub', hub)
-  await createRemoteSandboxFence(ctx)({ connectionId: 'c1', argv: COMMAND_ARGV })
+  const marked = markConfinedArgv(COMMAND_ARGV, { mode: 'read-only' })
+  await createRemoteSandboxFence(ctx)({ connectionId: 'c1', argv: marked.argv })
   assert.equal(calls.length, 1)
 })
 
-test('fence: a missing remote component refuses a confined session but not danger', async () => {
+test('fence: a missing remote component refuses a confined MARK but an unmarked argv passes', async () => {
   const missing = Object.assign(new Error('core missing'), { code: 'CORE_MISSING' })
-  const confined = hostContext('read-only')
+  const confined = hostContext()
   confined.provide('coreHub', fakeHub(missing).hub)
-  await assert.rejects(() => createRemoteSandboxFence(confined)({ connectionId: 'c1', argv: COMMAND_ARGV }), /core missing/)
-  const danger = hostContext('danger-full-access')
-  danger.provide('coreHub', fakeHub(missing).hub)
-  assert.deepEqual(await createRemoteSandboxFence(danger)({ connectionId: 'c1', argv: COMMAND_ARGV }), [...COMMAND_ARGV])
+  const marked = markConfinedArgv(COMMAND_ARGV, { mode: 'read-only' })
+  await assert.rejects(() => createRemoteSandboxFence(confined)({ connectionId: 'c1', argv: marked.argv }), /core missing/)
+  const plain = hostContext()
+  plain.provide('coreHub', fakeHub(missing).hub)
+  assert.deepEqual(await createRemoteSandboxFence(plain)({ connectionId: 'c1', argv: [...COMMAND_ARGV] }), [...COMMAND_ARGV])
 })
 
 /* ---------------------------------------------- 4) terminals (no PTY jail) */
 
-test('terminal: a confined session is REFUSED with the honest message', async () => {
-  const engine = new SshSubprocessEngine(hostContext('read-only'))
-  await assert.rejects(() => engine.spawnTerminal(terminalSpec(['bash'])), (error: unknown) => {
-    isUnavailable(error)
-    assert.match((error as Error).message, /refuses to open an interactive terminal/)
-    return true
-  })
+test('terminal: a MARKED confined argv is REFUSED with the honest message (model-side persistent shell)', async () => {
+  const engine = new SshSubprocessEngine(hostContext())
+  for (const mode of ['read-only', 'workspace-write'] as const) {
+    const marked = markConfinedArgv(['bash'], { mode })
+    await assert.rejects(
+      // The spec carries the marked array BY REFERENCE (a copy would lose it).
+      () => engine.spawnTerminal({ ...terminalSpec(['bash']), argv: marked.argv }),
+      (error: unknown) => {
+        isUnavailable(error)
+        assert.match((error as Error).message, /refuses to open an interactive terminal/)
+        assert.match((error as Error).message, new RegExp(mode))
+        return true
+      },
+    )
+  }
 })
 
-test('terminal: a danger session proceeds to the transport', async () => {
-  const engine = new SshSubprocessEngine(hostContext('danger-full-access'))
+test('terminal: an UNMARKED argv proceeds to the transport — the human browser terminal (ADR-0031 §4)', async () => {
+  // The session service says workspace-write and it does NOT matter any more:
+  // the human's terminal opens unfenced, aligned with the official local host.
+  const engine = new SshSubprocessEngine(hostContext('workspace-write'))
   await assert.rejects(() => engine.spawnTerminal(terminalSpec(['bash'])), (error: unknown) => {
-    assert.ok(!(error instanceof RemoteSandboxError), 'no refusal under danger')
+    assert.ok(!(error instanceof RemoteSandboxError), 'no refusal for the human terminal')
     assert.match(String(error), /TRANSPORT-REACHED/)
     return true
   })
 })
 
-test('terminal guard: an injected guard wins over the context-derived one', async () => {
-  const engine = new SshSubprocessEngine(hostContext('read-only'), undefined, undefined, () => undefined)
-  await assert.rejects(() => engine.spawnTerminal(terminalSpec(['bash'])), /TRANSPORT-REACHED/)
-})
-
-test('terminal guard: the decision follows the session mode only', () => {
-  assert.equal(createRemoteSandboxTerminalGuard(hostContext('danger-full-access'))('c1', 'off'), undefined)
-  assert.match(createRemoteSandboxTerminalGuard(hostContext('workspace-write'))('c1', 'off') ?? '', /workspace-write/)
-  assert.match(createRemoteSandboxTerminalGuard(hostContext())(undefined, 'off') ?? '', /read-only/)
+test('terminal: a DANGER mark is not a fence — it proceeds like the human terminal', async () => {
+  const engine = new SshSubprocessEngine(hostContext())
+  const marked = markConfinedArgv(['bash'], { mode: 'danger-full-access' })
+  await assert.rejects(() => engine.spawnTerminal({ ...terminalSpec(['bash']), argv: marked.argv }), /TRANSPORT-REACHED/)
 })
 
 /* ----------------------------- 5) subpath SshFileSystem write face */

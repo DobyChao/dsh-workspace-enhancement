@@ -11,11 +11,7 @@ import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-sub
 import { escalationHintMarker, sandboxDenialMarker } from '@deepseek-ai/dsh-sandbox'
 import { SshSubprocessEngine } from '../src/subprocess.ts'
 import { coreServeSandboxOf } from '../src/remote-policy.ts'
-import {
-  currentRemoteSpawnPolicy,
-  installRemoteSpawnPolicyBridge,
-  runWithRemoteSpawnPolicy,
-} from '../src/remote-spawn-policy.ts'
+import { confinedSpawnMarkOf, markConfinedArgv } from '../src/remote-confine-policy.ts'
 import { registerSwExec, registerWin32Bash, renderSwExecForeground } from '../src/exec-tools.ts'
 import type { SwExecForeground } from '../src/exec-tools.ts'
 import { SW_CONNECT_DESCRIPTION, SW_STATUS_DESCRIPTION } from '../src/tool-schema.ts'
@@ -46,9 +42,11 @@ const spec = (): SubprocessSpawnSpec => ({
   graceMs: 1000,
 })
 
-test('REQ-I18: allowed-once uses danger for this spawn; the next spawn stays session-fenced', () => {
+test('REQ-I27: the confine MARK drives the spawn policy — unmarked argv runs --sandbox off', async () => {
   const seen: string[] = []
   const ctx = new Context()
+  // The session policy service says workspace-write, but the ENGINE never
+  // reads it any more: only the mark on the argv object decides (ADR-0031 §3.1).
   ctx.provide('sandboxPolicy', { resolve: () => ({ mode: 'workspace-write' }) })
   ctx.provide('sshRegistry', { get: () => ({}) })
   const hub = {
@@ -61,37 +59,45 @@ test('REQ-I18: allowed-once uses danger for this spawn; the next spawn stays ses
     ctx,
     undefined,
     async () => { throw new Error('fence should not run') },
-    undefined,
     hub as never,
   )
-  engine.spawn(spec())
-  runWithRemoteSpawnPolicy({ mode: 'danger-full-access' }, () => { engine.spawn(spec()) })
-  engine.spawn(spec())
-  assert.deepEqual(seen, ['workspace-write', 'danger-full-access', 'workspace-write'])
+  const plain = spec()
+  const confined = markConfinedArgv(spec().argv, { mode: 'workspace-write' })
+  const handles = [
+    engine.spawn(spec()), // unmarked — what a danger grant means now
+    engine.spawn({ ...spec(), argv: confined.argv }),
+    engine.spawn({ ...plain }), // the next spawn is unaffected — no store to leak
+  ]
+  await Promise.allSettled(handles.map(handle => handle.done))
+  assert.deepEqual(seen, ['danger-full-access', 'workspace-write', 'danger-full-access'])
   assert.equal(coreServeSandboxOf('danger-full-access'), 'off')
   assert.equal(coreServeSandboxOf('workspace-write'), 'workspace-write')
 })
 
-test('REQ-I18: shell.run keeps sandboxPolicy across await and clears it after', async () => {
+test('REQ-I27: the one-call grant rides the SPEC itself — no store between tool and executor', async () => {
   const ctx = new Context()
+  const seen: unknown[] = []
   ctx.provide('shell', {
-    async run() {
+    async run(spec: { sandboxPolicy?: unknown }) {
       await Promise.resolve()
-      return currentRemoteSpawnPolicy()
+      seen.push(spec.sandboxPolicy)
     },
-    start() {
-      return currentRemoteSpawnPolicy()
+    start(spec: { sandboxPolicy?: unknown }) {
+      seen.push(spec.sandboxPolicy)
     },
   })
-  installRemoteSpawnPolicyBridge(ctx)
   const shell = ctx.get('shell') as {
-    run: (spec: { sandboxPolicy?: unknown }) => Promise<unknown>
-    start: (spec: { sandboxPolicy?: unknown }) => unknown
+    run: (spec: { sandboxPolicy?: unknown }) => Promise<void>
+    start: (spec: { sandboxPolicy?: unknown }) => void
   }
-  const during = await shell.run({ sandboxPolicy: { mode: 'danger-full-access' } })
-  assert.deepEqual(during, { mode: 'danger-full-access' })
-  assert.equal(currentRemoteSpawnPolicy(), undefined)
-  assert.deepEqual(shell.start({ sandboxPolicy: { mode: 'workspace-write' } }), { mode: 'workspace-write' })
+  await shell.run({ sandboxPolicy: { mode: 'danger-full-access' } })
+  shell.start({ sandboxPolicy: { mode: 'workspace-write' } })
+  assert.deepEqual(seen, [{ mode: 'danger-full-access' }, { mode: 'workspace-write' }])
+  // And the FENCE channel: a confined call confine-marks the argv it hands spawn.
+  assert.deepEqual(
+    confinedSpawnMarkOf(markConfinedArgv(['bash', '-c', 'x'], { mode: 'workspace-write' }).argv),
+    { mode: 'workspace-write' },
+  )
 })
 
 interface Captured {
@@ -113,6 +119,12 @@ function toolHost(options: {
       if (name === 'subprocess') return { spawn: options.spawn ?? (() => handle(0, '')) }
       if (name === 'settings') return { get: () => ({ preference: options.preference ?? 'en' }) }
       if (name === 'sandboxPolicy') return { resolve: () => ({ mode: 'workspace-write' }) }
+      if (name === 'sandbox') {
+        // The composed remote face: confine returns a REGISTERED argv (the
+        // remote-confine passthrough branch, ADR-0031 §3.1).
+        return { confine: (argv: readonly string[], policy: { mode: 'read-only' | 'workspace-write' | 'danger-full-access' }) =>
+          markConfinedArgv(argv, { mode: policy.mode }) }
+      }
       if (name === 'approval') return options.approval
       return undefined
     },
@@ -161,14 +173,15 @@ test('UX-6: Language=zh keeps bash and sw_* schemas English and execution errors
 })
 
 test('REQ-I18: sw_exec denial hint, then allowed-once is only that spawn', async () => {
-  const policies: unknown[] = []
+  const policies: Array<string | undefined> = []
   let exitCode = 1
   let stderr = 'mkdir: cannot create directory: Read-only file system\n'
   const approvalCalls: string[] = []
   const host = toolHost({
     preference: 'zh',
-    spawn: () => {
-      policies.push(currentRemoteSpawnPolicy())
+    spawn: (spec: SubprocessSpawnSpec) => {
+      // The new policy truth: the confine MARK on the argv object.
+      policies.push(confinedSpawnMarkOf(spec.argv)?.mode)
       return handle(exitCode, stderr)
     },
     approval: { request: async () => { approvalCalls.push('asked'); return 'allowed-once' } },
@@ -204,9 +217,12 @@ test('REQ-I18: sw_exec denial hint, then allowed-once is only that spawn', async
   }, remoteExec())
   await tool.execute({ command: 'pwd', description: 'Print directory', server: 'c2' }, remoteExec())
   assert.equal(approvalCalls.length, 1)
-  assert.equal(policies[0], undefined)
-  assert.deepEqual(policies[1], { mode: 'danger-full-access' })
-  assert.equal(policies[2], undefined)
+  // Session-fenced call ⇒ confine-marked workspace-write; the allowed-once
+  // DANGER grant skips confine (official semantics) ⇒ unmarked = --sandbox off;
+  // the next call falls back to the session fence again.
+  assert.equal(policies[0], 'workspace-write')
+  assert.equal(policies[1], undefined)
+  assert.equal(policies[2], 'workspace-write')
   await assert.rejects(
     () => tool.execute({
       command: 'pwd',

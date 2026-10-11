@@ -57,8 +57,7 @@ import { worldOfCwd } from './mixed.ts'
 import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { isRemoteCommandDenial } from './remote-confine.ts'
-import { isSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
-import { runWithRemoteSpawnPolicy } from './remote-spawn-policy.ts'
+import { isConfinedSandboxMode, isSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
 import { bashDescription, bashParams, swExecDescription, swExecParams } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { hasRemoteSessionContext, hasRemoteWorkspaceContext, sessionIdOf } from './session-remote-context.ts'
@@ -1067,14 +1066,25 @@ async function grantedModeOf(
   return granted
 }
 
-/** Spawn under a one-shot mode. No grant → the engine reads the session mode. */
-function spawnUnder(
+/**
+ * Spawn under the confine model (REQ-I27 / ADR-0031 §3.3): `sw_exec` and the
+ * win32 `bash` adopt the OFFICIAL bash shape — the effective mode (one-shot
+ * grant, else the session mode) goes through `ctx.sandbox.confine`, whose
+ * product carries the mark into spawn. A danger mode skips confine, exactly
+ * like the official executors (the argv stays unmarked ⇒ `--sandbox off`).
+ */
+function spawnMarked(
+  ctx: Context,
   spawn: (spec: SubprocessSpawnSpec) => SubprocessHandle,
   spec: SubprocessSpawnSpec,
   mode: SandboxMode | undefined,
 ): SubprocessHandle {
-  if (mode === undefined) return spawn(spec)
-  return runWithRemoteSpawnPolicy({ mode }, () => spawn(spec))
+  const effective = mode ?? resolveRemoteSessionMode(ctx)
+  if (!isConfinedSandboxMode(effective)) return spawn(spec)
+  const sandbox = ctx.get('sandbox', false) as { confine?: (argv: readonly string[], policy: unknown) => { argv: string[] } } | undefined
+  if (sandbox === undefined || typeof sandbox.confine !== 'function') return spawn(spec)
+  const confined = sandbox.confine(spec.argv, { mode: effective })
+  return spawn({ ...spec, argv: confined.argv })
 }
 
 function stampDenial<T extends { exitCode: number | null; stderr: SwExecStream; sandbox?: { mode: SandboxMode; denied: true } }>(
@@ -1452,7 +1462,7 @@ export function registerSwExec(
           ...(exec.agent !== undefined ? { owner: jobOwnerOf(jobs, exec.agent) } : {}),
           output: collectSources(() => handleRef),
           run: () => {
-            const handle = spawnUnder(env.spawn, {
+            const handle = spawnMarked(ctx, env.spawn, {
               argv,
               cwd,
               stdio: COLLECT_STDIO,
@@ -1471,8 +1481,8 @@ export function registerSwExec(
         return { kind: 'background', jobId, server: connection.id, endpoint: connection.endpoint }
       }
       const bound = granted === undefined
-        ? env
-        : { ...env, spawn: (spec: SubprocessSpawnSpec) => spawnUnder(env.spawn, spec, granted) }
+        ? { ...env, spawn: (spec: SubprocessSpawnSpec) => spawnMarked(ctx, env.spawn, spec, undefined) }
+        : { ...env, spawn: (spec: SubprocessSpawnSpec) => spawnMarked(ctx, env.spawn, spec, granted) }
       const foreground = await swExecCore(bound, serverId, args.command, workdir, args.timeoutMs, exec.signal, osCache, t)
       if (exec.signal.aborted === true) throw toolAbortError()
       return stampDenial(foreground, ranMode)
@@ -1607,7 +1617,7 @@ export function registerWin32Bash(
           ...(exec.agent !== undefined ? { owner: jobOwnerOf(jobs, exec.agent) } : {}),
           output: collectSources(() => handleRef),
           run: () => {
-            const handle = spawnUnder(spec => spawnerOf(ctx, t).spawn(spec), {
+            const handle = spawnMarked(ctx, spec => spawnerOf(ctx, t).spawn(spec), {
               argv: ['bash', '-c', args.command],
               cwd,
               stdio: COLLECT_STDIO,
@@ -1629,7 +1639,7 @@ export function registerWin32Bash(
       const deadline = makeSwExecDeadline(effectiveTimeoutMs, exec.signal)
       let handle: SubprocessHandle
       try {
-        handle = spawnUnder(spec => spawnerOf(ctx, t).spawn(spec), {
+        handle = spawnMarked(ctx, spec => spawnerOf(ctx, t).spawn(spec), {
           argv: ['bash', '-c', args.command],
           cwd,
           stdio: COLLECT_STDIO,
