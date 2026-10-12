@@ -1,13 +1,12 @@
 /**
- * REQ-I18: carry one call's sandbox policy from the shell executor into
- * `subprocess.spawn`.
+ * REQ-I18 → REQ-I27 / ADR-0031 §3.3 RETIRED the one-shot policy store: the
+ * policy now travels INSIDE the confine product (`remote-confine-policy.ts`)
+ * because every official entry — including any future one — calls
+ * `ctx.sandbox.confine` (BUG-12 was exactly a new entry this bridge missed).
  *
- * Official bash/pwsh approve `sandbox_permissions` and stamp the granted mode
- * onto the shell spec. `SubprocessSpawnSpec` has no policy field, and a
- * danger grant never calls `confine`, so the remote core used to keep the
- * sticky session mode. This store is entered around `ctx.shell.run` / `start`
- * (and around our own `sw_exec` / win32 bash spawns) and read once, synchronously,
- * inside `SshSubprocessEngine.spawn`.
+ * What REMAINS here is the world pinning: the official shell's workdir is
+ * pinned to the session world (ADR-0028, `region-exec`) and the
+ * `dswLocalExec` bypass flag for `sw_exec(server: "local")` on Linux.
  *
  * @module dsh-workspace-enhancement/remote-spawn-policy
  */
@@ -15,11 +14,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
-import { initiatorSessionOf } from './remote-policy.ts'
 import { pinBashWorkdir, pinPwshWorkdir, sessionLocalCwd } from './region-exec.ts'
+import { initiatorSessionOf } from './remote-policy.ts'
 import { sessionLocalSideRoots } from './side-root-policy.ts'
 
-const storage = new AsyncLocalStorage<unknown>()
 /** Set while `sw_exec(server: "local")` is inside the host shell. */
 const hostLocalExec = new AsyncLocalStorage<true>()
 const workdirStore = new AsyncLocalStorage<string>()
@@ -29,19 +27,16 @@ export function isHostLocalShellExec(): boolean {
   return hostLocalExec.getStore() === true
 }
 
-/** The policy bound to the current spawn, if a caller entered one. */
-export function currentRemoteSpawnPolicy(): unknown {
-  return storage.getStore()
+/** The workdir of the shell call being confined (REQ-I24 side-root pick). */
+export function currentShellWorkdir(): string | undefined {
+  return workdirStore.getStore()
 }
 
-/**
- * Run `fn` with `policy` visible to {@link currentRemoteSpawnPolicy}.
- * `undefined` does not enter the store, so a non-escalated call keeps the
- * session mode.
- */
-export function runWithRemoteSpawnPolicy<T>(policy: unknown, fn: () => T): T {
-  if (policy === undefined) return fn()
-  return storage.run(policy, fn)
+/** Enter the workdir around one shell entry (the policy overlay is gone —
+ * the confine registry carries it now, ADR-0031 §3.3). */
+function enterShellCall<T>(spec: ShellSpec, fn: () => T): T {
+  if (typeof spec.workdir !== 'string') return fn()
+  return workdirStore.run(spec.workdir, fn)
 }
 
 interface ShellFace {
@@ -59,17 +54,6 @@ interface ShellSpec {
   /** Set by `sw_exec(server: "local")` so the pin does not send it remote. */
   dswLocalExec?: boolean
   [key: string]: unknown
-}
-
-/** The workdir of the shell call being confined (REQ-I24 side-root pick). */
-export function currentShellWorkdir(): string | undefined {
-  return workdirStore.getStore()
-}
-
-/** Enter the one-shot policy and the workdir around one shell entry. */
-function enterShellCall<T>(spec: ShellSpec, fn: () => T): T {
-  const withPolicy = () => runWithRemoteSpawnPolicy(spec.sandboxPolicy, fn)
-  return typeof spec.workdir === 'string' ? workdirStore.run(spec.workdir, withPolicy) : withPolicy()
 }
 
 /**

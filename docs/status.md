@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-09 01:50 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-11 10:50 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,26 +10,26 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `chore/close-61-62` / `49b41f6` |
-| HEAD 提交 | `fix(remote): pin the direct-leg stop wire to the real stdin (#62)` (2026-10-09) |
+| 分支 / HEAD | `feat/req-i22-confine-spike` / `9012af2` |
+| HEAD 提交 | `docs: close the side-root batch and BUG-13 after merge (#63)` (2026-10-09) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 61 |
-| 单测用例（静态计数） | 652 |
+| 单测文件 | 62 |
+| 单测用例（静态计数） | 663 |
 | E2E 场景文件 | 8 |
-| ADR | 30 |
-| 轮次报告 | 50 |
+| ADR | 31 |
+| 轮次报告 | 51 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 19 |
-| `doing` | 0 |
+| `todo` | 17 |
+| `doing` | 3 |
 | `blocked` | 6 |
 | `done` | 75 |
 | `shipped` | 10 |

@@ -20,12 +20,13 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { REMOTE_SANDBOX_MESSAGES, remoteSandboxUnavailableError } from './remote-sandbox.ts'
-import type { RemoteSandboxConfinementMode, RemoteSandboxMode } from './remote-sandbox.ts'
+import type { RemoteSandboxConfinementMode } from './remote-sandbox.ts'
 import type { ExecOutcome } from './ssh-core.ts'
 import type { CoreHub } from './core-hub.ts'
-import { isConfinedSandboxMode, isCoreMissingError, resolveRemoteSessionMode } from './remote-policy.ts'
-import { currentRemoteSpawnPolicy } from './remote-spawn-policy.ts'
+import { isConfinedSandboxMode, isCoreMissingError } from './remote-policy.ts'
+import { confinedSpawnMarkOf } from './remote-confine-policy.ts'
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -82,15 +83,6 @@ export interface RemoteSandboxFenceInput {
 /** The fence closure: resolves the argv to serialize, or throws. */
 export type RemoteSandboxFence = (input: RemoteSandboxFenceInput) => Promise<readonly string[]>
 
-/**
- * The terminal refusal decision (ADR-0022 §2.4): the message to raise, or
- * `undefined` when a terminal may open. No I/O.
- */
-export type RemoteSandboxTerminalGuard = (
-  connectionId: string | undefined,
-  mode: RemoteSandboxMode,
-) => string | undefined
-
 /* -------------------------------------------------------- host wiring */
 
 function registryOf(ctx: Context): RemoteSandboxRegistryFace | undefined {
@@ -112,14 +104,11 @@ export function remoteSandboxDepsOf(ctx: Context): RemoteSandboxDeps {
 export const remoteSandboxUnavailable: RemoteSandboxDeps['unavailable'] = (mode, detail) =>
   remoteSandboxUnavailableError(mode, detail)
 
-/** Refuse a terminal whenever the session mode is confined. */
-export function createRemoteSandboxTerminalGuard(ctx: Context): RemoteSandboxTerminalGuard {
-  return () => {
-    const mode = resolveRemoteSessionMode(ctx)
-    if (!isConfinedSandboxMode(mode)) return undefined
-    return REMOTE_SANDBOX_MESSAGES.terminalUnsupported.replace('{mode}', mode)
-  }
-}
+/**
+ * REQ-I27 / ADR-0031 §4 retired the session-mode terminal guard: terminals
+ * key off the confine MARK in `spawnTerminal` (marked = model-side = refuse;
+ * unmarked = the human's browser terminal = opens unfenced).
+ */
 
 /** The `coreHub` service by name (no import cycle with `core-hub.ts`). */
 function coreHubOf(ctx: Context): CoreHub | undefined {
@@ -142,7 +131,9 @@ export function createRemoteSandboxFence(
 ): RemoteSandboxFence {
   const deps = options.deps ?? remoteSandboxDepsOf(ctx)
   return async (input: RemoteSandboxFenceInput): Promise<readonly string[]> => {
-    const policy = resolveRemoteSessionMode(ctx, currentRemoteSpawnPolicy())
+    // REQ-I27 / ADR-0031 §3.1: the confine mark — not the session mode —
+    // decides. Unmarked argv is unfenced by design (owner-accepted).
+    const policy: SandboxMode = confinedSpawnMarkOf(input.argv)?.mode ?? 'danger-full-access'
     const confined = isConfinedSandboxMode(policy)
     const refuseMode = policy === 'workspace-write' ? 'workspace-write' : 'read-only'
     const connectionId = input.connectionId

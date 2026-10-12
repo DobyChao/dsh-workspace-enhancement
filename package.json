@@ -75,6 +75,7 @@
     "check": "npm run check:static && npm run typecheck && npm test && npm run build && npm run build:core && node scripts/pack-smoke.mjs",
     "check:static": "node scripts/check.mjs",
     "e2e": "playwright test --config e2e/playwright.config.ts",
+    "e2e:l1": "node scripts/e2e-l1/run-cases.mjs",
     "e2e:headed": "playwright test --config e2e/playwright.config.ts --headed",
     "e2e:report": "playwright show-report e2e/artifacts/html-report",
     "preflight": "node scripts/preflight.mjs",

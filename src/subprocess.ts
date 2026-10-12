@@ -32,13 +32,14 @@ import type { RemoteSpawnGate } from './remote-approval-gate.ts'
 import { RemoteSandboxError } from './remote-sandbox.ts'
 import {
   createRemoteSandboxFence,
-  createRemoteSandboxTerminalGuard,
 } from './remote-sandbox-fence.ts'
-import type { RemoteSandboxFence, RemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
+import type { RemoteSandboxFence } from './remote-sandbox-fence.ts'
 import type { CoreHub } from './core-hub.ts'
 import { CoreSubprocessHandle } from './core-process.ts'
-import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
-import { currentRemoteSpawnPolicy, installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
+import { isConfinedSandboxMode } from './remote-policy.ts'
+import { confinedSpawnMarkOf } from './remote-confine-policy.ts'
+import { REMOTE_SANDBOX_MESSAGES } from './remote-sandbox.ts'
+import { installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
 import type { SshTerminalHandle } from './terminal.ts'
 
 /**
@@ -86,15 +87,12 @@ export class SshSubprocessEngine {
   private readonly spillDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-ssh-'))
   /** Memoized context-derived fence (see {@link sandboxFence}). */
   private lazyFence: RemoteSandboxFence | undefined
-  /** Memoized context-derived terminal guard (see {@link sandboxTerminalGuard}). */
-  private lazyTerminalGuard: RemoteSandboxTerminalGuard | undefined
   private disposing = false
 
   constructor(
     private readonly ctx: Context,
     private readonly gate?: RemoteSpawnGate,
     private readonly fence?: RemoteSandboxFence,
-    private readonly terminalGuard?: RemoteSandboxTerminalGuard,
     private readonly hub?: CoreHub,
   ) {
     ctx.effect(() => async () => {
@@ -146,22 +144,10 @@ export class SshSubprocessEngine {
   }
 
   /**
-   * The terminal twin of {@link sandboxFence} (same explicit-dep-wins rule).
+   * The terminal twin of {@link sandboxFence} retired with REQ-I27
+   * (ADR-0031 §4): terminals key off the confine mark directly in
+   * `spawnTerminal`.
    */
-  private sandboxTerminalGuard(): RemoteSandboxTerminalGuard {
-    this.lazyTerminalGuard ??= this.terminalGuard ?? createRemoteSandboxTerminalGuard(this.ctx)
-    return this.lazyTerminalGuard
-  }
-
-  /**
-   * The terminal-refusal decision for one route: the message to raise, or
-   * `undefined` when the session may open a terminal. An explicitly injected
-   * guard wins; otherwise the context-derived guard decides from the session
-   * mode (a confined session has no fenced PTY).
-   */
-  private terminalRefusal(connectionId: string | undefined): string | undefined {
-    return this.sandboxTerminalGuard()(connectionId, 'off')
-  }
 
   /**
    * The aggregate SSH transport, resolved lazily through `ctx.get` — property
@@ -268,9 +254,11 @@ export class SshSubprocessEngine {
     // (explicit dep or context-derived) is the later stage that turns that same
     // argv into the executed one.
     const fence = this.sandboxFence()
-    // REQ-I18: a one-shot grant (shell spec, or our own tool) outranks the
-    // sticky session mode. Absent store → session `/permission`.
-    const policy = resolveRemoteSessionMode(this.ctx, currentRemoteSpawnPolicy())
+    // REQ-I27 / ADR-0031 §3.1: the confine REGISTRY — not the session mode —
+    // is the policy truth. Marked argv (a confine product) enforces its mode;
+    // unmarked argv runs `--sandbox off` (owner-accepted narrowing), which is
+    // also exactly what a danger grant means: the consumer skipped confine.
+    const policy = confinedSpawnMarkOf(spec.argv)?.mode ?? 'danger-full-access'
     const hub = this.coreHub()
     if (hub !== undefined && route.connectionId !== undefined) {
       const connectionId = route.connectionId
@@ -324,12 +312,15 @@ export class SshSubprocessEngine {
     // AUDIT-6: an interactive terminal is itself an arbitrary-command entry —
     // gated regardless of shell shape whenever the machine is (ADR-0020 D1).
     await this.runGate(spec.argv, route, spec.signal, true)
-    // REQ-I9 (ADR-0022 §2.4): v1 REFUSES a fenced interactive terminal instead
-    // of opening an unfenced one (`/dev/tty` under `--dev /dev` without
-    // `--new-session` is unverified — recon A3 §Q2 caveat 3). The decision is a
-    // configuration read with no probe, so it is reached before `spawnSshTerminal`.
-    const refusal = this.terminalRefusal(route.connectionId)
-    if (refusal !== undefined) throw new RemoteSandboxError(refusal)
+    // REQ-I27 / ADR-0031 §4 (owner 2026-10-11): terminals key off the confine
+    // MARK, not the session mode. A marked argv means a MODEL-side persistent
+    // shell asked to be fenced — fenced PTY is unverified (ADR-0022 §2.4), so
+    // refuse. An unmarked argv is the human's browser terminal: it opens
+    // unfenced, aligning with the official local semantics.
+    const terminalMark = confinedSpawnMarkOf(spec.argv)
+    if (terminalMark !== undefined && isConfinedSandboxMode(terminalMark.mode)) {
+      throw new RemoteSandboxError(REMOTE_SANDBOX_MESSAGES.terminalUnsupported.replace('{mode}', terminalMark.mode))
+    }
     const terminal = await spawnSshTerminal(route.transport, route.cwd, spec)
     if (this.disposing) {
       await terminal.terminate()
@@ -374,12 +365,13 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
     ctx: Context,
     gate?: RemoteSpawnGate,
     fence?: RemoteSandboxFence,
-    terminalGuard?: RemoteSandboxTerminalGuard,
+    terminalGuard?: never,
     hub?: CoreHub,
   ) {
+    void terminalGuard
     super(ctx)
     installRemoteSpawnPolicyBridge(ctx)
-    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, terminalGuard, hub)
+    this.engine = new SshSubprocessEngine(ctx, gate ?? createRemoteSpawnGate(ctx), fence, hub)
   }
 
   /** @inheritdoc */

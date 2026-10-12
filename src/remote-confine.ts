@@ -1,19 +1,27 @@
 /**
- * REQ-I13 / ADR-0025: wrap `ctx.sandbox.confine` so a remote initiator cwd
- * does not get a *local* bwrap/landlock runner stuffed into argv.
+ * REQ-I13 / ADR-0025 → REQ-I27 / ADR-0031 §3: on a remote initiator cwd,
+ * `confine` becomes the POLICY CARRIER — it registers its product in the
+ * in-process registry (`remote-confine-policy.ts`) and returns the argv
+ * unchanged (the remote component's jail enforces the mode, not a host
+ * wrapper). `spawn` then reads the mark by argv identity; an unmarked argv
+ * runs `--sandbox off` (ADR-0031 §3.1, owner-accepted narrowing).
  *
- * Official bash/fs escalation happens *before* confine. This passthrough only
- * skips host wrapping; it does not skip the approval card.
+ * Official bash/fs escalation happens *before* confine; a danger grant skips
+ * confine entirely, which is exactly why the mark — not the session mode —
+ * is the spawn-side truth (BUG-12's root cause retires with this).
  *
  * @module dsh-workspace-enhancement/remote-confine
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
-import { initiatorSessionOf } from './remote-policy.ts'
+import { initiatorSessionOf, resolveRemoteSessionMode, sandboxModeFromPolicy } from './remote-policy.ts'
 import { currentShellWorkdir, isHostLocalShellExec } from './remote-spawn-policy.ts'
 import { widenPolicyToSideRoot } from './side-root-policy.ts'
 import { remoteRouteFromCwd } from './transport.ts'
+import { markConfinedArgv, REMOTE_CORE_DENIAL_SIGNATURE, isRemoteCommandDenial } from './remote-confine-policy.ts'
+
+export { REMOTE_CORE_DENIAL_SIGNATURE, isRemoteCommandDenial }
 
 interface ConfineHost {
   confine(argv: readonly string[], policy: SandboxPolicy, ...rest: unknown[]): ConfinedArgv
@@ -22,21 +30,11 @@ interface ConfineHost {
 const patched = new WeakSet<object>()
 
 /**
- * Remote core jail is bubblewrap. Official bash classifies a denial only when
- * `confine` advertises this dialect (`Read-only file system` on stderr).
- */
-export const REMOTE_CORE_DENIAL_SIGNATURE = 'read-only file system'
-
-/** Non-zero exit whose stderr matches the remote bwrap denial dialect. */
-export function isRemoteCommandDenial(exitCode: number | null, stderr: string): boolean {
-  if (exitCode === null || exitCode === 0) return false
-  return stderr.toLowerCase().includes(REMOTE_CORE_DENIAL_SIGNATURE)
-}
-
-/**
  * Identity argv for a remote session: the host runner must not wrap the
  * command, but the denial dialect stays the remote core's bwrap text so
- * official bash/pwsh still append the escalation hint.
+ * official bash/pwsh still append the escalation hint. REQ-I27 moved the
+ * dialect constants beside the registry (`remote-confine-policy.ts`); this
+ * shape is retained for the tests that pin it.
  */
 export function passthroughConfinedArgv(argv: readonly string[]): ConfinedArgv {
   return {
@@ -65,7 +63,13 @@ function patchSandbox(owner: Context): void {
   patched.add(sandbox)
   const original = sandbox.confine.bind(sandbox)
   sandbox.confine = (argv, policy, ...rest) => {
-    if (shouldPassthroughRemoteConfine(owner)) return passthroughConfinedArgv(argv)
+    if (shouldPassthroughRemoteConfine(owner)) {
+      // REQ-I27: the mark IS the policy channel. The call's policy (session
+      // mode + any one-shot grant, merged by the official consumer) names the
+      // mode the remote component will enforce.
+      const mode = sandboxModeFromPolicy(policy) ?? resolveRemoteSessionMode(owner)
+      return markConfinedArgv(argv, { mode })
+    }
     // REQ-I24: a command whose cwd is in a local side root gets that root.
     return original(argv, widenPolicyToSideRoot(owner, policy, currentShellWorkdir()), ...rest)
   }

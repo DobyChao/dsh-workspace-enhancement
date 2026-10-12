@@ -37,7 +37,6 @@ import {
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
 import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
 import type { CoreProvisionOutcome } from '../src/core-provision.ts'
-import { runWithRemoteSpawnPolicy } from '../src/remote-spawn-policy.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
@@ -157,14 +156,20 @@ interface FakeCtx {
  * Build the fake host context the tools register against.
  * @param subprocessError - when set, `ctx.get('subprocess')` throws it: the
  *   marker that proves routing did NOT reach the spawn seam.
+ * @param sessionMode - when set, `ctx.get('sandboxPolicy')` resolves to that
+ *   mode — the face `resolveRemoteSessionMode` reads (REQ-I27 retired the ALS
+ *   overlay, so a danger session is simulated through the service).
  */
-function fakeHostCtx(subprocessError?: string): FakeCtx {
+function fakeHostCtx(subprocessError?: string, sessionMode?: string): FakeCtx {
   const tools: ToolDefinition[] = []
   const sections: Array<{ name: string; text: unknown }> = []
   const contexts: Array<{ name: string; text: unknown }> = []
   const ctx = {
     get: (name: string) => {
       if (name === 'subprocess' && subprocessError !== undefined) throw new Error(subprocessError)
+      if (name === 'sandboxPolicy' && sessionMode !== undefined) {
+        return { resolve: () => ({ mode: sessionMode }) }
+      }
       return undefined
     },
     tools: { register: (definition: ToolDefinition) => { tools.push(definition); return () => {} } },
@@ -212,8 +217,9 @@ function mountWorkspaceTools(
   store: () => SessionConnectionsFace | undefined,
   registry: unknown = fakeRegistry(),
   provisionCore?: (id: string, signal?: AbortSignal) => Promise<CoreProvisionOutcome>,
+  sessionMode?: string,
 ): FakeCtx {
-  const mounted = fakeHostCtx()
+  const mounted = fakeHostCtx(undefined, sessionMode)
   registerWorkspaceTools(mounted.ctx, () => registry as never, () => undefined, store, provisionCore)
   return mounted
 }
@@ -567,9 +573,9 @@ test('REQ-I21 sw_connect: a danger-full-access session never attempts a provisio
     () => store as unknown as SessionConnectionsFace,
     fakeRegistry(),
     async (id) => { provisioned += 1; return outcomeOf(id, {}) },
+    'danger-full-access',
   )
-  const text = await runWithRemoteSpawnPolicy('danger-full-access', () =>
-    runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION)) as Promise<{ text: string }>)
+  const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
   assert.equal(provisioned, 0, 'danger sessions do not attempt deploys')
   assert.ok(!text.includes('remote component:'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'], 'the connect itself is unaffected')

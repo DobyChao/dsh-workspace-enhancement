@@ -34,7 +34,7 @@ import { SshFileSystemEngine } from './filesystem.ts'
 import { MixedFileSystem, MixedSubprocessRuntime } from './mixed.ts'
 import type { FileSystemBranch, SideWorkspaceFace } from './mixed.ts'
 import { createRemoteSpawnGate, registerRemoteApprovalAnswerer } from './remote-approval-gate.ts'
-import { createRemoteSandboxFence, createRemoteSandboxTerminalGuard } from './remote-sandbox-fence.ts'
+import { createRemoteSandboxFence } from './remote-sandbox-fence.ts'
 import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 import { ensureCoreHub } from './core-hub.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
@@ -89,7 +89,6 @@ export function installMixedProviders(ctx: Context): void {
     ctx,
     createRemoteSpawnGate(ctx),
     fence,
-    createRemoteSandboxTerminalGuard(ctx),
     hub,
   )
   ctx.set('subprocess', new MixedSubprocessRuntime(localSubprocess, sshSubprocess))

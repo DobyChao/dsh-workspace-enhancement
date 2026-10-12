@@ -28,6 +28,7 @@ on:
     - cron: '0 3 * * 1' # Monday 03:00 UTC — next + alpha
     - cron: '0 3 * * 4' # Thursday 03:00 UTC — alpha gets its own slot
     - cron: '0 4 * * *' # Daily 04:00 UTC — dist-tag watch (INFRA-20)
+    - cron: '0 5 * * 1' # Monday 05:00 UTC — desktop composition watch (UPSTREAM-11)
   workflow_dispatch:
 
 permissions:
@@ -86,6 +87,60 @@ jobs:
               })
             }
 
+
+  # UPSTREAM-11: the desktop app is invisible to EVERY sentinel above — its
+  # packages (@deepseek-ai/dsh-desktop / -desktop-host) are private and never
+  # touch npm, so neither the tag watch nor the scope watch can see it. The
+  # desktop profile is initialized from PROFILE_TEMPLATES.web, so the day the
+  # composition template stops being web-shaped is the day the plugin's four
+  # coupling surfaces silently stop applying. This job diffs the three
+  # composition-defining files of the monorepo default branch against the
+  # committed baseline (`scripts/upstream-desktop-baseline.json`) and opens an
+  # issue on any movement. Acknowledging = regenerate the baseline, commit.
+  # Weekly (Monday 05:00 UTC, after the deep probes); manual dispatch runs it.
+  desktop-watch:
+    name: desktop composition watch
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 5 * * 1'
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Watch the desktop monorepo composition
+        id: desktop
+        run: node scripts/upstream-desktop.mjs
+
+      - name: Open or update the desktop-watch issue
+        if: steps.desktop.outputs.signal == 'changed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const title = '[upstream watch] the desktop composition moved'
+            const body = [
+              fs.readFileSync('.tmp/upstream-desktop-report.md', 'utf8'),
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              'This is the desktop watch (UPSTREAM-11): the private desktop packages never touch npm, so the tag/scope/drift sentinels are all blind to the desktop composition — this file-diff probe is the only coverage.',
+              '',
+              'See `docs/compatibility.md` §7 and `docs/notes/upstream11-desktop-survey.md`.',
+            ].join('\n')
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100,
+            })
+            const existing = open.find(issue => issue.title === title)
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body,
+              })
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+              })
+            }
 
   # UPSTREAM-7: the drift channels below only reinstall the seam family this
   # repo DECLARES, so a green channel says nothing about packages we do not

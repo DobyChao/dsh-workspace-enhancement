@@ -43,6 +43,7 @@
 | `npm run test:agent` | 沙箱内单测（单进程、无 esbuild；自动分类沙箱受限失败） | **代理** |
 | `npm run build` | `tsc` + `tsdown` | 代理 / CI |
 | `npm run e2e` | Playwright 黑盒（lab 50599） | 本地 shell / CI |
+| `npm run e2e:l1 -- --cli <bin.js> (--key <path> \| --password <pw>)` | L1 实机冒烟 M3–M5（假模型 headless，真宿主真工具；参数详见 `scripts/e2e-l1/run-cases.mjs` 头注；CI 的 e2e-l1 作业自动跑，INFRA-23） | 代理 / CI |
 | `npm run status` | 重新生成 `docs/status.md` | 任何人 |
 | `npm run preflight` | **能力预检**（node/npm/git/gh/wsl/端口/lab/打包产物；browser-use 需 agent 自报）——每轮开工与接手先跑，缺能力 ⇒ blocked 不跳过（§7） | 代理 |
 | `npm run slots -- --list \| --key <key> \| --diff <a.js> <b.js>` | 上游客户端**槽位/服务目录**读取与 diff（磁盘权威源读取器，零依赖、只读；见 §5 红线 7） | 代理 / CI |
@@ -50,6 +51,7 @@
 | `pwsh -File scripts/dev-lab.ps1` | 起隔离 lab 实例（win32 宿主，50599） | 本地 shell |
 | `pwsh -File scripts/dev-lab-wsl.ps1 [-Smoke]` | 起 **WSL Linux 宿主** lab（50600；家族校验跟 pin、装 pack tarball；INFRA-19） | 本地 shell |
 | `node scripts/upstream-tags.mjs [--write-baseline]` | 宿主 dist-tag 轻探（每日 workflow 跑；漂移开 issue；认领=重写基线提交） | 代理 / CI |
+| `node scripts/upstream-desktop.mjs [--write-baseline]` | 桌面组合周探（monorepo 四文件指纹 + `PROFILE_TEMPLATES.web` 语义断言，UPSTREAM-11；认领=重写基线提交） | 代理 / CI |
 
 实机测试分层与 case 清单见 [`docs/uat/matrix.md`](./docs/uat/matrix.md)（L1 每 PR /
 L2 发版前；能力缺失→blocked，不静默跳过）。

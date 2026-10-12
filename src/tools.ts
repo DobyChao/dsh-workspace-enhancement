@@ -34,7 +34,6 @@ import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
 import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
 import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
-import { currentRemoteSpawnPolicy } from './remote-spawn-policy.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -584,7 +583,7 @@ export function registerWorkspaceTools(
         // failed connect (reads still work via SFTP). A danger-full-access
         // session never attempts a deploy (the core is not needed there).
         const signal = (exec as { signal?: AbortSignal }).signal
-        const sessionMode = resolveRemoteSessionMode(ctx, currentRemoteSpawnPolicy())
+        const sessionMode = resolveRemoteSessionMode(ctx)
         const provisionWanted = isConfinedSandboxMode(sessionMode)
         const lines = [t('tool.sw_connect.output.heading')]
         for (const probe of probes) {
