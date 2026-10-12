@@ -224,18 +224,19 @@ export const CONN_STATE_LABEL_KEY: Record<ConnState, DswKey> = {
 }
 
 /**
- * Literal dot colors for the DOM row-badge layer (`row-badges.ts` /
+ * Dot colors for the DOM row-badge layer (`row-badges.ts` /
  * `remote-status-entry.tsx`), which injects into host DOM nodes and therefore
- * cannot address a CSS module class. These mirror the semantic tokens the
- * React badge resolves through `status.module.css`
- * (`--dsw-alias-state-success-primary` = green-500 in both themes,
- * `--dsw-alias-label-caption` for the unknown state); `offline` takes the
- * red-400 step so the dot stays legible on both panel fills.
+ * cannot address a CSS module class. UX-4: the values are var() references to
+ * the SAME host semantic tokens the React badge resolves through
+ * `status.module.css` (`--dsw-alias-state-success-primary` green,
+ * `--dsw-alias-state-error-primary` red, `--dsw-alias-label-caption` gray) —
+ * var() resolves in inline styles too, so both surfaces follow the host
+ * theme with no hex left to drift.
  */
 export const CONN_STATE_COLOR: Record<ConnState, string> = {
-  unknown: '#8A8F98',
-  active: '#22C55E',
-  offline: '#F25A5A',
+  unknown: 'var(--dsw-alias-label-caption)',
+  active: 'var(--dsw-alias-state-success-primary)',
+  offline: 'var(--dsw-alias-state-error-primary)',
 }
 
 /**
