@@ -57,6 +57,18 @@ test('machinePayload: merges the parsed jump chain; undefined omits, [] is an ex
   assert.deepEqual(empty.jump, [])
 })
 
+test('UX-10: no root anywhere in the blank form — the empty username must reach the wire as empty', () => {
+  assert.equal(EMPTY_MACHINE_FORM.username, '')
+  assert.equal(EMPTY_MACHINE_FORM.workspace, '')
+  const payload = machinePayload(EMPTY_MACHINE_FORM)
+  // No silent root fallback: the form gates an empty username before the
+  // payload is built; a masked default here would hide a missed gate.
+  assert.equal(payload.username, '')
+  assert.equal(payload.workspace, '')
+  const filled = machinePayload({ ...EMPTY_MACHINE_FORM, username: ' alice ' })
+  assert.equal(filled.username, 'alice')
+})
+
 test('t8: jumpChainOf — an edit clearing a chain the machine had sends the explicit clear', () => {
   // A non-empty text parses to its hops (any mode).
   assert.deepEqual(jumpChainOf('u@b1, b2', true, 'u@b1, b2'), [

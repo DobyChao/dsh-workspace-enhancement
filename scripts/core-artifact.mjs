@@ -10,11 +10,13 @@
  * generated from it (`scripts/sync-core-version.mjs`) and `npm run check:static`
  * fails when that projection is stale.
  */
-import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { runCapture } from './lib/run.mjs'
 
 /** Repository root (the directory holding `package.json`). */
 export const ROOT = resolve(dirname(fileURLToPath(new URL('../package.json', import.meta.url))))
@@ -52,21 +54,41 @@ export function artifactName(meta) {
 
 /**
  * sha256 of the dsh-core member inside the built dist tarball, or `null` when
- * the tarball is absent or unreadable (REQ-I17 provenance gate: the fence only
- * runs registered binaries, and a built binary must be registered).
+ * the tarball is absent (REQ-I17 provenance gate: the fence only runs
+ * registered binaries, and a built binary must be registered).
+ *
+ * BUG-15: the member is EXTRACTED into a scratch dir over plain file
+ * descriptors and hashed from disk. The previous `-xzOf` pipe capture both
+ * EPERMs under the DSH file sandbox (returning a silent null for a tarball
+ * that was right there — the sha never registered, the gate skipped, and the
+ * package distrusted its own core) and would have corrupted the binary had it
+ * run, because stdout must never pass through utf8. A tarball that exists but
+ * cannot be extracted THROWS: "absent" and "unreadable" must not share the
+ * silent-null exit.
+ *
  * @param meta - validated artifact meta (defaults to the file's).
+ * @param distDir - dist dir override (tests; defaults to `<root>/core/dist`).
  */
-export function distCoreSha256(meta = readArtifactMeta()) {
+export function distCoreSha256(meta = readArtifactMeta(), distDir = join(ROOT, 'core', 'dist')) {
   const name = artifactName(meta)
-  const dir = join(ROOT, 'core', 'dist')
-  if (!existsSync(join(dir, name))) return null
-  // Relative name + cwd: an absolute Windows path carries a drive-letter
-  // colon that GNU tar parses as a remote host ("Cannot connect to D:").
-  for (const member of ['./dsh-core', 'dsh-core']) {
-    const out = spawnSync('tar', ['-xzOf', name, member], { cwd: dir, maxBuffer: 64 * 1024 * 1024 })
-    if (out.status === 0 && out.stdout.length > 0) {
-      return createHash('sha256').update(out.stdout).digest('hex')
+  if (!existsSync(join(distDir, name))) return null
+  const work = mkdtempSync(join(tmpdir(), 'dsw-dist-sha-'))
+  try {
+    let lastStderr = ''
+    for (const member of ['./dsh-core', 'dsh-core']) {
+      // Relative name + cwd: an absolute Windows path carries a drive-letter
+      // colon that GNU tar parses as a remote host ("Cannot connect to D:").
+      const out = runCapture('tar', ['-xzf', name, '-C', work, member], { cwd: distDir })
+      if (out.status === 0 && existsSync(join(work, 'dsh-core'))) {
+        return createHash('sha256').update(readFileSync(join(work, 'dsh-core'))).digest('hex')
+      }
+      if (out.error !== undefined) {
+        throw new Error(`core/dist/${name}: cannot run tar (${out.error.message}) — the provenance gate cannot verify this tarball`)
+      }
+      lastStderr = out.stderr.trim()
     }
+    throw new Error(`core/dist/${name}: tar extracted no dsh-core member${lastStderr !== '' ? ` (${lastStderr})` : ''} — the provenance gate cannot verify this tarball`)
+  } finally {
+    rmSync(work, { recursive: true, force: true })
   }
-  return null
 }

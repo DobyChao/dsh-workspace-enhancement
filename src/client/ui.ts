@@ -87,3 +87,29 @@ export function useDialogA11y(active: boolean, onClose: () => void): RefObject<H
 
   return ref
 }
+
+/**
+ * BUG-14: backdrop-dismiss props that survive drag-selection. A plain
+ * `onClick` guarded by `target === currentTarget` also fires for a click the
+ * browser dispatches on the nearest COMMON ANCESTOR of mousedown and mouseup —
+ * selecting text inside the dialog and releasing over the backdrop read as a
+ * backdrop click and closed the picker, losing the browse state. The dismiss
+ * now additionally requires the press itself to have started on the backdrop.
+ * The press flag lives in the returned closure, so any re-render between
+ * press and release fails safe (no dismiss) rather than guessing.
+ */
+export function backdropDismissProps(onDismiss: () => void): {
+  onMouseDown: (event: { target: unknown; currentTarget: unknown }) => boolean
+  onClick: (event: { target: unknown; currentTarget: unknown }) => void
+} {
+  let pressedOnBackdrop = false
+  return {
+    onMouseDown: event => {
+      pressedOnBackdrop = event.target === event.currentTarget
+      return pressedOnBackdrop
+    },
+    onClick: event => {
+      if (pressedOnBackdrop && event.target === event.currentTarget) onDismiss()
+    },
+  }
+}

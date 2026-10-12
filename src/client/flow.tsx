@@ -15,7 +15,7 @@ import { ConnectionForm } from './form.tsx'
 import type { ConnectionDraft } from './form.tsx'
 import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
-import { cx, useDialogA11y } from './ui.ts'
+import { backdropDismissProps, cx, useDialogA11y } from './ui.ts'
 import {
   AlertIcon,
   CheckIcon,
@@ -611,7 +611,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
   if (!open) return null
 
   return (
-    <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget) onCancel() }}>
+    <div className={styles.overlay} {...backdropDismissProps(onCancel)}>
       <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={t('flow.dialog.label')} ref={dialogRef}>
         <header className={styles.header}>
           <div className={styles.headerText}>
