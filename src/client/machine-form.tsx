@@ -317,7 +317,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
     name: initial?.name ?? '',
     host: initial?.host ?? '',
     port: initial?.port ?? '22',
-    username: initial?.username ?? 'root',
+    username: initial?.username ?? '',
     password: '',
     privateKeyPath: initial?.privateKeyPath ?? '',
     passphrase: initial?.passphrase ?? '',
@@ -376,16 +376,15 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
   const errorOf = (key: keyof FieldErrors): string | undefined => (revealed ? errorsOf()[key] : undefined)
 
   /** Prefill every field the resolution covers; keep operator edits elsewhere. */
-  const applyResolved = (resolved: ResolvedSshConfigView, currentCwd: string, currentUser: string): void => {
+  const applyResolved = (resolved: ResolvedSshConfigView): void => {
     setForm(prev => ({
       ...prev,
       host: resolved.host,
       ...(resolved.port !== 22 ? { port: String(resolved.port) } : {}),
       ...(resolved.username !== '' ? { username: resolved.username } : {}),
       ...(resolved.privateKeyPaths[0] !== undefined ? { privateKeyPath: resolved.privateKeyPaths[0] as string } : {}),
-      ...(currentCwd.trim() === '' && (resolved.username !== '' ? resolved.username : currentUser).trim() !== ''
-        ? { workspace: `/home/${(resolved.username !== '' ? resolved.username : currentUser).trim()}` }
-        : {}),
+      // UX-10: no guessed workspace — an alias may carry a User whose home is
+      // not /home/<user>; the field stays empty and the placeholder explains.
     }))
     if (resolved.privateKeyPaths.length > 0) setAuthKind('key')
     setJumpText(resolved.jump.map(formatHop).join(', '))
@@ -409,7 +408,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
       if (!result.ok) return
       const resolved = asResolved(result.value)
       if (current !== autoGeneration.current) return
-      applyResolved(resolved, form.workspace, form.username)
+      applyResolved(resolved)
     } catch {
       // Silent by design; the manual list/button reports the error.
     } finally {
@@ -430,7 +429,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
       const resolved = asResolved(result.value)
       if (current !== autoGeneration.current) return
       lastAutoHost.current = resolved.host
-      applyResolved(resolved, form.workspace, form.username)
+      applyResolved(resolved)
       setFeedback({
         kind: 'success',
         text: t('form.config.resolved', { alias: resolved.alias, endpoint: `${resolved.username !== '' ? `${resolved.username}@` : ''}${resolved.host}${resolved.port !== 22 ? `:${String(resolved.port)}` : ''}` }),
@@ -491,6 +490,12 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
       const input = payload()
       if (form.host.trim() === '') {
         setFeedback({ kind: 'error', text: t('form.test.noHost') })
+        return
+      }
+      // UX-10: the username is no longer prefilled — a blank must be refused
+      // here too, or the test would silently run against root@host.
+      if (form.username.trim() === '') {
+        setFeedback({ kind: 'error', text: t('form.test.noUsername') })
         return
       }
       const editing = form.id !== ''
@@ -560,6 +565,10 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
           setAuthKind('key')
           setResolveSummary(null)
           setAdvanced(false)
+          // UX-5: the reset blank form must not inherit the save attempt's
+          // revealed state — the freshly blanked host field would immediately
+          // render「请填写主机名」.
+          setRevealed(false)
           // F2: the success acknowledgment lives at the page level (the form
           // remounts on `key={editing?.id}` change and any in-form text would
           // vanish); only a stale pre-save feedback is cleared here.
@@ -711,6 +720,7 @@ export function MachineForm({ mode, rpc, initial, onSaved, onCancel, t: tSeat }:
             ref={usernameRef}
             className={inputClass(usernameError !== undefined)}
             value={form.username}
+            placeholder={t('form.placeholder.username')}
             disabled={busy}
             aria-invalid={usernameError !== undefined}
             onChange={event => { setForm(prev => ({ ...prev, username: event.target.value })) }}

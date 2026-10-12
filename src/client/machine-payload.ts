@@ -29,7 +29,7 @@ export interface MachineFormState {
 
 /** Cleared form state. */
 export const EMPTY_MACHINE_FORM: MachineFormState = {
-  id: '', name: '', host: '', port: '22', username: 'root', password: '',
+  id: '', name: '', host: '', port: '22', username: '', password: '',
   privateKeyPath: '', passphrase: '', workspace: '', hostKeyMode: '', encryptPassword: false,
 }
 
@@ -71,7 +71,9 @@ export function machinePayload(
     name: form.name.trim(),
     host: form.host.trim(),
     port: Number(form.port) || 22,
-    username: form.username.trim() || 'root',
+    // UX-10: no root fallback — the form gates an empty username before the
+    // payload is ever built, and a silent root here would mask that gate.
+    username: form.username.trim(),
     ...(form.password !== '' ? { password: form.password } : {}),
     ...(isEdit
       ? (form.privateKeyPath.trim() !== '' ? { privateKeyPath: form.privateKeyPath.trim() } : {})
