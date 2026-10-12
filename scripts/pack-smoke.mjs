@@ -134,7 +134,14 @@ check('tarball leaks no private paths', leaked.length === 0, leaked.slice(0, 8).
 // binaries registered in core/artifact.json compatHashes. The tarball is
 // guaranteed here (prepack ran ensure-core), so an unregistered build is RED.
 {
-  const distSha = distCoreSha256()
+  // BUG-15: unreadable-but-present is a throw now, not a silent null — report
+  // it through the check line so pack time stays a clean RED, not a crash.
+  let distSha = null
+  try {
+    distSha = distCoreSha256()
+  } catch (error) {
+    console.error(`[pack-smoke] ${error instanceof Error ? error.message : String(error)}`)
+  }
   check('built core binary is registered in compatHashes (provenance gate)',
     distSha !== null && readArtifactMeta().compatHashes.includes(distSha),
     distSha ?? 'cannot read the dist core binary')
