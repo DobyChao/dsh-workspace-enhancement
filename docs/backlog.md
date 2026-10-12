@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | doing | P2 | 2026-10-12 用户提并拍板；原 REQ-I30 并入。探针只测 command -v bwrap（core-deploy.ts:128），装而不可用要到围栏执行才裸报。修法：功能探测（真跑最小 bwrap，参照宿主）+ 用户引导 + dsh-core 加 go-landlock 后备档（按内核 ABI 降档、部分强制如实报），调查[档案](./notes/req-i29-bwrap-landlock-survey.md)。验收：不可用即报给指引；无 bwrap 远端两档权限仍被强制 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -24,7 +25,6 @@
 | INFRA-24 | 流程减负：拍板队列 + round/闸门复评 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕；round 报告只在里程碑/事故写、小 PR 用 PR 描述，复评纯格式闸门性价比（原 INFRA-25 并入）。先定拍板队列落点与「可逆」判据；改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
 | REQ-I28 | 远程会话上传件与生成产物：读取/打开打通，先定义上传落点 | todo | P2 | 2026-10-12 用户提，10-13 定形。宿主上传走 `dsh-client-file-upload`+`attachments`（R18/R19，落本地）；远程会话在远端 ⇒ 上传件读不到、产物打不开（现状待核）。形状：上传落点单独拍（倾向随会话传远端）；产物打开与 REQ-A6-C2 共建组件，能力长在我方 client half，不得硬依赖 optional peer。验收：上传后模型可读、产物可打开 |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-10-13 用户拍板：A 起步（registerTab + 复用现有 browse/状态面）；C2 并入 REQ-I28 共建远程文件树/预览；B 仅附属；C1/抢 files kind 不做（ADR-0006）。硬规则：optional peer + 禁 value-import + 能力探测降级；版本线绑宿主家族是主风险。调查[档案](./notes/req-a6-better-sidebar-survey.md) |
-| REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | todo | P2 | 2026-10-12 用户提并拍板；原 REQ-I30 并入。探针只测 command -v bwrap（core-deploy.ts:128），装而不可用要到围栏执行才裸报。修法：功能探测（真跑最小 bwrap，参照宿主）+ 用户引导 + dsh-core 加 go-landlock 后备档（按内核 ABI 降档、部分强制如实报），调查[档案](./notes/req-i29-bwrap-landlock-survey.md)。验收：不可用即报给指引；无 bwrap 远端两档权限仍被强制 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
