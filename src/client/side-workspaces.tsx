@@ -44,6 +44,7 @@ import {
 import type { WireResult } from './index.ts'
 import type { RemoteStatusSeats } from './remote-status.ts'
 import { zhBaseline } from './status.tsx'
+import { backdropDismissProps } from './ui.ts'
 import { CloseIcon, FolderIcon, PlusIcon, ServerIcon, TrashIcon } from './icons.tsx'
 import styles from './side-workspaces.module.css'
 
@@ -296,7 +297,7 @@ export function SideWorkspacesPanel(props: SideWorkspacesProps & { injected: Flo
   }
 
   return (
-    <div className={styles.panel} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className={styles.panel} {...backdropDismissProps(onClose)}>
       <div ref={cardRef} className={styles.card} role="dialog" aria-label={t('side.card.label')} onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
         <div className={styles.header}>
           <strong className={styles.title}>{t('side.card.title')}</strong>
