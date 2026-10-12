@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-12 12:36 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-12 15:58 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,28 +10,28 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `master` / `20045da` |
-| HEAD 提交 | `docs(backlog): raise BUG-15 to P1` (2026-10-12) |
+| 分支 / HEAD | `master` / `eba6796` |
+| HEAD 提交 | `fix: picker drag-close, loud core sha, empty form defaults, token colors (#67)` (2026-10-12) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 63 |
-| 单测用例（静态计数） | 675 |
+| 单测文件 | 65 |
+| 单测用例（静态计数） | 685 |
 | E2E 场景文件 | 8 |
 | ADR | 31 |
-| 轮次报告 | 51 |
+| 轮次报告 | 52 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 16 |
+| `todo` | 12 |
 | `doing` | 0 |
 | `blocked` | 9 |
-| `done` | 79 |
+| `done` | 83 |
 | `shipped` | 10 |
 | `dropped` | 16 |
 

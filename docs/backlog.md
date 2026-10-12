@@ -16,10 +16,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-15 | core-artifact.mjs 管道读 tar：沙箱 EPERM 静默跳过 sha 登记/溯源门 | doing | P1 | 2026-10-12 用户报，同日用户拍板升 P1。core-artifact.mjs:66 spawnSync 默认管道读 tar：沙箱 EPERM⇒静默 null；ensure-core 无声跳过登记、check 溯源门随 null 跳过⇒假绿。修法：tar 解临时目录按文件哈希；缺文件≠读失败必响。验收（用户拍板）：link/本地 tgz/npm 三通道一律信自家打包核；沙箱内门真跑、读失败非静默 |
-| BUG-14 | 目录选择器：拖选松手在窗外即整窗关闭 | doing | P2 | 2026-10-12 用户报。根因：`flow.tsx:614` / `side-workspaces.tsx:299` 背景关闭挂在 `click` 且 `target===currentTarget`；拖选 mousedown 在卡片内、mouseup 落背景 ⇒ click 打在共同祖先=背景层即关。修法：改 mousedown 判定或记 mousedown 起点。验收：窗内拖选路径/文件名、松手在窗外，窗口不关、选中保留 |
-| UX-10 | 新建/编辑连接表单：不预填 + 警告时机 | doing | P3 | 2026-10-12 用户建议；原 UX-5 并入。`machine-form.tsx:320` 用户名预填 `'root'`、`:386-387` 工作区随拼 `/home/<user>`——改默认空 + placeholder；另修打开编辑页即现「请填写主机名」（初值 vs 校验时机）。验收：两栏无预填、打开零警告，改后或提交才校验，保存不受影响 |
-| UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | doing | P3 | `status.tsx` 仍硬编码 hex。证据 PR #20。验收：双主题走宿主语义 token |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -54,6 +50,10 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-15 | core-artifact.mjs 管道读 tar：沙箱 EPERM 静默跳过 sha 登记/溯源门 | done | P1 | PR #67。tar 解临时目录按文件哈希（零管道），存在但读不出必抛；pack-smoke 干净判红；单测 3 例。**尾巴**：lab 实机 UAT 走查 [R52](./uat/R52-bug14-15-ux4-10.md) |
+| BUG-14 | 目录选择器：拖选松手在窗外即整窗关闭 | done | P2 | PR #67。`backdropDismissProps`（mousedown 起点 + click 双条件，跨渲染 fail-safe），flow/side-workspaces 两处换用；单测 5 例。**尾巴**：浏览器拖选实机 R52 |
+| UX-10 | 新建/编辑连接表单：不预填 + 警告时机 | done | P3 | PR #67（含原 UX-5）。初值/EMPTY/wire 三处去 root 预填、别名不再猜 `/home/<user>`；保存重置补 `setRevealed(false)`；测试连接拒空用户名。**尾巴**：lab 目测 R52 |
+| UX-4 | `CONN_STATE_COLOR` 状态色 token 化 | done | P3 | PR #67。三态色换宿主 `var(--dsw-alias-state-*)`，DOM 增辉点与 React 徽章同档随双主题。**尾巴**：双主题实机 R52 |
 | REQ-I22 | Spike：远程围栏改走 `confine` 逐次策略 | done | P1 | PR #65。[ADR-0031](./decisions/ADR-0031-remote-fence-confine-policy.md) accepted：两问答死（调用面全量枚举 + 终端两路），实施随 REQ-I27 同 PR。档案 [R51](./rounds/R51-three-p1-round.md) |
 | REQ-I27 | 实施远程围栏 `confine` 逐次策略 | done | P1 | PR #65。注册表（argv 身份）+ spawn/终端/fence 标记驱动 + ALS 退役 + sw_exec/win32-bash 官方同形；boot-smoke + 双 OS CI 绿。**尾巴**：N9 提权 / L1 抽查实机；0.1.7 消费者集合装机核。档案 R51 |
 | INFRA-23 | L1 实机冒烟进 CI：假模型 + sshd 容器 | done | P1 | PR #65。`scripts/e2e-l1/`（假 Anthropic 服务器 + headless 真宿主 + M3–M5 断言）+ ci.yml `e2e-l1`。**尾巴**：secret `DSW_E2E_SSH_PASSWORD` 建好后真跑；M6/M7 浏览器半留 L1。WSL 预验 blocked（用户指示）。档案 R51 |
