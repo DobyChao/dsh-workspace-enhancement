@@ -22,7 +22,8 @@
 |---|---|---|---|---|
 | REQ-I26 | 远程组件覆盖 linux-arm64 | todo | P2 | ADR-0023 §2.7 的第二架构。现只构建部署 linux-x86_64（`assertLinuxAmd64`），aarch64 被拒后走直连腿（#59 的现场）。验收：按 `uname -m` 选工件、每架构独立 sha256、CI 出 linux-arm64 tarball、部署门放行 aarch64。Windows 远端仍不做（无 bwrap） |
 | INFRA-24 | 流程减负：拍板队列 + round/闸门复评 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕；round 报告只在里程碑/事故写、小 PR 用 PR 描述，复评纯格式闸门性价比（原 INFRA-25 并入）。先定拍板队列落点与「可逆」判据；改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
-| REQ-I28 | 远程会话上传件与生成产物：读取/打开打通，先定义上传落点 | todo | P2 | 2026-10-12 用户提。宿主上传走 `dsh-client-file-upload`+`attachments` 服务（R18/R19 核过，落**本地**）；远程会话 fs/subprocess 在远端 ⇒ 上传件模型读不到、远端产物客户端打不开（路径两个世界，现状待核）。先拍上传落点：留本地 vs 随会话传进远端工作区；与 REQ-A6 或共用入口。验收：远程会话上传后模型可读、产物可在客户端打开 |
+| REQ-I28 | 远程会话上传件与生成产物：读取/打开打通，先定义上传落点 | todo | P2 | 2026-10-12 用户提，10-13 定形。宿主上传走 `dsh-client-file-upload`+`attachments`（R18/R19，落本地）；远程会话在远端 ⇒ 上传件读不到、产物打不开（现状待核）。形状：上传落点单独拍（倾向随会话传远端）；产物打开与 REQ-A6-C2 共建组件，能力长在我方 client half，不得硬依赖 optional peer。验收：上传后模型可读、产物可打开 |
+| REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-10-13 用户拍板：A 起步（registerTab + 复用现有 browse/状态面）；C2 并入 REQ-I28 共建远程文件树/预览；B 仅附属；C1/抢 files kind 不做（ADR-0006）。硬规则：optional peer + 禁 value-import + 能力探测降级；版本线绑宿主家族是主风险。调查[档案](./notes/req-a6-better-sidebar-survey.md) |
 | REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | todo | P2 | 2026-10-12 用户提并拍板；原 REQ-I30 并入。探针只测 command -v bwrap（core-deploy.ts:128），装而不可用要到围栏执行才裸报。修法：功能探测（真跑最小 bwrap，参照宿主）+ 用户引导 + dsh-core 加 go-landlock 后备档（按内核 ABI 降档、部分强制如实报），调查[档案](./notes/req-i29-bwrap-landlock-survey.md)。验收：不可用即报给指引；无 bwrap 远端两档权限仍被强制 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
@@ -39,7 +40,6 @@
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 10-08 复核：四包 `next`=`0.2.0-rc.2` 已进 rc，仍拒 win32 宿主、未接 Web、不进默认组合。细化对比（含 A′/B′）见 [ADR-0029](./decisions/ADR-0029-positioning-review.md)，推荐 A′。**待所有者**拍板；拍定即解挡 `REQ-A7` |
 | REQ-A7 | 包改名为远程工作区类名称 | blocked | P2 | 候选 `dsh-remote-workspace`，旧包 `npm deprecate` 指向新包；`sw_` / `dsw` 不动。**挡于** `UPSTREAM-6`（A/A′/C 才改，B 另议）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.1 |
 | UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | blocked | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
-| REQ-A6 | 适配 dsh-better-sidebar 插件 | blocked | P2 | 2026-09-29 调查完成（[档案](./notes/req-a6-better-sidebar-survey.md)）：零槽位冲突可并存；适配 = optional peer + `ctx.betterSidebar.registerTab` 注册远程工作区 tab（A 起步→C2），走我方 /api/dsw 不碰其本地 fs（合 ADR-0006）。版本线绑宿主家族是主风险。**待用户拍方向** |
 | REQ-I25 | 混合门面未知方法默认转发本地委托 | blocked | P3 | ADR-0030 选项 B：仍是唯一提供者，只拦带路径 / cwd 的方法，其余默认转发；`sandboxMode` 等 getter 单列。验收：纯本地会话与官方一致，三条矩阵行保持，boot-smoke 过。**挡于 ADR-0030 拍板** |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |

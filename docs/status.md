@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-12 15:58 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-12 16:28 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `master` / `eba6796` |
-| HEAD 提交 | `fix: picker drag-close, loud core sha, empty form defaults, token colors (#67)` (2026-10-12) |
+| 分支 / HEAD | `master` / `ce29a2b` |
+| HEAD 提交 | `docs: close the BUG-14/15 + UX-4/10 round after merge (#67)` (2026-10-12) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -28,9 +28,9 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
+| `todo` | 13 |
 | `doing` | 0 |
-| `blocked` | 9 |
+| `blocked` | 8 |
 | `done` | 83 |
 | `shipped` | 10 |
 | `dropped` | 16 |
@@ -40,7 +40,6 @@
 - UPSTREAM-6 — 官方 SSH 运行时定位拍板
 - REQ-A7 — 包改名为远程工作区类名称
 - UX-8 — 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移
-- REQ-A6 — 适配 dsh-better-sidebar 插件
 - REQ-I25 — 混合门面未知方法默认转发本地委托
 - INFRA-8 — AgentTeams 标准 profile 注册
 - AUDIT-5 — 分组视图下会话子行拿不到 compact 徽标
