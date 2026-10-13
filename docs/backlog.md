@@ -16,7 +16,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | doing | P2 | 2026-10-12 用户提并拍板；原 REQ-I30 并入。探针只测 command -v bwrap（core-deploy.ts:128），装而不可用要到围栏执行才裸报。修法：功能探测（真跑最小 bwrap，参照宿主）+ 用户引导 + dsh-core 加 go-landlock 后备档（按内核 ABI 降档、部分强制如实报），调查[档案](./notes/req-i29-bwrap-landlock-survey.md)。验收：不可用即报给指引；无 bwrap 远端两档权限仍被强制 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -50,6 +49,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | done | P2 | PR #69（含 REQ-I30 并入；折入 UX-4 车道修复）。核心 tier 化 + fenceinfo + 部署/状态/设置页档位；core 0.2.3；授权对齐宿主（/dev/null、真实 /tmp）。**尾巴**：真 Docker 降档、老 core unknown 实机 [R53](./uat/R53-req-i29-fence-tier.md)。档案 [R53](./rounds/R53-req-i29-fence-tier.md) |
 | BUG-15 | core-artifact.mjs 管道读 tar：沙箱 EPERM 静默跳过 sha 登记/溯源门 | done | P1 | PR #67。tar 解临时目录按文件哈希（零管道），存在但读不出必抛；pack-smoke 干净判红；单测 3 例。**尾巴**：lab 实机 UAT 走查 [R52](./uat/R52-bug14-15-ux4-10.md) |
 | BUG-14 | 目录选择器：拖选松手在窗外即整窗关闭 | done | P2 | PR #67。`backdropDismissProps`（mousedown 起点 + click 双条件，跨渲染 fail-safe），flow/side-workspaces 两处换用；单测 5 例。**尾巴**：浏览器拖选实机 R52 |
 | UX-10 | 新建/编辑连接表单：不预填 + 警告时机 | done | P3 | PR #67（含原 UX-5）。初值/EMPTY/wire 三处去 root 预填、别名不再猜 `/home/<user>`；保存重置补 `setRevealed(false)`；测试连接拒空用户名。**尾巴**：lab 目测 R52 |

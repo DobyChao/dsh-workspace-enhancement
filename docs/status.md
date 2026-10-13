@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-12 16:28 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-13 11:59 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.3` |
 | npm 已发布版本 | `0.2.3` |
 | 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `master` / `ce29a2b` |
-| HEAD 提交 | `docs: close the BUG-14/15 + UX-4/10 round after merge (#67)` (2026-10-12) |
+| 分支 / HEAD | `master` / `dde001a` |
+| HEAD 提交 | `feat(core): fence tier — functional bwrap probe, Landlock fallback, guided refusal (#69)` (2026-10-13) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -19,19 +19,19 @@
 | 项 | 值 |
 |---|---|
 | 单测文件 | 65 |
-| 单测用例（静态计数） | 685 |
+| 单测用例（静态计数） | 689 |
 | E2E 场景文件 | 8 |
 | ADR | 31 |
-| 轮次报告 | 52 |
+| 轮次报告 | 53 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 13 |
+| `todo` | 12 |
 | `doing` | 0 |
 | `blocked` | 8 |
-| `done` | 83 |
+| `done` | 84 |
 | `shipped` | 10 |
 | `dropped` | 16 |
 
