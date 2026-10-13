@@ -44,7 +44,8 @@
 import type { WireResult } from './index.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { routeIdOf } from './route-id.ts'
-import { CONN_STATE_COLOR, CONN_STATE_LABEL_KEY, zhBaseline } from './status.tsx'
+import { CONN_STATE_COLOR } from './conn-state.ts'
+import { CONN_STATE_LABEL_KEY, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
 
 // The route-placeholder rule now lives in its own `.ts` module (t4): the header

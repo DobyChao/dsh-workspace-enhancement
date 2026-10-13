@@ -128,6 +128,75 @@ export function remoteToolProbe(): string {
   return 'if command -v rg >/dev/null 2>&1; then echo RG; fi; if command -v bwrap >/dev/null 2>&1; then echo BWRAP; fi; true'
 }
 
+/* ------------------------------------------------------------- fence tier */
+
+/**
+ * REQ-I29: the fence tier one remote can actually enforce, as
+ * `dsh-core fenceinfo` reports it. `tier: 'none'` means a confined session
+ * will refuse fail-closed — the guidance text then names every way out.
+ */
+export interface FenceTierView {
+  tier: 'bwrap' | 'landlock' | 'none'
+  bwrapPath?: string | undefined
+  bwrapProbeErr?: string | undefined
+  bwrapMissing?: boolean | undefined
+  landlockAbi?: number | undefined
+  landlockErr?: string | undefined
+  notes?: readonly string[] | undefined
+}
+
+const FENCE_TIERS: readonly string[] = ['bwrap', 'landlock', 'none']
+
+/**
+ * Parse one `dsh-core fenceinfo` JSON line. `undefined` for anything that is
+ * not a well-formed tier answer (an older same-line core predating the
+ * subcommand, a truncated line) — "unknown" is honest, a guess is not.
+ */
+export function parseFenceInfo(stdout: string): FenceTierView | undefined {
+  const text = stdout.trim()
+  if (text === '') return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const record = parsed as Record<string, unknown>
+  if (typeof record.tier !== 'string' || !FENCE_TIERS.includes(record.tier)) return undefined
+  const view: FenceTierView = { tier: record.tier as FenceTierView['tier'] }
+  if (typeof record.bwrapPath === 'string' && record.bwrapPath !== '') view.bwrapPath = record.bwrapPath
+  if (typeof record.bwrapProbeErr === 'string' && record.bwrapProbeErr !== '') view.bwrapProbeErr = record.bwrapProbeErr
+  if (record.bwrapMissing === true) view.bwrapMissing = true
+  if (typeof record.landlockAbi === 'number') view.landlockAbi = record.landlockAbi
+  if (typeof record.landlockErr === 'string' && record.landlockErr !== '') view.landlockErr = record.landlockErr
+  if (Array.isArray(record.notes)) {
+    const notes = record.notes.filter((note): note is string => typeof note === 'string' && note !== '')
+    if (notes.length > 0) view.notes = notes
+  }
+  return view
+}
+
+/**
+ * The operator-facing summary of one tier answer — the deploy result's
+ * `detail` and the status line both carry exactly this text.
+ */
+export function fenceTierNote(view: FenceTierView): string {
+  const abi = typeof view.landlockAbi === 'number' ? view.landlockAbi : 0
+  switch (view.tier) {
+    case 'bwrap':
+      return `fence tier: bwrap (functionally probed${abi >= 1 ? `; landlock abi ${abi} as fallback` : ''})`
+    case 'landlock':
+      return `fence tier: landlock (abi ${abi}${view.bwrapProbeErr !== undefined ? `; bwrap unusable: ${view.bwrapProbeErr}` : '; bwrap not installed'}) — stricter: no tmpfs /tmp, no PID isolation`
+    default: {
+      const cause = view.bwrapProbeErr !== undefined
+        ? `bwrap installed but unusable (${view.bwrapProbeErr})`
+        : 'bwrap not installed'
+      return `fence tier: NONE — ${cause}, landlock unavailable (abi ${abi}); confined sessions will refuse. Install bubblewrap (${bwrapInstallHints().join('; ')}) or use a Landlock-enabling kernel (linux ≥5.13), or run the work with sandbox mode off`
+    }
+  }
+}
+
 /**
  * Development aid: names the deploy should treat as ABSENT on the remote even
  * when the probe finds them (`DSW_CORE_VENDOR_FORCE_MISSING=rg,bwrap`). The
@@ -201,7 +270,7 @@ export async function deployCore(
   const notes: string[] = []
   const probe = await transport.exec(remoteToolProbe(), execOptions)
   const forced = forcedMissingTools()
-  const { rg: remoteHasRg, bwrap: remoteHasBwrap } = remoteToolsPresent(probe.stdout, forced)
+  const { rg: remoteHasRg } = remoteToolsPresent(probe.stdout, forced)
   if (forced.length > 0) {
     notes.push(`DSW_CORE_VENDOR_FORCE_MISSING=${forced.join(',')} (development aid: the probe above is not authoritative)`)
   }
@@ -219,9 +288,6 @@ export async function deployCore(
     } else {
       notes.push(outcome.detail)
     }
-  }
-  if (!remoteHasBwrap) {
-    notes.push(`the remote has no bwrap — fenced work will refuse until it is installed (${bwrapInstallHints().join('; ')})`)
   }
 
   const remoteTar = `/tmp/${tarName}`
@@ -245,6 +311,17 @@ export async function deployCore(
   if (ver.exitCode !== 0) {
     return { ok: false, version, detail: (ver.stderr || ver.stdout || 'version probe failed').trim() }
   }
+  // REQ-I29: the fence tier this remote can really enforce — probed by the
+  // core itself (functional bwrap run + real Landlock restriction), reported
+  // before any session leans on the fence. `undefined` = an older same-line
+  // core: unknown is honest, and the version gate keeps that window patched.
+  const fenceOut = await transport.exec('"$HOME"/.dsh-core/current/dsh-core fenceinfo', execOptions)
+  const fence = parseFenceInfo(fenceOut.stdout)
+  if (fence !== undefined) {
+    notes.push(fenceTierNote(fence))
+  } else if (fenceOut.exitCode !== 0) {
+    notes.push('fence tier unknown (fenceinfo unavailable on the deployed core)')
+  }
   const note = notes.length > 0 ? notes.join('; ') : undefined
   try {
     const parsed = JSON.parse(ver.stdout) as { version?: string; arch?: string; proto?: number; caps?: string[] }
@@ -254,25 +331,41 @@ export async function deployCore(
       arch: parsed.arch,
       proto: parsed.proto,
       caps: parsed.caps,
+      fence,
       ...(note !== undefined ? { detail: note } : {}),
     }
   } catch {
-    return { ok: true, version, detail: note ?? ver.stdout.trim() }
+    return { ok: true, version, fence, detail: note ?? ver.stdout.trim() }
   }
 }
 
 export async function coreStatusViaExec(transport: SshTransport, signal?: AbortSignal): Promise<CoreStatusView> {
+  const execOptions = signal !== undefined ? { signal } : undefined
   const outcome = await transport.exec(
     'if test -x "$HOME"/.dsh-core/current/dsh-core; then "$HOME"/.dsh-core/current/dsh-core version; else echo MISSING; fi',
-    signal !== undefined ? { signal } : undefined,
+    execOptions,
   )
   const text = outcome.stdout.trim()
   if (text === 'MISSING' || outcome.exitCode !== 0) {
     return { ok: false, detail: 'core not installed' }
   }
+  // REQ-I29: report the enforceable fence tier alongside the version — a
+  // "none" answer is guidance the operator needs BEFORE a confined session
+  // refuses mid-work.
+  const fenceOut = await transport.exec('"$HOME"/.dsh-core/current/dsh-core fenceinfo', execOptions)
+  const fence = parseFenceInfo(fenceOut.stdout)
+  const fenceDetail = fence !== undefined && fence.tier === 'none' ? fenceTierNote(fence) : undefined
   try {
     const parsed = JSON.parse(text) as { version?: string; arch?: string; proto?: number; caps?: string[] }
-    return { ok: true, version: parsed.version, arch: parsed.arch, proto: parsed.proto, caps: parsed.caps }
+    return {
+      ok: true,
+      version: parsed.version,
+      arch: parsed.arch,
+      proto: parsed.proto,
+      caps: parsed.caps,
+      fence,
+      ...(fenceDetail !== undefined ? { detail: fenceDetail } : {}),
+    }
   } catch {
     return { ok: false, detail: text }
   }

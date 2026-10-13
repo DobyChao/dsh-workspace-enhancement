@@ -71,7 +71,7 @@ export const MODEL_PROMPTS = {
    * Missing core + confined mode fails closed; danger keeps SFTP/SSH.
    */
   remoteNoSandbox:
-    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined writes and bash FAIL CLOSED if that core is missing. Reads then fall back to unfenced SFTP so chat and official Read still work (visible: the write/bash refusal names the missing core or bwrap). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
+    'Remote commands and file tools follow this session\'s /permission sandbox (workspace-write, read-only, or danger-full-access), enforced by the Linux core when it is deployed. Confined writes and bash FAIL CLOSED if that core is missing. Reads then fall back to unfenced SFTP so chat and official Read still work (visible: the write/bash refusal names the missing core, or the fence tier the remote cannot enforce — bubblewrap install hints, the Landlock fallback tier, or sandbox-off). danger-full-access (including a one-shot sandbox_permissions grant) uses `dsh-core serve --sandbox off`, or today\'s SFTP and SSH when no core is installed. Interactive terminals stay refused while the session is confined. Escalation uses the same official card as local writes.',
   /**
    * AUDIT-6 gate-expectation sentence (`sw-remote` section): injected only
    * when the session's main-workspace machine has `remoteApproval !== 'off'`.

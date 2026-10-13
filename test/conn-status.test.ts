@@ -197,7 +197,7 @@ test('SshSession: a failed ready attempt is not cached — the next getClient re
 })
 
 test('UX-4: CONN_STATE_COLOR rides the host semantic tokens — no hex left', async () => {
-  const { CONN_STATE_COLOR } = await import('../src/client/status.tsx')
+  const { CONN_STATE_COLOR } = await import('../src/client/conn-state.ts')
   assert.equal(CONN_STATE_COLOR.active, 'var(--dsw-alias-state-success-primary)')
   assert.equal(CONN_STATE_COLOR.offline, 'var(--dsw-alias-state-error-primary)')
   assert.equal(CONN_STATE_COLOR.unknown, 'var(--dsw-alias-label-caption)')
