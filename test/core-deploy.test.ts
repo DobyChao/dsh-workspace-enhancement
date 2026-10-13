@@ -102,3 +102,62 @@ test('forcedMissingTools: trims, lowercases and de-duplicates the dev knob', () 
   assert.deepEqual(forcedMissingTools(' rg , BWRAP ,rg'), ['rg', 'bwrap'])
   assert.deepEqual(forcedMissingTools('bwrap'), ['bwrap'])
 })
+
+/* ------------------------------------------------ REQ-I29: fence tier view */
+
+import { fenceTierNote, parseFenceInfo } from '../src/core-deploy.ts'
+
+test('parseFenceInfo: the three tier answers parse with their fields', () => {
+  const bwrap = parseFenceInfo('{"tier":"bwrap","bwrapPath":"/usr/bin/bwrap","bwrapMissing":false,"landlockAbi":7}')
+  assert.equal(bwrap?.tier, 'bwrap')
+  assert.equal(bwrap?.bwrapPath, '/usr/bin/bwrap')
+  assert.equal(bwrap?.landlockAbi, 7)
+  const landlock = parseFenceInfo('{"tier":"landlock","bwrapProbeErr":"exit 1 under the read-only profile","landlockAbi":3,"notes":["landlock tier: no mount isolation"]}')
+  assert.equal(landlock?.tier, 'landlock')
+  assert.equal(landlock?.bwrapProbeErr, 'exit 1 under the read-only profile')
+  assert.deepEqual(landlock?.notes, ['landlock tier: no mount isolation'])
+  const none = parseFenceInfo('{"tier":"none","bwrapMissing":true,"landlockAbi":0}')
+  assert.equal(none?.tier, 'none')
+  assert.equal(none?.bwrapMissing, true)
+})
+
+test('parseFenceInfo: garbage and foreign shapes are unknown, never guessed', () => {
+  assert.equal(parseFenceInfo(''), undefined)
+  assert.equal(parseFenceInfo('usage: dsh-core …'), undefined)
+  assert.equal(parseFenceInfo('{"tier":"nsjail"}'), undefined)
+  assert.equal(parseFenceInfo('{"tier":42}'), undefined)
+})
+
+test('fenceTierNote: each tier line is honest about what it means', () => {
+  assert.match(fenceTierNote({ tier: 'bwrap', landlockAbi: 7 }), /bwrap \(functionally probed; landlock abi 7 as fallback\)/)
+  assert.match(
+    fenceTierNote({ tier: 'landlock', landlockAbi: 3, bwrapProbeErr: 'exit 1 under the read-only profile' }),
+    /landlock \(abi 3; bwrap unusable: exit 1.*\/tmp writable but shared, no PID isolation/,
+  )
+  const none = fenceTierNote({ tier: 'none', bwrapMissing: true, landlockAbi: 0 })
+  for (const want of ['fence tier: NONE', 'bwrap not installed', 'landlock unavailable', 'sandbox mode off']) {
+    assert.ok(none.includes(want), `none note missing "${want}": ${none}`)
+  }
+  const noneProbe = fenceTierNote({ tier: 'none', bwrapProbeErr: 'uid map failed', landlockAbi: 0 })
+  assert.match(noneProbe, /bwrap installed but unusable \(uid map failed\)/)
+})
+
+test('coreStatusLabel: the fence tier drives the settings line (REQ-I29)', () => {
+  const t = (key: string, params?: Record<string, unknown>): string => `${key}:${JSON.stringify(params ?? {})}`
+  assert.match(
+    coreStatusLabel({ ok: true, version: '0.2.3', fence: { tier: 'bwrap' } }, t),
+    /^settings\.core\.okFenced:/,
+  )
+  assert.match(
+    coreStatusLabel({ ok: true, version: '0.2.3', fence: { tier: 'landlock', landlockAbi: 3 } }, t),
+    /^settings\.core\.okDegraded:/,
+  )
+  // A core without a fence is NOT a green line — the guidance takes the row.
+  const noneLine = coreStatusLabel(
+    { ok: true, version: '0.2.3', fence: { tier: 'none' }, detail: 'fence tier: NONE — …' },
+    t,
+  )
+  assert.match(noneLine, /^settings\.core\.fenceNone:/)
+  // An older same-line core (no fenceinfo answer) keeps the plain ok line.
+  assert.match(coreStatusLabel({ ok: true, version: '0.2.3' }, t), /^settings\.core\.ok:/)
+})

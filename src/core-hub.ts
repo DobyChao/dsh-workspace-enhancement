@@ -37,6 +37,7 @@ import type { ExecOutcome } from './ssh-core.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { remoteSandboxDepsOf, remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps } from './remote-sandbox-fence.ts'
+import type { FenceTierView } from './core-deploy.ts'
 import {
   CoreMissingError,
   coreServeSandboxOf,
@@ -58,6 +59,8 @@ export interface CoreStatusView {
   arch?: string | undefined
   proto?: number | undefined
   caps?: readonly string[] | undefined
+  /** REQ-I29: the fence tier the remote can really enforce (deploy/status probe). */
+  fence?: FenceTierView | undefined
   detail?: string | undefined
 }
 

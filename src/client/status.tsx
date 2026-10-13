@@ -25,8 +25,11 @@ import styles from './status.module.css'
  */
 export const zhBaseline: TranslateNS<'dsw'> = (key, params) => lookup('zh', key, params)
 
-/** Tri-state connection state as wired by `/dsw/conn.*`. */
-export type ConnState = 'unknown' | 'active' | 'offline'
+/** Tri-state connection state as wired by `/dsw/conn.*`. UX-4: lives in
+ * `conn-state.ts` (the sandbox test lane cannot load this view module). */
+export type { ConnState } from './conn-state.ts'
+export { CONN_STATE_COLOR } from './conn-state.ts'
+import type { ConnState } from './conn-state.ts'
 
 /** One `/dsw/conn.status` row (structural; unknown fields tolerated). */
 export interface ConnStatusView {
@@ -223,21 +226,7 @@ export const CONN_STATE_LABEL_KEY: Record<ConnState, DswKey> = {
   offline: 'status.offline',
 }
 
-/**
- * Dot colors for the DOM row-badge layer (`row-badges.ts` /
- * `remote-status-entry.tsx`), which injects into host DOM nodes and therefore
- * cannot address a CSS module class. UX-4: the values are var() references to
- * the SAME host semantic tokens the React badge resolves through
- * `status.module.css` (`--dsw-alias-state-success-primary` green,
- * `--dsw-alias-state-error-primary` red, `--dsw-alias-label-caption` gray) —
- * var() resolves in inline styles too, so both surfaces follow the host
- * theme with no hex left to drift.
- */
-export const CONN_STATE_COLOR: Record<ConnState, string> = {
-  unknown: 'var(--dsw-alias-label-caption)',
-  active: 'var(--dsw-alias-state-success-primary)',
-  offline: 'var(--dsw-alias-state-error-primary)',
-}
+/** Dot colors live in `conn-state.ts` (UX-4: re-exported above). */
 
 /**
  * The tri-state badge: colored dot + label, and (unless `compact`) the
