@@ -10,6 +10,7 @@ package main
 // enabled; hosts without it skip honestly.
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,9 +23,22 @@ const helperEnv = "DSW_TEST_LANDLOCK_HELPER"
 // The helper applies one restriction then reports whether the kernel really
 // held a write attempt. Outcome lines: WRITE_DENIED… / WRITE_ALLOWED /
 // RESTRICTED_OK / RESTRICT_ERROR…
+//
+// The outcome file's descriptor is opened BEFORE the restriction: Landlock
+// mediates path-based opens, not writes to already-open descriptors —
+// otherwise a correctly-restricted read-only helper could never report.
 func landlockHelper() {
+	outPath := os.Getenv(helperEnv + "_OUT")
+	out, outErr := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	report := func(text string) {
-		_ = os.WriteFile(os.Getenv(helperEnv+"_OUT"), []byte(text+"\n"), 0o644)
+		if outErr != nil {
+			return
+		}
+		_, _ = fmt.Fprintln(out, text)
+		_ = out.Close()
+	}
+	if outErr != nil {
+		return
 	}
 	mode := os.Getenv(helperEnv + "_MODE")
 	workspace := os.Getenv(helperEnv + "_WS")
@@ -37,6 +51,8 @@ func landlockHelper() {
 		report("RESTRICTED_OK")
 		return
 	}
+	// os.WriteFile OPENS the target after the restriction — this is the
+	// enforcement under test, not a side effect.
 	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
 		report("WRITE_DENIED: " + err.Error())
 		return
