@@ -81,12 +81,15 @@ func (i fenceInfo) refusal(mode string) string {
 }
 
 // The note lines that make a Landlock tier honest about what it is NOT.
+// Grant spelling mirrors the host dialect: /tmp IS writable in
+// workspace-write (the real shared /tmp — the difference vs bwrap's tmpfs is
+// isolation, not availability).
 func landlockTierNotes(abi int, mode string) []string {
 	notes := []string{
 		"landlock tier: no mount isolation — no private tmpfs /tmp, no PID namespace; the process sees the real filesystem tree",
 	}
 	if mode == "workspace-write" {
-		notes = append(notes, "landlock tier: /tmp stays read-only in workspace-write — stricter than the bwrap profile's tmpfs /tmp")
+		notes = append(notes, "landlock tier: /tmp is writable but SHARED (no ephemeral tmpfs — the bwrap dialect's per-run scratch isolation does not apply)")
 	}
 	if abi < 2 {
 		notes = append(notes, "partial enforcement (Landlock ABI 1): rename/reparent (REFER) is not restrictable on this kernel")

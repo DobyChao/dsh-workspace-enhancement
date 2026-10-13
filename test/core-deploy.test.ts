@@ -132,7 +132,7 @@ test('fenceTierNote: each tier line is honest about what it means', () => {
   assert.match(fenceTierNote({ tier: 'bwrap', landlockAbi: 7 }), /bwrap \(functionally probed; landlock abi 7 as fallback\)/)
   assert.match(
     fenceTierNote({ tier: 'landlock', landlockAbi: 3, bwrapProbeErr: 'exit 1 under the read-only profile' }),
-    /landlock \(abi 3; bwrap unusable: exit 1.*stricter: no tmpfs \/tmp/,
+    /landlock \(abi 3; bwrap unusable: exit 1.*\/tmp writable but shared, no PID isolation/,
   )
   const none = fenceTierNote({ tier: 'none', bwrapMissing: true, landlockAbi: 0 })
   for (const want of ['fence tier: NONE', 'bwrap not installed', 'landlock unavailable', 'sandbox mode off']) {

@@ -29,7 +29,7 @@
    - [ ] `{"tier":"bwrap",…,"landlockAbi":<本机>}`——bwrap 是**功能探测通过**后的结论。
 2. 禁 userns 容器：同命令
    - [ ] `tier":"landlock"`，notes 含 `fell back from bwrap (…)` 与 `no mount isolation`；`bwrapProbeErr` 非空。
-   - [ ] 容器内 `sw_exec` 受限写：workspace-write 会话里写工作区内成功、写 `/etc/xxx` 拒绝、写 `/tmp/xxx` **拒绝**（landlock 档比 bwrap 更严，如实设计）。
+   - [ ] 容器内 `sw_exec` 受限写：workspace-write 会话里写工作区内成功、写 `/etc/xxx` 拒绝、写 `/tmp/xxx` **成功**（宿主方言一致：真实共享 /tmp 可写，与 bwrap 的差异只在隔离性不在可用性；写 $HOME 外工作区外路径拒绝）。
 3. 双缺环境（无 bwrap + 内核无 Landlock，或临时 `DSH_CORE_FENCE_TIER=none`）：
    - [ ] `fenceinfo` 仍 exit 0，`tier":"none"`。
    - [ ] 受限会话执行：拒绝文案含安装提示（apt/dnf/pacman/zypper）、Landlock 内核提示、sandbox off 三条出路。

@@ -187,7 +187,7 @@ export function fenceTierNote(view: FenceTierView): string {
     case 'bwrap':
       return `fence tier: bwrap (functionally probed${abi >= 1 ? `; landlock abi ${abi} as fallback` : ''})`
     case 'landlock':
-      return `fence tier: landlock (abi ${abi}${view.bwrapProbeErr !== undefined ? `; bwrap unusable: ${view.bwrapProbeErr}` : '; bwrap not installed'}) — stricter: no tmpfs /tmp, no PID isolation`
+      return `fence tier: landlock (abi ${abi}${view.bwrapProbeErr !== undefined ? `; bwrap unusable: ${view.bwrapProbeErr}` : '; bwrap not installed'}) — /tmp writable but shared, no PID isolation`
     default: {
       const cause = view.bwrapProbeErr !== undefined
         ? `bwrap installed but unusable (${view.bwrapProbeErr})`

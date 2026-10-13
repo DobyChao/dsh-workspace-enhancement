@@ -18,4 +18,5 @@ export const CORE_ARTIFACT_ARCH = 'linux-x64'
  */
 export const CORE_COMPAT_HASHES = [
   'a0f28eaef7e608b2339fb6691ec9569c192ccd02ed20ffda894762a598ebf62d',
+  'd35cb7f3dc491f271a65602c5e8fcebd4da8fcfac48d0f0352c25eecb7e6a4c0',
 ] as const

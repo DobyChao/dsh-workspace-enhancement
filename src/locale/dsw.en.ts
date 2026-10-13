@@ -266,7 +266,7 @@ const en: Record<DswKey, string> = {
   'settings.rpc.coreStatusFailed': 'Failed to read remote component status',
   'settings.core.ok': 'remote component {version}{arch}',
   'settings.core.okFenced': 'remote component {version}{arch} · fence bwrap',
-  'settings.core.okDegraded': 'remote component {version}{arch} · fence landlock (abi {abi}, degraded: no tmpfs /tmp, no PID isolation)',
+  'settings.core.okDegraded': 'remote component {version}{arch} · fence landlock (abi {abi}, degraded: /tmp is the real shared dir, no PID isolation)',
   'settings.core.fenceNone': 'remote component {version}{arch} · ⚠ cannot confine: confined sessions will refuse. {detail}',
   'settings.core.missing': 'remote component not installed ({detail})',
   'settings.core.unsupported': 'no remote component for this architecture ({detail})',

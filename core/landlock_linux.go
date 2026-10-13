@@ -132,6 +132,15 @@ func restrictLandlock(sandbox, workspace string) error {
 			return fmt.Errorf("landlock rule on %s: %w", path, err)
 		}
 		defer syscall.Close(fd)
+		// A non-directory (e.g. the /dev/null grant) may only carry
+		// file-applicable rights — directory-only bits there are EINVAL.
+		var stat syscall.Stat_t
+		if err := syscall.Fstat(fd, &stat); err != nil {
+			return fmt.Errorf("landlock rule on %s: %w", path, err)
+		}
+		if stat.Mode&syscall.S_IFMT != syscall.S_IFDIR {
+			allowed &= landlockExecute | landlockWriteFile | landlockReadFile | landlockTruncate
+		}
 		rule := landlockPathBeneathAttr{allowedAccess: allowed, parentFd: int32(fd)}
 		// LANDLOCK_RULE_PATH_BENEATH == 1.
 		if _, _, errno := syscall.Syscall6(sysLandlockAddRule, rulesetFd, 1,
@@ -141,14 +150,26 @@ func restrictLandlock(sandbox, workspace string) error {
 		return nil
 	}
 
-	// Read-only everywhere; the workspace rule stacks the write vocabulary on
-	// top for workspace-write. Bits beyond the kernel's ABI are dropped —
+	// Grant spelling mirrors the host's Landlock dialect
+	// (dsh-sandbox-local `landlockProfileArgs`) exactly: read-only everywhere
+	// plus writable /dev/null in BOTH modes (a read-only jail that cannot
+	// redirect to /dev/null breaks half the toolchain), and workspace-write
+	// stacks the workspace root AND the real /tmp — the per-runner difference
+	// vs bwrap is isolation (shared scratch vs ephemeral tmpfs), never
+	// availability. Bits beyond the kernel's ABI are dropped —
 	// decideFenceTier already reported that as partial enforcement.
 	if err := addRule("/", landlockReadOnlyBits&handled); err != nil {
 		return err
 	}
+	writeBits := (landlockReadOnlyBits | landlockWriteBits) & handled
+	if err := addRule("/dev/null", writeBits); err != nil {
+		return err
+	}
 	if sandbox == "workspace-write" {
-		if err := addRule(workspace, (landlockReadOnlyBits|landlockWriteBits)&handled); err != nil {
+		if err := addRule("/tmp", writeBits); err != nil {
+			return err
+		}
+		if err := addRule(workspace, writeBits); err != nil {
 			return err
 		}
 	}

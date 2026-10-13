@@ -275,7 +275,7 @@ export const zh = {
   'settings.rpc.coreStatusFailed': '读取远程组件状态失败',
   'settings.core.ok': '远程组件 {version}{arch}',
   'settings.core.okFenced': '远程组件 {version}{arch} · 围栏 bwrap',
-  'settings.core.okDegraded': '远程组件 {version}{arch} · 围栏 landlock（abi {abi}，降档：无 tmpfs /tmp、无 PID 隔离）',
+  'settings.core.okDegraded': '远程组件 {version}{arch} · 围栏 landlock（abi {abi}，降档：/tmp 为真实共享目录、无 PID 隔离）',
   'settings.core.fenceNone': '远程组件 {version}{arch} · ⚠ 无法围栏：受限会话将拒绝执行。{detail}',
   'settings.core.missing': '远程组件未安装（{detail}）',
   'settings.core.unsupported': '此架构没有可用的远程组件（{detail}）',

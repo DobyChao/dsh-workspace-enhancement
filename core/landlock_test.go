@@ -42,9 +42,11 @@ func landlockHelper() {
 	}
 	mode := os.Getenv(helperEnv + "_MODE")
 	workspace := os.Getenv(helperEnv + "_WS")
-	if err := restrictLandlock(mode, workspace); err != nil {
-		report("RESTRICT_ERROR: " + err.Error())
-		return
+	if mode != "" {
+		if err := restrictLandlock(mode, workspace); err != nil {
+			report("RESTRICT_ERROR: " + err.Error())
+			return
+		}
 	}
 	target := os.Getenv(helperEnv + "_TARGET")
 	if target == "" {
@@ -93,22 +95,49 @@ func runLandlockHelper(t *testing.T, mode, workspace, target string) string {
 func TestLandlockEnforcement(t *testing.T) {
 	outsideDir := t.TempDir()
 	outside := filepath.Join(outsideDir, "outside.txt")
+	// A deny target that is NOT under /tmp — with the host-dialect grant
+	// (/tmp writable in workspace-write), a TempDir-based "outside" would be
+	// inside allowed territory. Baseline-prove the home path is writable
+	// UNRESTRICTED first, so the denial below can only be Landlock's.
+	home, homeErr := os.UserHomeDir()
+	denyTarget := ""
+	if homeErr == nil {
+		denyTarget = filepath.Join(home, ".dsw-landlock-test-outside")
+		if base := runLandlockHelper(t, "", "", denyTarget); base != "WRITE_ALLOWED" {
+			denyTarget = ""
+		}
+	}
 
-	t.Run("read-only denies writes anywhere", func(t *testing.T) {
+	t.Run("read-only denies writes anywhere except /dev/null", func(t *testing.T) {
 		out := runLandlockHelper(t, "read-only", "", outside)
 		if !strings.HasPrefix(out, "WRITE_DENIED") {
 			t.Fatalf("read-only must deny writes, got: %s", out)
 		}
+		// Host-dialect parity: /dev/null stays writable even in read-only.
+		if out := runLandlockHelper(t, "read-only", "", "/dev/null"); out != "WRITE_ALLOWED" {
+			t.Fatalf("read-only must keep /dev/null writable, got: %s", out)
+		}
 	})
 
-	t.Run("workspace-write allows inside, denies outside", func(t *testing.T) {
+	t.Run("workspace-write allows the workspace and /tmp, denies elsewhere", func(t *testing.T) {
 		ws := t.TempDir()
 		inside := filepath.Join(ws, "inside.txt")
 		if out := runLandlockHelper(t, "workspace-write", ws, inside); out != "WRITE_ALLOWED" {
 			t.Fatalf("workspace-write must allow the workspace root, got: %s", out)
 		}
-		if out := runLandlockHelper(t, "workspace-write", ws, outside); !strings.HasPrefix(out, "WRITE_DENIED") {
-			t.Fatalf("workspace-write must deny outside the root, got: %s", out)
+		// Host-dialect parity: the REAL /tmp is writable in workspace-write —
+		// a deny here would break every TMPDIR-using tool on the tier.
+		tmpTarget := filepath.Join(outsideDir, "in-tmp.txt") // outsideDir lives under /tmp
+		if out := runLandlockHelper(t, "workspace-write", ws, tmpTarget); out != "WRITE_ALLOWED" {
+			t.Fatalf("workspace-write must allow the real /tmp, got: %s", out)
+		}
+		// Denial outside BOTH the root and /tmp — baseline-proved writable.
+		if denyTarget != "" {
+			if out := runLandlockHelper(t, "workspace-write", ws, denyTarget); !strings.HasPrefix(out, "WRITE_DENIED") {
+				t.Fatalf("workspace-write must deny outside root and /tmp, got: %s", out)
+			}
+		} else {
+			t.Skip("no baseline-writable non-/tmp path available")
 		}
 	})
 

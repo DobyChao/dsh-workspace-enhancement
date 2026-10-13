@@ -61,8 +61,8 @@ func TestDecideFenceTierMissingBwrapFallsToLandlock(t *testing.T) {
 		t.Fatalf("missing must be flagged: %+v", info)
 	}
 	joined := strings.Join(info.Notes, "\n")
-	if !strings.Contains(joined, "/tmp stays read-only") {
-		t.Fatalf("workspace-write must disclose the stricter /tmp: %v", info.Notes)
+	if !strings.Contains(joined, "/tmp is writable but SHARED") {
+		t.Fatalf("workspace-write must disclose the shared-/tmp difference: %v", info.Notes)
 	}
 	if !strings.Contains(joined, "ABI <3") || !strings.Contains(joined, "ABI 1") {
 		t.Fatalf("abi 1 partial enforcement must be disclosed: %v", info.Notes)
