@@ -44,6 +44,7 @@
 | R35 | REQ-I15 读面降级 + REQ-I16 bash 按工作区注入 | [R35-req-i15-i16.md](./R35-req-i15-i16.md) |
 | R36 | 发布 npm `v0.2.1` | [R36-v0.2.1-release.md](./R36-v0.2.1-release.md) |
 | R51 | 三个 P1 一轮：confine spike（ADR-0031）+ L1 进 CI + 桌面适配 | [R51-three-p1-round.md](./R51-three-p1-round.md) |
+| R54 | 发布 npm `v0.2.4` | [R54-pub9-v0.2.4-release.md](./R54-pub9-v0.2.4-release.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 

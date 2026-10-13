@@ -4,8 +4,19 @@
 
 ## Unreleased
 
+## [0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-13)
+
+0.2.3 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.4`**
+（hello / `dsh-core version` / 工件名同步）。版本门仍按 **major.minor** 接受已部署的 0.2.x，
+同线 patch **不强制**重部署；围栏档（`fenceinfo` / Landlock）在新二进制里，要用档位就再部署一次。
+`compatHashes` 保留已发布 0.2.2 与 master 上 0.2.3 构建的哈希，并登记本版二进制。
+
 ### 新增
 
+- **远程围栏档位（`REQ-I29`，含 `REQ-I30` 方向）**：核心按功能探测选档——bwrap 真跑只读 profile 包 `true` 才 exec；否则 Landlock（内核 ABI，手写 UAPI，go.mod 零依赖）；双缺在 exec 前拒绝并列出出路（发行版装 bwrap / Landlock 内核 ≥5.13 / sandbox off）。`dsh-core fenceinfo` 上报档位；部署、`sw_status` 与设置页三态（bwrap / landlock 降档 / 无法围栏）。授权对齐宿主：两种模式都给 `/dev/null` 写，workspace-write 给真实 `/tmp`。老同线核心对非形态 `fenceinfo` 记 unknown，不谎报。`DSH_CORE_FENCE_TIER` 只覆盖偏好，不覆盖可行性。
+- **远程围栏改走 `confine` 逐次策略（`REQ-I27`，spike `REQ-I22` / ADR-0031）**：argv 身份注册表驱动 spawn、终端与 fence 标记；模型侧 persistent shell 仍拒，浏览器终端（人开）放行。ALS 旁路退役。
+- **L1 实机冒烟进 CI（`INFRA-23`）**：假模型 + headless 真宿主，`scripts/e2e-l1/`，`ci.yml` 的 `e2e-l1` 作业跑 M3–M5。
+- **桌面版适配哨兵（`UPSTREAM-11`）**：每周探 monorepo 四文件指纹 + `PROFILE_TEMPLATES.web` 语义断言。桌面壳包 web 模板，架构上零改动可用；桌面真机 UAT 仍待用户。
 - **本机副根与主根同权（`REQ-I24`）**：workspace-write 下，写入目标或命令 workdir 落在本会话挂的并列副根内即可写（一次写 / 一条命令只写一个根；同时写两个根仍要提权）。在副根里跑命令时，Windows ACL 后端会给副根一条持久、可继承的授权，卸载副根不收回；包含主根的祖先目录与盘符根不放宽。
 
 ### 变更
@@ -13,11 +24,15 @@
 - **远程只剩远程组件一条执行路径（`AUDIT-7`）**：机器字段 `remoteSandbox` 与宿主侧 bwrap 包装删除；远端权限只跟会话 `/permission`。旧 machines.json 的该键读入忽略、下次保存丢弃。子路径部署没挂远程组件时，围栏档的远程命令与写被拒；宿主组合没有 `sandboxPolicy` 服务时远程按 `read-only` 处理。`core.status` 不再返回 `sandbox` 字段。
 - **设置页去掉「远程命令审批」（`UX-7`）**：下拉与列表徽标删除；执行门保留，machines.json 里已有的值仍生效。
 - **术语（`UX-9`）**：用户可见文案中的「核心」改称「远程组件」。
+- **连接状态色 token 化（`UX-4`）**：三态色改宿主 `var(--dsw-alias-state-*)`，DOM 增辉与 React 徽章同档随双主题。
+- **新建/编辑连接表单（`UX-10`，含原 `UX-5`）**：不预填 root、别名不再猜 `/home/<user>`；保存重置不再继承 revealed 警告；测试连接拒空用户名。
 
 ### 修复
 
 - **0.2.0 宿主上远程会话 pwsh 提权不生效（`BUG-12`）**：官方 shell 的 `resolve` / `execute` 接缝现在也带上单次提权与 workdir。
 - **直连停止线假 EOF（`BUG-13`，#59）**：没有远程组件的远端上，`bash` / `sw_exec` / `glob` 一启动就被 SIGTERM 杀掉。原因是作业控制关闭时，后台 `cat` 的 stdin 被接到 `/dev/null`，几毫秒内读到假 EOF 就组杀。现在先把真实 stdin 复制到 fd 4，停止线读这个副本；用户命令不继承它。stdin 真的关闭时仍会组杀。
+- **目录选择器拖选松手在窗外即关窗（`BUG-14`）**：关闭要 mousedown 起点与 click 落点都在背景上。
+- **核心 sha 登记在沙箱里被管道 EPERM 静默跳过（`BUG-15`）**：tar 解到临时目录再哈希；tarball 在但读不出必抛，pack-smoke 干净判红。
 
 ## [0.2.3](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-09-30)
 
