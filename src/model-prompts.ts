@@ -81,6 +81,16 @@ export const MODEL_PROMPTS = {
   remoteGateActive:
     'Commands on this machine additionally require an approval decision before they run; do not retry a rejected command unchanged. If the approval gate and sandbox escalation are both on, the operator sees two cards.',
   /**
+   * REQ-I28: stable sentence for a remote main workspace. Uploads are copied
+   * into `{dir}` on the remote before the turn starts.
+   */
+  remoteUploads:
+    'Files the user uploads into this remote session are copied into `{dir}` in the remote workspace before the turn starts. Read and edit those copies with the remote file tools; the local attachment path is not on this machine.',
+  /** REQ-I28: heading for the volatile list of copied remote paths. */
+  remoteFilesHeading: '**Files copied into this remote workspace for this session**:',
+  /** REQ-I28: one copied remote path. */
+  remoteFileItem: '- `{path}`',
+  /**
    * Kept for older tests/callers; the session-sandbox sentence above now
    * covers the fence. Empty so a leftover inject is a no-op.
    */

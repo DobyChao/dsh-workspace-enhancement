@@ -21,10 +21,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I26 | 远程组件覆盖 linux-arm64 | todo | P2 | ADR-0023 §2.7 的第二架构。现只构建部署 linux-x86_64（`assertLinuxAmd64`），aarch64 被拒后走直连腿（#59 的现场）。验收：按 `uname -m` 选工件、每架构独立 sha256、CI 出 linux-arm64 tarball、部署门放行 aarch64。Windows 远端仍不做（无 bwrap） |
-| INFRA-24 | 流程减负：拍板队列 + round/闸门复评 | todo | P2 | 待拍板项收到一处（推荐项 + 代价 + 期限），可逆决定逾期按推荐执行并留痕；round 报告只在里程碑/事故写、小 PR 用 PR 描述，复评纯格式闸门性价比（原 INFRA-25 并入）。先定拍板队列落点与「可逆」判据；改 `AGENTS.md` §7 + 闸门。见 [R48](./rounds/R48-project-direction-review.md) §3 |
-| REQ-I28 | 远程会话上传件与生成产物：读取/打开打通，先定义上传落点 | todo | P2 | 2026-10-12 用户提，10-13 定形。宿主上传走 `dsh-client-file-upload`+`attachments`（R18/R19，落本地）；远程会话在远端 ⇒ 上传件读不到、产物打不开（现状待核）。形状：上传落点单独拍（倾向随会话传远端）；产物打开与 REQ-A6-C2 共建组件，能力长在我方 client half，不得硬依赖 optional peer。验收：上传后模型可读、产物可打开 |
-| REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-10-13 用户拍板：A 起步（registerTab + 复用现有 browse/状态面）；C2 并入 REQ-I28 共建远程文件树/预览；B 仅附属；C1/抢 files kind 不做（ADR-0006）。硬规则：optional peer + 禁 value-import + 能力探测降级；版本线绑宿主家族是主风险。调查[档案](./notes/req-a6-better-sidebar-survey.md) |
+| REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-10-13 用户拍板：A 起步（registerTab + 复用现有 browse/状态面）；C2 文件树/预览仍待做（上传落点已由 REQ-I28 落地）；B 仅附属；C1/抢 files kind 不做（ADR-0006）。硬规则：optional peer + 禁 value-import + 能力探测降级。调查[档案](./notes/req-a6-better-sidebar-survey.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
@@ -34,6 +31,8 @@
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
 ## 3. 被挡住 / 待拍板（blocked）
+
+推荐、代价与期限在 [拍板队列](./decisions/queue.md)。逾期的可逆项会让静态闸门变红。
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
@@ -50,6 +49,11 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I26 | 远程组件覆盖 linux-arm64 | done | P2 | linux-arm64 与 linux-x64 同工件：uname 选包、独立 sha、CI/pack 双 tarball。rg 按架构。Windows 远端仍不做。尾巴：arm64 实机部署 |
+| REQ-I28 | 远程会话上传落到远端工作区 | done | P2 | 回执返回前 SFTP 写入远端 `.dsh-uploads/`，失败则上传失败。产物路径进运行时上下文。[ADR-0032](./decisions/ADR-0032-remote-session-uploads.md)。尾巴：lab 打开产物 |
+| INFRA-24 | 拍板队列与可逆期限 | done | P2 | 队列 [queue](./decisions/queue.md)（推荐、代价、reversible-until）。逾期闸门红。round 只在里程碑/事故写 |
+| UX-11 | 「设为当前」决定新建工作区的起始机器 | done | P3 | 未指定连接时从当前机器开始浏览；横幅点名机器；当前行有选中样式。脚本 [UX-11](./uat/UX-11-12-settings.md) |
+| UX-12 | 远程组件部署失败用红色错误样式 | done | P3 | 部署失败走红色错误横幅和红色状态芯片，不再用绿色成功横幅。脚本 [UX-12](./uat/UX-11-12-settings.md) |
 | REQ-I29 | 远程围栏 bwrap 可用性：功能探测 + Landlock 后备档 + 用户引导 | done | P2 | PR #69（含 REQ-I30 并入；折入 UX-4 车道修复）。核心 tier 化 + fenceinfo + 部署/状态/设置页档位；core 0.2.3；授权对齐宿主（/dev/null、真实 /tmp）。**尾巴**：真 Docker 降档、老 core unknown 实机 [R53](./uat/R53-req-i29-fence-tier.md)。档案 [R53](./rounds/R53-req-i29-fence-tier.md) |
 | BUG-15 | core-artifact.mjs 管道读 tar：沙箱 EPERM 静默跳过 sha 登记/溯源门 | done | P1 | PR #67。tar 解临时目录按文件哈希（零管道），存在但读不出必抛；pack-smoke 干净判红；单测 3 例。**尾巴**：lab 实机 UAT 走查 [R52](./uat/R52-bug14-15-ux4-10.md) |
 | BUG-14 | 目录选择器：拖选松手在窗外即整窗关闭 | done | P2 | PR #67。`backdropDismissProps`（mousedown 起点 + click 双条件，跨渲染 fail-safe），flow/side-workspaces 两处换用；单测 5 例。**尾巴**：浏览器拖选实机 R52 |

@@ -21,6 +21,7 @@
  * 10. HEAD commit subject follows Conventional Commits.
  * 11. No stray build/test artifacts in the repository root.
  * 12. docs/backlog.md: id + status, section↔status, §2 P0→P3, note length cap.
+ *     docs/decisions/queue.md: recommendation + cost + reversible deadline (INFRA-24).
  *
  * Plus one non-fatal diagnostic (never fails the run):
  *
@@ -32,7 +33,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { runCapture } from './lib/run.mjs'
 import { auditBacklog } from './lib/backlog.mjs'
-import { distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
+import { auditDecisionQueue } from './lib/decision-queue.mjs'
+import { eachDistCoreSha, readArtifactMeta } from './core-artifact.mjs'
 
 const ROOT = dirname(fileURLToPath(new URL('.', import.meta.url)))
 const HAN = /[\p{Script=Han}]/u
@@ -349,6 +351,13 @@ try {
   check('docs/backlog.md readable', false, String(error.message || error))
 }
 
+try {
+  const queueErrors = auditDecisionQueue(read('docs/decisions/queue.md'))
+  check('decision queue deadlines', queueErrors.length === 0, queueErrors.join('; '))
+} catch (error) {
+  check('decision queue readable', false, String(error.message || error))
+}
+
 // ---- 13. local build artifacts are not older than their sources -------------
 /**
  * `lib/` is gitignored, and the development install of this plugin is a `link:`
@@ -397,10 +406,9 @@ try {
   // bump that forgot its own hash — it must never ship. Skipped when no
   // local tarball exists (CI static runs before the build); pack-smoke
   // re-enforces it at pack time where the tarball is guaranteed.
-  const distSha = distCoreSha256()
-  if (distSha !== null) {
-    check('built core binary is registered in compatHashes',
-      readArtifactMeta().compatHashes.includes(distSha), distSha)
+  for (const built of eachDistCoreSha()) {
+    check(`built core binary (${built.arch}) is registered in compatHashes`,
+      readArtifactMeta().compatHashes.includes(built.sha), built.sha)
   }
 } catch (error) {
   check('core manifest sources readable', false, String(error.message || error))

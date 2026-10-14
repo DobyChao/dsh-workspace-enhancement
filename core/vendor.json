@@ -9,6 +9,19 @@
     "license": "MIT OR UNLICENSE",
     "homepage": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0"
   },
+  "rgTargets": [
+    {
+      "coreArch": "linux-arm64",
+      "version": "15.2.0",
+      "arch": "aarch64-unknown-linux-musl",
+      "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz",
+      "checksumUrl": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz.sha256",
+      "sha256": "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915",
+      "member": "ripgrep-15.2.0-aarch64-unknown-linux-musl/rg",
+      "license": "MIT OR UNLICENSE",
+      "homepage": "https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0"
+    }
+  ],
   "bwrap": {
     "license": "LGPL-2.1-or-later",
     "homepage": "https://github.com/containers/bubblewrap",

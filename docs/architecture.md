@@ -113,7 +113,7 @@
 | read-only / workspace-write | 不可用 | 降级 SFTP（REQ-I15） | `SANDBOX_UNAVAILABLE` | `SANDBOX_UNAVAILABLE` | 拒 | `core-routing.test.ts`（REQ-I15）、UAT R35 |
 | danger-full-access | 不可用 | SFTP | SFTP | 裸 SSH | 允许 | `core-routing.test.ts`、`core-version-gate.test.ts` |
 
-「不可用」含：未部署、非 linux x86_64、版本跨 major.minor 线、sha256 不在白名单（REQ-I17 / REQ-I21），
+「不可用」含：未部署、非 linux 或没有对应架构的工件（x86_64 / aarch64）、版本跨 major.minor 线、sha256 不在白名单（REQ-I17 / REQ-I21 / REQ-I26），
 以及组合里没挂 `coreHub`（子路径行）或调用没有注册表连接 id（聚合传输）。宿主没有 `sandboxPolicy`
 服务时本次档按 `read-only`（fail-safe）。远程执行只有这一条路径：机器字段 `remoteSandbox` 与宿主侧
 bwrap 包装已删除（AUDIT-7），旧 machines.json 里的该键读入时忽略、下次保存时丢弃。
@@ -153,7 +153,7 @@ bwrap 包装已删除（AUDIT-7），旧 machines.json 里的该键读入时忽�
 1. **远端权限跟会话 `/permission`**——与本地同一套提权卡；无远程组件的围栏档写/spawn fail-closed，读面降 SFTP（ADR-0025 / REQ-I15）。可选审批门默认 `off`，与提权卡同时开会弹两张。Write、官方 bash/pwsh、win32 bash、`sw_exec` 都可以一次提权（`REQ-I18`，2026-09-22 用户 lab 简验）；没有 overlay 的下一次调用仍跟会话档。
 2. **会话连接门拦不住会拼路径的模型**——`ssh://<id>/…` 走注册表级路由，不查会话（ADR-0021）。
 3. **副根 = 工作区的延伸**（ADR-0019 / ADR-0028 §5 / `REQ-I24`）：没有逐根开关；workspace-write 下一次写（按目标）或一条命令（按 cwd）落在哪个根就以哪个根为准，本机与远程同规则。挂副根即放宽写范围，只能由人在面板上挂（表 §4.1 D）。
-4. **远端前置**：围栏档要先从设置页部署远程组件（`core.deploy`，linux x86_64）。Windows / 非 amd64 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 版组件。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
+4. **远端前置**：围栏档要先从设置页部署远程组件（`core.deploy`，linux x86_64 与 aarch64）。Windows 在 workspace-write 下会拒绝，直到 `/permission danger-full-access` 或以后有 Windows 版组件。交互终端仍需远端 `bash`/`pwsh`，且围栏档拒绝 PTY。
 5. **SSH 协议**：远端 `pid` 恒为 -1，无 `inspectForeground` / `signalForeground`。直连腿停止靠远端 steward（SSH stdin EOF → `kill -TERM 0`；watcher 读的是复制出来的 fd，避免后台列表把 stdin 接到 `/dev/null`，`BUG-13`），不把 OS pid 交给宿主；有远程组件时 danger 仍走组件 RPC（`--sandbox off`）。
 6. **`resolveExecutable` 恒走本地**（接缝无 cwd；未来若远程会话解析出本地绝对路径，会被 `remoteArgvOf` 削成裸名）。
 7. **官方工作区注册表看不见远程工作区**（占位目录方案，镜像已砍）。

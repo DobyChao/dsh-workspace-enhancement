@@ -6,8 +6,18 @@
 /** Artifact/hello version of the remote core (ADR-0024). */
 export const CORE_ARTIFACT_VERSION = '0.2.4'
 
-/** Filename arch segment of the core tarball. */
+/** Filename arch segment of the primary (linux-x64) core tarball. */
 export const CORE_ARTIFACT_ARCH = 'linux-x64'
+
+/**
+ * Every architecture this package ships (REQ-I26). Deploy picks a row by
+ * `uname -m`; the filename arch is {@link CORE_ARTIFACT_ARCH} only for the
+ * primary target.
+ */
+export const CORE_ARTIFACT_TARGETS = [
+  { arch: 'linux-x64', manifestArch: 'linux-x86_64', uname: ['x86_64', 'amd64', 'x64'] },
+  { arch: 'linux-arm64', manifestArch: 'linux-aarch64', uname: ['aarch64', 'arm64'] },
+] as const
 
 /**
  * sha256 of every dsh-core binary the fence may run (REQ-I17 provenance
@@ -20,4 +30,6 @@ export const CORE_COMPAT_HASHES = [
   'a0f28eaef7e608b2339fb6691ec9569c192ccd02ed20ffda894762a598ebf62d',
   'd35cb7f3dc491f271a65602c5e8fcebd4da8fcfac48d0f0352c25eecb7e6a4c0',
   '89404e159e8abca8957d535bfa026f4ba49cc776fa6e26edf0462867be5c0fff',
+  '261a4f9dc7500c39096d819cca2650851ba5e5c31d5b75df9beda0cc2ba3ad81',
+  '369d939e85f331b277f7eebe324cbb983bba2641966a18ee8c4fc9086d4a99b2',
 ] as const

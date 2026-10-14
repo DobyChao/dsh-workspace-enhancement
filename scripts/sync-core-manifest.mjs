@@ -17,7 +17,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ROOT, readArtifactMeta } from './core-artifact.mjs'
+import { ROOT, artifactTargets, readArtifactMeta } from './core-artifact.mjs'
 
 const ARTIFACT_OUT = join(ROOT, 'src', 'core-artifact.ts')
 const VENDOR_OUT = join(ROOT, 'src', 'core-vendor-pins.ts')
@@ -43,6 +43,27 @@ function readVendorMeta() {
   if (!Array.isArray(meta.bwrap.installHints) || meta.bwrap.installHints.length === 0) {
     throw new Error('core/vendor.json: "bwrap.installHints" must be a non-empty array')
   }
+  if (meta.rgTargets !== undefined) {
+    if (!Array.isArray(meta.rgTargets)) {
+      throw new Error('core/vendor.json: "rgTargets" must be an array')
+    }
+    for (const row of meta.rgTargets) {
+      if (typeof row?.coreArch !== 'string' || row.coreArch === '') {
+        throw new Error('core/vendor.json: each rgTargets row needs a non-empty "coreArch"')
+      }
+      for (const key of strings) {
+        if (typeof row[key] !== 'string' || row[key] === '') {
+          throw new Error(`core/vendor.json: rgTargets ${row.coreArch} "${key}" must be a non-empty string`)
+        }
+      }
+      if (!/^[0-9a-f]{64}$/.test(row.sha256)) {
+        throw new Error(`core/vendor.json: rgTargets ${row.coreArch} "sha256" must be a lowercase sha256`)
+      }
+      if (!/^https:\/\//.test(row.url) || !/^https:\/\//.test(row.checksumUrl)) {
+        throw new Error(`core/vendor.json: rgTargets ${row.coreArch} urls must be https`)
+      }
+    }
+  }
   return meta
 }
 
@@ -51,6 +72,9 @@ function readVendorMeta() {
  * @param meta - validated `core/artifact.json`.
  */
 function renderArtifact(meta) {
+  const targets = artifactTargets(meta).map((target) =>
+    `  { arch: '${target.arch}', manifestArch: '${target.manifestArch}', uname: [${target.uname.map((name) => `'${name}'`).join(', ')}] },`,
+  ).join('\n')
   return `/**
  * GENERATED from \`core/artifact.json\` by \`npm run sync:core-manifest\` — do not
  * edit by hand. \`npm run check:static\` fails when this file is stale.
@@ -59,8 +83,17 @@ function renderArtifact(meta) {
 /** Artifact/hello version of the remote core (ADR-0024). */
 export const CORE_ARTIFACT_VERSION = '${meta.version}'
 
-/** Filename arch segment of the core tarball. */
+/** Filename arch segment of the primary (linux-x64) core tarball. */
 export const CORE_ARTIFACT_ARCH = '${meta.arch}'
+
+/**
+ * Every architecture this package ships (REQ-I26). Deploy picks a row by
+ * \`uname -m\`; the filename arch is {@link CORE_ARTIFACT_ARCH} only for the
+ * primary target.
+ */
+export const CORE_ARTIFACT_TARGETS = [
+${targets}
+] as const
 
 /**
  * sha256 of every dsh-core binary the fence may run (REQ-I17 provenance
@@ -79,8 +112,14 @@ ${meta.compatHashes.map((hash) => `  '${hash}',`).join('\n')}
  * Render the generated vendor-pin module.
  * @param meta - validated `core/vendor.json`.
  */
+function renderRgRow(coreArch, pin) {
+  return `  { coreArch: ${JSON.stringify(coreArch)}, version: ${JSON.stringify(pin.version)}, arch: ${JSON.stringify(pin.arch)}, url: ${JSON.stringify(pin.url)}, checksumUrl: ${JSON.stringify(pin.checksumUrl)}, sha256: ${JSON.stringify(pin.sha256)}, member: ${JSON.stringify(pin.member)} },`
+}
+
 function renderVendor(meta) {
   const hints = meta.bwrap.installHints.map((hint) => `  ${JSON.stringify(hint)},`).join('\n')
+  const rows = [renderRgRow('linux-x64', meta.rg)]
+  for (const extra of meta.rgTargets ?? []) rows.push(renderRgRow(extra.coreArch, extra))
   return `/**
  * GENERATED from \`core/vendor.json\` by \`npm run sync:core-manifest\` — do not
  * edit by hand. \`npm run check:static\` fails when this file is stale.
@@ -101,6 +140,14 @@ export const RG_VENDOR = {
   license: ${JSON.stringify(meta.rg.license)},
   homepage: ${JSON.stringify(meta.rg.homepage)},
 } as const
+
+/**
+ * Official ripgrep pins keyed by core filename arch (REQ-I26). {@link RG_VENDOR}
+ * stays the linux-x64 pin; deploy must not push that binary to another arch.
+ */
+export const RG_TARGETS = [
+${rows.join('\n')}
+] as const
 
 /**
  * bubblewrap has no upstream binary release (source tarball only), so it is

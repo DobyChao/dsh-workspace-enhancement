@@ -35,3 +35,4 @@
 | [0029](./ADR-0029-positioning-review.md) | 官方 SSH 家族进 rc 后的定位细化对比；推荐 A′（并存 + 契约对齐） | proposed（UPSTREAM-6） |
 | [0030](./ADR-0030-local-seams-stay-routed.md) | 本地接缝不交还官方：路由层留作唯一提供者，改为默认转发 | proposed（REQ-I23） |
 | [0031](./ADR-0031-remote-fence-confine-policy.md) | 远程围栏改走 `confine` 逐次策略：spike 结论（调用面/终端两问已答）+ 标记 argv 实施形状 | accepted（REQ-I22 spike；实施 = REQ-I27） |
+| [0032](./ADR-0032-remote-session-uploads.md) | 远程会话上传在回执前写入远端工作区 `.dsh-uploads/` | accepted（REQ-I28） |

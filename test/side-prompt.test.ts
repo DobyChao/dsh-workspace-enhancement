@@ -84,7 +84,8 @@ test('composeWorkspacePrompt: remote cwd without sides keeps the pure R4 text + 
   assert.ok(text.includes('follow this session\'s /permission sandbox'))
   assert.ok(!text.includes('approval decision before they run'))
   assert.ok(!text.includes('Side workspace'))
-  assert.equal(text.split('\n\n').length, 2)
+  assert.ok(text.includes('.dsh-uploads'))
+  assert.equal(text.split('\n\n').length, 3)
 })
 
 test('composeWorkspacePrompt: AUDIT-6 — the gate expectation sentence appears exactly when the machine gate is on', () => {
@@ -128,6 +129,6 @@ test('composeWorkspacePrompt: remote cwd with sides renders ALL parts', () => {
   assert.ok(text.includes('remote SSH workspace'))
   assert.ok(text.includes('follow this session\'s /permission sandbox'))
   assert.ok(text.includes('Side workspace **部署**'))
-  // 三段以空行分隔（R4 强调 + AUDIT-6 诚实句 + R5 副清单）
-  assert.equal(text.split('\n\n').length, 3)
+  // R4 强调 + AUDIT-6 诚实句 + REQ-I28 上传句 + R5 副清单
+  assert.equal(text.split('\n\n').length, 4)
 })

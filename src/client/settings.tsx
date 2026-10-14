@@ -24,7 +24,7 @@ import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
-import { coreStatusLabel } from './core-status.ts'
+import { coreFailureIsArchRefusal, coreStatusLabel, deployBannerKind } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
 import { AlertIcon, CheckIcon, ChevronIcon } from './icons.tsx'
 import styles from './settings.module.css'
@@ -148,7 +148,7 @@ export interface CoreLine {
 export function coreToneOf(view: CoreStatusPayload): CoreTone {
   if (view.ok === true) return 'ok'
   const detail = typeof view.detail === 'string' ? view.detail : ''
-  return /linux|x86_64|amd64|uname/i.test(detail) ? 'warn' : 'error'
+  return coreFailureIsArchRefusal(detail) ? 'warn' : 'error'
 }
 
 const CORE_TONE_CLASS: Record<CoreTone, string | undefined> = {
@@ -213,11 +213,18 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setMsg('')
     setMoreOpen('')
     try {
+      const clicked = machines.find(machine => machine.id === id)
+      const label = clicked?.label !== undefined && clicked.label !== '' ? clicked.label : id
       const result = await rpc('machines.setCurrent', { id })
       const state = unwrap<{ machines: unknown; currentId: unknown; ok: boolean }>(result, t('settings.rpc.switchFailed'))
       setMachines(Array.isArray(state.machines) ? state.machines.map(asMachineView).filter((m): m is MachineView => m !== null) : [])
-      setCurrentId(typeof state.currentId === 'string' ? state.currentId : '')
-      setMsg(t('settings.setCurrent'))
+      const next = typeof state.currentId === 'string' ? state.currentId : ''
+      setCurrentId(next)
+      if (next !== id) {
+        setErr(t('settings.rpc.switchFailed'))
+        return
+      }
+      setMsg(t('settings.setCurrent', { label }))
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -263,9 +270,11 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     try {
       const result = await rpc('core.deploy', { id })
       const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreDeployFailed'))
-      const line: CoreLine = { label: coreStatusLabel(view, t), tone: coreToneOf(view) }
+      const failed = deployBannerKind(view) === 'error'
+      const line: CoreLine = { label: coreStatusLabel(view, t), tone: failed ? 'error' : 'ok' }
       setCoreLines(current => ({ ...current, [id]: line }))
-      setMsg(line.label)
+      if (failed) setErr(line.label)
+      else setMsg(line.label)
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
     } finally {
@@ -309,7 +318,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                 const isCurrent = machine.id === currentId
                 const core = coreLines[machine.id]
                 return (
-                  <li key={machine.id} className={styles.rowCard}>
+                  <li key={machine.id} className={`${styles.rowCard} ${isCurrent ? styles.rowCardCurrent : ''}`}>
                     <div className={styles.rowHead}>
                       <div className={styles.rowIdentity}>
                         <span className={styles.rowName}>{machine.label}</span>
@@ -322,7 +331,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                         {machine.jumpHosts.length > 0
                           ? <span className={styles.rowTag}>{t('settings.machines.jumpBadge', { count: machine.jumpHosts.length })}</span>
                           : null}
-                        {isCurrent ? <span className={styles.rowTag}>{t('settings.machines.currentBadge')}</span> : null}
+                        {isCurrent ? <span className={`${styles.rowTag} ${styles.rowTagCurrent}`}>{t('settings.machines.currentBadge')}</span> : null}
                       </div>
 
                       <div className={styles.rowActions}>

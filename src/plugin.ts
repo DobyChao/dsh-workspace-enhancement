@@ -39,6 +39,7 @@ import { SessionSideWorkspaceStore } from './session-workspaces.ts'
 import { ensureCoreHub } from './core-hub.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
 import { installRemoteConfinePassthrough } from './remote-confine.ts'
+import { installRemoteSessionUploads } from './session-uploads.ts'
 import { installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
 
 /**
@@ -143,4 +144,7 @@ export function apply(ctx: Context, config: Config): void {
     ctx.plugin(SshSubprocessRuntime, createRemoteSpawnGate(ctx))
     ctx.plugin(SshFileSystem)
   }
+  // REQ-I28: remote-session uploads copy into the remote workspace before the
+  // upload promise resolves. No-op when the host has no fileUploads service.
+  installRemoteSessionUploads(ctx)
 }

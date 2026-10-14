@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+### 新增
+
+- **linux-arm64 远程组件（`REQ-I26`）**：与 linux-x64 同一套工件。`uname -m` 选 tarball，各自 sha256 进入 `compatHashes`，CI 与 pack 都要求两份。官方 rg 按架构 pin，不会把 x64 的 rg 推到 arm64。Windows 远端仍拒绝。
+- **远程会话上传落到远端工作区（`REQ-I28`，ADR-0032）**：远程 cwd 的上传在回执返回前经 SFTP 写入该工作区的 `.dsh-uploads/`；复制失败则这次上传失败。工作区内的产物记入运行时上下文；工作区外且本机存在的绝对路径复制到 `.dsh-artifacts/`。本地会话不复制。
+- **拍板队列（`INFRA-24`）**：`docs/decisions/queue.md` 收推荐、代价与 `reversible-until` / `irreversible`。可逆项逾期则静态闸门失败。round 报告只用于里程碑和事故。
+
+### 修复
+
+- **设为当前（`UX-11`）**：未指定连接时，目录选择从当前机器开始浏览；成功横幅点名该机器；当前行有选中样式。
+- **部署失败样式（`UX-12`）**：`core.deploy` 返回失败时用红色错误横幅和红色芯片，不再走绿色成功横幅。
+
 ## [0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-13)
 
 0.2.3 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.4`**

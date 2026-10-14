@@ -65,8 +65,8 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 > 二进制**——既不随 npm 包，也不进 git 历史。（原方案把 linux-x64 `bwrap`+`rg` 入库并
 > 打进 tarball，被否：来源说不清、许可要跟着走、二进制进 git 不可回收。）
 
-- 工件：`dsh-core-<version>-linux-x64.tar.gz`（**只含** `dsh-core` + `MANIFEST.json`）。
-  不入库；`.gitignore` 覆盖 `core/dist/` 与 `core/vendor/`。
+- 工件：`dsh-core-<version>-linux-x64.tar.gz` 与 `dsh-core-<version>-linux-arm64.tar.gz`
+  （REQ-I26；**只含** `dsh-core` + `MANIFEST.json`）。不入库；`.gitignore` 覆盖 `core/dist/`。
 - **版本/架构单一来源**：`core/artifact.json`（第一方）与 `core/vendor.json`（第三方
   pin），由 `scripts/sync-core-manifest.mjs` 生成 `src/core-artifact.ts` 与
   `src/core-vendor-pins.ts`；`npm run check:static` 第 14 道闸门拦漂移。
@@ -76,8 +76,8 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   文案给出各发行版安装命令与「临时改用 `danger-full-access`」两条出路——
   宿主进程**不崩**、其他工具照常。宿主侧探测发生在部署时（状态备注）与围栏探针时。
 - **`rg`：远端优先，缺失才由宿主取官方件**。部署前探 `command -v rg`：有 ⇒ 什么都不推；
-  没有 ⇒ 宿主从 **ripgrep 官方 release**（`BurntSushi/ripgrep`，`x86_64-unknown-linux-musl`
-  静态件）下载 → 校验 `core/vendor.json` 里 pin 的 sha256（与官方 `.sha256` 资产交叉核对）
+  没有 ⇒ 宿主从 **ripgrep 官方 release**（`BurntSushi/ripgrep`，与核心同架构的 musl
+  静态件；x64 在 `rg`，arm64 在 `rgTargets`）下载 → 校验 `core/vendor.json` 里 pin 的 sha256（与官方 `.sha256` 资产交叉核对）
   → 解出 `rg` → 缓存到 `$DSH_HOME/cache/dsw-core-vendor/rg-<version>-<arch>/rg`
   （附 `.sha256` sidecar）→ 与核心一起 SFTP 推送到 `~/.dsh-core/<version>/bin/rg`。
   网络：`curl`，尊重 `https_proxy`/`http_proxy`；`DSW_CORE_VENDOR_PROXY` 覆盖代理，

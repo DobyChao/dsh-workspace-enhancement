@@ -20,6 +20,7 @@ import { hostLocaleOf } from './locale/host.ts'
 import { SW_CONNECT_DESCRIPTION, SW_CONNECT_PARAMS, SW_STATUS_DESCRIPTION } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from './session-remote-context.ts'
+import { REMOTE_UPLOAD_DIR, renderRemoteFileLines } from './session-uploads.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import type { SshRegistry } from './registry.ts'
@@ -205,12 +206,14 @@ export function renderConnectedStatusLine(
 export function renderSessionWorkspaceContext(
   connected: readonly ConnectedMachineFact[],
   sides: readonly SideWorkspaceItem[],
+  remoteFiles = '',
 ): string {
   const parts: string[] = []
   const machines = renderConnectedMachines(connected)
   if (machines !== '') parts.push(machines)
   const side = renderSideWorkspaces(sides)
   if (side !== '') parts.push(side)
+  if (remoteFiles !== '') parts.push(remoteFiles)
   return parts.join('\n')
 }
 
@@ -244,6 +247,7 @@ export function composeWorkspacePrompt(
   if (fact !== null) {
     parts.push(renderRemotePrompt(fact))
     parts.push(modelPrompt('remoteNoSandbox'))
+    parts.push(modelPrompt('remoteUploads', { dir: REMOTE_UPLOAD_DIR }))
     if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
       parts.push(modelPrompt('remoteGateActive'))
     }
@@ -678,8 +682,13 @@ export function registerWorkspaceTools(
     name: 'dsw-session-workspace',
     order: 90,
     text: (context) => {
-      const { cwd, sides: attached } = sessionWorkspaceContextOf(context, sides)
-      return renderSessionWorkspaceContext(connectedFactsOf(sessionIdOf(context), cwd), attached)
+      const facts = sessionWorkspaceContextOf(context, sides)
+      const { cwd, sides: attached } = facts
+      return renderSessionWorkspaceContext(
+        connectedFactsOf(sessionIdOf(context), cwd),
+        attached,
+        renderRemoteFileLines(facts.sessionId),
+      )
     },
   })
   ctx.effect(() => contextDisposer, 'dsw-session-workspace runtime context')
