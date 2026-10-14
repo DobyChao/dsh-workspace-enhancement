@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-14 09:30 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-14 09:35 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.4` |
 | npm 已发布版本 | `0.2.4` |
 | 最新 tag | `v0.2.4` |
-| 分支 / HEAD | `cursor/req-a6-remote-files-f59e` / `6053b06` |
-| HEAD 提交 | `feat(core): ship arm64 cores, remote uploads, and the decision queue (#71)` (2026-10-14) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `cursor/req-a6-remote-files-f59e` / `ed8465d` |
+| HEAD 提交 | `feat(client): browse remote uploads and artifacts in better-sidebar` (2026-10-14) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
