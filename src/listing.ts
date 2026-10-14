@@ -17,6 +17,11 @@ export interface RemoteListingEntry {
   hidden: boolean
 }
 
+/** One file or directory in a preview tree (REQ-A6). Directories stay enterable. */
+export interface RemoteFileEntry extends RemoteListingEntry {
+  kind: 'file' | 'directory'
+}
+
 /** One remote listing level. */
 export interface RemoteListing {
   path: string
@@ -308,6 +313,112 @@ export async function listRemoteLevelViaCore(
     entries,
     truncated,
   }
+}
+
+/**
+ * One level of files and directories for the remote preview tree.
+ * Same bounded window as {@link listRemoteLevel}; files are kept, not dropped.
+ * A missing directory rejects so the caller can show an empty root.
+ */
+export async function listRemoteFiles(
+  ssh: SshTransport,
+  target: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<{ path: string; entries: RemoteFileEntry[]; truncated: boolean }> {
+  const sftp = await ssh.getSftp(signal)
+  const listed = await raceAbort(sftpReadDir(sftp, target), signal)
+  return packFileLevel(target, limit, listed.map(entry => ({
+    name: entry.filename,
+    directory: entry.attrs.isDirectory(),
+    file: entry.attrs.isFile(),
+    link: entry.attrs.isSymbolicLink(),
+  })), async (name) => {
+    const stats = await raceAbort(sftpStat(sftp, posix.join(target, name)), signal)
+    return stats.isDirectory() ? 'directory' : stats.isFile() ? 'file' : 'other'
+  }, signal)
+}
+
+/**
+ * File-and-directory level through core `fs.listDir`. Symlinks are stated
+ * once so a link to a file still appears in the tree.
+ */
+export async function listRemoteFilesViaCore(
+  client: { call(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> },
+  target: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<{ path: string; entries: RemoteFileEntry[]; truncated: boolean }> {
+  signal?.throwIfAborted()
+  const raw = await client.call('fs.listDir', { path: target }, signal)
+  const rec = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {}
+  const listed = Array.isArray(rec.entries) ? rec.entries : []
+  const rows: Array<{ name: string; directory: boolean; file: boolean; link: boolean }> = []
+  for (const item of listed) {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    if (typeof row.name !== 'string') continue
+    const type = typeof row.type === 'string' ? row.type : 'other'
+    rows.push({
+      name: row.name,
+      directory: type === 'directory',
+      file: type === 'file',
+      link: type === 'symlink',
+    })
+  }
+  return packFileLevel(target, limit, rows, async (name) => {
+    const st = await client.call('fs.stat', { path: posix.join(target, name) }, signal)
+    const kind = st !== null && typeof st === 'object' && !Array.isArray(st)
+      ? (st as Record<string, unknown>).type
+      : undefined
+    return kind === 'directory' ? 'directory' : kind === 'file' ? 'file' : 'other'
+  }, signal)
+}
+
+async function packFileLevel(
+  target: string,
+  limit: number,
+  rows: readonly { name: string; directory: boolean; file: boolean; link: boolean }[],
+  follow: (name: string) => Promise<'file' | 'directory' | 'other'>,
+  signal?: AbortSignal,
+): Promise<{ path: string; entries: RemoteFileEntry[]; truncated: boolean }> {
+  const keep = limit + 1
+  const window: Array<{ name: string; directory: boolean; file: boolean; link: boolean }> = []
+  let evicted = false
+  for (const row of rows) {
+    signal?.throwIfAborted()
+    if (row.name === '.' || row.name === '..') continue
+    if (!row.directory && !row.file && !row.link) continue
+    if (boundedInsert(window, row, keep)) evicted = true
+  }
+  const entries: RemoteFileEntry[] = []
+  let truncated = evicted
+  for (const candidate of window) {
+    signal?.throwIfAborted()
+    let kind: 'file' | 'directory' | 'other' = candidate.directory ? 'directory' : candidate.file ? 'file' : 'other'
+    if (kind === 'other' && candidate.link) {
+      try {
+        kind = await follow(candidate.name)
+      } catch (error) {
+        if (signal?.aborted === true) throw asError(signal.reason)
+        continue
+      }
+    }
+    if (kind !== 'file' && kind !== 'directory') continue
+    if (entries.length === limit) {
+      truncated = true
+      break
+    }
+    entries.push({
+      name: candidate.name,
+      path: posix.join(target, candidate.name),
+      hidden: candidate.name.startsWith('.'),
+      kind,
+    })
+  }
+  return { path: target, entries, truncated }
 }
 
 /** Create one child directory through core RPC (`fs.mkdir`), non-recursive. */

@@ -25,7 +25,7 @@ import type { HostKeyMode } from './hostkey.ts'
 import { registerWorkspaceTools } from './tools.ts'
 import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
-import { listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, remoteHome as sharedRemoteHome } from './listing.ts'
+import { listRemoteFiles, listRemoteFilesViaCore, listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, remoteHome as sharedRemoteHome } from './listing.ts'
 import { SessionMachineConnections, normalizeMachineIds } from './session-connections.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceInput } from './session-workspaces.ts'
 import { normalizeSideRootKey, remoteSideRootKey } from './session-workspaces.ts'
@@ -38,6 +38,10 @@ import type { CoreHub } from './core-hub.ts'
 import { createCoreWarmup } from './core-provision.ts'
 import { deployCore } from './core-deploy.ts'
 import { isCoreMissingError } from './remote-policy.ts'
+import { previewPathAllowed } from './remote-layout.ts'
+import { PREVIEW_MAX_BYTES, previewDocument, readRemotePreviewFile, sessionWorkspaceFor } from './remote-preview.ts'
+import type { PreviewSftp } from './remote-preview.ts'
+import { sessionFileIndex } from './session-uploads.ts'
 import type { SshTransport } from './transport.ts'
 
 /** Channel config. */
@@ -118,6 +122,13 @@ function isIdPayload(value: unknown): value is { id: string } {
 function isBrowsePayload(value: unknown): value is { id: string; path?: string } {
   return isRecord(value) && isString(value.id) && value.id.trim() !== ''
     && (value.path === undefined || isString(value.path))
+}
+
+/** Preview tree payload: `{ id, path, sessionId? }` with an absolute remote path. */
+function isPreviewListPayload(value: unknown): value is { id: string; path: string; sessionId?: string } {
+  return isRecord(value) && isString(value.id) && value.id.trim() !== ''
+    && isString(value.path) && posix.isAbsolute(value.path)
+    && (value.sessionId === undefined || isString(value.sessionId))
 }
 
 /** Session-route payload: `{ id, path }` with an absolute POSIX remote path. */
@@ -282,7 +293,10 @@ export const CHANNEL_ENDPOINTS = [
   'conn.reconnect',
   'browse.home',
   'browse.list',
+  'browse.files',
+  'browse.read',
   'browse.mkdir',
+  'session.files',
   'session.route',
   'local.pickNative',
   'session.ws.list',
@@ -422,6 +436,35 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
       if (isCoreMissingError(error)) return undefined
       throw error
     }
+  }
+
+  /**
+   * Workspace used to authorize a preview path. The session cwd wins when it
+   * routes to this machine; otherwise the machine's saved workspace.
+   */
+  const workspaceForPreview = (id: string, sessionId: string): string => {
+    const fromSession = sessionId === '' ? undefined : sessionWorkspaceFor(ctx, sessionId, id)
+    if (fromSession !== undefined && posix.isAbsolute(fromSession)) return fromSession
+    const saved = registry().listMachines().machines.find(machine => machine.id === id)?.workspace
+    if (saved === undefined || !posix.isAbsolute(saved)) {
+      throw new Error(`dsw: ${t('rpc.previewDenied')}`)
+    }
+    return saved
+  }
+  /** Refuse paths outside the upload dir, the artifact dir, and recorded extras. */
+  const assertPreviewPath = (id: string, sessionId: string, path: string): void => {
+    const index = sessionId === '' ? { uploads: [] as readonly string[], artifacts: [] as readonly string[] } : sessionFileIndex(sessionId)
+    const workspace = workspaceForPreview(id, sessionId)
+    if (!previewPathAllowed(workspace, path, [...index.uploads, ...index.artifacts])) {
+      throw new Error(`dsw: ${t('rpc.previewDenied')}`)
+    }
+  }
+  /** Files and directories in one preview-tree level. */
+  const listFiles = async (id: string, target: string, signal?: AbortSignal) => {
+    if (!posix.isAbsolute(target)) throw new Error(`dsw: ${t('rpc.cannotList', { target })}`)
+    const client = await operatorCore(id, target, signal)
+    if (client !== undefined) return listRemoteFilesViaCore(client, target, maxEntries, signal)
+    return listRemoteFiles(requireConnection(id), target, maxEntries, signal)
   }
 
   /** List one remote level: core RPC when a Linux core is up, else SFTP. */
@@ -607,6 +650,37 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
         case 'browse.list': {
           const input = requirePayload(payload, isBrowsePayload, 'browse.list')
           return { ok: true, value: await listRemote(input.id.trim(), input.path, signal) }
+        }
+        case 'browse.files': {
+          const input = requirePayload(payload, isPreviewListPayload, 'browse.files')
+          const id = input.id.trim()
+          const sessionId = input.sessionId?.trim() ?? ''
+          assertPreviewPath(id, sessionId, input.path)
+          return { ok: true, value: await listFiles(id, input.path, signal) }
+        }
+        case 'browse.read': {
+          const input = requirePayload(payload, isPreviewListPayload, 'browse.read')
+          const id = input.id.trim()
+          const sessionId = input.sessionId?.trim() ?? ''
+          assertPreviewPath(id, sessionId, input.path)
+          try {
+            const read = await readRemotePreviewFile(
+              await requireConnection(id).getSftp(signal) as unknown as PreviewSftp,
+              input.path,
+              PREVIEW_MAX_BYTES,
+            )
+            if (!read.isFile) throw new Error(`dsw: ${t('rpc.previewNotFile')}`)
+            return { ok: true, value: previewDocument(input.path, read) }
+          } catch (error) {
+            const message = messageOf(error)
+            if (message.startsWith('dsw:') || message.startsWith('bad-request:')) throw error
+            throw new Error(`dsw: ${t('rpc.previewRead')}`)
+          }
+        }
+        case 'session.files': {
+          const input = requirePayload(payload, isSessionConnListPayload, 'session.files')
+          const index = sessionFileIndex(input.sessionId.trim())
+          return { ok: true, value: { uploads: [...index.uploads], artifacts: [...index.artifacts] } }
         }
         case 'browse.mkdir': {
           const input = requirePayload(payload, isRecord, 'browse.mkdir')

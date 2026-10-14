@@ -50,9 +50,11 @@
 
 会话栏**行级**徽标没有官方槽位，由 `installRowBadges` 用 DOM 增辉层注入（ADR-0011）。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
 
+`dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击优先走宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…`（仅当 `remote.workspaceFiles` 存在，远程内容走会话文件系统）。没有这条能力时，页内用 `browse.read` 预览文本、图片和 PDF。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
+
 ## 3. 模块地图
 
-`src/` 现 **67** 个文件：宿主 45、客户端 18、词典 4。下表按职责分组，不堆导出清单。
+`src/` 现 **86** 个文件：宿主 54、客户端 28、词典 4。下表按职责分组，不堆导出清单。
 
 ### 3.1 宿主
 
@@ -76,6 +78,7 @@
 | 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、远程组件状态文案 |
 | 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
 | 状态与徽标 | `status.tsx` `row-badges.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` | 三态连接、行增辉、会话头远程状态 |
+| 远程文件 | `remote-files.ts` `remote-files-panel.tsx` `remote-files.module.css` `better-sidebar.ts` | 上传/产物树与预览；optional peer 的 tab 注册 |
 | 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
 
 ### 3.3 词典（`src/locale/`）

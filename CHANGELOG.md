@@ -6,6 +6,7 @@
 
 ### 新增
 
+- **better-sidebar 远程文件页（`REQ-A6`）**：`dsh-better-sidebar` 为 optional peer。装了它时注册 `dsw:workspaces`（不占用宿主 `files`），用已有远程浏览列出 `.dsh-uploads` / `.dsh-artifacts` 和工作区内产物。点击文件时，若宿主文档预览能读远程内容则 `openResource`；否则（以及同时）在页内预览文本、图片和 PDF。附属的文件查看器只认这两类路径。
 - **linux-arm64 远程组件（`REQ-I26`）**：与 linux-x64 同一套工件。`uname -m` 选 tarball，各自 sha256 进入 `compatHashes`，CI 与 pack 都要求两份。官方 rg 按架构 pin，不会把 x64 的 rg 推到 arm64。Windows 远端仍拒绝。
 - **远程会话上传落到远端工作区（`REQ-I28`，ADR-0032）**：远程 cwd 的上传在回执返回前经 SFTP 写入该工作区的 `.dsh-uploads/`；复制失败则这次上传失败。工作区内的产物记入运行时上下文；工作区外且本机存在的绝对路径复制到 `.dsh-artifacts/`。本地会话不复制。
 - **拍板队列（`INFRA-24`）**：`docs/decisions/queue.md` 收推荐、代价与 `reversible-until` / `irreversible`。可逆项逾期则静态闸门失败。round 报告只用于里程碑和事故。

@@ -17,11 +17,11 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | PUB-9 | 0.2.4 发布 | doing | P1 | 插件与 core 同升 0.2.4（围栏档在新工件；同 major.minor 不强制重部署）。合并后打 tag `v0.2.4` 并建 GitHub Release。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
+| REQ-A6 | 适配 dsh-better-sidebar 插件 | doing | P2 | optional peer 注册 `dsw:workspaces`（复用 browse.files 与远程状态）。树含 `.dsh-uploads` / `.dsh-artifacts` 与工作区内产物；宿主 `openResource` 可用时打开文档预览，面板内预览文本/图片/PDF。B 只认这两类路径。不抢 files。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md) |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-A6 | 适配 dsh-better-sidebar 插件 | todo | P2 | 2026-10-13 用户拍板：A 起步（registerTab + 复用现有 browse/状态面）；C2 文件树/预览仍待做（上传落点已由 REQ-I28 落地）；B 仅附属；C1/抢 files kind 不做（ADR-0006）。硬规则：optional peer + 禁 value-import + 能力探测降级。调查[档案](./notes/req-a6-better-sidebar-survey.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |

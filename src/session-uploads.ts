@@ -10,15 +10,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import { existsSync, readFileSync } from 'node:fs'
 import { posix } from 'node:path'
 import { modelPrompt } from './model-prompts.ts'
+import { REMOTE_ARTIFACT_DIR, REMOTE_UPLOAD_DIR } from './remote-layout.ts'
 import { quoteShellArg } from './ssh-core.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 
-/** Directory under the remote workspace that receives user uploads. */
-export const REMOTE_UPLOAD_DIR = '.dsh-uploads'
-
-/** Directory under the remote workspace that receives copied host artifacts. */
-export const REMOTE_ARTIFACT_DIR = '.dsh-artifacts'
+export { REMOTE_ARTIFACT_DIR, REMOTE_UPLOAD_DIR }
 
 const mirrored = new Map<string, string>()
 const presented = new Map<string, string[]>()
@@ -75,6 +72,14 @@ export function sessionUploadsFor(sessionId: string): readonly { attachmentId: s
 /** Presented paths already recorded for one session. */
 export function sessionPresentedFor(sessionId: string): readonly string[] {
   return presented.get(sessionId) ?? []
+}
+
+/** Upload and in-workspace artifact paths recorded for one session. */
+export function sessionFileIndex(sessionId: string): { uploads: readonly string[]; artifacts: readonly string[] } {
+  return {
+    uploads: sessionUploadsFor(sessionId).map(row => row.remotePath),
+    artifacts: sessionPresentedFor(sessionId),
+  }
 }
 
 /** Remember one remote path so the runtime context can name it. */
