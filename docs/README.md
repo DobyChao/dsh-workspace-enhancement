@@ -10,6 +10,7 @@
 | 版本、HEAD、待办计数 | [`status.md`](./status.md)（`npm run status` 生成，禁止手改） | 任何手写副本 |
 | 现状怎么跑 | [`architecture.md`](./architecture.md) | rounds、README 设计要点、把 ADR 全文贴进来 |
 | 为什么这么做 | [`decisions/`](./decisions/)（[索引](./decisions/README.md)） | 在 architecture 里复述 ADR |
+| 待拍板的推荐、代价、期限 | [`decisions/queue.md`](./decisions/queue.md) | 在 backlog 备注里再写一份期限 |
 | 某一轮做了什么、怎么验的 | [`rounds/`](./rounds/)（**历史档案，不是现状**） | 当作当前架构或待办表 |
 | 测试怎么跑、沙箱限制 | [`testing.md`](./testing.md) | AGENTS 里除命令表以外再写一遍 |
 | 宿主支持窗口与上游漂移 | [`compatibility.md`](./compatibility.md) | README 里展开漂移日志 |

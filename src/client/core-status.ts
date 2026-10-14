@@ -49,8 +49,21 @@ export function coreStatusLabel(
     return t('settings.core.ok', { version: view.version, arch })
   }
   const detail = typeof view.detail === 'string' && view.detail !== '' ? view.detail : ''
-  if (/linux|x86_64|amd64|uname/i.test(detail)) {
+  if (coreFailureIsArchRefusal(detail)) {
     return t('settings.core.unsupported', { detail })
   }
   return t('settings.core.missing', { detail: detail === '' ? '—' : detail })
+}
+
+/**
+ * An architecture refusal (no core for this kernel/machine), as opposed to a
+ * generic failure that happens to mention "linux".
+ */
+export function coreFailureIsArchRefusal(detail: string): boolean {
+  return /uname|linux only|no build for this architecture/i.test(detail)
+}
+
+/** Deploy result banner: only a live core is success (UX-12). */
+export function deployBannerKind(view: CoreStatusPayload): 'success' | 'error' {
+  return view.ok === true ? 'success' : 'error'
 }

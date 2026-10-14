@@ -5,17 +5,19 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { assertLinuxAmd64, coreInstallScript, forcedMissingTools, manifestIssues, remoteToolsPresent } from '../src/core-deploy.ts'
-import { coreStatusLabel } from '../src/client/core-status.ts'
+import { assertLinuxCore, coreInstallScript, forcedMissingTools, manifestIssues, remoteToolsPresent } from '../src/core-deploy.ts'
+import { coreStatusLabel, deployBannerKind } from '../src/client/core-status.ts'
 
-test('assertLinuxAmd64: linux + x86_64/amd64 accepted', () => {
-  assert.doesNotThrow(() => assertLinuxAmd64('Linux', 'x86_64'))
-  assert.doesNotThrow(() => assertLinuxAmd64('linux', 'amd64'))
+test('assertLinuxCore: linux x86_64 and aarch64 accepted (REQ-I26)', () => {
+  assert.deepEqual(assertLinuxCore('Linux', 'x86_64'), { arch: 'linux-x64', manifestArch: 'linux-x86_64' })
+  assert.deepEqual(assertLinuxCore('linux', 'amd64'), { arch: 'linux-x64', manifestArch: 'linux-x86_64' })
+  assert.deepEqual(assertLinuxCore('Linux', 'aarch64'), { arch: 'linux-arm64', manifestArch: 'linux-aarch64' })
+  assert.deepEqual(assertLinuxCore('Linux', 'arm64'), { arch: 'linux-arm64', manifestArch: 'linux-aarch64' })
 })
 
-test('assertLinuxAmd64: other kernels and aarch64 refused', () => {
-  assert.throws(() => assertLinuxAmd64('Darwin', 'x86_64'), /linux only/)
-  assert.throws(() => assertLinuxAmd64('Linux', 'aarch64'), /x86_64 only/)
+test('assertLinuxCore: other kernels and unknown machines refused', () => {
+  assert.throws(() => assertLinuxCore('Darwin', 'x86_64'), /linux only/)
+  assert.throws(() => assertLinuxCore('Linux', 'riscv64'), /no build for this architecture/)
 })
 
 test('coreStatusLabel: installed / missing / unsupported', () => {
@@ -27,6 +29,9 @@ test('coreStatusLabel: installed / missing / unsupported', () => {
   assert.equal(coreStatusLabel({ ok: true, version: '0.2.0-dev', arch: 'x86_64' }, t), 'ok:0.2.0-dev x86_64')
   assert.equal(coreStatusLabel({ ok: false, detail: 'core not installed' }, t), 'miss:core not installed')
   assert.match(coreStatusLabel({ ok: false, detail: 'uname -s = Darwin' }, t), /^bad:/)
+  assert.match(coreStatusLabel({ ok: false, detail: 'core artifact missing on linux' }, t), /^miss:/)
+  assert.equal(deployBannerKind({ ok: false, detail: 'extract failed' }), 'error')
+  assert.equal(deployBannerKind({ ok: true, version: '0.2.4' }), 'success')
 })
 
 test('coreInstallScript: chmod covers the core alone when nothing else is pushed', () => {

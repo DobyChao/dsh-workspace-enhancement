@@ -17,16 +17,14 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SFTPWrapper } from 'ssh2'
-import { CORE_ARTIFACT_VERSION } from './core-protocol.ts'
-import { coreArtifactName, type CoreStatusView } from './core-hub.ts'
+import { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-protocol.ts'
+import { coreArtifactName, coreTargetForUname, type CoreStatusView } from './core-hub.ts'
 import { extractGzipTarMember } from './gzip-tar.ts'
-import { bwrapInstallHints, ensureRgVendor } from './core-vendor.ts'
-import { RG_VENDOR } from './core-vendor-pins.ts'
+import { bwrapInstallHints, ensureRgVendorFor, rgSourceFor } from './core-vendor.ts'
 import { quoteShellArg } from './ssh-core.ts'
 import type { SshTransport } from './transport.ts'
 
 const LINUX = new Set(['linux', 'Linux'])
-const AMD64 = new Set(['x86_64', 'amd64', 'x64'])
 
 /**
  * Files the tarball MUST contain. Only the first-party binary: third-party
@@ -42,9 +40,9 @@ export interface VendorFile {
   relative: string
 }
 
-export function localCoreTarball(): string {
+export function localCoreTarball(arch: string = CORE_ARTIFACT_ARCH): string {
   const here = dirname(fileURLToPath(import.meta.url))
-  return join(here, '..', 'core', 'dist', coreArtifactName())
+  return join(here, '..', 'core', 'dist', coreArtifactName(arch))
 }
 
 /**
@@ -75,13 +73,27 @@ export function readTarballManifest(artifact: string): unknown {
   return JSON.parse(data.toString('utf8')) as unknown
 }
 
-export function assertLinuxAmd64(unameS: string, unameM: string): void {
+/** The core tarball deploy will push for this remote. */
+export interface LinuxCoreTarget {
+  arch: string
+  manifestArch: string
+}
+
+/**
+ * Accept a Linux remote this package ships a core for (REQ-I26).
+ * Windows stays refused: there is no bwrap there.
+ * @param unameS - `uname -s`.
+ * @param unameM - `uname -m`.
+ */
+export function assertLinuxCore(unameS: string, unameM: string): LinuxCoreTarget {
   if (!LINUX.has(unameS.trim())) {
-    throw new Error(`dsh-core v1 supports linux only (uname -s = ${JSON.stringify(unameS.trim())})`)
+    throw new Error(`dsh-core supports linux only (uname -s = ${JSON.stringify(unameS.trim())})`)
   }
-  if (!AMD64.has(unameM.trim())) {
-    throw new Error(`dsh-core v1 supports x86_64 only (uname -m = ${JSON.stringify(unameM.trim())})`)
+  const target = coreTargetForUname(unameM)
+  if (target === undefined) {
+    throw new Error(`dsh-core has no build for this architecture (uname -m = ${JSON.stringify(unameM.trim())}); supported: x86_64, aarch64`)
   }
+  return target
 }
 
 function sftpWrite(sftp: SFTPWrapper, remote: string, data: Buffer): Promise<void> {
@@ -229,7 +241,7 @@ export function remoteToolsPresent(
 }
 
 /**
- * Deploy the linux-x64 tarball to the login user's `~/.dsh-core/<version>/`.
+ * Deploy the matching linux tarball to the login user's `~/.dsh-core/<version>/`.
  *
  * Never fails just because an optional tool is unavailable: the core is still
  * deployed and the returned detail explains what is missing and where the
@@ -239,7 +251,16 @@ export async function deployCore(
   transport: SshTransport,
   options: { artifact?: string | undefined; signal?: AbortSignal | undefined } = {},
 ): Promise<CoreStatusView> {
-  const artifact = options.artifact ?? localCoreTarball()
+  const execOptions = options.signal !== undefined ? { signal: options.signal } : undefined
+  const uname = await transport.exec('uname -s; uname -m', execOptions)
+  const [sys, machine] = uname.stdout.split(/\r?\n/).map(line => line.trim())
+  let target: LinuxCoreTarget
+  try {
+    target = assertLinuxCore(sys ?? '', machine ?? '')
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : String(error) }
+  }
+  const artifact = options.artifact ?? localCoreTarball(target.arch)
   if (!existsSync(artifact)) {
     return { ok: false, detail: `core artifact missing: ${artifact}` }
   }
@@ -254,16 +275,8 @@ export async function deployCore(
   if (issues.length > 0) {
     return { ok: false, detail: `core artifact incomplete (${artifact}): ${issues.join('; ')}` }
   }
-  const execOptions = options.signal !== undefined ? { signal: options.signal } : undefined
-  const uname = await transport.exec('uname -s; uname -m', execOptions)
-  const [sys, machine] = uname.stdout.split(/\r?\n/).map(line => line.trim())
-  try {
-    assertLinuxAmd64(sys ?? '', machine ?? '')
-  } catch (error) {
-    return { ok: false, detail: error instanceof Error ? error.message : String(error) }
-  }
   const version = CORE_ARTIFACT_VERSION
-  const tarName = coreArtifactName()
+  const tarName = coreArtifactName(target.arch)
   const sftp = await transport.getSftp(options.signal)
   await transport.exec('mkdir -p -- "$HOME"/.dsh-core', execOptions)
 
@@ -277,16 +290,18 @@ export async function deployCore(
 
   const vendors: VendorFile[] = []
   if (!remoteHasRg) {
-    const outcome = ensureRgVendor()
-    if (outcome.ok) {
-      const temp = `/tmp/dsh-core-rg-${RG_VENDOR.version}`
+    const outcome = ensureRgVendorFor(target.arch)
+    if (!outcome.ok) {
+      notes.push(outcome.detail)
+    } else {
+      const pin = rgSourceFor(target.arch)
+      const versionLabel = pin?.version ?? target.arch
+      const temp = `/tmp/dsh-core-rg-${versionLabel}-${target.arch}`
       await sftpWrite(sftp, temp, readFileSync(outcome.path))
       vendors.push({ temp, relative: 'bin/rg' })
       notes.push(outcome.cached
-        ? `provisioned rg ${RG_VENDOR.version} from the host cache`
-        : `fetched rg ${RG_VENDOR.version} from the official release`)
-    } else {
-      notes.push(outcome.detail)
+        ? `provisioned rg ${versionLabel} from the host cache`
+        : `fetched rg ${versionLabel} from the official release`)
     }
   }
 

@@ -53,12 +53,13 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Go core (test + linux/amd64 build)
+      - name: Go core (test + linux/amd64 + linux/arm64 build)
         if: runner.os == 'Linux'
         working-directory: core
         run: |
           go test ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/dsh-core .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/dsh-core-arm64 .
 
       - name: Go core (unit tests, no jail)
         if: runner.os != 'Linux'

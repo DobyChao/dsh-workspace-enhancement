@@ -14,6 +14,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from './core-client.ts'
 import {
   CORE_ARTIFACT_ARCH,
+  CORE_ARTIFACT_TARGETS,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
   CORE_COMPAT_HASHES,
@@ -144,8 +145,29 @@ export function isKnownCoreBinary(hash: string | undefined): boolean {
   return hash !== undefined && (CORE_COMPAT_HASHES as readonly string[]).includes(hash.toLowerCase())
 }
 
-export function coreArtifactName(): string {
-  return `dsh-core-${CORE_ARTIFACT_VERSION}-${CORE_ARTIFACT_ARCH}.tar.gz`
+export function coreArtifactName(arch: string = CORE_ARTIFACT_ARCH): string {
+  return `dsh-core-${CORE_ARTIFACT_VERSION}-${arch}.tar.gz`
+}
+
+/** One shipped core target, as projected from `core/artifact.json`. */
+export interface CoreArtifactTarget {
+  arch: string
+  manifestArch: string
+}
+
+/**
+ * Pick the shipped core for one `uname -m` value (REQ-I26).
+ * @param unameM - machine hardware name.
+ * @returns the target, or undefined when this package has no build for it.
+ */
+export function coreTargetForUname(unameM: string): CoreArtifactTarget | undefined {
+  const machine = unameM.trim()
+  for (const target of CORE_ARTIFACT_TARGETS) {
+    if ((target.uname as readonly string[]).includes(machine)) {
+      return { arch: target.arch, manifestArch: target.manifestArch }
+    }
+  }
+  return undefined
 }
 
 async function openOverSsh(request: CoreOpenRequest): Promise<CoreClient> {

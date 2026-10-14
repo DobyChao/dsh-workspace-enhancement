@@ -254,7 +254,7 @@ export const zh = {
   'settings.rpc.removeFailed': '删除失败',
   'settings.deleted': '已删除',
   'settings.rpc.switchFailed': '切换失败',
-  'settings.setCurrent': '已设为当前机器',
+  'settings.setCurrent': '已将 {label} 设为当前机器。之后新建远程工作区会从这台机器开始浏览。',
   'settings.rpc.forgetKeyFailed': '忘记主机指纹失败',
   'settings.forgotten': '已忘记 {host}:{port} 的主机指纹（下次连接重新记录）',
   'settings.title': '远程工作区（机器管理）',

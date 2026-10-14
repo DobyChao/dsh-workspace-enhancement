@@ -16,6 +16,7 @@ import type { ConnectionDraft } from './form.tsx'
 import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
 import { backdropDismissProps, cx, useDialogA11y } from './ui.ts'
+import { initialBrowseTarget } from './browse-target.ts'
 import {
   AlertIcon,
   CheckIcon,
@@ -381,7 +382,18 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
     }
   }
 
-  /** Open: refresh both sidebar lists and browse the initial target (local home, or the saved connection named by `initialConnectionId` when it exists). Closed: abort. */
+  /** Registry current machine, used when the opener did not name a connection (UX-11). */
+  const readCurrentMachineId = async (): Promise<string> => {
+    try {
+      const result = await rpc('machines.list')
+      if (!result.ok || !isRecord(result.value)) return ''
+      return typeof result.value.currentId === 'string' ? result.value.currentId : ''
+    } catch {
+      return ''
+    }
+  }
+
+  /** Open: refresh both sidebar lists and browse the initial target (local home, the current machine, or the saved connection named by `initialConnectionId` when it exists). Closed: abort. */
   useEffect(() => {
     if (!open) {
       generation.current += 1
@@ -412,9 +424,18 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
     // confirmed; an unknown id degrades back to the local home.
     const initialId = initialConnectionId.trim()
     if (initialId === '') {
-      setMode({ kind: 'local' })
-      void refreshConnections()
-      void loadLevel(signal => listLocalDirectory(undefined, signal))
+      void (async () => {
+        const [list, currentId] = await Promise.all([refreshConnections(), readCurrentMachineId()])
+        if (openGeneration !== generation.current) return
+        const target = initialBrowseTarget('', currentId, list.map(connection => connection.id))
+        if (target.kind === 'remote') {
+          setMode({ kind: 'remote', id: target.id })
+          navigateRemote(target.id)
+          return
+        }
+        setMode({ kind: 'local' })
+        void loadLevel(signal => listLocalDirectory(undefined, signal))
+      })()
       return
     }
     setMode({ kind: 'remote', id: initialId })

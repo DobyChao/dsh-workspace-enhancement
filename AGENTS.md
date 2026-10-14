@@ -181,7 +181,7 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
    > **PR 标题必须是 Conventional Commit**：squash 合并把它当作 master 上的提交标题，
    > 而闸门校验的正是这个标题（浏览器默认填分支名 → 合并后 master 必红）。
 
-6. 合并后：整行挪到 §4，状态改 `done`/`shipped`，`npm run status`，在 `docs/rounds/` 写一份报告。
+6. 合并后：整行挪到 §4，状态改 `done`/`shipped`，`npm run status`。round 只写里程碑/事故；其余用 PR 描述。拍板队列：`docs/decisions/queue.md`。
 
 7. **发布只由仓库所有者决定**：合并进 `master` 不会发布。`release.yml` 只在 `v*` tag 上跑，且
    publish 作业挂在 `npm-publish` environment 上——**推 tag 只是排队，真正的 `npm publish` 要
@@ -195,6 +195,6 @@ DSH 文件沙箱（workspace-write）**不能开管道**：
 
 0. `npm run preflight` —— 能力预检：缺什么、什么会 blocked，一目了然。
 1. `npm run status` —— 看版本、HEAD、待办分布、被挡住的项。
-2. `docs/backlog.md` §1/§3 —— 当前在做什么、什么被挡住。
+2. `docs/backlog.md` §1/§3 与 `docs/decisions/queue.md` —— 在做什么、被挡住的、待拍板。
 3. `docs/README.md` —— 文档地图（现状 / 决策 / 档案各看哪）。
 4. `docs/compatibility.md` —— 别在错误的上游家族上开工。

@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { BWRAP_VENDOR, RG_VENDOR } from './core-vendor-pins.ts'
+import { BWRAP_VENDOR, RG_TARGETS, RG_VENDOR } from './core-vendor-pins.ts'
 import { extractGzipTarMemberToFile } from './gzip-tar.ts'
 import { dshHome } from './hostkey.ts'
 
@@ -57,15 +57,33 @@ export interface VendorSource {
   member: string
 }
 
-/** The pinned ripgrep source. */
+/** The pinned ripgrep source for the primary linux-x64 core. */
 export function rgSource(): VendorSource {
-  return {
+  return rgSourceFor('linux-x64') ?? {
     name: 'rg',
     version: RG_VENDOR.version,
     arch: RG_VENDOR.arch,
     url: RG_VENDOR.url,
     sha256: RG_VENDOR.sha256,
     member: RG_VENDOR.member,
+  }
+}
+
+/**
+ * Official ripgrep pin for one core filename arch (REQ-I26).
+ * @param coreArch - `linux-x64` or `linux-arm64`.
+ * @returns the pin, or undefined when this package has no official rg for it.
+ */
+export function rgSourceFor(coreArch: string): VendorSource | undefined {
+  const pin = RG_TARGETS.find(row => row.coreArch === coreArch)
+  if (pin === undefined) return undefined
+  return {
+    name: 'rg',
+    version: pin.version,
+    arch: pin.arch,
+    url: pin.url,
+    sha256: pin.sha256,
+    member: pin.member,
   }
 }
 
@@ -254,7 +272,19 @@ export function ensureVendor(source: VendorSource, download: VendorDownload = cu
  * @returns the cached path, or an actionable failure detail.
  */
 export function ensureRgVendor(download: VendorDownload = curlDownload): RgVendorOutcome {
-  return ensureVendor(rgSource(), download)
+  return ensureRgVendorFor('linux-x64', download)
+}
+
+/**
+ * Ensure the ripgrep pin that matches one core arch.
+ * A missing pin fails closed instead of pushing the x64 binary onto arm64.
+ * @param coreArch - core filename arch (`linux-x64`, `linux-arm64`).
+ * @param download - download seam (tests inject a local writer).
+ */
+export function ensureRgVendorFor(coreArch: string, download: VendorDownload = curlDownload): RgVendorOutcome {
+  const source = rgSourceFor(coreArch)
+  if (source === undefined) return { ok: false, detail: `no official rg pin for ${coreArch}` }
+  return ensureVendor(source, download)
 }
 
 /** bwrap install hints, for the refusal message the model and the operator read. */

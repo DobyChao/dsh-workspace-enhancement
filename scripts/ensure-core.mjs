@@ -14,21 +14,17 @@
  * downgrades "missing and the toolchain cannot build it" to a warning; when the
  * artifact cannot be built at all the pack path fails hard.
  *
- * Why not also re-read the artifact's MANIFEST here: the expected file name is
- * version- and arch-stamped and both come from `core/artifact.json`, so a stale
- * artifact simply is not found (→ rebuild). The in-tarball check belongs to the
- * deploy path (`manifestIssues` in `src/core-deploy.ts`, which runs on the host)
- * — and reading a tar through a pipe is exactly what the DSH file sandbox
- * forbids, so the guard stays spawn-light on purpose.
+ * REQ-I26: every `targets[]` row must be present (linux-x64 and linux-arm64).
+ * Each built binary's sha256 is registered once in the flat `compatHashes`
+ * list, then the TS projection is regenerated a single time.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ROOT, artifactName, distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
+import { ROOT, artifactNameFor, artifactTargets, distCoreSha256, eachDistCoreSha, readArtifactMeta } from './core-artifact.mjs'
 
 const optional = process.argv.includes('--optional')
 const meta = readArtifactMeta()
-const artifact = join(ROOT, 'core', 'dist', artifactName(meta))
 
 /**
  * Run `scripts/build-core.mjs` in this process' place (stdio inherited: piped
@@ -43,6 +39,13 @@ function build() {
   return built.status === 0
 }
 
+/** Arches whose dist tarball is not on disk yet. */
+function missingTargets(metaNow = readArtifactMeta()) {
+  return artifactTargets(metaNow).filter(
+    (target) => distCoreSha256({ version: metaNow.version, arch: target.arch }) === null,
+  )
+}
+
 /**
  * REQ-I17 provenance self-registration: Go builds are not byte-reproducible
  * across toolchains, so a static hash list would reject a legitimately
@@ -51,35 +54,36 @@ function build() {
  * re-projects the TS constants — every built artifact is by definition one we
  * shipped, and the shipped package can never distrust its own core.
  */
-function registerBuiltHash() {
-  const sha = distCoreSha256()
-  if (sha === null) return
+function registerBuiltHashes() {
   const metaNow = readArtifactMeta()
-  if (metaNow.compatHashes.includes(sha)) return
-  metaNow.compatHashes.push(sha)
-  writeFileSync(
-    join(ROOT, 'core', 'artifact.json'),
-    JSON.stringify(metaNow, null, 2) + '\n',
-  )
+  const built = eachDistCoreSha(metaNow)
+  let added = false
+  for (const row of built) {
+    if (metaNow.compatHashes.includes(row.sha)) continue
+    metaNow.compatHashes.push(row.sha)
+    added = true
+    console.error(`[ensure-core] registered ${row.arch} binary sha256 ${row.sha.slice(0, 12)}… in compatHashes`)
+  }
+  if (!added) return
+  writeFileSync(join(ROOT, 'core', 'artifact.json'), JSON.stringify(metaNow, null, 2) + '\n')
   const sync = spawnSync(process.execPath, [join(ROOT, 'scripts/sync-core-manifest.mjs')], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] })
   if (sync.status !== 0) {
     console.error('[ensure-core] WARN could not re-project the core manifests after hash registration')
-  } else {
-    console.error(`[ensure-core] registered core binary sha256 ${sha.slice(0, 12)}… in compatHashes`)
   }
 }
 
-if (existsSync(artifact)) {
-  registerBuiltHash()
+const names = artifactTargets(meta).map((target) => artifactNameFor(meta.version, target.arch))
+if (missingTargets(meta).length === 0) {
+  registerBuiltHashes()
   // stderr on purpose: `npm pack --json` parses OUR stdout, and a lifecycle
   // script that prints to stdout corrupts that JSON (caught by pack-smoke).
-  console.error(`[ensure-core] ${artifactName(meta)} is present`)
+  console.error(`[ensure-core] ${names.join(', ')} present`)
   process.exit(0)
 }
 
-if (build() && existsSync(artifact)) {
-  registerBuiltHash()
-  console.error(`[ensure-core] built ${artifact}`)
+if (build() && missingTargets().length === 0) {
+  registerBuiltHashes()
+  console.error(`[ensure-core] built ${names.join(', ')}`)
   process.exit(0)
 }
 
@@ -88,5 +92,5 @@ if (optional) {
     + ' — run `npm run build:core` from a shell with the Go toolchain')
   process.exit(0)
 }
-console.error(`[ensure-core] core artifact missing: ${artifact} (and it could not be built)`)
+console.error(`[ensure-core] core artifact missing: ${names.join(', ')} (and it could not be built)`)
 process.exit(1)

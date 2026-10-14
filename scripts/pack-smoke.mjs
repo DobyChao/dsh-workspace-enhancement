@@ -15,7 +15,7 @@ import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } fr
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import { artifactName, distCoreSha256, readArtifactMeta } from './core-artifact.mjs'
+import { artifactNameFor, artifactTargets, eachDistCoreSha, readArtifactMeta } from './core-artifact.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(new URL('.', import.meta.url))))
 
@@ -34,8 +34,10 @@ const MUST_INCLUDE = [
 // check` builds it right before this gate, and `prepack` refuses to pack
 // without it, so it is a hard requirement here. The expected name comes from
 // the single source (`core/artifact.json`), never a literal.
-const CORE_ARTIFACT = `core/dist/${artifactName(readArtifactMeta())}`
-MUST_INCLUDE.push(CORE_ARTIFACT)
+const artifactMeta = readArtifactMeta()
+for (const target of artifactTargets(artifactMeta)) {
+  MUST_INCLUDE.push(`core/dist/${artifactNameFor(artifactMeta.version, target.arch)}`)
+}
 
 const MUST_EXCLUDE = [
   /^src\//,
@@ -136,25 +138,24 @@ check('tarball leaks no private paths', leaked.length === 0, leaked.slice(0, 8).
 {
   // BUG-15: unreadable-but-present is a throw now, not a silent null — report
   // it through the check line so pack time stays a clean RED, not a crash.
-  let distSha = null
+  let built = []
   try {
-    distSha = distCoreSha256()
+    built = eachDistCoreSha()
   } catch (error) {
     console.error(`[pack-smoke] ${error instanceof Error ? error.message : String(error)}`)
   }
-  check('built core binary is registered in compatHashes (provenance gate)',
-    distSha !== null && readArtifactMeta().compatHashes.includes(distSha),
-    distSha ?? 'cannot read the dist core binary')
-
-
-  // Self-consistency: the package must trust its OWN core — the projection
-  // (which lib/ compiles from, i.e. what ships) has to list the very binary
-  // sitting in core/dist. A stale projection (registration after tsc)
-  // would ship a plugin that refuses the artifact it carries.
-  if (distSha !== null) {
-    const projection = readFileSync(join(ROOT, 'src', 'core-artifact.ts'), 'utf8')
-    check('projection lists the built core hash (package self-consistency)',
-      projection.includes(distSha), distSha)
+  check('every shipped core tarball was readable',
+    built.length === artifactTargets(readArtifactMeta()).length,
+    built.map(row => row.arch).join(', ') || 'cannot read the dist core binaries')
+  const projection = readFileSync(join(ROOT, 'src', 'core-artifact.ts'), 'utf8')
+  for (const row of built) {
+    check(`built core binary (${row.arch}) is registered in compatHashes (provenance gate)`,
+      readArtifactMeta().compatHashes.includes(row.sha), row.sha)
+    // Self-consistency: the package must trust its OWN core — the projection
+    // (which lib/ compiles from, i.e. what ships) has to list the very binary
+    // sitting in core/dist.
+    check(`projection lists the ${row.arch} core hash (package self-consistency)`,
+      projection.includes(row.sha), row.sha)
   }
 }
 

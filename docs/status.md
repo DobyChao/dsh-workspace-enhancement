@@ -1,37 +1,37 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-13 12:52 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-14 05:03 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.4` |
-| npm 已发布版本 | `0.2.3` |
-| 最新 tag | `v0.2.3` |
-| 分支 / HEAD | `cursor/release-0.2.4-8d0c` / `e8316c7` |
-| HEAD 提交 | `docs: close the REQ-I29 fence-tier round after merge (#69)` (2026-10-13) |
+| npm 已发布版本 | `0.2.4` |
+| 最新 tag | `v0.2.4` |
+| 分支 / HEAD | `cursor/i26-i28-infra24-ux-1b88` / `d987014` |
+| HEAD 提交 | `chore(release): prepare npm v0.2.4 (#70)` (2026-10-13) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 65 |
-| 单测用例（静态计数） | 689 |
+| 单测文件 | 68 |
+| 单测用例（静态计数） | 698 |
 | E2E 场景文件 | 8 |
-| ADR | 31 |
+| ADR | 32 |
 | 轮次报告 | 54 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
+| `todo` | 9 |
 | `doing` | 1 |
 | `blocked` | 8 |
-| `done` | 84 |
+| `done` | 89 |
 | `shipped` | 10 |
 | `dropped` | 16 |
 

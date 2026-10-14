@@ -36,8 +36,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      # INFRA-15: `npm run check` (prepublishOnly) now builds the linux-x64
-      # core tarball and pack-smoke hard-requires it in the published package.
+      # INFRA-15 / REQ-I26: `npm run check` (prepublishOnly) builds the
+      # linux-x64 and linux-arm64 core tarballs; pack-smoke hard-requires both.
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'

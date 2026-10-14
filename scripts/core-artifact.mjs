@@ -26,7 +26,7 @@ export const ARTIFACT_JSON = join(ROOT, 'core', 'artifact.json')
 
 /**
  * Read and validate the single source of truth.
- * @returns the parsed `{ version, arch, manifestArch }`.
+ * @returns the parsed artifact meta, including every shipped `targets` row.
  * @throws when the file is unreadable or a field is missing/not a string.
  */
 export function readArtifactMeta() {
@@ -40,7 +40,43 @@ export function readArtifactMeta() {
     || meta.compatHashes.some(hash => !/^[0-9a-f]{64}$/.test(hash))) {
     throw new Error('core/artifact.json: "compatHashes" must be a non-empty array of lowercase sha256 values (every dsh-core binary the fence may run — REQ-I17 provenance gate)')
   }
+  artifactTargets(meta)
   return meta
+}
+
+/**
+ * Every architecture this package ships a core tarball for (REQ-I26).
+ * The top-level `arch` / `manifestArch` stay as the primary (linux-x64) name
+ * `coreArtifactName()` used before multi-arch; `targets` is the full set.
+ * @param meta - parsed artifact meta (defaults to the file).
+ * @returns the validated target rows.
+ */
+export function artifactTargets(meta = readArtifactMeta()) {
+  if (!Array.isArray(meta.targets) || meta.targets.length === 0) {
+    throw new Error('core/artifact.json: "targets" must list every shipped core architecture')
+  }
+  const seen = new Set()
+  for (const target of meta.targets) {
+    for (const key of ['arch', 'manifestArch', 'goarch']) {
+      if (typeof target?.[key] !== 'string' || target[key] === '') {
+        throw new Error(`core/artifact.json: each target "${key}" must be a non-empty string`)
+      }
+    }
+    if (!Array.isArray(target.uname) || target.uname.length === 0
+      || target.uname.some(name => typeof name !== 'string' || name === '')) {
+      throw new Error(`core/artifact.json: target ${target.arch} "uname" must be a non-empty string array`)
+    }
+    if (seen.has(target.arch)) throw new Error(`core/artifact.json: duplicate target arch ${target.arch}`)
+    seen.add(target.arch)
+  }
+  const primary = meta.targets.find(target => target.arch === meta.arch)
+  if (primary === undefined) {
+    throw new Error(`core/artifact.json: top-level arch ${meta.arch} is not one of targets`)
+  }
+  if (primary.manifestArch !== meta.manifestArch) {
+    throw new Error(`core/artifact.json: top-level manifestArch must match the ${meta.arch} target`)
+  }
+  return meta.targets
 }
 
 /**
@@ -50,6 +86,15 @@ export function readArtifactMeta() {
  */
 export function artifactName(meta) {
   return `dsh-core-${meta.version}-${meta.arch}.tar.gz`
+}
+
+/**
+ * Tarball file name for one target arch.
+ * @param version - artifact version.
+ * @param arch - filename arch segment (`linux-x64`, `linux-arm64`).
+ */
+export function artifactNameFor(version, arch) {
+  return artifactName({ version, arch })
 }
 
 /**
@@ -69,6 +114,22 @@ export function artifactName(meta) {
  * @param meta - validated artifact meta (defaults to the file's).
  * @param distDir - dist dir override (tests; defaults to `<root>/core/dist`).
  */
+/**
+ * sha256 of every BUILT target tarball (absent arches are omitted).
+ * A present-but-unreadable tarball throws, same as {@link distCoreSha256}.
+ * @param meta - validated artifact meta.
+ * @param distDir - dist dir override.
+ * @returns `{ arch, sha }[]` for tarballs that exist.
+ */
+export function eachDistCoreSha(meta = readArtifactMeta(), distDir = join(ROOT, 'core', 'dist')) {
+  const found = []
+  for (const target of artifactTargets(meta)) {
+    const sha = distCoreSha256({ version: meta.version, arch: target.arch }, distDir)
+    if (sha !== null) found.push({ arch: target.arch, sha })
+  }
+  return found
+}
+
 export function distCoreSha256(meta = readArtifactMeta(), distDir = join(ROOT, 'core', 'dist')) {
   const name = artifactName(meta)
   if (!existsSync(join(distDir, name))) return null

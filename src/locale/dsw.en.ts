@@ -245,7 +245,7 @@ const en: Record<DswKey, string> = {
   'settings.rpc.removeFailed': 'Delete failed',
   'settings.deleted': 'Deleted',
   'settings.rpc.switchFailed': 'Switch failed',
-  'settings.setCurrent': 'Set as the current machine',
+  'settings.setCurrent': 'Set {label} as the current machine. New remote workspaces open there.',
   'settings.rpc.forgetKeyFailed': 'Failed to forget the host key',
   'settings.forgotten': 'Forgot the host key of {host}:{port} (it will be recorded again on next connect)',
   'settings.title': 'Remote workspaces (machine management)',
