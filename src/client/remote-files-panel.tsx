@@ -24,10 +24,9 @@ import {
   inWorkspaceExtras,
   isMissingListing,
   listedLevel,
-  previewChoice,
+  openRemoteFile,
   remoteWorkspaceOf,
   specialRoots,
-  workspaceFilesOf,
 } from './remote-files.ts'
 import type { ListedEntry, PreviewWire } from './remote-files.ts'
 import styles from './remote-files.module.css'
@@ -225,49 +224,32 @@ export function RemoteFilesTab(props: RemoteFilesTabProps): JSX.Element {
 
   const openFile = (path: string): void => {
     if (workspace === null) return
-    const bridge = props.ctx.get('sidebarRight')
-    const remote = props.ctx.get('remote')
-    const openResource = isRecord(bridge) ? bridge.openResource : undefined
-    const choice = previewChoice({
+    setPreview({ path, status: 'loading' })
+    const connectionId = workspace.connectionId
+    void openRemoteFile({
       sessionId,
       workspace: workspace.workspace,
-      remotePath: path,
-      openResource,
-      workspaceFiles: workspaceFilesOf(remote),
+      path,
+      get: name => props.ctx.get(name),
+      read: () => rpc('browse.read', { id: connectionId, path, sessionId }).then(result => unwrap(result, t('files.preview.failed'))),
+      failedMessage: t('files.preview.failed'),
+      onHostRejected: () => {
+        setPreview(prev => {
+          if (prev === undefined || prev.path !== path) return prev
+          const next = { ...prev }
+          delete next.hostAddress
+          return next
+        })
+      },
+    }).then(opened => {
+      setPreview({
+        path,
+        status: opened.status,
+        ...(opened.wire !== undefined ? { wire: opened.wire } : {}),
+        ...(opened.hostAddress !== undefined ? { hostAddress: opened.hostAddress } : {}),
+        ...(opened.error !== undefined ? { error: opened.error } : {}),
+      })
     })
-    setPreview({ path, status: 'loading' })
-    let hostAddress: string | undefined
-    if (choice.kind === 'host' && typeof openResource === 'function') {
-      try {
-        const opened: unknown = openResource(choice.address)
-        hostAddress = choice.address
-        if (isPromise(opened)) {
-          void opened.catch(() => {
-            setPreview(prev => {
-              if (prev === undefined || prev.path !== path) return prev
-              const next = { ...prev }
-              delete next.hostAddress
-              return next
-            })
-          })
-        }
-      } catch {
-        hostAddress = undefined
-      }
-    }
-    void rpc('browse.read', { id: workspace.connectionId, path, sessionId })
-      .then(result => {
-        const wire = asPreviewWire(unwrap(result, t('files.preview.failed')))
-        if (wire === undefined) {
-          setPreview({ path, status: 'error', ...(hostAddress !== undefined ? { hostAddress } : {}), error: t('files.preview.failed') })
-          return
-        }
-        setPreview({ path, status: 'ready', wire, ...(hostAddress !== undefined ? { hostAddress } : {}) })
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : t('files.preview.failed')
-        setPreview({ path, status: 'error', ...(hostAddress !== undefined ? { hostAddress } : {}), error: message })
-      })
   }
 
   return (
@@ -402,8 +384,4 @@ function TreeDir(props: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function isPromise(value: unknown): value is Promise<unknown> {
-  return typeof value === 'object' && value !== null && 'then' in value && typeof value.then === 'function'
 }

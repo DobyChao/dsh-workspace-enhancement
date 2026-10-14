@@ -13,6 +13,7 @@
 
 ### 修复
 
+- **远程文件点击预览（`REQ-A6`）**：`remote.workspaceFiles` 是关联属性，未 inject 时读取会抛 `without inject`，点击停在「选择一个文件以预览」。改为 `ctx.get('remote.workspaceFiles')` 探测；缺了也不挡页内 `browse.read`。
 - **设为当前（`UX-11`）**：未指定连接时，目录选择从当前机器开始浏览；成功横幅点名该机器；当前行有选中样式。
 - **部署失败样式（`UX-12`）**：`core.deploy` 返回失败时用红色错误横幅和红色芯片，不再走绿色成功横幅。
 

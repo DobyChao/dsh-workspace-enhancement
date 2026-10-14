@@ -16,6 +16,8 @@ import {
   inWorkspaceExtras,
   isMissingListing,
   listedLevel,
+  hostPreviewBridge,
+  openRemoteFile,
   previewChoice,
   remoteWorkspaceOf,
   sessionFileAddress,
@@ -98,6 +100,83 @@ test('REQ-A6 host preview uses a session file address, never an absolute one', (
     workspaceFiles: { read: () => undefined },
   })
   assert.deepEqual(outside, { kind: 'plugin' })
+})
+
+test('REQ-A6 openFile without remote.workspaceFiles inject still sets preview content', async () => {
+  const injectError = new Error('cannot get property "remote.workspaceFiles" without inject')
+  let touchedWorkspaceFiles = false
+  const remote = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === 'workspaceFiles') {
+        touchedWorkspaceFiles = true
+        throw injectError
+      }
+      return undefined
+    },
+  })
+  const probed: string[] = []
+  let opened = false
+  let read = false
+  const result = await openRemoteFile({
+    sessionId: 's1',
+    workspace,
+    path: '/srv/app/.dsh-uploads/uat-seed.txt',
+    get: (name) => {
+      probed.push(name)
+      if (name === 'remote') return remote
+      if (name === 'remote.workspaceFiles') throw injectError
+      if (name === 'sidebarRight') return { openResource: () => { opened = true } }
+      return undefined
+    },
+    read: async () => {
+      read = true
+      return {
+        path: '/srv/app/.dsh-uploads/uat-seed.txt',
+        name: 'uat-seed.txt',
+        kind: 'text',
+        text: 'seed',
+        size: 4,
+        truncated: false,
+      }
+    },
+    failedMessage: 'failed',
+  })
+  assert.equal(read, true)
+  assert.equal(opened, false)
+  assert.equal(touchedWorkspaceFiles, false)
+  assert.equal(probed.includes('remote.workspaceFiles'), true)
+  assert.equal(result.status, 'ready')
+  assert.equal(result.wire?.text, 'seed')
+  assert.equal(result.hostAddress, undefined)
+  assert.equal(hostPreviewBridge(() => { throw injectError }).workspaceFiles, undefined)
+})
+
+test('REQ-A6 openFile still bridges the host when workspaceFiles is provided', async () => {
+  const addresses: string[] = []
+  const result = await openRemoteFile({
+    sessionId: 's1',
+    workspace,
+    path: '/srv/app/.dsh-artifacts/uat-artifact.txt',
+    get: (name) => {
+      if (name === 'remote.workspaceFiles') return { readBytes: () => undefined }
+      if (name === 'sidebarRight.openResource') {
+        return (address: string) => { addresses.push(address) }
+      }
+      return undefined
+    },
+    read: async () => ({
+      path: '/srv/app/.dsh-artifacts/uat-artifact.txt',
+      name: 'uat-artifact.txt',
+      kind: 'text',
+      text: 'artifact',
+      size: 8,
+    }),
+    failedMessage: 'failed',
+  })
+  assert.deepEqual(addresses, ['dsh-resource://file/session/s1/.dsh-artifacts/uat-artifact.txt'])
+  assert.equal(result.status, 'ready')
+  assert.equal(result.wire?.text, 'artifact')
+  assert.equal(result.hostAddress, addresses[0])
 })
 
 test('REQ-A6 listing and preview wires tolerate partial payloads', () => {

@@ -194,10 +194,111 @@ export function isMissingListing(message: string): boolean {
   return /no such file|not found|enoent|does not exist/i.test(message)
 }
 
-/** `workspaceFiles` off the client `remote` service, if that shape is mounted. */
-export function workspaceFilesOf(remote: unknown): unknown {
-  if (!isRecord(remote)) return undefined
-  return remote.workspaceFiles
+/**
+ * Host document-preview capabilities, without an inject requirement.
+ *
+ * `remote` is a traceable service whose `workspaceFiles` property resolves
+ * the context key `remote.workspaceFiles`. Reading that property throws
+ * `cannot get property "remote.workspaceFiles" without inject` when this
+ * plugin did not list it in `inject`. `ctx.get` reads the store and returns
+ * undefined when the service is absent, so a missing host bridge never
+ * blocks the in-plugin preview.
+ */
+export function hostPreviewBridge(get: (name: string) => unknown): {
+  openResource: unknown
+  workspaceFiles: unknown
+} {
+  const namedOpen = optionalGet(get, 'sidebarRight.openResource')
+  const fromBridge = optionalProp(optionalGet(get, 'sidebarRight'), 'openResource')
+  const openResource = typeof namedOpen === 'function' ? namedOpen : fromBridge
+  return {
+    openResource: typeof openResource === 'function' ? openResource : undefined,
+    workspaceFiles: optionalGet(get, 'remote.workspaceFiles'),
+  }
+}
+
+/** One click: optional host open, then the `browse.read` document. */
+export interface RemoteFileOpen {
+  status: 'ready' | 'error'
+  wire?: PreviewWire
+  hostAddress?: string
+  error?: string
+}
+
+/**
+ * Open a remote file. The host `openResource` bridge runs only when both
+ * `sidebarRight.openResource` and `remote.workspaceFiles` can be probed.
+ * `read` (the `browse.read` call) always runs, including when those probes
+ * throw the missing-inject error.
+ */
+export async function openRemoteFile(input: {
+  sessionId: string
+  workspace: string
+  path: string
+  get: (name: string) => unknown
+  read: () => Promise<unknown>
+  failedMessage: string
+  onHostRejected?: () => void
+}): Promise<RemoteFileOpen> {
+  let hostAddress: string | undefined
+  try {
+    const bridge = hostPreviewBridge(input.get)
+    const choice = previewChoice({
+      sessionId: input.sessionId,
+      workspace: input.workspace,
+      remotePath: input.path,
+      openResource: bridge.openResource,
+      workspaceFiles: bridge.workspaceFiles,
+    })
+    if (choice.kind === 'host' && typeof bridge.openResource === 'function') {
+      try {
+        const opened: unknown = bridge.openResource(choice.address)
+        hostAddress = choice.address
+        if (isPromise(opened)) {
+          void opened.catch(() => input.onHostRejected?.())
+        }
+      } catch {
+        hostAddress = undefined
+      }
+    }
+  } catch {
+    hostAddress = undefined
+  }
+  try {
+    const wire = asPreviewWire(await input.read())
+    if (wire === undefined) return withHost({ status: 'error', error: input.failedMessage }, hostAddress)
+    return withHost({ status: 'ready', wire }, hostAddress)
+  } catch (error: unknown) {
+    const message = error instanceof Error && error.message !== '' ? error.message : input.failedMessage
+    return withHost({ status: 'error', error: message }, hostAddress)
+  }
+}
+
+function withHost(open: RemoteFileOpen, hostAddress: string | undefined): RemoteFileOpen {
+  if (hostAddress !== undefined) open.hostAddress = hostAddress
+  return open
+}
+
+function optionalGet(get: (name: string) => unknown, name: string): unknown {
+  try {
+    return get(name)
+  } catch {
+    return undefined
+  }
+}
+
+/** Property read that treats a missing-inject throw as absence. */
+function optionalProp(value: unknown, key: string): unknown {
+  if (!isRecord(value)) return undefined
+  try {
+    return value[key]
+  } catch {
+    return undefined
+  }
+}
+
+function isPromise(value: unknown): value is Promise<unknown> {
+  return typeof value === 'object' && value !== null && 'then' in value && typeof value.then === 'function'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

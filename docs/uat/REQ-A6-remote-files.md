@@ -12,8 +12,8 @@
 
 1. 打开该远程会话，在 better-sidebar 里打开「远程文件」（tab id `dsw:workspaces`，不是宿主的「文件」页）。
 2. 页头有远程连接状态。展开「上传」「产物」。
-3. 点击 `.dsh-uploads` 或 `.dsh-artifacts` 下的一个文件。
-4. 宿主文档预览可用时，右侧文档预览打开该文件（`dsh-resource://file/session/…`），页内同时能看到文本、图片或 PDF。宿主没有远程读取能力时，页内预览仍然打开，而不是只在模型上下文里留一条路径。
+3. 点击 `.dsh-uploads` 或 `.dsh-artifacts` 下的一个文件（例如 `uat-seed.txt`）。
+4. 页内预览必须离开「选择一个文件以预览」，看到文本、图片或 PDF。宿主没有 `remote.workspaceFiles`（控制台不应再出现 `without inject`）时也一样：页内预览走 `browse.read`。宿主文档预览可用时，右侧另外打开 `dsh-resource://file/session/…`。
 5. 宿主原来的「文件」页仍在，没有被这个 tab 替换。
 
 ## 没有 better-sidebar

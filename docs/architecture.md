@@ -50,7 +50,7 @@
 
 会话栏**行级**徽标没有官方槽位，由 `installRowBadges` 用 DOM 增辉层注入（ADR-0011）。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
 
-`dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击优先走宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…`（仅当 `remote.workspaceFiles` 存在，远程内容走会话文件系统）。没有这条能力时，页内用 `browse.read` 预览文本、图片和 PDF。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
+`dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击始终用 `browse.read` 在页内预览文本、图片和 PDF。宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…` 只在 `ctx.get('remote.workspaceFiles')` 与 `openResource` 都能取到时额外打开；缺 inject 时 `ctx.get` 返回空，不读 `remote.workspaceFiles` 属性（那条属性会抛 `without inject`）。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
 
 ## 3. 模块地图
 
