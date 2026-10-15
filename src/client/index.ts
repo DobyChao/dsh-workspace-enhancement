@@ -29,6 +29,9 @@ import { createRemoteStatusSeats, remoteStatusRegisterOptions, REMOTE_STATUS_SLO
 import type { RemoteSessionsFeed } from './remote-status.ts'
 import { RemoteStatusAction } from './remote-status-entry.tsx'
 import { RemoteWorkspaceSettingsPage } from './settings.tsx'
+import { installBetterSidebar } from './better-sidebar.ts'
+import { asPreviewWire, remoteWorkspaceOf } from './remote-files.ts'
+import { RemoteFileViewer, RemoteFilesTab } from './remote-files-panel.tsx'
 import { SideWorkspacesAction } from './side-workspaces.tsx'
 
 /** Local, self-contained wire contracts (no cross-plugin value imports). */
@@ -240,6 +243,33 @@ export function apply(ctx: Context): void {
   ctx.slots.inject(REMOTE_STATUS_SLOT, () =>
     ctx.slots.register({ ...remoteStatusRegisterOptions(t), inject: injected }, RemoteStatusAction))
   installSidebarRowBadges(ctx)
+  // REQ-A6: optional peer. No inject — a missing better-sidebar must not
+  // keep this plugin from mounting. The tab reuses browse + remote status.
+  installBetterSidebar(ctx, {
+    title: () => t('files.tab.title'),
+    description: () => t('files.tab.description'),
+    component: RemoteFilesTab,
+    viewerTitle: () => t('files.viewer.title'),
+    viewer: RemoteFileViewer,
+    load: async (path, scope, signal) => {
+      const connection = ctx.get('connection') as ClientConnection | undefined
+      if (connection === undefined) throw new Error(t('rpc.transportUnavailable'))
+      const sessionId = scope.sessionId ?? ''
+      const sessions = ctx.get('sessions') as { list?: { getSnapshot(): { byId: Record<string, { cwd?: string }> } } } | undefined
+      const cwd = sessions?.list?.getSnapshot().byId[sessionId]?.cwd
+      const workspace = remoteWorkspaceOf(typeof cwd === 'string' ? cwd : undefined)
+      if (workspace === null) throw new Error(t('files.local'))
+      const result = await connection.rpc.call(API_CHANNEL, channelEndpointOf('browse.read'), {
+        id: workspace.connectionId,
+        path,
+        sessionId,
+      }, signal)
+      if (!result.ok) throw new Error(result.error.message || t('files.preview.failed'))
+      const wire = asPreviewWire(result.value)
+      if (wire === undefined) throw new Error(t('files.preview.failed'))
+      return wire
+    },
+  })
 }
 
 /**

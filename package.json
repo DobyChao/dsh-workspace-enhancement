@@ -121,7 +121,13 @@
     "@deepseek-ai/dsh-system-prompt": "^0.1.7-rc.2 || ^0.2.0-rc.1",
     "@deepseek-ai/dsh-timeout": "^0.1.7-rc.2 || ^0.2.0-rc.1",
     "@deepseek-ai/dsh-tools": "^0.1.7-rc.2 || ^0.2.0-rc.1",
-    "@deepseek-ai/schemastery": "^3.18.4"
+    "@deepseek-ai/schemastery": "^3.18.4",
+    "dsh-better-sidebar": ">=0.12.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-better-sidebar": {
+      "optional": true
+    }
   },
   "dependencies": {
     "ssh2": "^1.16.0"

@@ -27,6 +27,9 @@
  *
  * 13. `lib/` is not older than `src/` — the linked dev install loads `lib/`, so
  *     a stale build silently keeps old code running (WARN only; see INFRA-11).
+ * 15. `dsh-better-sidebar` is an optional peer and is never value-imported
+ *     (REQ-A6). `import type` is allowed; the client `inject` list must not
+ *     name the service (that would refuse to mount when the peer is absent).
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -412,6 +415,36 @@ try {
   }
 } catch (error) {
   check('core manifest sources readable', false, String(error.message || error))
+}
+
+// ---- 15. optional better-sidebar peer: no value import (REQ-A6) ------------
+const sidebarRange = peer['dsh-better-sidebar']
+const sidebarMeta = pkg.peerDependenciesMeta?.['dsh-better-sidebar']
+const sidebarInDeps = deps['dsh-better-sidebar'] !== undefined
+  || pkg.optionalDependencies?.['dsh-better-sidebar'] !== undefined
+check('dsh-better-sidebar is an optional peer',
+  sidebarRange !== undefined && sidebarMeta?.optional === true && !sidebarInDeps,
+  `peer=${sidebarRange ?? '(missing)'} optional=${sidebarMeta?.optional === true} deps=${sidebarInDeps}`)
+
+const valueImports = []
+const valueImportPattern = /(?:^|[^\w])(?:import|export)\s+(?!type\b)[^;]*?\sfrom\s+['"]dsh-better-sidebar(?:\/[^'"]*)?['"]|require\(\s*['"]dsh-better-sidebar(?:\/[^'"]*)?['"]\s*\)|import\(\s*['"]dsh-better-sidebar(?:\/[^'"]*)?['"]\s*\)/g
+for (const file of walk(resolve(ROOT, 'src'), ['.ts', '.tsx'], ['node_modules'])) {
+  const code = codeWithoutComments(readFileSync(file, 'utf-8'))
+  if (valueImportPattern.test(code)) valueImports.push(rel(file))
+  valueImportPattern.lastIndex = 0
+}
+check('no value-import of dsh-better-sidebar', valueImports.length === 0, valueImports.join(', '))
+
+try {
+  const clientEntry = read('src/client/index.ts')
+  const injectList = /export const inject = \[([\s\S]*?)\]/u.exec(clientEntry)
+  const names = injectList === null ? '' : injectList[1]
+  const hard = /['"]betterSidebar['"]/.test(names)
+  check('client inject does not hard-require betterSidebar',
+    injectList !== null && !hard,
+    injectList === null ? 'inject list missing' : hard ? 'betterSidebar is in inject' : '')
+} catch (error) {
+  check('client inject readable', false, String(error.message || error))
 }
 
 // ---- result ----------------------------------------------------------------
