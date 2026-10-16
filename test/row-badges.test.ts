@@ -160,9 +160,9 @@ test('t6: rowTitleOf ignores the injected badge subtree (self-sustaining loop fi
     querySelectorAll: () => [
       fakeSpan('zcode'),
       fakeSpan('🌐', { badge: true }),
-      fakeSpan('未检测', { badge: true }),
+      fakeSpan('检测中', { badge: true }),
       fakeSpan('重新检测', { badge: true }),
-      fakeSpan('🌐未检测重新检测', { badge: true }),
+      fakeSpan('🌐检测中重新检测', { badge: true }),
     ],
   }
   assert.equal(rowTitleOf(row), 'zcode')
@@ -172,9 +172,9 @@ test('t6: rowTitleOf ignores the injected badge subtree (self-sustaining loop fi
   // Guard: without the badge mark the same extractor output would have
   // withdrawn the badge (the t4→t5 failure mode).
   const unmarked = {
-    querySelectorAll: () => [fakeSpan('zcode'), fakeSpan('🌐未检测重新检测')],
+    querySelectorAll: () => [fakeSpan('zcode'), fakeSpan('🌐检测中重新检测')],
   }
-  assert.equal(rowTitleOf(unmarked), '🌐未检测重新检测')
+  assert.equal(rowTitleOf(unmarked), '🌐检测中重新检测')
   assert.equal(markedRowStillQualifies('c1', rowTitleOf(unmarked), index), false)
 })
 
@@ -212,11 +212,11 @@ test('t15-r2: badgeTextsOf — a language switch re-derives the retry button tex
     host: '10.0.0.1', port: 22, username: 'root', hostKeyKnown: false,
   }
   const zh = badgeTextsOf(view, false, zhBaseline)
-  assert.equal(zh.stateLabel, '未检测')
+  assert.equal(zh.stateLabel, '检测中')
   assert.equal(zh.buttonText, '重新检测')
   assert.equal(zh.buttonTitle, '重新检测并尝试连接')
   const en = badgeTextsOf(view, false, enT)
-  assert.equal(en.stateLabel, 'not detected')
+  assert.equal(en.stateLabel, 'Checking')
   assert.equal(en.buttonText, 'Re-check')
   assert.equal(en.buttonTitle, 'Re-check and try to connect')
   // Compact rows (session children) use the short button text variant.

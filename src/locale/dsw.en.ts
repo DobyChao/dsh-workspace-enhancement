@@ -340,11 +340,12 @@ const en: Record<DswKey, string> = {
 
   /* ------------------------------------------------------------ status.tsx */
   'status.rpc.failed': 'dsw rpc failed',
-  'status.unknown': 'not detected',
-  'status.active': 'connected',
-  'status.offline': 'offline',
-  'status.connecting': 'connecting…',
-  'status.checking': 'checking…',
+  // UX-13: reachability, not a session attachment. Three labels only.
+  'status.unknown': 'Checking',
+  'status.active': 'Reachable',
+  'status.offline': 'Unreachable',
+  'status.connecting': 'Checking',
+  'status.checking': 'Checking',
   'status.retryAction.title': 'Re-check and try to connect',
   'status.retryAction.compact': 'Reconnect',
   'status.retryAction.full': 'Re-check and try to connect',

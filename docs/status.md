@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-14 09:35 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-16 10:55 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.4` |
 | npm 已发布版本 | `0.2.4` |
 | 最新 tag | `v0.2.4` |
-| 分支 / HEAD | `cursor/req-a6-remote-files-f59e` / `ed8465d` |
-| HEAD 提交 | `feat(client): browse remote uploads and artifacts in better-sidebar` (2026-10-14) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `cursor/ux-13-status-probe-1416` / `ab94302` |
+| HEAD 提交 | `feat(client): browse remote uploads and artifacts in better-sidebar (#72)` (2026-10-15) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 70 |
-| 单测用例（静态计数） | 708 |
+| 单测文件 | 72 |
+| 单测用例（静态计数） | 730 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 54 |
@@ -30,8 +30,8 @@
 |---|---|
 | `todo` | 8 |
 | `doing` | 2 |
-| `blocked` | 8 |
-| `done` | 89 |
+| `blocked` | 7 |
+| `done` | 91 |
 | `shipped` | 10 |
 | `dropped` | 16 |
 
@@ -39,7 +39,6 @@
 
 - UPSTREAM-6 — 官方 SSH 运行时定位拍板
 - REQ-A7 — 包改名为远程工作区类名称
-- UX-8 — 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移
 - REQ-I25 — 混合门面未知方法默认转发本地委托
 - INFRA-8 — AgentTeams 标准 profile 注册
 - AUDIT-5 — 分组视图下会话子行拿不到 compact 徽标

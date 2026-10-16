@@ -1,5 +1,7 @@
 # 侧栏工作区行插槽调查（UX-8 归档，2026-09-29，子代理调查）
 
+> 2026-10-16 已执行选项 A（`data-row-key`，无锚回退标题）。选项 B（Session 行迁官方槽）不做。
+
 > 问题：左侧栏「工作区」分组里每个远程工作区行上的连接状态控件位置，最新版（0.2.0-rc.1）有没有
 > 官方客户端 slot？证据：0.2.0-rc.1 全局安装树 runner/ui-workspace bundle、0.1.7-rc.2 对照
 > （npm 拉取临时快照）、`scripts/slot-catalog.mjs --diff`、0.1.5-rc.2 真实 tarball 验证。

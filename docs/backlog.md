@@ -38,7 +38,6 @@
 |---|---|---|---|---|
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 10-08 复核：四包 `next`=`0.2.0-rc.2` 已进 rc，仍拒 win32 宿主、未接 Web、不进默认组合。细化对比（含 A′/B′）见 [ADR-0029](./decisions/ADR-0029-positioning-review.md)，推荐 A′。**待所有者**拍板；拍定即解挡 `REQ-A7` |
 | REQ-A7 | 包改名为远程工作区类名称 | blocked | P2 | 候选 `dsh-remote-workspace`，旧包 `npm deprecate` 指向新包；`sw_` / `dsw` 不动。**挡于** `UPSTREAM-6`（A/A′/C 才改，B 另议）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.1 |
-| UX-8 | 侧栏行徽章：data-row-key 锚 + Session 行官方槽迁移 | blocked | P2 | 2026-09-29 调查（[档案](./notes/ux8-sidebar-slot-survey.md)）：分组行（截图位）三代皆无槽，控件本就是我方 DOM 增辉；Session 行 0.1.7 起 4 槽。机会：A=分组行匹配升 data-row-key（低垂）；B=Session 徽章迁 hover/action 槽（只进联合双家族线）。**待拍 A/B/AB** |
 | REQ-I25 | 混合门面未知方法默认转发本地委托 | blocked | P3 | ADR-0030 选项 B：仍是唯一提供者，只拦带路径 / cwd 的方法，其余默认转发；`sandboxMode` 等 getter 单列。验收：纯本地会话与官方一致，三条矩阵行保持，boot-smoke 过。**挡于 ADR-0030 拍板** |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
 | AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
@@ -49,6 +48,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UX-13 | 连接状态自动探测与可达性文案 | done | P2 | 侧栏与远程会话打开即探测（防抖、60s 缓存、失败退避）。文案为检测中/可连接/不可连接。脚本 [UX-13](./uat/UX-13-8-status.md) |
+| UX-8 | 侧栏行徽章按 data-row-key 对齐 | done | P2 | 分组行按 data-row-key 对齐（无锚回退标题）。Session 行槽迁移不做。脚本 [UX-8](./uat/UX-13-8-status.md) |
 | REQ-I26 | 远程组件覆盖 linux-arm64 | done | P2 | linux-arm64 与 linux-x64 同工件：uname 选包、独立 sha、CI/pack 双 tarball。rg 按架构。Windows 远端仍不做。尾巴：arm64 实机部署 |
 | REQ-I28 | 远程会话上传落到远端工作区 | done | P2 | 回执返回前 SFTP 写入远端 `.dsh-uploads/`，失败则上传失败。产物路径进运行时上下文。[ADR-0032](./decisions/ADR-0032-remote-session-uploads.md)。尾巴：lab 打开产物 |
 | INFRA-24 | 拍板队列与可逆期限 | done | P2 | 队列 [queue](./decisions/queue.md)（推荐、代价、reversible-until）。逾期闸门红。round 只在里程碑/事故写 |

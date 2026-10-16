@@ -2,8 +2,10 @@
  * Connection status UI shared by every machine surface (settings rows, the
  * add-workspace flow sidebar, the DOM row layer): the `/dsw/conn.*` wire
  * contract, a small TTL + in-flight dedupe status center, the `useConnStatus`
- * hook, and the tri-state badge component (◇ unknown / ● active / ● offline)
- * with the "re-check and try to connect" affordance.
+ * hook, and the tri-state badge component (checking / reachable / unreachable)
+ * with the "re-check" affordance. A mounted badge probes on its own (UX-13);
+ * the button is the manual fallback. The wire states stay `unknown` /
+ * `active` / `offline`; the labels must not say the session is attached.
  *
  * The wire contract mirrors the host's ConnectionStatusView (registry.ts);
  * unknown fields are tolerated. No new dependencies.
@@ -16,6 +18,8 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DswKey } from '../locale/index.ts'
 import { lookup } from '../locale/index.ts'
 import type { WireResult } from './index.ts'
+import { createProbeScheduler, systemProbeClock } from './probe-schedule.ts'
+import type { ProbeScheduler } from './probe-schedule.ts'
 import styles from './status.module.css'
 
 /**
@@ -71,6 +75,44 @@ export function asConnStatus(value: unknown): ConnStatusView | null {
   if (typeof value.lastProbeLatencyMs === 'number') view.lastProbeLatencyMs = value.lastProbeLatencyMs
   if (typeof value.message === 'string') view.message = value.message
   return view
+}
+
+/**
+ * A status view synthesized when the wire has no row yet, or the probe
+ * failed before a view came back. `unknown` paints as checking; `offline`
+ * paints as unreachable.
+ */
+export function connStatusFallback(id: string, state: ConnState): ConnStatusView {
+  return {
+    id,
+    state,
+    connected: false,
+    label: '',
+    host: '',
+    port: 22,
+    username: '',
+    hostKeyKnown: false,
+  }
+}
+
+/** One live probe (`auto`) or reconnect (`manual`). A null wire result is unreachable. */
+async function probedView(center: StatusCenter, id: string, mode: 'auto' | 'manual'): Promise<ConnStatusView> {
+  const view = mode === 'manual' ? await center.reconnect(id) : await center.probe(id)
+  return view ?? connStatusFallback(id, 'offline')
+}
+
+let sharedProbeScheduler: ProbeScheduler<ConnStatusView> | undefined
+
+/**
+ * The process-wide reachability scheduler. Sidebar rows and the session
+ * header share it, so opening both does not probe the same machine twice.
+ */
+export function connectionProbeScheduler(): ProbeScheduler<ConnStatusView> {
+  sharedProbeScheduler ??= createProbeScheduler(
+    systemProbeClock(),
+    view => view.state === 'active' ? 'reachable' : 'unreachable',
+  )
+  return sharedProbeScheduler
 }
 
 /** Unwrap a wire result into its value (throws the business message). */
@@ -172,7 +214,14 @@ export function getStatusCenter(rpc: RpcCall, getT: () => TranslateNS<'dsw'> = (
   return sharedCenter
 }
 
-/** Bind one entry's status to a component (auto-fetch + refresh actions). */
+/**
+ * Bind one entry's status to a component.
+ *
+ * Mounting watches the shared probe scheduler (UX-13): the sidebar machine
+ * list and a remote session header probe on their own, with debounce, a TTL
+ * cache, and backoff. `reconnect` is the manual re-check (dispose + probe).
+ * `refresh` forces a probe without disposing the live chain.
+ */
 export function useConnStatus(center: StatusCenter | null, id: string | undefined): {
   view: ConnStatusView | null
   busy: boolean
@@ -184,9 +233,15 @@ export function useConnStatus(center: StatusCenter | null, id: string | undefine
   useEffect(() => {
     if (center === null || id === undefined) return
     let alive = true
-    setView(center.peek(id))
-    void center.get(id).then(found => { if (alive) setView(found) })
-    return () => { alive = false }
+    const stop = connectionProbeScheduler().watch(
+      id,
+      () => probedView(center, id, 'auto'),
+      found => { if (alive) setView(found) },
+    )
+    return () => {
+      alive = false
+      stop()
+    }
   }, [center, id])
   const run = (fn: () => Promise<ConnStatusView | null>): (() => Promise<ConnStatusView | null>) => {
     return async () => {
@@ -207,8 +262,12 @@ export function useConnStatus(center: StatusCenter | null, id: string | undefine
   return useMemo(() => ({
     view,
     busy,
-    refresh: run(() => center !== null && id !== undefined ? center.get(id) : Promise.resolve(null)),
-    reconnect: run(() => center !== null && id !== undefined ? center.reconnect(id) : Promise.resolve(null)),
+    refresh: run(() => center !== null && id !== undefined
+      ? connectionProbeScheduler().recheck(id, () => probedView(center, id, 'auto'))
+      : Promise.resolve(null)),
+    reconnect: run(() => center !== null && id !== undefined
+      ? connectionProbeScheduler().recheck(id, () => probedView(center, id, 'manual'))
+      : Promise.resolve(null)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [center, id, busy, view])
 }

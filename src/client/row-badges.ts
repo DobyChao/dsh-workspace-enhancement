@@ -1,32 +1,36 @@
 /**
- * Sidebar row enhancement — DOM compatibility layer (C3).
+ * Sidebar row enhancement — DOM compatibility layer (C3, UX-8, UX-13).
  *
- * The shipped workspace browser (ui-workspace's `sidebar.workspaces`
- * occupant) exposes no per-row slot, so the tri-state remote badge is
- * injected into the rendered list DOM instead: a MutationObserver watches the
- * document for the session tree, remote entries are matched by workspace /
- * session title against the workspace registry projection (paths under the
- * `dsw-routes` / `dsh-ssh-routes` placeholder roots), and each matched row is
- * decorated with a 🌐 + tri-state badge + a mini "re-check and try to
- * connect" button (unknown/offline only).
+ * Grouped workspace rows have no per-row slot on any supported family, so the
+ * reachability badge is still injected into the rendered list DOM. Session
+ * rows gained four official slots in 0.1.7; this layer does not move onto
+ * them (UX-8 option B). A MutationObserver watches the session tree. On
+ * 0.1.7+ a row is matched by `data-row-key` (`workspace:<id>` / `session:<id>`);
+ * 0.1.5 has no such attribute and falls back to the title index
+ * (`row-match.ts`). Each matched row is decorated with a 🌐 + tri-state badge
+ * + a "re-check" button (hidden once the machine is reachable).
+ *
+ * Showing the list probes automatically (UX-13): debounce, a TTL cache for a
+ * reachable result, and backoff after a failure. The button stays as a manual
+ * reconnect. The labels are Checking / Reachable / Unreachable — a reachability
+ * result is not "connected" (that word is the session attachment).
  *
  * Degradation contract (all deliberate, no exceptions):
  * - Missing/unexpected DOM shapes → the scan no-ops (latch after repeated
  *   failures; upstream re-renders are picked up by the observer).
- * - Unknown ids / RPC failures → badge stays on `unknown` with no button
- *   noise; the row is never duplicated (the single status-marker idempotence)
- *   and our insertions cannot loop (a re-scan after our own mutation inserts
- *   nothing).
- * - Flat-mode sessions are matched by title against the session projection
- *   (ambiguous titles are skipped); grouped sessions inherit their group's
- *   connection.
- * - C3 same-title guard: a remote title that ALSO belongs to a local
- *   workspace / session (path or cwd without a route placeholder root) is
- *   never marked — a missing badge is the accepted cost, a mis-mark is not.
- *   Remote↔remote ambiguity keeps the skip. Rebuild is 先清后标: badges whose
- *   row no longer qualifies are withdrawn before the next injection pass, so
- *   no stale badge can survive a same-title local workspace appearing, a
- *   remote workspace/session deletion, or a title rename.
+ * - Unknown ids / RPC failures → the badge shows unreachable and the probe
+ *   scheduler backs off; the row is never duplicated (the single status-marker
+ *   idempotence) and our insertions cannot loop (a re-scan after our own
+ *   mutation inserts nothing).
+ * - Flat-mode sessions match `session:<id>` when the row has it, otherwise
+ *   the title index (ambiguous titles are skipped). Grouped session children
+ *   with a known session key use that session; otherwise they inherit the group.
+ * - C3 same-title guard still applies to the title fallback: a remote title
+ *   that ALSO belongs to a local workspace / session is not marked from the
+ *   title. A `data-row-key` that names the remote workspace still badges that
+ *   row, and a key that names the local one badges nothing. Remote↔remote
+ *   ambiguity keeps the skip. Rebuild is 先清后标: badges whose row no longer
+ *   qualifies are withdrawn before the next injection pass.
  * - t6 (no self-sustaining loop): `rowTitleOf` excludes the badge subtree
  *   (badge-root `data-dsw-badge` mark) and the MutationObserver filters our
  *   own badge-paint mutations (target inside the badge subtree), so a
@@ -45,8 +49,28 @@ import type { WireResult } from './index.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { routeIdOf } from './route-id.ts'
 import { CONN_STATE_COLOR } from './conn-state.ts'
-import { CONN_STATE_LABEL_KEY, zhBaseline } from './status.tsx'
+import { CONN_STATE_LABEL_KEY, asConnStatus, connectionProbeScheduler, connStatusFallback, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
+import {
+  ROW_KEY_ATTR,
+  connIdForGroupedSession,
+  connIdForSessionRow,
+  connIdForWorkspaceRow,
+} from './row-match.ts'
+import type { RemoteSessionRow, RemoteWorkspaceRow, RowAnchor } from './row-match.ts'
+
+export type { RemoteSessionRow, RemoteWorkspaceRow } from './row-match.ts'
+export {
+  ROW_KEY_ATTR,
+  connIdForGroupedSession,
+  connIdForSessionRow,
+  connIdForWorkspaceRow,
+  markedRowStillQualifies,
+  parseRowKey,
+  remoteSessionIndex,
+  remoteWorkspaceIndex,
+  workspaceIdOf,
+} from './row-match.ts'
 
 // The route-placeholder rule now lives in its own `.ts` module (t4): the header
 // remote-status entry needs it too, and the sandbox test runner cannot load
@@ -96,18 +120,6 @@ export function markRowStatus(row: StatusDataset, connId: string): boolean {
 /** Clear the row's status marker (dispose path). */
 export function clearRowStatus(row: StatusDataset): void {
   delete row.dataset[ROW_STATUS_KEY]
-}
-
-/** One workspace registry row projection (title + canonical path). */
-export interface RemoteWorkspaceRow {
-  title: string
-  path: string
-}
-
-/** One session list projection row (display title + cwd, when recorded). */
-export interface RemoteSessionRow {
-  title: string
-  cwd?: string
 }
 
 /** The data feeds the badge layer reads (plain getters; the caller drives refresh). */
@@ -173,102 +185,9 @@ export function badgeTextsOf(view: ConnStatusView, compact: boolean, t: Translat
   }
 }
 
-const STATUS_FRESH_MS = 5_000
-const STATUS_POLL_MS = 30_000
 const SCAN_DELAY_MS = 120
 const SCAN_MIN_GAP_MS = 300
 const MAX_CONSECUTIVE_FAILURES = 3
-
-/**
- * C3: grouped-view index — remote workspace title → connection id.
- *
- * A workspace is remote when its path carries a route placeholder root
- * (`dsw-routes` / legacy `dsh-ssh-routes`); every OTHER title (a local
- * workspace, or an unclassifiable path) forms the local-title set, and a
- * remote title that also exists there is DROPPED before any marking: a local
- * workspace named like a remote one must never be decorated as remote.
- * Remote↔remote ambiguity (two connections, one title) keeps the existing
- * skip — a missing badge is the accepted cost, a mis-mark is not.
- * @param workspaces - the full workspace projection (local + remote rows).
- * @returns title → connId (only unambiguous, non-colliding remote titles).
- */
-export function remoteWorkspaceIndex(
-  workspaces: readonly RemoteWorkspaceRow[],
-): Map<string, string> {
-  const localTitles = new Set<string>()
-  const byTitle = new Map<string, string[]>()
-  for (const workspace of workspaces) {
-    if (workspace.title === '') continue
-    const connId = routeIdOf(workspace.path)
-    if (connId === undefined) {
-      localTitles.add(workspace.title)
-      continue
-    }
-    byTitle.set(workspace.title, [...(byTitle.get(workspace.title) ?? []), connId])
-  }
-  const index = new Map<string, string>()
-  for (const [title, ids] of byTitle) {
-    if (localTitles.has(title)) continue // 本地↔远程同名：跳过（C3）
-    const unique = ids.filter((id, index) => ids.indexOf(id) === index)
-    if (unique.length === 1 && unique[0] !== undefined) index.set(title, unique[0])
-  }
-  return index
-}
-
-/**
- * C3: flat-view index — remote session title → connection id.
- *
- * Sessions are remote when their recorded cwd carries a route placeholder
- * root; every other session (local cwd, or no cwd recorded — unjudgeable)
- * feeds the local-title set, and a remote title colliding with it is dropped:
- * a local/unknown session named like a remote one must never be marked in
- * flat mode. Remote↔remote ambiguity stays skipped.
- * @param sessions - the full session projection.
- * @returns title → connId (only unambiguous, non-colliding remote titles).
- */
-export function remoteSessionIndex(
-  sessions: readonly RemoteSessionRow[],
-): Map<string, string> {
-  const localTitles = new Set<string>()
-  const byTitle = new Map<string, string[]>()
-  for (const session of sessions) {
-    if (session.title === '') continue
-    const connId = session.cwd !== undefined ? routeIdOf(session.cwd) : undefined
-    if (connId === undefined) {
-      localTitles.add(session.title)
-      continue
-    }
-    byTitle.set(session.title, [...(byTitle.get(session.title) ?? []), connId])
-  }
-  const index = new Map<string, string>()
-  for (const [title, ids] of byTitle) {
-    if (localTitles.has(title)) continue // 本地↔远程同名：跳过（C3）
-    const unique = ids.filter((id, index) => ids.indexOf(id) === index)
-    if (unique.length === 1 && unique[0] !== undefined) index.set(title, unique[0])
-  }
-  return index
-}
-
-/**
- * C3 撤回: whether one already-marked row still qualifies after a data change.
- * A marked row keeps its badge only when its CURRENT title still maps to the
- * connId it was marked for under the NEW index; everything else — a
- * same-title LOCAL workspace/session that appeared later, a remote
- * workspace/session deleted, a title renamed to something unindexed (or to
- * another connection), or an unreadable title — is withdrawn before the next
- * injection pass, so「重建=先清后标」and no injected badge can linger.
- * @param connId - the connId the row was marked for (rowStatusOf).
- * @param title - the row's current display title (null when unreadable).
- * @param index - the CURRENT (rebuilt) title → connId index of the row's view.
- * @returns whether the badge may stay.
- */
-export function markedRowStillQualifies(
-  connId: string,
-  title: string | null,
-  index: Map<string, string>,
-): boolean {
-  return title !== null && index.get(title) === connId
-}
 
 /**
  * `data-dsw-badge`: the ONE attribute marking OUR injected badge ROOT. The
@@ -362,51 +281,52 @@ export function installRowBadges(
   // locale on every call, so a language switch needs no re-binding here.
   const t = locale !== undefined ? locale.bind('dsw') : zhBaseline
 
-  /** title → connId; ambiguous titles (two connections, one name) are dropped. */
-  let remoteByTitle = new Map<string, string>()
-  let remoteSessionTitles = new Map<string, string>()
-  const statuses = new Map<string, { view: ConnStatusView; at: number; pending: Promise<ConnStatusView> | null }>()
+  let workspaces: readonly RemoteWorkspaceRow[] = []
+  let sessions: readonly RemoteSessionRow[] = []
+  const statuses = new Map<string, ConnStatusView>()
   const marked = new Map<HTMLElement, HTMLElement>()
+  const releases = new Map<HTMLElement, () => void>()
   let consecutiveFailures = 0
   let disposed = false
   let pendingScan: ReturnType<typeof setTimeout> | null = null
   let lastScanAt = 0
+  const scheduler = connectionProbeScheduler()
 
   const rebuildRemote = (): void => {
-    // C3: both indexes drop titles that also belong to a LOCAL workspace /
-    // session — an ambiguous title never mis-marks (see the index builders).
-    remoteByTitle = remoteWorkspaceIndex(sources.workspaces())
-    remoteSessionTitles = remoteSessionIndex(sources.sessions())
+    workspaces = sources.workspaces()
+    sessions = sources.sessions()
   }
 
-  const fetchStatus = async (connId: string, force: boolean): Promise<ConnStatusView> => {
-    const record = statuses.get(connId)
-    if (!force && record !== undefined && Date.now() - record.at < STATUS_FRESH_MS) return record.view
-    const pendingInFlight = record?.pending
-    if (pendingInFlight !== undefined && pendingInFlight !== null) return pendingInFlight
-    const pending = (async () => {
-      try {
-        const result = await rpc('conn.status', { id: connId })
-        if (!result.ok) throw new Error(result.error.message)
-        const view = result.value as unknown
-        if (typeof view !== 'object' || view === null || !('id' in view)) {
-          statuses.delete(connId)
-          return unknownView(connId)
-        }
-        const parsed = view as ConnStatusView
-        statuses.set(connId, { view: parsed, at: Date.now(), pending: null })
-        return parsed
-      } catch {
-        statuses.delete(connId)
-        return unknownView(connId)
-      }
-    })()
-    statuses.set(connId, {
-      view: record?.view ?? unknownView(connId),
-      at: record?.at ?? 0,
-      pending,
-    })
-    return pending
+  const anchorOf = (row: HTMLElement): RowAnchor => ({
+    rowKey: row.getAttribute(ROW_KEY_ATTR),
+    title: rowTitleOf(row),
+  })
+
+  const releaseRow = (row: HTMLElement): void => {
+    const release = releases.get(row)
+    if (release !== undefined) release()
+    releases.delete(row)
+  }
+
+  /**
+   * One reachability probe. A transport or parse failure is an unreachable
+   * view, so the badge leaves the checking label and the scheduler backs off.
+   */
+  const probeConn = async (connId: string, mode: 'auto' | 'manual'): Promise<ConnStatusView> => {
+    const endpoint = mode === 'manual' ? 'conn.reconnect' : 'conn.probe'
+    try {
+      const result = await rpc(endpoint, { id: connId })
+      if (!result.ok) return connStatusFallback(connId, 'offline')
+      return asConnStatus(result.value) ?? connStatusFallback(connId, 'offline')
+    } catch {
+      return connStatusFallback(connId, 'offline')
+    }
+  }
+
+  const remember = (connId: string, view: ConnStatusView): void => {
+    if (disposed) return
+    statuses.set(connId, view)
+    paintConn(connId)
   }
 
   const paintBadge = (badge: HTMLElement, view: ConnStatusView): void => {
@@ -435,12 +355,12 @@ export function installRowBadges(
   }
 
   const paintConn = (connId: string): void => {
-    const record = statuses.get(connId)
-    if (record === undefined) return
+    const view = statuses.get(connId)
+    if (view === undefined) return
     for (const [row, badge] of marked) {
       // Single attribute contract (F0): rowStatusOf is the paintConn key and
       // the idempotence guard — never a second marker.
-      if (rowStatusOf(row) === connId) paintBadge(badge, record.view)
+      if (rowStatusOf(row) === connId) paintBadge(badge, view)
     }
   }
 
@@ -454,16 +374,8 @@ export function installRowBadges(
     for (const [row, badge] of marked) {
       const connId = rowStatusOf(row)
       if (connId === undefined) continue
-      paintBadge(badge, statuses.get(connId)?.view ?? unknownView(connId))
+      paintBadge(badge, statuses.get(connId) ?? unknownView(connId))
     }
-  }
-
-  const refreshConn = async (connId: string, force: boolean): Promise<void> => {
-    const view = await fetchStatus(connId, force)
-    if (disposed) return
-    const record = statuses.get(connId)
-    if (record !== undefined) record.view = view
-    paintConn(connId)
   }
 
   const buildBadge = (connId: string, compact: boolean): HTMLElement => {
@@ -499,6 +411,9 @@ export function installRowBadges(
     // Single status-marker contract (F0): markRowStatus both checks and sets
     // the ONE attribute paintConn reads — never a second marker.
     if (!markRowStatus(row, connId)) return
+    const previous = marked.get(row)
+    if (previous !== undefined) previous.remove()
+    releaseRow(row)
     const badge = buildBadge(connId, compact)
     // Append at the row END: the badge stays outside the React-managed child
     // list (the row is keyed by session id and never re-created while listed,
@@ -507,7 +422,10 @@ export function installRowBadges(
     // [slot…, title, time, rowActions, badge].
     row.appendChild(badge)
     marked.set(row, badge)
-    void refreshConn(connId, false)
+    // UX-13: rendering the row is the automatic probe. The scheduler debounces,
+    // caches a reachable result, and backs off after a failure.
+    const release = scheduler.watch(connId, () => probeConn(connId, 'auto'), view => remember(connId, view))
+    releases.set(row, release)
   }
 
   /**
@@ -525,6 +443,7 @@ export function installRowBadges(
       if (connId === undefined) {
         // Orphaned badge (marker cleared elsewhere): remove and forget.
         badge.remove()
+        releaseRow(row)
         marked.delete(row)
         continue
       }
@@ -532,28 +451,31 @@ export function installRowBadges(
       if (tree === null) continue // detached rows are pruned by the caller
       // Same view detection as scan(): grouped = the tree carries group rows.
       const grouped = Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"][aria-expanded]')).length > 0
-      const title = rowTitleOf(row)
+      const anchor = anchorOf(row)
       let qualify = false
       if (grouped) {
         if (row.getAttribute('aria-expanded') !== null) {
-          qualify = markedRowStillQualifies(connId, title, remoteByTitle)
+          qualify = connIdForWorkspaceRow(anchor, workspaces) === connId
         } else {
-          // Grouped session child: inherits its section's marked group row.
+          // Grouped session child: a known session key wins; otherwise the
+          // section's group row, and only while that group still qualifies.
           const section = row.parentElement
           const group = section === null ? undefined : Array.from(section.children).find<HTMLElement>((child): child is HTMLElement =>
             isElement(child)
             && child !== row
-            && rowStatusOf(child) === connId
             && child.getAttribute('role') === 'treeitem'
             && child.getAttribute('aria-expanded') !== null)
-          qualify = group !== undefined && markedRowStillQualifies(connId, rowTitleOf(group), remoteByTitle)
+          const groupConn = group === undefined ? undefined : connIdForWorkspaceRow(anchorOf(group), workspaces)
+          const inherited = groupConn === connId ? connId : undefined
+          qualify = connIdForGroupedSession(anchor, sessions, inherited) === connId
         }
       } else {
-        qualify = markedRowStillQualifies(connId, title, remoteSessionTitles)
+        qualify = connIdForSessionRow(anchor, sessions) === connId
       }
       if (qualify) continue
       badge.remove()
       clearRowStatus(row)
+      releaseRow(row)
       marked.delete(row)
     }
   }
@@ -565,6 +487,7 @@ export function installRowBadges(
       for (const [row, badge] of marked) {
         if (!row.isConnected) {
           badge.remove()
+          releaseRow(row)
           marked.delete(row)
         }
       }
@@ -574,11 +497,11 @@ export function installRowBadges(
       for (const tree of trees) {
         const groupRows = Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"][aria-expanded]'))
         if (groupRows.length > 0) {
-          // Grouped view: workspace rows by title; their section's session
-          // rows inherit the connection (no title parsing needed there).
+          // Grouped view: workspace rows by data-row-key (title fallback on
+          // 0.1.5). Session children use their own session key when the feed
+          // knows it, and otherwise inherit the group connection.
           for (const row of groupRows) {
-            const title = rowTitleOf(row)
-            const connId = title !== null ? remoteByTitle.get(title) : undefined
+            const connId = connIdForWorkspaceRow(anchorOf(row), workspaces)
             if (connId === undefined) continue
             markRow(row, connId, false)
             const section = row.parentElement
@@ -586,16 +509,16 @@ export function installRowBadges(
             for (const child of Array.from(section.children)) {
               if (child === row || !isElement(child)) continue
               if (child.getAttribute('role') !== 'treeitem') continue
-              if (rowStatusOf(child) === connId) continue
-              markRow(child, connId, true)
+              const childConn = connIdForGroupedSession(anchorOf(child), sessions, connId)
+              if (childConn === undefined) continue
+              if (rowStatusOf(child) === childConn) continue
+              markRow(child, childConn, true)
             }
           }
-        } else if (remoteSessionTitles.size > 0) {
-          // Flat list / search: session rows matched by display title.
+        } else {
+          // Flat list / search: session key, then title.
           for (const row of Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]'))) {
-            const title = rowTitleOf(row)
-            if (title === null) continue
-            const connId = remoteSessionTitles.get(title)
+            const connId = connIdForSessionRow(anchorOf(row), sessions)
             if (connId === undefined) continue
             markRow(row, connId, false)
           }
@@ -637,20 +560,12 @@ export function installRowBadges(
     event.preventDefault()
     event.stopPropagation()
     const label = badge.querySelector<HTMLElement>('[data-dsw-label]')
-    if (label !== null) label.textContent = t('status.connecting')
-    // The button semantics are reconnect (dispose + rebuild + probe), not a
-    // mere status read; the fresh view lands in the status map on resolution.
-    void rpc('conn.reconnect', { id: connId })
-      .then(result => {
-        if (!result.ok) throw new Error(result.error.message)
-        const view = result.value as unknown
-        if (typeof view === 'object' && view !== null && 'id' in view) {
-          const parsed = view as ConnStatusView
-          statuses.set(connId, { view: parsed, at: Date.now(), pending: null })
-          paintConn(connId)
-        }
-      })
-      .catch(() => { void refreshConn(connId, true).catch(() => undefined) })
+    if (label !== null) label.textContent = t('status.checking')
+    // Manual fallback: dispose + rebuild + probe, ignoring TTL and backoff.
+    // Watchers paint the settled view; this then covers a click with no watcher.
+    void scheduler.recheck(connId, () => probeConn(connId, 'manual'))
+      .then(view => remember(connId, view))
+      .catch(() => remember(connId, connStatusFallback(connId, 'offline')))
   }
 
   // t6: skip OUR OWN badge paint mutations (target inside a `data-dsw-badge`
@@ -668,28 +583,17 @@ export function installRowBadges(
   const rootTarget = document.body ?? document.documentElement
   observer.observe(rootTarget, { childList: true, subtree: true })
   document.addEventListener('click', onClick, true)
-  const pollTimer = setInterval(() => {
-    if (marked.size === 0 || disposed) return
-    const connIds = new Set<string>()
-    for (const badge of marked.values()) {
-      const connId = badge.dataset.dswConnId
-      if (connId !== undefined) connIds.add(connId)
-    }
-    for (const connId of connIds) {
-      void refreshConn(connId, true).catch(() => undefined)
-    }
-  }, STATUS_POLL_MS)
   onChange()
 
   return () => {
     disposed = true
     observer.disconnect()
     document.removeEventListener('click', onClick, true)
-    clearInterval(pollTimer)
     if (pendingScan !== null) clearTimeout(pendingScan)
     for (const [row, badge] of marked) {
       badge.remove()
       clearRowStatus(row)
+      releaseRow(row)
     }
     marked.clear()
     statuses.clear()
