@@ -121,6 +121,8 @@ const en: Record<DswKey, string> = {
   'rpc.sessionRoute': 'session.route failed',
   'rpc.connectionsList': 'connections.list failed',
   'rpc.configHosts': 'config.hosts failed',
+  'rpc.configProbe.unknown': 'Not a Host alias in ~/.ssh/config',
+  'rpc.configProbe.noUser': 'This Host has no username, so it cannot be checked',
   'rpc.pickNative': 'local.pickNative failed',
   'rpc.connectionsResolve': 'connections.resolve failed',
   'rpc.connectionsAdd': 'connections.add failed',

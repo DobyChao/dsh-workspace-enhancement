@@ -8,7 +8,7 @@
  * 0.1.7+ a row is matched by `data-row-key` (`workspace:<id>` / `session:<id>`);
  * 0.1.5 has no such attribute and falls back to the title index
  * (`row-match.ts`). Each matched row is decorated with a 🌐 + tri-state badge
- * + a "re-check" button (hidden once the machine is reachable).
+ * + a "re-check" button that stays visible in every reachability state.
  *
  * Showing the list probes automatically (UX-13): debounce, a TTL cache for a
  * reachable result, and backoff after a failure. The button stays as a manual
@@ -49,6 +49,7 @@ import type { WireResult } from './index.ts'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { routeIdOf } from './route-id.ts'
 import { CONN_STATE_COLOR } from './conn-state.ts'
+import { recheckStaysVisible } from './recheck.ts'
 import { CONN_STATE_LABEL_KEY, asConnStatus, connectionProbeScheduler, connStatusFallback, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
 import {
@@ -347,7 +348,7 @@ export function installRowBadges(
       label.textContent = texts.stateLabel
     }
     if (button !== null) {
-      const display = view.state === 'active' ? 'none' : ''
+      const display = recheckStaysVisible(view.state) ? '' : 'none'
       if (button.style.display !== display) button.style.display = display
       if (button.textContent !== texts.buttonText) button.textContent = texts.buttonText
       if (button.title !== texts.buttonTitle) button.title = texts.buttonTitle

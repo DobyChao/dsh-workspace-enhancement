@@ -33,6 +33,7 @@ import type { JumpConfig } from './runtime.ts'
 import { normalizeRemoteApproval } from './remote-approval-gate.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import { hostLocaleOf } from './locale/host.ts'
+import { configProbeId } from './config-probe.ts'
 import type { TranslateFn } from './locale/index.ts'
 
 /** Registry plugin config. */
@@ -59,6 +60,12 @@ export interface RegistryConfig {
    * network call. Zero disables the cache. Defaults to 5000.
    */
   statusTtlMs?: number
+  /**
+   * Path of the OpenSSH client config `listConfigHosts` / `probeConfigAlias`
+   * read. Defaults to `~/.ssh/config`. Tests point this at a temp file; the
+   * product path stays the user config.
+   */
+  sshConfigPath?: string
   /**
    * Default-machine fallback fields (the plugin row's cordis.yml `host` etc.):
    * used as the active machine while machines.json is empty.
@@ -696,7 +703,7 @@ export class SshRegistry extends Service {
     strictHostKeyChecking?: boolean
     knownHosts?: string[]
   }
-  private readonly sshConfigPath = join(homedir(), '.ssh', 'config')
+  private readonly sshConfigPath: string
   private readonly specs = new Map<string, SshConnectionSpec>()
   private readonly live = new Map<string, SshConnection>()
   private readonly probeCache = new Map<string, { at: number; view: ConnectionStatusView; specRef: SshConnectionSpec }>()
@@ -715,6 +722,7 @@ export class SshRegistry extends Service {
     this.secretsDir = config.secretsDir ?? defaultSecretsDir()
     this.defaultHostKeyMode = config.hostKeyMode === 'verify' || config.hostKeyMode === 'off' ? config.hostKeyMode : 'accept-new'
     this.statusTtlMs = config.statusTtlMs ?? DEFAULT_STATUS_TTL_MS
+    this.sshConfigPath = config.sshConfigPath ?? join(homedir(), '.ssh', 'config')
     this.configDefault = {
       host: config.host ?? '',
       port: config.port ?? 22,
@@ -1306,6 +1314,93 @@ export class SshRegistry extends Service {
     const connection = this.get(id)
     if (connection === undefined) throw new Error(`dsw: ${this.t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`) // unreachable after requireSpec
     return this.probeLive(id, spec, connection, signal)
+  }
+
+  /**
+   * Reachability of one exact `~/.ssh/config` Host alias, without saving a
+   * machine. The connection is built, probed (`echo ok`), and disposed. An
+   * alias the sidebar would not list, or a block with no user, is offline
+   * and does not open a socket. The view id is {@link configProbeId}.
+   */
+  async probeConfigAlias(alias: string, signal?: AbortSignal): Promise<ConnectionStatusView> {
+    const trimmed = alias.trim()
+    const id = configProbeId(trimmed)
+    const listed = this.listConfigHosts().find(row => row.alias.toLowerCase() === trimmed.toLowerCase())
+    if (listed === undefined) {
+      return this.configProbeView(id, trimmed, '', 22, '', 'offline', this.t('rpc.configProbe.unknown'))
+    }
+    const resolved = this.resolveSshConfig(listed.alias)
+    if (resolved.host.trim() === '' || resolved.username.trim() === '') {
+      return this.configProbeView(
+        id,
+        listed.alias,
+        resolved.host,
+        resolved.port,
+        resolved.username,
+        'offline',
+        this.t('rpc.configProbe.noUser'),
+      )
+    }
+    const spec: SshConnectionSpec = {
+      id,
+      label: listed.alias,
+      host: resolved.host,
+      port: resolved.port,
+      username: resolved.username,
+      ...(resolved.privateKeyPaths[0] !== undefined && resolved.privateKeyPaths[0] !== ''
+        ? { privateKeyPath: resolved.privateKeyPaths[0] }
+        : {}),
+      ...(resolved.jump.length > 0
+        ? {
+          jump: resolved.jump.map(hop => ({
+            host: hop.host,
+            port: hop.port,
+            username: hop.username,
+            ...(hop.privateKeyPath !== undefined && hop.privateKeyPath !== '' ? { privateKey: hop.privateKeyPath } : {}),
+            ...(hop.agent !== undefined && hop.agent !== '' ? { agent: hop.agent } : {}),
+          })),
+        }
+        : {}),
+    }
+    const connection = this.fabricateConnection(spec)
+    try {
+      const probeSignal = signal === undefined
+        ? AbortSignal.timeout(PROBE_TIMEOUT_MS)
+        : AbortSignal.any([signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)])
+      const outcome = await connection.exec('echo ok', { signal: probeSignal })
+      if (outcome.exitCode !== 0) {
+        throw new Error((outcome.stderr || outcome.stdout || `exit ${String(outcome.exitCode)}`).trim())
+      }
+      return this.configProbeView(id, listed.alias, resolved.host, resolved.port, resolved.username, 'active')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return this.configProbeView(id, listed.alias, resolved.host, resolved.port, resolved.username, 'offline', message)
+    } finally {
+      connection.dispose()
+    }
+  }
+
+  /** Secret-free view for an ssh-config probe. Never a live chain. */
+  private configProbeView(
+    id: string,
+    alias: string,
+    host: string,
+    port: number,
+    username: string,
+    state: 'active' | 'offline',
+    message?: string,
+  ): ConnectionStatusView {
+    return {
+      id,
+      state,
+      connected: false,
+      label: alias,
+      host,
+      port,
+      username,
+      hostKeyKnown: host !== '' && this.hostKeyStore.get(host, port) !== undefined,
+      ...(message !== undefined && message !== '' ? { message } : {}),
+    }
   }
 
   /**

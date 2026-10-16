@@ -20,6 +20,7 @@ import { lookup } from '../locale/index.ts'
 import type { WireResult } from './index.ts'
 import { createProbeScheduler, systemProbeClock } from './probe-schedule.ts'
 import type { ProbeScheduler } from './probe-schedule.ts'
+import { recheckStaysVisible } from './recheck.ts'
 import styles from './status.module.css'
 
 /**
@@ -288,8 +289,8 @@ export const CONN_STATE_LABEL_KEY: Record<ConnState, DswKey> = {
 /** Dot colors live in `conn-state.ts` (UX-4: re-exported above). */
 
 /**
- * The tri-state badge: colored dot + label, and (unless `compact`) the
- * "re-check and try to connect" button shown for unknown/offline entries.
+ * The tri-state badge: colored dot + label, and the re-check button. The
+ * button stays in every state (checking, reachable, unreachable).
  * Styling lives in `status.module.css` and rides the host's semantic state
  * tokens, so a machine here reads the same green/red as a configured provider
  * does in the host's own settings sections.
@@ -320,9 +321,10 @@ export function ConnStatusBadge({
         title={view?.message !== undefined && view.message !== '' ? view.message : t(CONN_STATE_LABEL_KEY[state])}
       />
       <span className={busy ? `${styles.label} ${styles.labelBusy}` : styles.label}>{label}</span>
-      {state !== 'active' && (
+      {recheckStaysVisible(state) && (
         <button
           type="button"
+          data-dsw-action="reconnect"
           title={actionTitle}
           disabled={busy}
           className={styles.retry}

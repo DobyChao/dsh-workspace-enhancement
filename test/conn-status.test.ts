@@ -8,11 +8,12 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { configProbeId } from '../src/config-probe.ts'
 import { SshRegistry, deriveConnectionState } from '../src/registry.ts'
 import type { ConnectionStatusView, ProbedConnection, RegistryConfig } from '../src/registry.ts'
 import { SshSession } from '../src/ssh-core.ts'
@@ -205,4 +206,67 @@ test('UX-4: CONN_STATE_COLOR rides the host semantic tokens — no hex left', as
     assert.match(value, /^var\(--dsw-alias-/, `every state must be a host token, got ${value}`)
     assert.doesNotMatch(value, /#[0-9a-fA-F]{3,8}/, 'no raw hex may return')
   }
+})
+
+test('UX-13: config.probe reaches an ssh-config alias without saving a machine', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsw-config-probe-'))
+  const sshConfig = join(home, 'ssh-config')
+  writeFileSync(sshConfig, [
+    'Host c1',
+    '  HostName 10.0.0.8',
+    '  User dev',
+    'Host c2',
+    '  HostName 10.0.0.9',
+    '',
+  ].join('\n'))
+  const seen: string[] = []
+  let disposed = 0
+  const registry = new TestRegistry(new Context(), {
+    ...baseConfig(home),
+    sshConfigPath: sshConfig,
+  }, spec => {
+    seen.push(`${spec.id}|${spec.host}|${spec.username}`)
+    return fakeConnection({
+      connected: true,
+      onDispose: () => { disposed += 1 },
+    }).connection
+  })
+  const reached = await registry.probeConfigAlias('c1')
+  assert.equal(reached.id, configProbeId('c1'))
+  assert.equal(reached.state, 'active')
+  assert.equal(reached.connected, false)
+  assert.equal(reached.label, 'c1')
+  assert.equal(reached.host, '10.0.0.8')
+  assert.deepEqual(seen, ['config:c1|10.0.0.8|dev'])
+  assert.equal(disposed, 1)
+  assert.equal(registry.statusOf('config:c1'), undefined)
+  assert.equal(registry.list().length, 0)
+  assert.equal(existsSync(join(home, 'remote-workspaces', 'machines.json')), false)
+  const missingUser = await registry.probeConfigAlias('c2')
+  assert.equal(missingUser.state, 'offline')
+  assert.equal(seen.length, 1)
+  const unknown = await registry.probeConfigAlias('nope')
+  assert.equal(unknown.state, 'offline')
+  assert.equal(unknown.id, configProbeId('nope'))
+  assert.equal(seen.length, 1)
+})
+
+test('UX-13: a failing ssh-config probe is unreachable and still disposed', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsw-config-probe-fail-'))
+  const sshConfig = join(home, 'ssh-config')
+  writeFileSync(sshConfig, 'Host c1\n  HostName 10.0.0.8\n  User dev\n')
+  let disposed = false
+  const registry = new TestRegistry(new Context(), {
+    ...baseConfig(home),
+    sshConfigPath: sshConfig,
+  }, () => fakeConnection({
+    exec: () => Promise.reject(new Error('ssh: handshake failed')),
+    onDispose: () => { disposed = true },
+  }).connection)
+  const viewed = await registry.probeConfigAlias('C1')
+  assert.equal(viewed.state, 'offline')
+  assert.match(viewed.message ?? '', /handshake failed/)
+  assert.equal(viewed.id, configProbeId('C1'))
+  assert.equal(disposed, true)
+  assert.equal(registry.list().length, 0)
 })

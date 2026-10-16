@@ -132,6 +132,8 @@ export const zh = {
   'rpc.sessionRoute': '会话路由失败',
   'rpc.connectionsList': '连接列表失败',
   'rpc.configHosts': 'SSH 配置主机读取失败',
+  'rpc.configProbe.unknown': '不是 ~/.ssh/config 里的 Host 别名',
+  'rpc.configProbe.noUser': '该 Host 没有用户名，无法检测',
   'rpc.pickNative': '系统选择器调用失败',
   'rpc.connectionsResolve': '连接解析失败',
   'rpc.connectionsAdd': '连接添加失败',

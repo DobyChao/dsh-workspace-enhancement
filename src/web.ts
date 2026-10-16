@@ -118,6 +118,11 @@ function isIdPayload(value: unknown): value is { id: string } {
   return isRecord(value) && isString(value.id) && value.id.trim() !== ''
 }
 
+/** `{ alias }` for `config.probe` — one exact ssh-config Host alias. */
+function isAliasPayload(value: unknown): value is { alias: string } {
+  return isRecord(value) && isString(value.alias) && value.alias.trim() !== ''
+}
+
 /** Browse payload: `{ id, path? }`. */
 function isBrowsePayload(value: unknown): value is { id: string; path?: string } {
   return isRecord(value) && isString(value.id) && value.id.trim() !== ''
@@ -276,6 +281,7 @@ const wireError = (code: string, message: string): ChannelResult => {
 export const CHANNEL_ENDPOINTS = [
   'connections.list',
   'config.hosts',
+  'config.probe',
   'connections.resolve',
   'connections.add',
   'connections.remove',
@@ -522,6 +528,12 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
         case 'config.hosts': {
           // Re-reads ~/.ssh/config on every call; wildcards stay hidden.
           return { ok: true, value: registry().listConfigHosts() }
+        }
+        case 'config.probe': {
+          // Reachability of one ssh-config alias. Does not save a machine.
+          // A failure is an offline status, not an RPC error.
+          const input = requirePayload(payload, isAliasPayload, 'config.probe')
+          return { ok: true, value: await registry().probeConfigAlias(input.alias.trim(), signal) }
         }
         case 'connections.resolve': {
           const input = requirePayload(payload, isRecord, 'connections.resolve')
