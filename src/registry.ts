@@ -1262,14 +1262,19 @@ export class SshRegistry extends Service {
     return this.live.get(spec.id)
   }
 
-  /** Build one connection with the registry's TOFU store and default mode. */
-  private buildConnection(spec: SshConnectionSpec): SshConnection {
+  /**
+   * Build one connection with the registry's TOFU store and default mode.
+   * `persistHostKeys: false` is the reachability probe: unknown keys stay in
+   * memory for that connection and the store is not written.
+   */
+  private buildConnection(spec: SshConnectionSpec, persistHostKeys = true): SshConnection {
     const passwordProvider = (spec.credentialBackend ?? 'plain') === 'plain'
       ? undefined
       : (machineId: string): Promise<string | undefined> => this.resolvePassword({ ...spec, id: machineId })
     return new SshConnection(spec, {
       hostKeyStore: this.hostKeyStore,
       defaultHostKeyMode: this.defaultHostKeyMode,
+      persistHostKeys,
       ...(passwordProvider !== undefined ? { passwordProvider } : {}),
     })
   }
@@ -1278,9 +1283,10 @@ export class SshRegistry extends Service {
    * Build one registry-owned connection for a spec (test seam: subclasses may
    * substitute a fake so status/probe/reconnect logic is testable without a
    * real SSH server; production behavior is unchanged).
+   * `persistHostKeys` is false for a passive probe and true for a connect.
    */
-  protected fabricateConnection(spec: SshConnectionSpec): SshConnection {
-    return this.buildConnection(spec)
+  protected fabricateConnection(spec: SshConnectionSpec, persistHostKeys = true): SshConnection {
+    return this.buildConnection(spec, persistHostKeys)
   }
 
   /**
@@ -1302,25 +1308,36 @@ export class SshRegistry extends Service {
   }
 
   /**
-   * Actively verify one entry: `echo ok` over its live chain with a bounded
-   * budget. Creates the chain when absent. A failure is a status outcome
-   * (`offline` + message), never a thrown error. The outcome is cached for
-   * {@link RegistryConfig.statusTtlMs}.
+   * Actively verify one entry: `echo ok` with a bounded budget. A failure is
+   * a status outcome (`offline` + message), never a thrown error. The outcome
+   * is cached for {@link RegistryConfig.statusTtlMs}.
+   *
+   * A passive probe does not install the live chain and does not record an
+   * unknown host key. An already-open chain (an explicit connect) is reused.
+   * {@link reconnect} and {@link get} still build an `accept-new` connection
+   * that records.
    * @param id - registry entry id.
    * @param signal - caller lifetime (the probe budget still applies).
    */
   async probe(id: string, signal?: AbortSignal): Promise<ConnectionStatusView> {
     const spec = this.requireSpec(id)
-    const connection = this.get(id)
-    if (connection === undefined) throw new Error(`dsw: ${this.t('rpc.unknownConnectionId', { id: JSON.stringify(id) })}`) // unreachable after requireSpec
-    return this.probeLive(id, spec, connection, signal)
+    const live = this.live.get(id)
+    if (live !== undefined) return this.probeLive(id, spec, live, signal)
+    const ephemeral = this.fabricateConnection(spec, false)
+    try {
+      return await this.probeLive(id, spec, ephemeral, signal)
+    } finally {
+      ephemeral.dispose()
+    }
   }
 
   /**
    * Reachability of one exact `~/.ssh/config` Host alias, without saving a
-   * machine. The connection is built, probed (`echo ok`), and disposed. An
-   * alias the sidebar would not list, or a block with no user, is offline
-   * and does not open a socket. The view id is {@link configProbeId}.
+   * machine or a host key. The connection is built, probed (`echo ok`), and
+   * disposed. A stored key is checked; an unknown key is accepted in memory
+   * for this probe only. An alias the sidebar would not list, or a block
+   * with no user, is offline and does not open a socket. The view id is
+   * {@link configProbeId}.
    */
   async probeConfigAlias(alias: string, signal?: AbortSignal): Promise<ConnectionStatusView> {
     const trimmed = alias.trim()
@@ -1362,7 +1379,7 @@ export class SshRegistry extends Service {
         }
         : {}),
     }
-    const connection = this.fabricateConnection(spec)
+    const connection = this.fabricateConnection(spec, false)
     try {
       const probeSignal = signal === undefined
         ? AbortSignal.timeout(PROBE_TIMEOUT_MS)
@@ -1433,7 +1450,7 @@ export class SshRegistry extends Service {
   /** Project one spec + optional live chain into a tri-state status view. */
   private statusViewOf(
     spec: SshConnectionSpec,
-    live: SshConnection | null,
+    live: ProbedConnection | null,
     message: string | undefined,
     probeFailed: boolean,
   ): ConnectionStatusView {
@@ -1474,7 +1491,9 @@ export class SshRegistry extends Service {
       }
       spec.lastProbeAt = new Date().toISOString()
       spec.lastProbeLatencyMs = Date.now() - started
-      view = this.statusViewOf(spec, this.live.get(id) ?? null, undefined, false)
+      // An ephemeral probe is not the live chain. Snapshot the connection
+      // that just answered so a success still reads as reachable.
+      view = this.statusViewOf(spec, this.live.get(id) ?? connection, undefined, false)
       void this.persist()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

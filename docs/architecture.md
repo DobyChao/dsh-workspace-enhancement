@@ -48,7 +48,7 @@
 | `conversation.session.header.actions` | `SideWorkspacesAction` | 标题栏「工作区」按钮与副工作区面板 |
 | `conversation.session.header.utilities`（`REMOTE_STATUS_SLOT`） | `RemoteStatusAction` | 会话头远程状态 |
 
-会话栏分组行没有官方槽位（Session 行 0.1.7 起有槽，本插件不迁）。分组行徽标由 `installRowBadges` 注入，优先按 `data-row-key` 对齐，没有该属性时回退标题（ADR-0011）。侧栏列出远程机器、添加工作区里的已保存连接和 SSH 配置主机，或远程会话打开时自动探测。SSH 配置主机里已经保存过的连接复用该机器的探测；只存在于 `~/.ssh/config` 的别名走 `config.probe`，不写入注册表。「重新检测」在检测中、可连接、不可连接都保留，会话头「远程状态」里也有。可达性文案是检测中 / 可连接 / 不可连接，和会话里的「已连接」分开。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
+会话栏分组行没有官方槽位（Session 行 0.1.7 起有槽，本插件不迁）。分组行徽标由 `installRowBadges` 注入，优先按 `data-row-key` 对齐，没有该属性时回退标题（ADR-0011）。侧栏列出远程机器、添加工作区里的已保存连接和 SSH 配置主机，或远程会话打开时自动探测。SSH 配置主机里已经保存过的连接复用该机器的探测；只存在于 `~/.ssh/config` 的别名走 `config.probe`，不写入注册表。「重新检测」在检测中、可连接、不可连接都保留，会话头「远程状态」里也有。被动探测不把未见过的主机密钥写入 known_hosts（已记录的密钥对不上则不可连接）；连接和添加机器仍按 accept-new 记录。可达性文案是检测中 / 可连接 / 不可连接，和会话里的「已连接」分开。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
 
 `dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击始终用 `browse.read` 在页内预览文本、图片和 PDF。宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…` 只在 `ctx.get('remote.workspaceFiles')` 与 `openResource` 都能取到时额外打开；缺 inject 时 `ctx.get` 返回空，不读 `remote.workspaceFiles` 属性（那条属性会抛 `without inject`）。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
 

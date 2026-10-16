@@ -218,6 +218,12 @@ export interface SshConnectionOptions {
    * chain is opened so an OS-store password never lands in the persisted spec.
    */
   passwordProvider?: (machineId: string) => Promise<string | undefined>
+  /**
+   * When false, an unknown host key is accepted for this connection only and
+   * is not written to the store. A stored key is still verified; a mismatch
+   * rejects. Explicit connects leave this unset so `accept-new` still records.
+   */
+  persistHostKeys?: boolean
 }
 
 /**
@@ -316,12 +322,16 @@ export class SshConnection {
     if (this.hostKeyPolicy.kind !== 'tofu') {
       this.hostKeyGuard = undefined
     } else {
-      this.hostKeyGuard = new HostKeyGuard(this.hostKeyStore, this.hostKeyPolicy.mode)
+      this.hostKeyGuard = new HostKeyGuard(
+        this.hostKeyStore,
+        this.hostKeyPolicy.mode,
+        options.persistHostKeys !== false,
+      )
     }
     const hostKeyGuard = this.hostKeyGuard
     const sessionHostVerifier = hostKeyGuard === undefined
       ? undefined
-      : (host: ResolvedConnectionHost, key: Buffer): boolean => hostKeyGuard.verifier(host.host, host.port)(key)
+      : (host: ResolvedConnectionHost, key: Buffer): boolean => this.verifyHostKey(host.host, host.port, key)
     const passwordProvider = options.passwordProvider
     const resolveHosts = passwordProvider === undefined
       ? undefined
@@ -349,6 +359,15 @@ export class SshConnection {
    */
   isConnected(): boolean {
     return this.session.isConnected()
+  }
+
+  /**
+   * Run the transport's host-key check for one hop. Probe connections accept
+   * an unknown key in memory and do not write the store.
+   */
+  verifyHostKey(host: string, port: number, key: Buffer): boolean {
+    if (this.hostKeyGuard === undefined) return true
+    return this.hostKeyGuard.verifier(host, port)(key)
   }
 
   /** Whether the given endpoint has a recorded TOFU fingerprint. */

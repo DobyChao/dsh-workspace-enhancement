@@ -143,10 +143,11 @@ test('status cache expires: a cached offline message does not outlive the TTL', 
   const fresh = registry.statusOf(machine.id)
   assert.equal(fresh?.state, 'offline')
   assert.equal(fresh?.message, 'boom')
-  // Expired: derived from the live chain alone — offline, no stale message.
+  // Expired: a passive probe does not leave a live chain, so the snapshot is
+  // unknown and the failure message does not linger.
   await sleep(90)
   const expired = registry.statusOf(machine.id)
-  assert.equal(expired?.state, 'offline')
+  assert.equal(expired?.state, 'unknown')
   assert.equal(expired?.message, undefined)
 })
 
@@ -161,9 +162,10 @@ test('reconnect: disposes the poisoned chain, rebuilds, and probes the result', 
     return next
   })
   const machine = await registry.saveMachine({ host: 'h', username: 'u' })
-  // A first failed probe caches the poisoned chain.
-  const first = await registry.probe(machine.id)
-  assert.equal(first.state, 'offline')
+  // An explicit connect installs the chain. A passive probe must not — it
+  // would record nothing and would not leave this object cached.
+  const installed = registry.get(machine.id)
+  assert.equal(installed, stale.connection)
   assert.equal(stale.disposed(), false)
   // Reconnect disposes the old chain and probes a fresh one.
   const result = await registry.reconnect(machine.id)
@@ -269,4 +271,31 @@ test('UX-13: a failing ssh-config probe is unreachable and still disposed', asyn
   assert.equal(viewed.id, configProbeId('C1'))
   assert.equal(disposed, true)
   assert.equal(registry.list().length, 0)
+})
+
+test('UX-13: a passive probe does not record host keys; get and reconnect do', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsw-probe-flags-'))
+  const sshConfig = join(home, 'ssh-config')
+  writeFileSync(sshConfig, 'Host c1\n  HostName 10.0.0.8\n  User dev\n')
+  const flags: boolean[] = []
+  class RecordingRegistry extends TestRegistry {
+    protected override fabricateConnection(spec: SshConnectionSpec, persistHostKeys = true): SshConnection {
+      flags.push(persistHostKeys)
+      return super.fabricateConnection(spec)
+    }
+  }
+  const registry = new RecordingRegistry(new Context(), {
+    ...baseConfig(home),
+    sshConfigPath: sshConfig,
+  }, () => fakeConnection({ connected: true }).connection)
+  const machine = await registry.saveMachine({ host: 'h', username: 'u' })
+  await registry.probe(machine.id)
+  await registry.probeConfigAlias('c1')
+  registry.get(machine.id)
+  assert.deepEqual(flags, [false, false, true])
+  assert.equal(existsSync(join(home, 'remote-workspaces', 'known_hosts.json')), false)
+  // A later probe reuses the explicit chain instead of building another probe connection.
+  const before = flags.length
+  await registry.probe(machine.id)
+  assert.equal(flags.length, before)
 })
