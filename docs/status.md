@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-16 10:57 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-16 11:35 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.4` |
 | npm 已发布版本 | `0.2.4` |
 | 最新 tag | `v0.2.4` |
-| 分支 / HEAD | `cursor/ux-13-status-probe-1416` / `5de5fb5` |
-| HEAD 提交 | `feat(status): auto-probe reachability and anchor badges by row key` (2026-10-16) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `cursor/ux-13-status-probe-1416` / `5ba33e2` |
+| HEAD 提交 | `fix(status): name a host-key mismatch in the reachability tooltip` (2026-10-16) |
+| 与远端 | 5 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 72 |
-| 单测用例（静态计数） | 730 |
+| 单测文件 | 76 |
+| 单测用例（静态计数） | 746 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 54 |
