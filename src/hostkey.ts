@@ -164,6 +164,11 @@ export class HostKeyStore {
 export class HostKeyGuard {
   /** Last verification failure detail; a connect rewriter may surface it. */
   lastError: string | null = null
+  /**
+   * `changed` when a known key (stored, or already accepted in this probe)
+   * did not match. The probe maps that to the `host-key-changed` wire marker.
+   */
+  lastFailure: 'changed' | 'unknown' | null = null
   /** Fingerprints accepted during this guard's life and not written to the store. */
   private readonly ephemeral = new Map<string, string>()
 
@@ -188,6 +193,7 @@ export class HostKeyGuard {
   verifier(host: string, port: number): (key: Buffer) => boolean {
     const id = `${host}:${port}`
     return (key: Buffer): boolean => {
+      this.lastFailure = null
       if (this.mode === 'off') return true
       const fingerprint = keyFingerprint(key)
       const stored = this.store.get(host, port)
@@ -196,12 +202,14 @@ export class HostKeyGuard {
           this.lastError = null
           return true
         }
+        this.lastFailure = 'changed'
         this.lastError =
           `host key for ${id} CHANGED (stored ${stored.fingerprint}, received ${fingerprint}) — ` +
           'possible man-in-the-middle; discard the record (hostkey.forget) to re-trust if this is expected'
         return false
       }
       if (this.mode === 'verify') {
+        this.lastFailure = 'unknown'
         this.lastError = `unknown host key for ${id} (hostKeyMode=verify) — connect once with accept-new to trust it`
         return false
       }
@@ -211,6 +219,7 @@ export class HostKeyGuard {
           this.lastError = null
           return true
         }
+        this.lastFailure = 'changed'
         this.lastError =
           `host key for ${id} CHANGED during probe (seen ${seen}, received ${fingerprint}) — ` +
           'possible man-in-the-middle; the probe does not trust it'

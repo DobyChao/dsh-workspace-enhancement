@@ -21,6 +21,7 @@ import type { WireResult } from './index.ts'
 import { createProbeScheduler, systemProbeClock } from './probe-schedule.ts'
 import type { ProbeScheduler } from './probe-schedule.ts'
 import { recheckStaysVisible } from './recheck.ts'
+import { statusTooltip } from './status-detail.ts'
 import styles from './status.module.css'
 
 /**
@@ -311,14 +312,15 @@ export function ConnStatusBadge({
   const state = view?.state ?? 'unknown'
   const label = busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])
   const actionTitle = t('status.retryAction.title')
+  const detail = statusTooltip(view?.message, t(CONN_STATE_LABEL_KEY[state]), t('status.hostKey.changed'))
   const dotClass = `${styles.dot} ${
     state === 'active' ? styles.dotActive : state === 'offline' ? styles.dotOffline : styles.dotUnknown
   }`
   return (
-    <span className={styles.badge}>
+    <span className={styles.badge} title={detail}>
       <span
         className={dotClass}
-        title={view?.message !== undefined && view.message !== '' ? view.message : t(CONN_STATE_LABEL_KEY[state])}
+        title={detail}
       />
       <span className={busy ? `${styles.label} ${styles.labelBusy}` : styles.label}>{label}</span>
       {recheckStaysVisible(state) && (

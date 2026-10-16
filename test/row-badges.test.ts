@@ -226,3 +226,18 @@ test('t15-r2: badgeTextsOf — a language switch re-derives the retry button tex
   // The projection is what paintBadge writes under its value guard, so a
   // language-switch repaint updates the button copy/title in place.
 })
+
+test('UX-13: badgeTextsOf detail says the host key changed, and a network error stays itself', () => {
+  const changed: ConnStatusView = {
+    id: 'c1', state: 'offline', connected: false, label: 'c1',
+    host: '10.0.0.1', port: 22, username: 'root', hostKeyKnown: true,
+    message: 'host-key-changed',
+  }
+  const zh = badgeTextsOf(changed, false, zhBaseline)
+  assert.equal(zh.stateLabel, '不可连接')
+  assert.equal(zh.detail, '主机密钥已变更')
+  assert.equal(badgeTextsOf(changed, false, enT).detail, 'Host key changed')
+  const network: ConnStatusView = { ...changed, message: 'ssh: handshake failed' }
+  assert.equal(badgeTextsOf(network, false, zhBaseline).stateLabel, '不可连接')
+  assert.equal(badgeTextsOf(network, false, zhBaseline).detail, 'ssh: handshake failed')
+})

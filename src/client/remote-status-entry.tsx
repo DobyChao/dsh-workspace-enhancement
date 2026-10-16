@@ -16,6 +16,7 @@ import type { RemoteSessionFacts, RemoteStatusSeats } from './remote-status.ts'
 import { remoteConnectionIdOf } from './remote-status.ts'
 import type { RpcCall } from './status.tsx'
 import { headerRecheckLabelKey, recheckStaysVisible } from './recheck.ts'
+import { statusTooltip } from './status-detail.ts'
 import { CONN_STATE_LABEL_KEY, getStatusCenter, useConnStatus, zhBaseline } from './status.tsx'
 import { ServerIcon } from './icons.tsx'
 import styles from './status.module.css'
@@ -71,7 +72,7 @@ export function RemoteStatusAction(props: RemoteStatusActionProps): JSX.Element 
       // The global class stays: it is the DOM contract the UAT scripts and the
       // row-badge layer select on. `styles.statusChip` supplies the look.
       className={`dsw-remote-status ${styles.statusChip}`}
-      title={t('header.remote.title', { machine })}
+      title={statusTooltip(view?.message, t('header.remote.title', { machine }), t('status.hostKey.changed'))}
       aria-label={t('header.remote.label')}
     >
       <ServerIcon className={styles.statusChipIcon} width={13} height={13} />

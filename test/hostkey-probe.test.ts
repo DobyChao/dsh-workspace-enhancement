@@ -56,6 +56,9 @@ test('UX-13: a probe rejects a stored host key that does not match, and leaves t
   assert.equal(connection.verifyHostKey('10.0.0.8', 22, trusted), true)
   assert.equal(connection.verifyHostKey('10.0.0.8', 22, makeKeyBlob('ssh-ed25519', 8)), false)
   assert.equal(readFileSync(file, 'utf8'), before)
+  const guard = new HostKeyGuard(store, 'accept-new', false)
+  assert.equal(guard.verifier('10.0.0.8', 22)(makeKeyBlob('ssh-ed25519', 8)), false)
+  assert.equal(guard.lastFailure, 'changed')
 })
 
 test('UX-13: an explicit connect still records an unknown host key', () => {
@@ -74,5 +77,6 @@ test('UX-13: verify mode still rejects an unknown key during a probe and does no
   const { file, store } = storeFile()
   const guard = new HostKeyGuard(store, 'verify', false)
   assert.equal(guard.verifier('10.0.0.8', 22)(makeKeyBlob('ssh-ed25519', 2)), false)
+  assert.equal(guard.lastFailure, 'unknown')
   assert.equal(existsSync(file), false)
 })

@@ -127,6 +127,18 @@ test('probe: a failing round-trip reports offline with the message', async () =>
   const viewed = await registry.probe(machine.id)
   assert.equal(viewed.state, 'offline')
   assert.match(viewed.message ?? '', /handshake failed/)
+  assert.notEqual(viewed.message, 'host-key-changed')
+})
+
+test('UX-13: a host-key mismatch probe stays unreachable and stores the marker', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsw-sw-probe-hk-'))
+  const registry = new TestRegistry(new Context(), baseConfig(home), () => fakeConnection({
+    exec: () => Promise.reject(new Error('dsw: host-key-changed')),
+  }).connection)
+  const machine = await registry.saveMachine({ host: 'h', username: 'u' })
+  const viewed = await registry.probe(machine.id)
+  assert.equal(viewed.state, 'offline')
+  assert.equal(viewed.message, 'host-key-changed')
 })
 
 test('status cache expires: a cached offline message does not outlive the TTL', async () => {
@@ -268,8 +280,25 @@ test('UX-13: a failing ssh-config probe is unreachable and still disposed', asyn
   const viewed = await registry.probeConfigAlias('C1')
   assert.equal(viewed.state, 'offline')
   assert.match(viewed.message ?? '', /handshake failed/)
+  assert.notEqual(viewed.message, 'host-key-changed')
   assert.equal(viewed.id, configProbeId('C1'))
   assert.equal(disposed, true)
+  assert.equal(registry.list().length, 0)
+})
+
+test('UX-13: an ssh-config host-key mismatch stays unreachable with the marker', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsw-config-probe-hk-'))
+  const sshConfig = join(home, 'ssh-config')
+  writeFileSync(sshConfig, 'Host c1\n  HostName 10.0.0.8\n  User dev\n')
+  const registry = new TestRegistry(new Context(), {
+    ...baseConfig(home),
+    sshConfigPath: sshConfig,
+  }, () => fakeConnection({
+    exec: () => Promise.reject(new Error('dsw: host-key-changed')),
+  }).connection)
+  const viewed = await registry.probeConfigAlias('c1')
+  assert.equal(viewed.state, 'offline')
+  assert.equal(viewed.message, 'host-key-changed')
   assert.equal(registry.list().length, 0)
 })
 

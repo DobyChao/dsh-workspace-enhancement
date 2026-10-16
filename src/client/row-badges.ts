@@ -50,6 +50,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { routeIdOf } from './route-id.ts'
 import { CONN_STATE_COLOR } from './conn-state.ts'
 import { recheckStaysVisible } from './recheck.ts'
+import { statusTooltip } from './status-detail.ts'
 import { CONN_STATE_LABEL_KEY, asConnStatus, connectionProbeScheduler, connStatusFallback, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
 import {
@@ -159,9 +160,11 @@ function unknownView(connId: string): ConnStatusView {
   }
 }
 
-/** The badge texts a status view renders (state label + retry button). */
+/** The badge texts a status view renders (state label, detail, retry button). */
 export interface BadgeTexts {
   stateLabel: string
+  /** Tooltip. A host-key mismatch is the locale phrase; other failures keep their message. */
+  detail: string
   buttonText: string
   buttonTitle: string
 }
@@ -179,8 +182,10 @@ const COMPACT_KEY = 'dswCompact' as const
  * @param t - the translate seat (active language).
  */
 export function badgeTextsOf(view: ConnStatusView, compact: boolean, t: TranslateNS<'dsw'>): BadgeTexts {
+  const stateLabel = t(CONN_STATE_LABEL_KEY[view.state])
   return {
-    stateLabel: t(CONN_STATE_LABEL_KEY[view.state]),
+    stateLabel,
+    detail: statusTooltip(view.message, stateLabel, t('status.hostKey.changed')),
     buttonText: compact ? t('status.retryAction.compact') : t('status.retryAction.recheck'),
     buttonTitle: t('status.retryAction.title'),
   }
@@ -344,8 +349,10 @@ export function installRowBadges(
     // t15-r2: the retry BUTTON text and title get the same value-guard
     // rewrite — a language switch previously updated the state label but left
     // the button copy/title in the old language.
-    if (label !== null && label.textContent !== texts.stateLabel) {
-      label.textContent = texts.stateLabel
+    if (badge.title !== texts.detail) badge.title = texts.detail
+    if (label !== null) {
+      if (label.textContent !== texts.stateLabel) label.textContent = texts.stateLabel
+      if (label.title !== texts.detail) label.title = texts.detail
     }
     if (button !== null) {
       const display = recheckStaysVisible(view.state) ? '' : 'none'

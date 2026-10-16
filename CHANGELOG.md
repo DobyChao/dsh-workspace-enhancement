@@ -13,7 +13,7 @@
 
 ### 修复
 
-- **探测不写入主机密钥（`UX-13`）**：打开界面触发的 `conn.probe`，以及 ssh-config 主机的 `config.probe`，不再用 accept-new 把未见过的主机密钥写进 known_hosts。已记录的密钥仍会核对，对不上就是不可连接；未见过的密钥只在这一次探测的内存里接受。连接、添加机器、以及手点「重新检测」（`conn.reconnect`）仍按 accept-new 记录。
+- **探测不写入主机密钥（`UX-13`）**：打开界面触发的 `conn.probe`，以及 ssh-config 主机的 `config.probe`，不再用 accept-new 把未见过的主机密钥写进 known_hosts。已记录的密钥仍会核对，对不上仍是不可连接，悬停写「主机密钥已变更」（Host key changed），和网络不通分开；未见过的密钥只在这一次探测的内存里接受。连接、添加机器、以及手点「重新检测」（`conn.reconnect`）仍按 accept-new 记录。
 - **远程文件点击预览（`REQ-A6`）**：`remote.workspaceFiles` 是关联属性，未 inject 时读取会抛 `without inject`，点击停在「选择一个文件以预览」。改为 `ctx.get('remote.workspaceFiles')` 探测；缺了也不挡页内 `browse.read`。
 - **设为当前（`UX-11`）**：未指定连接时，目录选择从当前机器开始浏览；成功横幅点名该机器；当前行有选中样式。
 - **部署失败样式（`UX-12`）**：`core.deploy` 返回失败时用红色错误横幅和红色芯片，不再走绿色成功横幅。

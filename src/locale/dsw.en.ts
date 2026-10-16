@@ -346,6 +346,7 @@ const en: Record<DswKey, string> = {
   'status.unknown': 'Checking',
   'status.active': 'Reachable',
   'status.offline': 'Unreachable',
+  'status.hostKey.changed': 'Host key changed',
   'status.connecting': 'Checking',
   'status.checking': 'Checking',
   'status.retryAction.title': 'Re-check and try to connect',

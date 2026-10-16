@@ -355,6 +355,7 @@ export const zh = {
   'status.unknown': '检测中',
   'status.active': '可连接',
   'status.offline': '不可连接',
+  'status.hostKey.changed': '主机密钥已变更',
   'status.checking': '检测中',
   'status.connecting': '检测中',
   'status.retryAction.title': '重新检测并尝试连接',

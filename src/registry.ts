@@ -34,6 +34,7 @@ import { normalizeRemoteApproval } from './remote-approval-gate.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { configProbeId } from './config-probe.ts'
+import { probeFailureMessage } from './host-key-changed.ts'
 import type { TranslateFn } from './locale/index.ts'
 
 /** Registry plugin config. */
@@ -1390,7 +1391,7 @@ export class SshRegistry extends Service {
       }
       return this.configProbeView(id, listed.alias, resolved.host, resolved.port, resolved.username, 'active')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = probeFailureMessage(error)
       return this.configProbeView(id, listed.alias, resolved.host, resolved.port, resolved.username, 'offline', message)
     } finally {
       connection.dispose()
@@ -1496,7 +1497,7 @@ export class SshRegistry extends Service {
       view = this.statusViewOf(spec, this.live.get(id) ?? connection, undefined, false)
       void this.persist()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = probeFailureMessage(error)
       view = this.statusViewOf(spec, this.live.get(id) ?? null, message, true)
     }
     this.probeCache.set(id, { at: Date.now(), view, specRef: spec })

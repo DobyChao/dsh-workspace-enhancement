@@ -21,6 +21,7 @@ import type { Client, SFTPWrapper } from 'ssh2'
 import { SshSession, resolveRemoteCwd as mapRemoteCwd } from './ssh-core.ts'
 import type { ExecOutcome, ResolvedConnectionHost } from './ssh-core.ts'
 import type { JumpConfig } from './runtime.ts'
+import { hostKeyConnectError } from './host-key-changed.ts'
 import { HostKeyGuard, HostKeyStore, defaultKnownHostsFile } from './hostkey.ts'
 import type { HostKeyMode } from './hostkey.ts'
 import type { CredentialBackend } from './credential.ts'
@@ -343,10 +344,11 @@ export class SshConnection {
       ...(sessionHostVerifier !== undefined ? { hostVerifier: sessionHostVerifier } : {}),
       ...(resolveHosts !== undefined ? { resolveHosts } : {}),
       connectErrorRewriter: (error) => {
-        const hostKeyError = hostKeyGuard?.lastError
-        if (hostKeyError !== null && hostKeyError !== undefined) {
-          return new Error(`dsw: ${hostKeyError}`)
-        }
+        const hostKeyError = hostKeyConnectError(
+          hostKeyGuard?.lastFailure ?? null,
+          hostKeyGuard?.lastError ?? null,
+        )
+        if (hostKeyError !== null) return hostKeyError
         return rewrapConnectError(error, this.label, this.endpoint, spec)
       },
       resolveRemoteCwd: (cwd) => mapRemoteCwd(this.cwd, cwd),

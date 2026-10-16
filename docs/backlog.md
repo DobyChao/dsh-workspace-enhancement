@@ -48,7 +48,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UX-13 | 连接状态自动探测与可达性文案 | done | P2 | 打开即探测，不写入主机密钥。重新检测三态都在。脚本 [UX-13](./uat/UX-13-8-status.md) |
+| UX-13 | 连接状态自动探测与可达性文案 | done | P2 | 打开即探测，不写入主机密钥。密钥对不上悬停「主机密钥已变更」。重新检测三态都在。脚本 [UX-13](./uat/UX-13-8-status.md) |
 | UX-8 | 侧栏行徽章按 data-row-key 对齐 | done | P2 | 分组行按 data-row-key 对齐（无锚回退标题）。Session 行槽迁移不做。脚本 [UX-8](./uat/UX-13-8-status.md) |
 | REQ-I26 | 远程组件覆盖 linux-arm64 | done | P2 | linux-arm64 与 linux-x64 同工件：uname 选包、独立 sha、CI/pack 双 tarball。rg 按架构。Windows 远端仍不做。尾巴：arm64 实机部署 |
 | REQ-I28 | 远程会话上传落到远端工作区 | done | P2 | 回执返回前 SFTP 写入远端 `.dsh-uploads/`，失败则上传失败。产物路径进运行时上下文。[ADR-0032](./decisions/ADR-0032-remote-session-uploads.md)。尾巴：lab 打开产物 |

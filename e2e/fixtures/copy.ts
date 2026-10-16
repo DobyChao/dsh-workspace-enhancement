@@ -89,6 +89,7 @@ export const COPY = {
   'status.unknown': { zh: '检测中', en: 'Checking' },
   'status.active': { zh: '可连接', en: 'Reachable' },
   'status.offline': { zh: '不可连接', en: 'Unreachable' },
+  'status.hostKey.changed': { zh: '主机密钥已变更', en: 'Host key changed' },
 
   /* ------------------------------------------------- DSH shell (third party) */
   'shell.settings.trigger': { zh: '设置', en: 'Settings' },
