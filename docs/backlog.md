@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-13 | 子进程契约把 watchLinuxScopeStart 归为内部方法 | doing | P2 | `dsh-subprocess-local@0.2.1-rc.2` 私有 systemd-scope 钩子，归入 `INTERNAL_METHODS`。drift [39016266340](https://github.com/DobyChao/dsh-workspace-enhancement/actions/runs/39016266340) 两例红 |
 | PUB-9 | 0.2.4 发布 | doing | P1 | 插件与 core 同升 0.2.4（围栏档在新工件；同 major.minor 不强制重部署）。合并后打 tag `v0.2.4` 并建 GitHub Release。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
 | REQ-A6 | 适配 dsh-better-sidebar 插件 | doing | P2 | optional peer 注册 `dsw:workspaces`（复用 browse.files 与远程状态）。树含 `.dsh-uploads` / `.dsh-artifacts` 与工作区内产物；宿主 `openResource` 可用时打开文档预览，面板内预览文本/图片/PDF。B 只认这两类路径。不抢 files。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md) |
 ## 2. 已排期（todo，按优先级）
