@@ -27,7 +27,15 @@ import { test } from 'node:test'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { MixedSubprocessRuntime } from '../src/mixed.ts'
 
-/** 本地后端的内部实现：基类未声明、宿主经类型化的 `ctx.subprocess` 调不到，不参与反射断言。 */
+/**
+ * 本地后端的内部实现：基类未声明、宿主经类型化的 `ctx.subprocess` 调不到，不参与反射断言。
+ *
+ * `watchLinuxScopeStart`（`dsh-subprocess-local@0.2.1-rc.1` 起，`next` = `0.2.1-rc.2`）：
+ * `LocalSubprocessRuntime` 的私有方法。`spawn` / `spawnTerminal` 走 `systemd-run --user`
+ * 且目标进程没真正起来（`LinuxScopeNotStartedError`）时，它听 `handle.done` 的失败并调用
+ * `linuxScope.scopeNotStarted(generation)`，让选择器作废探测缓存。`.d.ts` 标 `private`，
+ * 抽象 `SubprocessRuntime` 不声明它，远程 SSH 门面看不见。不是接缝成员。
+ */
 const INTERNAL_METHODS = new Set([
   'constructor',
   'disposeManagedProcesses',
@@ -35,6 +43,7 @@ const INTERNAL_METHODS = new Set([
   'selectContainmentMode',
   'terminateForHostExit',
   'warnFallback',
+  'watchLinuxScopeStart',
 ])
 
 /** 一个具体后端原型链上的**公共方法名**全集（去重、去内部方法）。 */
@@ -88,6 +97,18 @@ test('contract: MixedSubprocessRuntime covers everything the installed backend e
   // 跟随家族：装 0.1.7+ 时，上游再加一个公开成员也会在这里红（静态清单不知道新名字）。
   const missing = UPSTREAM_METHODS.filter(name => typeof (MixedSubprocessRuntime.prototype as Record<string, unknown>)[name] !== 'function')
   assert.deepEqual(missing, [], `MixedSubprocessRuntime is missing upstream seam method(s): ${missing.join(', ')}`)
+})
+
+test('contract: watchLinuxScopeStart stays classified as a local-only hook', () => {
+  // 0.1.7 家族原型上没有这个名字，反射断言不会自己点名；把分类钉在清单上，
+  // 装上 0.2.1-rc 时它必须被 INTERNAL_METHODS 滤掉，而不是进 KNOWN_ADDITIONS。
+  assert.equal(INTERNAL_METHODS.has('watchLinuxScopeStart'), true)
+  assert.equal(KNOWN_ADDITIONS.includes('watchLinuxScopeStart'), false)
+  assert.equal(UPSTREAM_METHODS.includes('watchLinuxScopeStart'), false)
+  assert.equal(
+    typeof (MixedSubprocessRuntime.prototype as Record<string, unknown>).watchLinuxScopeStart,
+    'undefined',
+  )
 })
 
 test('contract: the reflection assertion turns red when the facade lacks a method', () => {
