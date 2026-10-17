@@ -23,7 +23,7 @@ import { registerDswLocale } from '../locale/index.ts'
 import { SshWorkspaceFlow } from './flow.tsx'
 import { createLocalDirectorySeats } from './local-directory.ts'
 import type { ClientUiWorkspace } from './local-directory.ts'
-import { installRowBadges } from './row-badges.ts'
+import { installRowBadges, workspaceIdOf } from './row-badges.ts'
 import type { RowBadgeSources } from './row-badges.ts'
 import { createRemoteStatusSeats, remoteStatusRegisterOptions, REMOTE_STATUS_SLOT } from './remote-status.ts'
 import type { RemoteSessionsFeed } from './remote-status.ts'
@@ -89,6 +89,8 @@ export interface ClientWorkspaces {
 export interface WorkspaceRowLike {
   title: string
   path: string
+  /** Host workspace id, when the feed exposes it (UX-8 `data-row-key`). */
+  workspaceId?: string
 }
 
 /** One session list projection row (the flat-mode sidebar source). */
@@ -284,11 +286,20 @@ function installSidebarRowBadges(ctx: Context): void {
   const sessionsService = ctx.get('sessions') as unknown as { list?: ClientSnapshot<{ byId: Record<string, SessionRowLike> }> } | undefined
   const sessionsFeed = sessionsService?.list
   const sources: RowBadgeSources = {
-    workspaces: () => workspacesFeed?.getSnapshot().items.map(item => ({ title: item.title, path: item.path })) ?? [],
+    workspaces: () => workspacesFeed?.getSnapshot().items.map(item => {
+      const workspaceId = workspaceIdOf(item)
+      return {
+        title: item.title,
+        path: item.path,
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+      }
+    }) ?? [],
     sessions: () => {
       const state = sessionsFeed?.getSnapshot()
       if (state === undefined) return []
-      return Object.values(state.byId).map(row => ({
+      // The feed key is the session id the host stamps as `session:<id>`.
+      return Object.entries(state.byId).map(([sessionId, row]) => ({
+        sessionId,
         title: row.displayTitle,
         ...(typeof row.cwd === 'string' ? { cwd: row.cwd } : {}),
       }))

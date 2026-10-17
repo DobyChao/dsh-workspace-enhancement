@@ -155,14 +155,28 @@ export class HostKeyStore {
  * TOFU host-key guard bound to one store and one mode. The verifier records a
  * never-seen key under `accept-new`, rejects a changed key always, rejects an
  * unknown key under `verify`, and accepts everything under `off`.
+ *
+ * A reachability probe passes `persistUnknown: false`: a stored key is still
+ * checked (a mismatch rejects), and an unknown key is accepted only in this
+ * guard's memory. The store is not written. The next explicit connect still
+ * uses the default and records under `accept-new`.
  */
 export class HostKeyGuard {
   /** Last verification failure detail; a connect rewriter may surface it. */
   lastError: string | null = null
+  /**
+   * `changed` when a known key (stored, or already accepted in this probe)
+   * did not match. The probe maps that to the `host-key-changed` wire marker.
+   */
+  lastFailure: 'changed' | 'unknown' | null = null
+  /** Fingerprints accepted during this guard's life and not written to the store. */
+  private readonly ephemeral = new Map<string, string>()
 
   constructor(
     private readonly store: HostKeyStore,
     private readonly mode: HostKeyMode,
+    /** When false, `accept-new` does not record an unknown key. */
+    private readonly persistUnknown = true,
   ) {}
 
   /** Whether the given host:port has a stored fingerprint. */
@@ -179,6 +193,7 @@ export class HostKeyGuard {
   verifier(host: string, port: number): (key: Buffer) => boolean {
     const id = `${host}:${port}`
     return (key: Buffer): boolean => {
+      this.lastFailure = null
       if (this.mode === 'off') return true
       const fingerprint = keyFingerprint(key)
       const stored = this.store.get(host, port)
@@ -187,14 +202,33 @@ export class HostKeyGuard {
           this.lastError = null
           return true
         }
+        this.lastFailure = 'changed'
         this.lastError =
           `host key for ${id} CHANGED (stored ${stored.fingerprint}, received ${fingerprint}) — ` +
           'possible man-in-the-middle; discard the record (hostkey.forget) to re-trust if this is expected'
         return false
       }
       if (this.mode === 'verify') {
+        this.lastFailure = 'unknown'
         this.lastError = `unknown host key for ${id} (hostKeyMode=verify) — connect once with accept-new to trust it`
         return false
+      }
+      const seen = this.ephemeral.get(id)
+      if (seen !== undefined) {
+        if (seen === fingerprint) {
+          this.lastError = null
+          return true
+        }
+        this.lastFailure = 'changed'
+        this.lastError =
+          `host key for ${id} CHANGED during probe (seen ${seen}, received ${fingerprint}) — ` +
+          'possible man-in-the-middle; the probe does not trust it'
+        return false
+      }
+      if (!this.persistUnknown) {
+        this.ephemeral.set(id, fingerprint)
+        this.lastError = null
+        return true
       }
       const entries = this.store.load()
       entries[id] = {

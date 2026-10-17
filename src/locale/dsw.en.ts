@@ -121,6 +121,8 @@ const en: Record<DswKey, string> = {
   'rpc.sessionRoute': 'session.route failed',
   'rpc.connectionsList': 'connections.list failed',
   'rpc.configHosts': 'config.hosts failed',
+  'rpc.configProbe.unknown': 'Not a Host alias in ~/.ssh/config',
+  'rpc.configProbe.noUser': 'This Host has no username, so it cannot be checked',
   'rpc.pickNative': 'local.pickNative failed',
   'rpc.connectionsResolve': 'connections.resolve failed',
   'rpc.connectionsAdd': 'connections.add failed',
@@ -340,11 +342,13 @@ const en: Record<DswKey, string> = {
 
   /* ------------------------------------------------------------ status.tsx */
   'status.rpc.failed': 'dsw rpc failed',
-  'status.unknown': 'not detected',
-  'status.active': 'connected',
-  'status.offline': 'offline',
-  'status.connecting': 'connecting…',
-  'status.checking': 'checking…',
+  // UX-13: reachability, not a session attachment. Three labels only.
+  'status.unknown': 'Checking',
+  'status.active': 'Reachable',
+  'status.offline': 'Unreachable',
+  'status.hostKey.changed': 'Host key changed',
+  'status.connecting': 'Checking',
+  'status.checking': 'Checking',
   'status.retryAction.title': 'Re-check and try to connect',
   'status.retryAction.compact': 'Reconnect',
   'status.retryAction.full': 'Re-check and try to connect',

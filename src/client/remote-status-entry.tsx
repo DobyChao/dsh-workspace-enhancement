@@ -5,8 +5,8 @@
  *
  * One row in the session header action strip: the tri-state state of the
  * connection the current session's cwd routes to (dot + state label), plus a
- * click that re-checks and reconnects. A local session renders nothing at all —
- * the strip stays exactly as upstream built it.
+ * re-check button that stays visible in every state. A local session renders
+ * nothing at all — the strip stays exactly as upstream built it.
  * @module dsh-workspace-enhancement/client/remote-status-entry
  */
 
@@ -15,6 +15,8 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteSessionFacts, RemoteStatusSeats } from './remote-status.ts'
 import { remoteConnectionIdOf } from './remote-status.ts'
 import type { RpcCall } from './status.tsx'
+import { headerRecheckLabelKey, recheckStaysVisible } from './recheck.ts'
+import { statusTooltip } from './status-detail.ts'
 import { CONN_STATE_LABEL_KEY, getStatusCenter, useConnStatus, zhBaseline } from './status.tsx'
 import { ServerIcon } from './icons.tsx'
 import styles from './status.module.css'
@@ -49,7 +51,7 @@ function useRemoteFacts(sessionId: string, seats: RemoteStatusSeats): RemoteSess
   return facts
 }
 
-/** The remote-status row: dot + state label, click = re-check and reconnect. */
+/** The remote-status row: dot + state label, and a re-check button in every state. */
 export function RemoteStatusAction(props: RemoteStatusActionProps): JSX.Element | null {
   const t = props.t ?? zhBaseline
   const facts = useRemoteFacts(props.sessionId, props)
@@ -65,22 +67,29 @@ export function RemoteStatusAction(props: RemoteStatusActionProps): JSX.Element 
     state === 'active' ? styles.dotActive : state === 'offline' ? styles.dotOffline : styles.dotUnknown
   }`
   return (
-    <button
-      type="button"
+    <span
       data-dsw-remote-status={connId}
       // The global class stays: it is the DOM contract the UAT scripts and the
       // row-badge layer select on. `styles.statusChip` supplies the look.
       className={`dsw-remote-status ${styles.statusChip}`}
-      title={t('header.remote.title', { machine })}
+      title={statusTooltip(view?.message, t('header.remote.title', { machine }), t('status.hostKey.changed'))}
       aria-label={t('header.remote.label')}
-      disabled={busy}
-      onClick={() => { void reconnect() }}
     >
       <ServerIcon className={styles.statusChipIcon} width={13} height={13} />
       <span className={dotClass} aria-hidden />
       <span className={busy ? `${styles.label} ${styles.labelBusy}` : styles.label}>
         {busy ? t('status.checking') : t(CONN_STATE_LABEL_KEY[state])}
       </span>
-    </button>
+      {recheckStaysVisible(state) && (
+        <button
+          type="button"
+          data-dsw-action="reconnect"
+          title={t('status.retryAction.title')}
+          disabled={busy}
+          className={styles.retry}
+          onClick={() => { void reconnect() }}
+        >{t(headerRecheckLabelKey())}</button>
+      )}
+    </span>
   )
 }

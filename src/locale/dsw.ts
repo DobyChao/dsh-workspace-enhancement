@@ -132,6 +132,8 @@ export const zh = {
   'rpc.sessionRoute': '会话路由失败',
   'rpc.connectionsList': '连接列表失败',
   'rpc.configHosts': 'SSH 配置主机读取失败',
+  'rpc.configProbe.unknown': '不是 ~/.ssh/config 里的 Host 别名',
+  'rpc.configProbe.noUser': '该 Host 没有用户名，无法检测',
   'rpc.pickNative': '系统选择器调用失败',
   'rpc.connectionsResolve': '连接解析失败',
   'rpc.connectionsAdd': '连接添加失败',
@@ -349,11 +351,13 @@ export const zh = {
 
   /* ------------------------------------------------------------ status.tsx */
   'status.rpc.failed': 'dsw rpc 失败',
-  'status.unknown': '未检测',
-  'status.active': '已连接',
-  'status.offline': '离线',
-  'status.checking': '检测中…',
-  'status.connecting': '连接中…',
+  // UX-13: reachability, not session attachment. Three labels only.
+  'status.unknown': '检测中',
+  'status.active': '可连接',
+  'status.offline': '不可连接',
+  'status.hostKey.changed': '主机密钥已变更',
+  'status.checking': '检测中',
+  'status.connecting': '检测中',
   'status.retryAction.title': '重新检测并尝试连接',
   'status.retryAction.compact': '重连',
   'status.retryAction.full': '重新检测并尝试连接',

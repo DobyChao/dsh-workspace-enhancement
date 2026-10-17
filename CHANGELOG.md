@@ -13,9 +13,15 @@
 
 ### 修复
 
+- **探测不写入主机密钥（`UX-13`）**：打开界面触发的 `conn.probe`，以及 ssh-config 主机的 `config.probe`，不再用 accept-new 把未见过的主机密钥写进 known_hosts。已记录的密钥仍会核对，对不上仍是不可连接，悬停写「主机密钥已变更」（Host key changed），和网络不通分开；未见过的密钥只在这一次探测的内存里接受。连接、添加机器、以及手点「重新检测」（`conn.reconnect`）仍按 accept-new 记录。
 - **远程文件点击预览（`REQ-A6`）**：`remote.workspaceFiles` 是关联属性，未 inject 时读取会抛 `without inject`，点击停在「选择一个文件以预览」。改为 `ctx.get('remote.workspaceFiles')` 探测；缺了也不挡页内 `browse.read`。
 - **设为当前（`UX-11`）**：未指定连接时，目录选择从当前机器开始浏览；成功横幅点名该机器；当前行有选中样式。
 - **部署失败样式（`UX-12`）**：`core.deploy` 返回失败时用红色错误横幅和红色芯片，不再走绿色成功横幅。
+
+### 变更
+
+- **连接状态自动探测与文案（`UX-13`）**：侧栏列出远程机器、打开远程会话，或打开添加工作区面板时自动探测，不再停在「未检测」等点击。「SSH 配置主机」行同样探测（已保存的连接复用其 id；只在 `~/.ssh/config` 里的别名走 `config.probe`，不写入注册表）。探测有防抖、可达结果缓存和失败退避。「重新检测」在检测中、可连接、不可连接三种状态都保留，会话头「远程状态」里也有这颗按钮。可达性三态为检测中 / 可连接 / 不可连接（Checking / Reachable / Unreachable），不再把探测结果叫「已连接」。
+- **侧栏徽章对齐行（`UX-8` 选项 A）**：分组行按 `data-row-key` 匹配连接；没有该属性的宿主（0.1.5）仍按标题匹配。Session 行不迁到官方槽。
 
 ## [0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-13)
 

@@ -86,9 +86,10 @@ export const COPY = {
   'side.mount': { zh: '挂载', en: 'Mount' },
 
   /* ---------------------------------------------------------- status */
-  'status.unknown': { zh: '未检测', en: 'not detected' },
-  'status.active': { zh: '已连接', en: 'connected' },
-  'status.offline': { zh: '离线', en: 'offline' },
+  'status.unknown': { zh: '检测中', en: 'Checking' },
+  'status.active': { zh: '可连接', en: 'Reachable' },
+  'status.offline': { zh: '不可连接', en: 'Unreachable' },
+  'status.hostKey.changed': { zh: '主机密钥已变更', en: 'Host key changed' },
 
   /* ------------------------------------------------- DSH shell (third party) */
   'shell.settings.trigger': { zh: '设置', en: 'Settings' },

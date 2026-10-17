@@ -187,3 +187,21 @@ test('hostLocaleOf（UPSTREAM-8）：0.1.7 SettingsForms 服务没有 get ——
   assert.doesNotThrow(() => locale.t('tool.output.exitCode', { code: 1 }))
 })
 
+test('UX-13: reachability labels are Checking / Reachable / Unreachable in both languages', () => {
+  assert.equal(zh['status.unknown'], '检测中')
+  assert.equal(zh['status.checking'], '检测中')
+  assert.equal(zh['status.connecting'], '检测中')
+  assert.equal(zh['status.active'], '可连接')
+  assert.equal(zh['status.offline'], '不可连接')
+  assert.equal(zh['status.hostKey.changed'], '主机密钥已变更')
+  assert.equal(en['status.unknown'], 'Checking')
+  assert.equal(en['status.checking'], 'Checking')
+  assert.equal(en['status.connecting'], 'Checking')
+  assert.equal(en['status.active'], 'Reachable')
+  assert.equal(en['status.offline'], 'Unreachable')
+  assert.equal(en['status.hostKey.changed'], 'Host key changed')
+  // Session attachment keeps its own wording.
+  assert.equal(zh['side.conn.heading'], '已连接的机器')
+  assert.equal(en['side.conn.heading'], 'Connected machines')
+})
+

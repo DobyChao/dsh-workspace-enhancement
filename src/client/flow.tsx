@@ -8,13 +8,14 @@
  * providers consume (see README for the workspace-adoption seam).
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConfigHostView, ConnectionView, WireEntry, WireListing, WireResult } from './index.ts'
 import { ConnectionForm } from './form.tsx'
 import type { ConnectionDraft } from './form.tsx'
 import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
-import { ConnStatusBadge, zhBaseline } from './status.tsx'
+import { configHostProbeTarget, configHostRpc } from './config-host-status.ts'
+import { ConnStatusBadge, createStatusCenter, zhBaseline } from './status.tsx'
 import { backdropDismissProps, cx, useDialogA11y } from './ui.ts'
 import { initialBrowseTarget } from './browse-target.ts'
 import {
@@ -228,6 +229,37 @@ function describeRemoteFailure(raw: string, t: TranslateNS<'dsw'>): RemoteFailur
     return { title: t('flow.error.unreachable.title'), text: t('flow.error.unreachable.text'), needsAuth: false }
   }
   return { title: t('flow.error.generic.title'), text: raw, needsAuth: false }
+}
+
+/**
+ * Reachability badge for one 「SSH 配置主机」 row. A host that matches a saved
+ * connection watches that id. Otherwise the badge probes `config.probe` and
+ * does not save a machine. Mounted when the panel lists the row.
+ */
+function ConfigHostStatusBadge({
+  host, connections, rpc, t,
+}: {
+  host: ConfigHostView
+  connections: readonly ConnectionView[]
+  rpc: FlowInjected['rpc']
+  t: TranslateNS<'dsw'>
+}): JSX.Element {
+  const target = configHostProbeTarget(host, connections)
+  const center = useMemo(() => {
+    if (target.kind !== 'config') return null
+    return createStatusCenter(configHostRpc(rpc, target), undefined, undefined, () => t)
+  }, [target.kind, target.alias, target.id, rpc, t])
+  return (
+    <span className={styles.connectionStatus}>
+      <ConnStatusBadge
+        id={target.id}
+        rpc={rpc}
+        {...(center !== null ? { center } : {})}
+        t={t}
+        compact
+      />
+    </span>
+  )
 }
 
 /** The directory-flow occupant registered into both workspace holes. */
@@ -855,6 +887,9 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                             </span>
                           </span>
                         </button>
+                        {!connectionsLoading && (
+                          <ConfigHostStatusBadge host={host} connections={connections} rpc={rpc} t={t} />
+                        )}
                       </li>
                     )
                   })}
