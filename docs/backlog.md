@@ -16,9 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-13 | 子进程契约把 watchLinuxScopeStart 归为内部方法 | doing | P2 | `dsh-subprocess-local@0.2.1-rc.2` 私有 systemd-scope 钩子，归入 `INTERNAL_METHODS`。drift [39016266340](https://github.com/DobyChao/dsh-workspace-enhancement/actions/runs/39016266340) 两例红 |
 | PUB-9 | 0.2.4 发布 | doing | P1 | 插件与 core 同升 0.2.4（围栏档在新工件；同 major.minor 不强制重部署）。合并后打 tag `v0.2.4` 并建 GitHub Release。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
-| REQ-A6 | 适配 dsh-better-sidebar 插件 | doing | P2 | optional peer 注册 `dsw:workspaces`（复用 browse.files 与远程状态）。树含 `.dsh-uploads` / `.dsh-artifacts` 与工作区内产物；宿主 `openResource` 可用时打开文档预览，面板内预览文本/图片/PDF。B 只认这两类路径。不抢 files。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md) |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -49,6 +47,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-A6 | 远程上传/产物可在宿主工作区文件页浏览 | done | P2 | 主路径：宿主「工作区文件」页（ctx.fs，不需 better-sidebar）。optional「远程文件」tab 仍作增强。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md)；决定与证据见 [R55](./rounds/R55-req-a6-host-files.md) |
+| UPSTREAM-13 | 子进程契约把 watchLinuxScopeStart 归为内部方法 | done | P2 | PR #76 已合入。`watchLinuxScopeStart` 归入内部方法。drift [39016266340](https://github.com/DobyChao/dsh-workspace-enhancement/actions/runs/39016266340) 仅此两例。issue #75 不关 |
 | UX-13 | 连接状态自动探测与可达性文案 | done | P2 | 打开即探测，不写入主机密钥。密钥对不上悬停「主机密钥已变更」。重新检测三态都在。脚本 [UX-13](./uat/UX-13-8-status.md) |
 | UX-8 | 侧栏行徽章按 data-row-key 对齐 | done | P2 | 分组行按 data-row-key 对齐（无锚回退标题）。Session 行槽迁移不做。脚本 [UX-8](./uat/UX-13-8-status.md) |
 | REQ-I26 | 远程组件覆盖 linux-arm64 | done | P2 | linux-arm64 与 linux-x64 同工件：uname 选包、独立 sha、CI/pack 双 tarball。rg 按架构。Windows 远端仍不做。尾巴：arm64 实机部署 |
