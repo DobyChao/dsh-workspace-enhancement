@@ -21,6 +21,8 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | todo | P1 | 2026-10-19 lab（插件 0.2.5 + better-sidebar 0.28.0）。路径条印占位 cwd，树是远端条目。打开被本地 stat，ENOENT。cwd 保持占位。验收：路径条显示远端路径，打开读到正文。见 [调查](./notes/lab-placeholder-ui.md) |
+| BUG-17 | 远程会话终端按本机 shell 启动 | todo | P1 | 2026-10-19 同一 lab。shell 探测无 cwd，答 Windows；启动按占位 cwd 去远端。面板只显示「终端错误：null」。验收：远端会话开远端 shell，本机会话仍本机。见 [调查](./notes/lab-placeholder-ui.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
