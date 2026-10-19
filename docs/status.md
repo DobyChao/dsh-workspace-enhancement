@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-17 11:48 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-19 03:58 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.4` |
+| package.json 版本 | `0.2.5` |
 | npm 已发布版本 | `0.2.4` |
 | 最新 tag | `v0.2.4` |
-| 分支 / HEAD | `cursor/req-a6-host-files-97f4` / `cada0a6` |
-| HEAD 提交 | `docs(req-a6): accept host workspace files as the primary path` (2026-10-17) |
+| 分支 / HEAD | `cursor/pub-10-host-0-2-1-5a81` / `73fc0c4` |
+| HEAD 提交 | `feat(release): declare host 0.2.1 support and package 0.2.5` (2026-10-19) |
 | 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
@@ -22,7 +22,7 @@
 | 单测用例（静态计数） | 747 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
-| 轮次报告 | 55 |
+| 轮次报告 | 56 |
 
 ## 待办分布（docs/backlog.md）
 
@@ -32,7 +32,7 @@
 | `doing` | 1 |
 | `blocked` | 7 |
 | `done` | 93 |
-| `shipped` | 10 |
+| `shipped` | 11 |
 | `dropped` | 16 |
 
 ## 被挡住 / 待拍板
