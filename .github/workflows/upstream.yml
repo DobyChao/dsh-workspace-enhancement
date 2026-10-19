@@ -209,10 +209,12 @@ jobs:
         # → 404 → boot smoke died).
         # `tag:` resolves every host-shared package through a dist-tag; `family:`
         # pins them all to one exact version.
-        # UPSTREAM-10: the union peer pin claims TWO families — 0.2.0-rc.1 rides
-        # the moving `next` tag (that is where the 0.2.0 line ships today), while
-        # 0.1.7-rc.2 stays covered by an exact-version channel so the claim can
-        # never outrun its probe after `next` moves on.
+        # The union peer pin claims THREE families. 0.2.1-rc.1 rides the moving
+        # `next` tag (host and seam `next` are 0.2.1-rc.2 as of 2026-10-19;
+        # `^0.2.1-rc.1` covers later prereleases of that same tuple). 0.2.0-rc.1
+        # left `next` with that move, so it has an exact-version channel again,
+        # same recipe as pinned-0.1.7-rc.2. Every seam peer publishes all three
+        # versions, so the install step is the existing tag-or-exact recipe.
         include:
           - channel: next
             tag: next
@@ -220,6 +222,9 @@ jobs:
           - channel: alpha
             tag: alpha
             family: ''
+          - channel: pinned-0.2.0-rc.1
+            tag: ''
+            family: 0.2.0-rc.1
           - channel: pinned-0.1.7-rc.2
             tag: ''
             family: 0.1.7-rc.2

@@ -16,7 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| PUB-9 | 0.2.4 发布 | doing | P1 | 插件与 core 同升 0.2.4（围栏档在新工件；同 major.minor 不强制重部署）。合并后打 tag `v0.2.4` 并建 GitHub Release。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
+| PUB-10 | 0.2.5 发布 | doing | P1 | 插件与远程组件同升 0.2.5。peer 扩到 `^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`。合并后打 tag `v0.2.5`、GitHub Release；npm 发布等所有者 Approve。本 PR 不打 tag、不发布。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -47,6 +47,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| PUB-9 | 0.2.4 发布 | shipped | P1 | tag [v0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.4)；npm latest=0.2.4。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
 | REQ-A6 | 远程上传/产物可在宿主工作区文件页浏览 | done | P2 | 主路径：宿主「工作区文件」页（ctx.fs，不需 better-sidebar）。optional「远程文件」tab 仍作增强。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md)；决定与证据见 [R55](./rounds/R55-req-a6-host-files.md) |
 | UPSTREAM-13 | 子进程契约把 watchLinuxScopeStart 归为内部方法 | done | P2 | PR #76 已合入。`watchLinuxScopeStart` 归入内部方法。drift [39016266340](https://github.com/DobyChao/dsh-workspace-enhancement/actions/runs/39016266340) 仅此两例。issue #75 不关 |
 | UX-13 | 连接状态自动探测与可达性文案 | done | P2 | 打开即探测，不写入主机密钥。密钥对不上悬停「主机密钥已变更」。重新检测三态都在。脚本 [UX-13](./uat/UX-13-8-status.md) |

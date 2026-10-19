@@ -9,7 +9,8 @@
 
 | 插件版本 | 宿主 `@deepseek-ai/dsh` | 状态 | 说明 |
 |---|---|---|---|
-| 0.2.4（当前发布） | `^0.1.7-rc.2 || ^0.2.0-rc.1`（**联合双家族**） | 支持 | 插件与远程组件同为 `0.2.4`。围栏档（`REQ-I29`：bwrap 功能探测 + Landlock 后备 + `fenceinfo`）、`REQ-I27` confine 逐次策略、`REQ-I24` 副根同权、`AUDIT-7` 远程单一路径、`BUG-12`/`BUG-13`/`BUG-14`/`BUG-15`、`UX-4`/`UX-7`/`UX-9`/`UX-10`、`INFRA-23` L1 CI、`UPSTREAM-11` 桌面周探。版本门仍按 major.minor 接受已部署 0.2.x（不强制重部署）；要用围栏档再部署一次。peer 仍是联合 pin |
+| 0.2.5（本版，待发布） | `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1`（**联合三家族**） | 支持 | 插件与远程组件同为 `0.2.5`。正式纳入 0.2.1-rc 家族：`^0.2.1-rc.1` 的 caret 覆盖同 tuple 的 `0.2.1-rc.2`（默认 semver 不含别的 tuple 的预发布，也不含 `0.2.1-alpha.*`）。运行时证据：ZCode lab 宿主 `@deepseek-ai/dsh@0.2.1-rc.2` boot/闸门通过；`watchLinuxScopeStart` 归内部方法见 PR [#76](https://github.com/DobyChao/dsh-workspace-enhancement/pull/76)。宿主 boot 用 `includePrerelease: true`，旧双家族 pin 在 boot 上已能匹配 `0.2.1-rc.2`；npm/pnpm 默认解析不开该开关，所以安装面仍要这条显式备选。版本门仍按 major.minor 接受已部署 0.2.x。npm 发布要等本 PR 合并后所有者 Approve |
+| 0.2.4 | `^0.1.7-rc.2 || ^0.2.0-rc.1`（**联合双家族**） | 支持 | npm `0.2.4`（2026-10-13，[v0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.4)）。插件与远程组件同为 `0.2.4`。围栏档（`REQ-I29`）、`REQ-I27` confine、`REQ-I24` 副根同权、`AUDIT-7`、`BUG-12`–`BUG-15`、`UX-4`/`UX-7`/`UX-9`/`UX-10`、`INFRA-23`、`UPSTREAM-11`。peer 停在双家族，**不**声明 0.2.1 |
 | 0.2.3 | `^0.1.7-rc.2 || ^0.2.0-rc.1`（**联合双家族**） | 支持 | npm `0.2.3`（2026-09-30）。发版动机：0.2.0 宿主强制 peer，npm 上的 0.2.2 装不上。核心工件仍 `0.2.2`（同线免重部署）。含 `UPSTREAM-8/9/10`、`INFRA-19/20/21/22`、`REQ-I14`/`REQ-I17`/`REQ-I21` |
 | 0.2.2 | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.1 之后：`BUG-10` 远程目录包 skill 三层修复（宿主 join 三种破坏形态）、`UPSTREAM-5` 0.1.7-rc 接缝（fs `watch` + subprocess `terminalEnvironment`，README 增 0.1.7-rc 行）、`UPSTREAM-7` scope watch 哨兵、drift workflow 加固。远程组件（代码与协议中仍称 core）工件 `0.2.2`（serve 世界绑定，需重部署）。0.1.7-rc.2 宿主上有两处运行时断点（locale 渲染 + 后台 jobs），修复随 0.2.3 发布 |
 | 0.2.1 | `^0.1.5-rc.1`（**单家族**） | 支持 | 0.2.0 之后：`REQ-I10` 日落 pick、`REQ-I15` 读面降级、`REQ-I16` bash 按工作区注入、`BUG-7`/`BUG-8`/`BUG-9`。远程组件工件 `0.2.1`（hello 从误留的 `0.2.0-dev` 对齐）。宿主窗口与 0.2.0 相同 |
@@ -47,6 +48,7 @@
 | 2026-09-28（**`0.1.7-rc.2` 运行时两断点，用户实机报告**） | ① `dsh-settings@0.1.7-rc.2` 把 settings 服务整体重写为 `SettingsForms`（`describe`/`update`/`replace`/`mutate` 配置表单面），`get(namespace)` 读取器消失；② `dsh-jobs@0.1.7-rc.2` 的 `start` 契约：`owner` 从 **Agent 实例**改为 **SessionId 字符串**，`run(job)` 收 `JobHandle`，输出从 hooks 的 `readOutput` 改为 spec 的 `output` **pull source**（registry 泵进 ring，模型经 `read` 消费带 channel 的 chunks） | ① 凡渲染本地化标记（空输出 / exit code / 沙箱拒绝）即 `TypeError: settings.get is not a function`，render 直接抛；② 三处后台注册（`sw_exec` 远程 / `sw_exec local` / win32 `bash`）`owner` 传 Agent 对象 ⇒ 0.1.7 的 owner 预检拒收，后台全灭；且不接 `output` 的话即便过了 owner，`job_output` 也只会读到空 ring | **已修（`UPSTREAM-8`）**：① `localePreferenceOf` 家族自适应——settings 有 `get` 走 0.1.5 读法，没有则回退 EN（0.1.7 的 `describe()` 每次遍历全部 profile 条目、带 revision 副作用，是配置 UI 读取不是热路径读；官方 bash 工具 0.1.7 自己也硬编码 EN 标记）；② `jobOwnerOf`（以 `readAt` 在场判 ring 家族：owner 传 `agent.id`）+ `collectSources`（collect readers 晚绑定 pull source，官方 bash 同款接法）+ `deltaRingSource`（宿主 shell 增量 `readOutput` 的字节游标桥，8 MiB 保留界 + UTF-8 码点边界裁剪）；0.1.5 路径原样保留（owner 实例 + `readOutput` hook） | `test/locale-host.test.ts`（0.1.7 `SettingsForms` fixture：不抛、回退 EN）+ `test/exec-tools.test.ts`（`jobOwnerOf` / `deltaRingSource` 字节游标与裁剪 + 三处 ring 家族注册用例）+ drift `next` 通道跑全部。**教训**：typecheck / 单测 / boot 三层当时全绿——断的是运行时契约而非编译期形状，检出来靠用户实机；0.1.7 契约 fixture 本轮已从磁盘权威源（`@next` scratch 安装）核出并锁进测试 |
 | 2026-10-03（**`latest` 翻 0.2.0 线 + alpha 翻 0.2.1 代**，认领） | 宿主包 `latest` 从 `0.1.7-rc.2` → **`0.2.0-rc.2`**（#56）：新装宿主默认 0.2.0 家族（强制 peer）；`alpha` 同时 `0.1.7-alpha.2` → **`0.2.1-alpha.1`**（下一代预警，周四 drift 自动探） | 联合 pin `^0.1.7-rc.2 || ^0.2.0-rc.1` 按语义化覆盖 rc.2——**发布前终检即实证**：0.2.3 tarball 在 0.2.0-rc.2 全家安装无 ERESOLVE + boot SMOKE PASS；lab 长期跑 rc.2 宿主 | **结论：pin 不动，新装即可用**。主 dev 家族是否从 0.1.7 翻到 0.2.0 属 owner 拍板（UPSTREAM-9 先例是 latest 翻即升；当前 0.2.0 仍是 rc 线，联合 pin 已保安装面，不急）。附带：#57 alpha 竞态实锤（ETARGET 10:13:13 vs 补发包 10:13:16 上架，差 3 秒；其后三天的定时 drift 全绿），上游发版残缺非我方不兼容，随发补齐 | 每日 tag-watch + 发布前终检（scratch 安装/boot）+ drift 三通道 |
 | 2026-09-29（**`next` 再进：`0.2.0-rc.2`**，认领即收口） | 距 rc.1 认领仅数小时，`next` 从 `0.2.0-rc.1` → **`0.2.0-rc.2`**（13 个 seam 包同步）；tag-watch 当日再响（#52），drift 家族漂移（#53） | 按哨兵指引**手动 dispatch drift**：`drift (next)`（=rc.2 全家重装 + typecheck + 全量单测 + 静态门 + build + boot 冒烟）**绿**（8m44s）；本地 scratch 双证：宿主 `0.2.0-rc.2` + 13 seam `@next` + 当前分支 pack tarball 一次安装**无 ERESOLVE**（0.2.0 宿主强制 peer 下联合 pin 直接可装），同树 boot 哨兵 **SMOKE PASS**（boot + `/api/dsw` 通道 200 ok=true） | **结论：联合 pin `^0.1.7-rc.2 || ^0.2.0-rc.1` 按语义化版本已覆盖 rc.2（caret 含同 tuple 预发布），无需改 pin**；PUB-8（0.2.3）发版窗口不受影响——rc.2 宿主装 0.2.3 即开箱可用。tag 基线已认领（composition 无漂移，scope-watch 绿，不重写）；#52/#53 关闭 | 每日 tag-watch + 手动 dispatch drift（哨兵指引动作）+ 本地 scratch 安装/ boot 探针（R41/R42 磁盘权威源法同款流程） |
+| 2026-10-19（**正式声明 0.2.1-rc 家族**，`PUB-10`） | 宿主 dist-tag：`latest=0.2.0-rc.2`、`next=0.2.1-rc.2`、`alpha=0.2.1-alpha.5`。13 个 seam 的 `next` 同步为 `0.2.1-rc.2`，且 `0.1.7-rc.2` / `0.2.0-rc.1` / `0.2.1-rc.2` 三版都在 registry 上。`dsh-app-boot@0.2.1-rc.2` 的 `satisfies` 是 `semver.satisfies(runtime, range, { includePrerelease: true })`，对照的是 **app-boot 自身版本**（与 `dsh --version` 相同），不是每个 seam 的安装版本 | 旧 pin `^0.1.7-rc.2 || ^0.2.0-rc.1` 在 **boot** 上已匹配 `0.2.1-rc.2`（includePrerelease 把 caret 放到 `<0.3.0`），lab 因此能过；**默认 semver**（npm/pnpm）对 `0.2.1-rc.2` 为 false，安装面并不满足。alpha `0.2.1-alpha.5` < `0.2.1-rc.1`，默认 semver 下不进新 pin | **已声明**：peer 扩为 `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1`。`upstream.yml` 的 `next` 通道装 `0.2.1-rc.*`；`next` 离开 0.2.0 后补 `pinned-0.2.0-rc.1`（与 `pinned-0.1.7-rc.2` 同一套精确版本安装）。devDependencies 仍是 `^0.1.7-rc.2` | 闸门 #6（每个备选家族名必须出现在 `upstream.yml`）+ drift 四通道 |
 | 2026-10-07（**组合漂移认领**，#58） | scope-watch 响（10-05 开 issue）：宿主组合**纯新增**——`dsh@latest`(0.2.0-rc.2) +`dsh-experimental-schedule-bundle`（Schedule 任务页 + 时间上下文进 Web 组合）；`dsh@alpha`(0.2.1-alpha.1) +`dsh-tool-schedule`（工具面持久 after/at/固定频率提醒）、`dsh-experimental-auto-review`（Auto 权限档 per-tool LLM 审批）、`dsh-experimental-inspector-profile`；`dsh-web-app@alpha` +8 客户端包（快捷键×2、session-log 上传设置、产品埋点/OTel×3、schedule 系×3） | **零契约冲击**：逐包核 peer/dependencies——新增包无一依赖 `dsh-subprocess` / `dsh-fs(-local)` 接缝家族（schedule 系 peer 是 llm/agent/tools/session/persistence），`ctx.subprocess`/`ctx.fs` 接缝所有权不变；基线 diff 无任何**移除**，SSH 四包仍未被收编（UPSTREAM-6 现况不变） | **结论：认领，零代码动作**。pin 不动（alpha 0.2.1 本就不在联合 pin 支持面）。前瞻一条：`auto-review` 若进正式线，我方 `sw_connect`/`sw_status` 的工具描述要经得起 LLM 审批者读 | 每日 tag-watch + 周一 scope-watch（本轮即其战果）+ 周四 drift(alpha) 自动探 0.2.1 代 |
 
 > 第二个案例是建立 CI 的直接动因：**依赖升级能悄悄弄坏测试，而当时没有任何机制会喊一声。**
@@ -57,7 +59,7 @@
 |---|---|---|---|
 | L1 静态 | 所有 peer 必须声明**同一个**范围（可以是 `||` 联合）；dev 必须是该范围里的一个备选；peer 范围必须带 `-rc.`；宿主包不得进 `dependencies`；**联合范围里每个家族都必须在 `upstream.yml` 里被点名** | `scripts/check.mjs` #6 | 每次 `npm run check` |
 | L2 升级 | Renovate 把 `@deepseek-ai/*` 分组为一个 PR（peer 与 dev 同步升级），禁止自动合并 | `renovate.json` | 每周 |
-| L3 哨兵 | **两通道**探测：`next` / `alpha` 各自重装家族，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue。**scope watch**（`UPSTREAM-7`）：每周一同一 workflow 比对宿主包 `@deepseek-ai/*` 组成与 `scripts/upstream-baseline.json`，漂移即开 issue（SSH 四包收编单独点名，是 `UPSTREAM-6` 复评触发器）；**desktop watch**（`UPSTREAM-11`）每周一探 monorepo 桌面组合文件（§7.3）——private 桌面包的唯一覆盖 | `.github/workflows/upstream.yml` + `scripts/upstream-watch.mjs` | 每周一 + 每周四（alpha）+ 每日 tag-watch + 手动 |
+| L3 哨兵 | **移动通道** `next` / `alpha` 加每个已声明、且 `next` 不再覆盖的家族的**精确版本通道**，各自重装，跑 typecheck + 全量单测 + 静态闸门 + boot 冒烟；任一红则自动开/更新 issue。**scope watch**（`UPSTREAM-7`）：每周一同一 workflow 比对宿主包 `@deepseek-ai/*` 组成与 `scripts/upstream-baseline.json`，漂移即开 issue（SSH 四包收编单独点名，是 `UPSTREAM-6` 复评触发器）；**desktop watch**（`UPSTREAM-11`）每周一探 monorepo 桌面组合文件（§7.3）——private 桌面包的唯一覆盖 | `.github/workflows/upstream.yml` + `scripts/upstream-watch.mjs` | 每周一 + 每周四（alpha）+ 每日 tag-watch + 手动 |
 | L4 运行时 | 能力探测而非版本假设：可选服务 `ctx.get()` 判空、特性探测、双键回退、首用 fail-loud | `src/**`（见下） | 运行期 |
 
 L3 的判读：它红不代表要立刻改代码，而是**代表"上游已经变了，你需要看一眼"**——
@@ -68,19 +70,21 @@ L3 的判读：它红不代表要立刻改代码，而是**代表"上游已经�
 npm 上 `@deepseek-ai/dsh` 家族有三个通道：`latest` → `next`（rc）→ `alpha`（下一代）。
 **破坏性接缝变更最先落在 alpha**，其内容迟早被提升为 rc；等它变成 rc 再动，就只剩救火窗口。
 2026-09-10 当天就演示了这条链路有多快：alpha 的 `readByteRange` 上午还是"预警"，
-下午 `0.1.5-rc.1` 发布、**宿主包的 `latest` 直接指向它**。哨兵探**两条**通道：
+下午 `0.1.5-rc.1` 发布、**宿主包的 `latest` 直接指向它**。哨兵探移动通道，再加已声明家族的精确版本通道：
 
 | 通道 | 现在解析到 | 含义 |
 |---|---|---|
-| `next` | **`0.2.0-rc.2`**（2026-09-29 实测；`latest` 仍 `0.1.7-rc.2`） | 下一代 rc——红了 = 提前预警 + boot 复测入口。2026-09-29 认领：联合 pin 按语义化版本已覆盖 rc.2（`^0.2.0-rc.1` 含同 tuple 预发布），drift (next) 绿 + 本地 scratch 安装/boot 双证（见当日行）；rc.1 时代的 pin 缺口已由 `UPSTREAM-10` 联合 pin 收口 |
-| `alpha` | **`0.1.7-alpha.2`**（2026-09-25 实测） | 下一代——红了 = **提前预警**（还有提升缓冲期）。0.1.6 的 SSH 新包事实见 `ADR-0026` |
+| `next` | **`0.2.1-rc.2`**（2026-10-19 实测；`latest` 仍 `0.2.0-rc.2`） | 0.2.1 家族探针。联合 pin 的 `^0.2.1-rc.1` 覆盖同 tuple 的 rc.2。红了 = 已声明家族坏了 |
+| `alpha` | **`0.2.1-alpha.5`**（2026-10-19 实测） | 下一代预警。`^0.2.1-rc.1` 不含 alpha（`alpha` < `rc`）。红了 = 提前看，不是合并阻断 |
+| `pinned-0.2.0-rc.1` | **`0.2.0-rc.1`** | `next` 已离开 0.2.0 线。精确版本通道，安装配方与 `pinned-0.1.7-rc.2` 相同 |
+| `pinned-0.1.7-rc.2` | **`0.1.7-rc.2`** | 0.1.7 家族精确版本通道（`UPSTREAM-10`） |
 
 > **`legacy`（0.1.2-rc.1）通道已于 2026-09-11 删除**（`UPSTREAM-4`）：所有者拍板 3080 不再安装本插件、
 > 后续不考虑 0.1.2 兼容，peer 范围随之收窄为单家族，再留一条 legacy 通道就是**验证一个我们不支持的家族**。
 >
-> **seam 包自身的 `latest` 不作数**（2026-09-28 实测卡在 `0.0.1-rc.1`）：家族信号以宿主包
-> `@deepseek-ai/dsh` 的 `latest` 为准——它指向哪条 rc 线，新装宿主就提供哪个家族组合。
-> 闸门 #6 的「多家族必须多通道」检查因此不再触发——声明少一条，就必须少验一条。
+> **seam 包自身的 `latest` 不作数**（2026-09-28 实测卡在 `0.0.1-rc.1`；2026-10-19 仍是）：家族信号以宿主包
+> `@deepseek-ai/dsh` 的 dist-tag 为准。闸门 #6 在联合范围上**会触发**：每个 `||` 备选的家族名必须出现在
+> `upstream.yml`，并且该家族要有一条真正会安装它的 drift 通道（`next` 装当前 rc，离开的家族改精确版本）。
 
 **每通道都跑 boot 冒烟**（`UPSTREAM-3` ③）：原先哨兵只跑 typecheck + 单测 + 静态闸门，
 `0.1.5-rc.1`/`rc.2` 上**插件启动即崩**却全绿（F1）——「能编译」被当成了「能运行」。

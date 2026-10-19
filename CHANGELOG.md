@@ -4,6 +4,22 @@
 
 ## Unreleased
 
+## [0.2.5](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-19)
+
+0.2.4 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.5`**
+（hello / `dsh-core version` / 工件名同步）。版本门仍按 **major.minor** 接受已部署的 0.2.x，
+同线 patch **不强制**重部署。`compatHashes` 保留已发布二进制的哈希；本版构建再登记新哈希。
+
+正式支持宿主 **0.2.1-rc 家族**。13 个 seam peer 的联合范围扩为
+`^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1`（devDependencies 仍是 `^0.1.7-rc.2`）。
+caret 只覆盖同一 `[major, minor, patch]` tuple 的更晚预发布，所以 `^0.2.1-rc.1` 含
+`0.2.1-rc.2`，不含 `0.2.1-alpha.*`。宿主 boot（`dsh-app-boot@0.2.1-rc.2`）用
+`semver.satisfies(runtime, range, { includePrerelease: true })` 对照 **app-boot 版本**，
+旧双家族 pin 在 boot 上已经匹配 `0.2.1-rc.2`；npm/pnpm 默认解析不开 `includePrerelease`，
+安装面不满足，所以本版把 `^0.2.1-rc.1` 写成显式备选。`upstream.yml` 的 `next` 通道安装
+`0.2.1-rc.*`；`next` 离开 0.2.0 后增加 `pinned-0.2.0-rc.1`。运行时证据：ZCode lab 宿主
+`0.2.1-rc.2` boot/闸门通过；`watchLinuxScopeStart` 归内部方法见 PR #76。
+
 ### 新增
 
 - **better-sidebar 远程文件页（`REQ-A6`）**：`dsh-better-sidebar` 为 optional peer。装了它时注册 `dsw:workspaces`（不占用宿主 `files`），用已有远程浏览列出 `.dsh-uploads` / `.dsh-artifacts` 和工作区内产物。点击文件时，若宿主文档预览能读远程内容则 `openResource`；否则（以及同时）在页内预览文本、图片和 PDF。附属的文件查看器只认这两类路径。
@@ -20,6 +36,7 @@
 
 ### 变更
 
+- **peer 联合 pin 纳入 0.2.1-rc（`PUB-10`）**：13 个 seam peer 从 `^0.1.7-rc.2 || ^0.2.0-rc.1` 扩为 `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1`。drift：`next` 探 0.2.1（当前 `0.2.1-rc.2`），`pinned-0.2.0-rc.1` 与 `pinned-0.1.7-rc.2` 精确安装离开 `next` 的家族。tag 基线认领 `next=0.2.1-rc.2`、`alpha=0.2.1-alpha.5`（`latest` 仍是 `0.2.0-rc.2`）。
 - **连接状态自动探测与文案（`UX-13`）**：侧栏列出远程机器、打开远程会话，或打开添加工作区面板时自动探测，不再停在「未检测」等点击。「SSH 配置主机」行同样探测（已保存的连接复用其 id；只在 `~/.ssh/config` 里的别名走 `config.probe`，不写入注册表）。探测有防抖、可达结果缓存和失败退避。「重新检测」在检测中、可连接、不可连接三种状态都保留，会话头「远程状态」里也有这颗按钮。可达性三态为检测中 / 可连接 / 不可连接（Checking / Reachable / Unreachable），不再把探测结果叫「已连接」。
 - **侧栏徽章对齐行（`UX-8` 选项 A）**：分组行按 `data-row-key` 匹配连接；没有该属性的宿主（0.1.5）仍按标题匹配。Session 行不迁到官方槽。
 
