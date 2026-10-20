@@ -12,6 +12,15 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { remoteRouteFromCwd } from './transport.ts'
+import { workspaceRelative } from './remote-layout.ts'
+
+/** BUG-16: ordinary workspace previews require an explicit matching remote session. */
+export function workspacePreviewAllowed(cwd: string | undefined, connectionId: string, path: string): boolean {
+  const route = remoteRouteFromCwd(cwd)
+  if (route === null || route.connectionId !== connectionId) return false
+  const relative = workspaceRelative(route.path, path)
+  return relative !== undefined && relative !== ''
+}
 
 /** Preview transfer cap. Larger images and PDFs are refused; text is cut. */
 export const PREVIEW_MAX_BYTES = 1_572_864

@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-19 15:00 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-20 09:22 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -9,17 +9,17 @@
 |---|---|
 | package.json 版本 | `0.2.5` |
 | npm 已发布版本 | `0.2.5` |
-| 最新 tag | `v0.2.4` |
-| 分支 / HEAD | `master` / `3b633dd` |
-| HEAD 提交 | `feat(release): declare host 0.2.1 support and package 0.2.5 (#78)` (2026-10-19) |
+| 最新 tag | `v0.2.5` |
+| 分支 / HEAD | `fix/BUG-16-17-remote-panels` / `8816ab2` |
+| HEAD 提交 | `docs: record remote file panel and terminal bugs` (2026-10-19) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 76 |
-| 单测用例（静态计数） | 747 |
+| 单测文件 | 78 |
+| 单测用例（静态计数） | 754 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 56 |
@@ -28,8 +28,8 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 10 |
-| `doing` | 1 |
+| `todo` | 8 |
+| `doing` | 3 |
 | `blocked` | 7 |
 | `done` | 93 |
 | `shipped` | 11 |

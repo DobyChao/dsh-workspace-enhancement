@@ -30,6 +30,9 @@ import type { RemoteSessionsFeed } from './remote-status.ts'
 import { RemoteStatusAction } from './remote-status-entry.tsx'
 import { RemoteWorkspaceSettingsPage } from './settings.tsx'
 import { installBetterSidebar } from './better-sidebar.ts'
+import { installNativeRemoteFiles } from './native-remote-files.ts'
+import type { NativeFilesHost } from './native-remote-files.ts'
+import { NativeRemoteFile, NativeRemotePath } from './native-remote-files-view.tsx'
 import { asPreviewWire, remoteWorkspaceOf } from './remote-files.ts'
 import { RemoteFileViewer, RemoteFilesTab } from './remote-files-panel.tsx'
 import { SideWorkspacesAction } from './side-workspaces.tsx'
@@ -245,6 +248,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject(REMOTE_STATUS_SLOT, () =>
     ctx.slots.register({ ...remoteStatusRegisterOptions(t), inject: injected }, RemoteStatusAction))
   installSidebarRowBadges(ctx)
+  installNativeRemoteFiles(ctx as unknown as NativeFilesHost, NativeRemoteFile, NativeRemotePath)
   // REQ-A6: optional peer. No inject — a missing better-sidebar must not
   // keep this plugin from mounting. The tab reuses browse + remote status.
   installBetterSidebar(ctx, {

@@ -52,6 +52,10 @@
 
 `dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击始终用 `browse.read` 在页内预览文本、图片和 PDF。宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…` 只在 `ctx.get('remote.workspaceFiles')` 与 `openResource` 都能取到时额外打开；缺 inject 时 `ctx.get` 返回空，不读 `remote.workspaceFiles` 属性（那条属性会抛 `without inject`）。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
 
+`BUG-16` 的原生文件资源由独立 `dsw:remote-file` 类型认领：匹配 `dsh-resource://file/session/**`，同步核对会话远端、连接 id 和工作区路径后才参与路由，优先于宽泛的本地编辑器。组件通过 `workspace.read` 取有界文本/媒体；宿主再次要求已打开的同一远程会话与工作区范围，不放宽原有 `browse.read` 的上传/产物白名单。原生文件页 `sidebar.right.tab.files.actions` 槽提供远端路径文案，并用带我方标记的局部 CSS 隐去占位路径；树键和 cwd 不变。此显示适配只覆盖原生文件页，不接管 better-sidebar 的文件树。
+
+`BUG-17` 的 `terminalController.shells/create` 在 effect 生命周期内包一层请求级 AsyncLocalStorage，给无 cwd 的 `terminalEnvironment/resolveExecutable` 带上会话路由。SSH 引擎显式选择该连接；PTY 仍按自身 spec.cwd 路由。作用域之外无 cwd 的调用仍按宿主回答，卸载恢复原方法。
+
 ## 3. 模块地图
 
 `src/` 现 **86** 个文件：宿主 54、客户端 28、词典 4。下表按职责分组，不堆导出清单。

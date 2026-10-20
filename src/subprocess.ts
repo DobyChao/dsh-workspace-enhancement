@@ -14,7 +14,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessRuntime, SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessHandle,
   SubprocessSpawnSpec,
@@ -185,17 +185,19 @@ export class SshSubprocessEngine {
     command: string,
     env?: Readonly<Record<string, string>>,
     signal?: AbortSignal,
+    cwd?: string,
   ): Promise<string> {
     if (command.length === 0) throw new Error('subprocess-ssh: executable name must be non-empty')
     signal?.throwIfAborted()
+    const ssh = cwd === undefined ? this.ssh() : resolveSshCwd(this.ctx, cwd).transport
     if (posix.isAbsolute(command)) {
-      const result = await this.ssh().exec(
+      const result = await ssh.exec(
         `test -f ${quoteShellArg(command)} -a -x ${quoteShellArg(command)}`,
         signal !== undefined ? { signal } : undefined,
       )
       signal?.throwIfAborted()
       if (result.exitCode !== 0) {
-        throw new Error(`subprocess-ssh: command ${JSON.stringify(command)} is not an executable file`)
+        throw new SubprocessExecutableNotFoundError(`subprocess-ssh: command ${JSON.stringify(command)} is not an executable file`)
       }
       return command
     }
@@ -206,26 +208,27 @@ export class SshSubprocessEngine {
     }
     const path = env?.PATH
     const prefix = path === undefined ? '' : `PATH=${quoteShellArg(path)} `
-    const result = await this.ssh().exec(`${prefix}command -v -- ${quoteShellArg(command)}`, signal !== undefined ? { signal } : undefined)
+    const result = await ssh.exec(`${prefix}command -v -- ${quoteShellArg(command)}`, signal !== undefined ? { signal } : undefined)
     signal?.throwIfAborted()
     const executable = result.stdout.trim()
     if (result.exitCode !== 0
       || executable.length === 0
       || executable.includes('\n')
       || (!posix.isAbsolute(executable) && !executable.includes('/'))) {
-      throw new Error(`subprocess-ssh: executable ${JSON.stringify(command)} did not resolve to one absolute path`)
+      throw new SubprocessExecutableNotFoundError(`subprocess-ssh: executable ${JSON.stringify(command)} did not resolve to one absolute path`)
     }
-    return posix.isAbsolute(executable) ? executable : posix.resolve(this.ssh().cwd, executable)
+    return posix.isAbsolute(executable) ? executable : posix.resolve(ssh.cwd, executable)
   }
 
   /**
    * Shell facts of the remote machine. Never `process.platform`: this provider
    * executes over SSH. `mingw`/`msys`/`cygwin` count as Windows.
    */
-  async terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+  async terminalEnvironment(signal?: AbortSignal, cwd?: string): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
     signal?.throwIfAborted()
-    const probed = await this.ssh().exec(
-      'uname -s; printf "\\n"; command -v bash || command -v sh',
+    const ssh = cwd === undefined ? this.ssh() : resolveSshCwd(this.ctx, cwd).transport
+    const probed = await ssh.exec(
+      'uname -s; command -v bash || command -v sh',
       signal !== undefined ? { signal } : undefined,
     )
     signal?.throwIfAborted()

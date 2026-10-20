@@ -16,13 +16,13 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | doing | P1 | 待 CI/合并；原生路径显示与远程文件引用预览见 [验收](./uat/BUG-16-17-remote-panels.md)。better-sidebar 自有目录树的只读适配需上游独立 PR，边界见 [调查](./notes/lab-placeholder-ui.md) §3 |
+| BUG-17 | 远程会话终端按本机 shell 启动 | doing | P1 | 待 CI/合并；终端请求绑定会话路由、候选查找与 null 成功回调修复，验收见 [BUG-16/17](./uat/BUG-16-17-remote-panels.md) |
 | PUB-10 | 0.2.5 发布 | doing | P1 | 插件与远程组件同升 0.2.5。peer 扩到 `^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`。合并后打 tag `v0.2.5`、GitHub Release；npm 发布等所有者 Approve。本 PR 不打 tag、不发布。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | todo | P1 | 2026-10-19 lab（插件 0.2.5 + better-sidebar 0.28.0）。路径条印占位 cwd，树是远端条目。打开被本地 stat，ENOENT。cwd 保持占位。验收：路径条显示远端路径，打开读到正文。见 [调查](./notes/lab-placeholder-ui.md) |
-| BUG-17 | 远程会话终端按本机 shell 启动 | todo | P1 | 2026-10-19 同一 lab。shell 探测无 cwd，答 Windows；启动按占位 cwd 去远端。面板只显示「终端错误：null」。验收：远端会话开远端 shell，本机会话仍本机。见 [调查](./notes/lab-placeholder-ui.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
