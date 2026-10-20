@@ -16,7 +16,7 @@
 
 /* The native files page has an actions slot but no path-label slot. Limit this
  * compatibility selector to a page carrying OUR remote-path contribution. */
-:global([data-files-root]):has(.nativePath) :global([data-files-path]) {
+:global([data-files-root]):has(.nativePath) :global([data-files-path="true"]) {
   display: none;
 }
 
