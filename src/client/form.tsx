@@ -12,7 +12,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RpcCall } from './status.tsx'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
-import { useDialogA11y } from './ui.ts'
+import { backdropDismissProps, useDialogA11y } from './ui.ts'
 import { CloseIcon } from './icons.tsx'
 import styles from './flow.module.css'
 
@@ -61,7 +61,7 @@ function draftToInitial(draft: ConnectionDraft | undefined): MachineFormInitial 
 export function ConnectionForm({ rpc, draft, t, onClose, onSaved }: ConnectionFormProps) {
   const dialogRef = useDialogA11y(true, onClose)
   return (
-    <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className={styles.overlay} {...backdropDismissProps(onClose)}>
       <div className={styles.form} role="dialog" aria-modal="true" aria-label={t('form.dialog.label')} ref={dialogRef}>
         <div className={styles.formHead}>
           <div className={styles.formHeadText}>

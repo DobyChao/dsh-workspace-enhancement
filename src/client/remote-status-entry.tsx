@@ -18,7 +18,7 @@ import type { RpcCall } from './status.tsx'
 import { headerRecheckLabelKey, recheckStaysVisible } from './recheck.ts'
 import { statusTooltip } from './status-detail.ts'
 import { CONN_STATE_LABEL_KEY, getStatusCenter, useConnStatus, zhBaseline } from './status.tsx'
-import { ServerIcon } from './icons.tsx'
+import { RefreshIcon, ServerIcon } from './icons.tsx'
 import styles from './status.module.css'
 
 /** The props this entry receives: its seats, the session, the wire, the seat. */
@@ -85,10 +85,13 @@ export function RemoteStatusAction(props: RemoteStatusActionProps): JSX.Element 
           type="button"
           data-dsw-action="reconnect"
           title={t('status.retryAction.title')}
+          aria-label={t(headerRecheckLabelKey())}
           disabled={busy}
           className={styles.retry}
           onClick={() => { void reconnect() }}
-        >{t(headerRecheckLabelKey())}</button>
+        >
+          <RefreshIcon width={12} height={12} />
+        </button>
       )}
     </span>
   )

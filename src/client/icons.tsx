@@ -82,6 +82,15 @@ export function CloseIcon(props: IconProps) {
   )
 }
 
+export function EditIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9.5 2.75 13.25 6.5 5.5 14.25H1.75V10.5L9.5 2.75Z" />
+      <path d="M8 4.25 11.75 8" />
+    </svg>
+  )
+}
+
 export function RefreshIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

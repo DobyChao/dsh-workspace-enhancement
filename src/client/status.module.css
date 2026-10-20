@@ -52,17 +52,19 @@
   align-items: center;
   justify-content: center;
   flex: none;
+  width: 22px;
   height: 22px;
-  padding: 0 8px;
+  padding: 0;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 11px;
   background: transparent;
-  font: inherit;
-  font-size: 11px;
-  line-height: 16px;
   color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
   cursor: pointer;
+}
+
+.retry svg {
+  width: 12px;
+  height: 12px;
 }
 
 .retry:hover:not(:disabled) {

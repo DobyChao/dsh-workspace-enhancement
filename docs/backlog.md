@@ -16,6 +16,10 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-18 | 连接表单等子弹窗拖选仍关闭 | doing | P2 | BUG-14 只换了目录选择器与副工作区卡。新建连接、新建文件夹、删除、确认仍是窗内按下、背景松开就关。四处改 `backdropDismissProps`。验收 [选择器](./uat/UX-14-picker-chrome.md) |
+| UX-14 | 目录选择器：全名、可编辑路径、可拖拽分区 | doing | P2 | 悬停服务器出全名。当前路径段和铅笔可输入路径，回车跳转，Esc 取消。左右分隔可拖，宽度记在 sessionStorage。验收 [选择器](./uat/UX-14-picker-chrome.md) |
+| UX-15 | 重连/重新检测改为刷新图标 | doing | P2 | 侧栏行、选择器徽章、会话头、设置页都只留刷新图标。悬停和可访问名仍是原说明。验收 [选择器](./uat/UX-14-picker-chrome.md) |
+| UX-16 | 工作区悬停显示服务器与真实路径 | doing | P2 | 宿主悬停卡的占位路径改成服务器和远端路径。复制按钮仍是宿主原文。验收 [选择器](./uat/UX-14-picker-chrome.md) |
 | BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | doing | P1 | 待 CI/合并；原生路径显示与远程文件引用预览见 [验收](./uat/BUG-16-17-remote-panels.md)。better-sidebar 自有目录树的只读适配需上游独立 PR，边界见 [调查](./notes/lab-placeholder-ui.md) §3 |
 | BUG-17 | 远程会话终端按本机 shell 启动 | doing | P1 | 待 CI/合并；终端请求绑定会话路由、候选查找与 null 成功回调修复，验收见 [BUG-16/17](./uat/BUG-16-17-remote-panels.md) |
 | PUB-10 | 0.2.5 发布 | doing | P1 | 插件与远程组件同升 0.2.5。peer 扩到 `^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`。合并后打 tag `v0.2.5`、GitHub Release；npm 发布等所有者 Approve。本 PR 不打 tag、不发布。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |

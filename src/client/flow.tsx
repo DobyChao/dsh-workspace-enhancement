@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConfigHostView, ConnectionView, WireEntry, WireListing, WireResult } from './index.ts'
 import { ConnectionForm } from './form.tsx'
@@ -17,12 +18,14 @@ import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
 import { configHostProbeTarget, configHostRpc } from './config-host-status.ts'
 import { ConnStatusBadge, createStatusCenter, zhBaseline } from './status.tsx'
 import { backdropDismissProps, cx, useDialogA11y } from './ui.ts'
+import { browsePathDraft, clampSplitWidth, connectionEndpoint, connectionHoverTitle, readSplitWidth, SPLIT_DEFAULT, SPLIT_MAX, SPLIT_MIN, SPLIT_STEP, SPLIT_STORAGE_KEY } from './browse-path.ts'
 import { initialBrowseTarget } from './browse-target.ts'
 import {
   AlertIcon,
   CheckIcon,
   ChevronIcon,
   CloseIcon,
+  EditIcon,
   EyeIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -295,6 +298,15 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
   const [nativePicking, setNativePicking] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ConnectionView | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [pathDraft, setPathDraft] = useState<string | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      return readSplitWidth(globalThis.sessionStorage?.getItem(SPLIT_STORAGE_KEY))
+    } catch {
+      return readSplitWidth(null)
+    }
+  })
+  const skipPathCommit = useRef(false)
 
   const generation = useRef(0)
   const activeRequest = useRef<AbortController | null>(null)
@@ -334,6 +346,51 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
   const navigateRemote = (id: string, path?: string): void => {
     setMode({ kind: 'remote', id })
     void loadLevel(async signal => asListing(unwrap(await rpc('browse.list', { id, ...(path !== undefined ? { path } : {}) }, signal), t('rpc.browseList'))))
+  }
+
+  const beginPathEdit = (): void => {
+    if (pane.path === null || pane.loading) return
+    skipPathCommit.current = false
+    setPathDraft(pane.path)
+  }
+
+  const commitPathEdit = (): void => {
+    if (skipPathCommit.current) {
+      skipPathCommit.current = false
+      return
+    }
+    const draft = pathDraft
+    setPathDraft(null)
+    if (draft === null) return
+    const next = browsePathDraft(mode.kind, draft)
+    if (next === null || next === pane.path) return
+    if (mode.kind === 'local') navigateLocal(next)
+    else navigateRemote(mode.id, next)
+  }
+
+  const onSplitPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    const handle = event.currentTarget
+    const originX = event.clientX
+    const originW = sidebarWidth
+    const previousCursor = document.body.style.cursor
+    const previousSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    handle.setPointerCapture(event.pointerId)
+    const onMove = (ev: PointerEvent): void => {
+      setSidebarWidth(clampSplitWidth(originW + ev.clientX - originX))
+    }
+    const onUp = (ev: PointerEvent): void => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousSelect
+      setSidebarWidth(clampSplitWidth(originW + ev.clientX - originX))
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
   }
 
   const openRemotePath = async (): Promise<void> => {
@@ -424,6 +481,14 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
       return ''
     }
   }
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SPLIT_STORAGE_KEY, String(sidebarWidth))
+    } catch {
+      // Private mode, or a host that blocks storage. The drag still works this visit.
+    }
+  }, [sidebarWidth])
 
   /** Open: refresh both sidebar lists and browse the initial target (local home, the current machine, or the saved connection named by `initialConnectionId` when it exists). Closed: abort. */
   useEffect(() => {
@@ -677,7 +742,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
         </header>
 
         <div className={styles.body}>
-          <nav className={styles.sidebar} aria-label={t('flow.sidebar.label')}>
+          <nav className={styles.sidebar} style={{ width: sidebarWidth }} aria-label={t('flow.sidebar.label')}>
             <section className={styles.sidebarSection} aria-label={t('flow.sidebar.local.section')}>
               <ul className={styles.connectionList} role="list">
                 <li className={cx(styles.connectionItem, mode.kind === 'local' && styles.connectionItemActive)}>
@@ -747,14 +812,15 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                           type="button"
                           className={styles.connectionMain}
                           aria-current={active ? 'true' : 'false'}
+                          title={connectionHoverTitle(connection)}
                           onClick={() => { navigateRemote(connection.id) }}
                         >
                           <ServerIcon className={styles.connectionIcon} />
                           <span className={styles.connectionInfo}>
-                            <span className={styles.connectionLabel}>{connection.label}</span>
+                            <span className={styles.connectionLabel} title={connection.label}>{connection.label}</span>
                             <span className={styles.connectionDetail}>
-                              <span className={styles.connectionEndpoint}>
-                                {connection.username}@{connection.host}:{connection.port}
+                              <span className={styles.connectionEndpoint} title={connectionEndpoint(connection)}>
+                                {connectionEndpoint(connection)}
                               </span>
                               <span className={styles.badge}>
                                 {connection.auth === 'password' ? <LockIcon style={{ width: 11, height: 11 }} /> : <KeyIcon style={{ width: 11, height: 11 }} />}
@@ -847,7 +913,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                         >
                           <ServerIcon className={styles.connectionIcon} />
                           <span className={styles.connectionInfo}>
-                            <span className={styles.connectionLabel}>{host.alias}</span>
+                            <span className={styles.connectionLabel} title={host.alias}>{host.alias}</span>
                             <span className={styles.connectionDetail}>
                               {working ? (
                                 <span className={styles.hostWorking}>
@@ -858,7 +924,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                                 <span className={styles.hostErrorText} role="alert">{t('flow.ssh.addFailed', { message: hostError.message })}</span>
                               ) : (
                                 <>
-                                  <span className={styles.connectionEndpoint}>
+                                  <span className={styles.connectionEndpoint} title={host.username !== '' ? `${host.username}@${host.host}:${host.port}` : undefined}>
                                     {host.username !== '' ? `${host.username}@${host.host}:${host.port}` : t('flow.ssh.noUsername')}
                                   </span>
                                   {registered !== undefined ? (
@@ -911,8 +977,54 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
             </button>
           </nav>
 
+          <div
+            className={styles.splitter}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('flow.split.label')}
+            aria-valuemin={SPLIT_MIN}
+            aria-valuemax={SPLIT_MAX}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            onPointerDown={onSplitPointerDown}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault()
+                setSidebarWidth(width => clampSplitWidth(width - SPLIT_STEP))
+              } else if (event.key === 'ArrowRight') {
+                event.preventDefault()
+                setSidebarWidth(width => clampSplitWidth(width + SPLIT_STEP))
+              } else if (event.key === 'Home') {
+                event.preventDefault()
+                setSidebarWidth(SPLIT_DEFAULT)
+              }
+            }}
+          />
+
           <div className={styles.main}>
             <div className={styles.toolbar}>
+              {pathDraft !== null ? (
+                <input
+                  className={cx(styles.input, styles.pathInput)}
+                  aria-label={t('flow.path.input.label')}
+                  placeholder={t('flow.path.edit.placeholder')}
+                  value={pathDraft}
+                  autoFocus
+                  spellCheck={false}
+                  onChange={(event) => { setPathDraft(event.target.value) }}
+                  onBlur={commitPathEdit}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      event.currentTarget.blur()
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault()
+                      skipPathCommit.current = true
+                      setPathDraft(null)
+                    }
+                  }}
+                />
+              ) : (
               <nav className={styles.crumbs} aria-label={t('flow.crumbs.label')}>
                 <button
                   type="button"
@@ -929,7 +1041,16 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                 </button>
                 {crumbs.map((crumb, index) =>
                   index === lastCrumbIndex ? (
-                    <span key={crumb.path} className={styles.crumbCurrent} aria-current="page" title={crumb.path}>
+                    <span
+                      key={crumb.path}
+                      className={styles.crumbCurrent}
+                      aria-current="page"
+                      title={crumb.path}
+                      role="button"
+                      tabIndex={0}
+                      onClick={beginPathEdit}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); beginPathEdit() } }}
+                    >
                       {crumb.name}
                     </span>
                   ) : (
@@ -948,7 +1069,27 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                   ),
                 )}
               </nav>
+              )}
           <div className={styles.toolbarActions}>
+            <button
+              type="button"
+              className={styles.toolButton}
+              aria-label={t('flow.path.edit.label')}
+              title={t('flow.path.edit.title')}
+              aria-pressed={pathDraft !== null}
+              disabled={pane.path === null || pane.loading}
+              onMouseDown={(event) => { event.preventDefault() }}
+              onClick={() => {
+                if (pathDraft !== null) {
+                  skipPathCommit.current = true
+                  setPathDraft(null)
+                  return
+                }
+                beginPathEdit()
+              }}
+            >
+              <EditIcon />
+            </button>
             {mode.kind === 'local' && (
               <button
                 type="button"
@@ -1099,7 +1240,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
       </div>
 
       {folderDraft !== null && (
-        <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget && !folderBusy) setFolderDraft(null) }}>
+        <div className={styles.overlay} {...backdropDismissProps(() => { if (!folderBusy) setFolderDraft(null) })}>
           <div className={styles.smallDialog} role="dialog" aria-modal="true" aria-label={t('flow.mkdir.dialogLabel')} ref={folderDialogRef}>
             <h3 className={styles.formTitle}>{t('flow.mkdir.title')}</h3>
             <p className={styles.createIn}>
@@ -1132,7 +1273,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
       )}
 
       {deleteTarget !== null && (
-        <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget && removingId === null) setDeleteTarget(null) }}>
+        <div className={styles.overlay} {...backdropDismissProps(() => { if (removingId === null) setDeleteTarget(null) })}>
           <div className={styles.smallDialog} role="dialog" aria-modal="true" aria-label={t('flow.connection.delete.dialogLabel')} ref={deleteDialogRef}>
             <div className={styles.confirmHead}>
               <span className={styles.confirmIconWrap}><TrashIcon /></span>
@@ -1161,7 +1302,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
       )}
 
       {confirmTarget !== null && (
-        <div className={styles.overlay} onClick={(event) => { if (event.target === event.currentTarget && hostPending === null) setConfirmTarget(null) }}>
+        <div className={styles.overlay} {...backdropDismissProps(() => { if (hostPending === null) setConfirmTarget(null) })}>
           <div className={styles.smallDialog} role="dialog" aria-modal="true" aria-label={t('flow.ssh.confirm.dialogLabel')} ref={confirmDialogRef}>
             <div className={styles.confirmHead}>
               <span className={cx(styles.confirmIconWrap, styles.confirmIconInfo)}><ServerIcon /></span>

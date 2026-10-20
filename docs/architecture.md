@@ -48,7 +48,7 @@
 | `conversation.session.header.actions` | `SideWorkspacesAction` | 标题栏「工作区」按钮与副工作区面板 |
 | `conversation.session.header.utilities`（`REMOTE_STATUS_SLOT`） | `RemoteStatusAction` | 会话头远程状态 |
 
-会话栏分组行没有官方槽位（Session 行 0.1.7 起有槽，本插件不迁）。分组行徽标由 `installRowBadges` 注入，优先按 `data-row-key` 对齐，没有该属性时回退标题（ADR-0011）。侧栏列出远程机器、添加工作区里的已保存连接和 SSH 配置主机，或远程会话打开时自动探测。SSH 配置主机里已经保存过的连接复用该机器的探测；只存在于 `~/.ssh/config` 的别名走 `config.probe`，不写入注册表。「重新检测」在检测中、可连接、不可连接都保留，会话头「远程状态」里也有。被动探测不把未见过的主机密钥写入 known_hosts（已记录的密钥对不上则不可连接，悬停提示主机密钥已变更，和网络不通分开）；连接和添加机器仍按 accept-new 记录。可达性文案是检测中 / 可连接 / 不可连接，和会话里的「已连接」分开。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
+会话栏分组行没有官方槽位（Session 行 0.1.7 起有槽，本插件不迁）。分组行徽标由 `installRowBadges` 注入，优先按 `data-row-key` 对齐，没有该属性时回退标题（ADR-0011）。侧栏列出远程机器、添加工作区里的已保存连接和 SSH 配置主机，或远程会话打开时自动探测。SSH 配置主机里已经保存过的连接复用该机器的探测；只存在于 `~/.ssh/config` 的别名走 `config.probe`，不写入注册表。重新检测在检测中、可连接、不可连接都保留，控件是刷新图标（悬停仍说明「重新检测并尝试连接」），会话头和设置页同样。工作区悬停卡没有槽位，行层把占位 cwd 改写成服务器和远端真实路径。被动探测不把未见过的主机密钥写入 known_hosts（已记录的密钥对不上则不可连接，悬停提示主机密钥已变更，和网络不通分开）；连接和添加机器仍按 accept-new 记录。可达性文案是检测中 / 可连接 / 不可连接，和会话里的「已连接」分开。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。
 
 `dsh-better-sidebar` 是 optional peer（`peerDependenciesMeta.optional`），客户端**不**把它写进 `inject`，也**不** value-import。`ctx.get('betterSidebar')` 有 `registerTab` 才注册 `dsw:workspaces`（复用 `/api/dsw/browse.files` 与会话头远程状态）；没有则整段跳过。文件点击始终用 `browse.read` 在页内预览文本、图片和 PDF。宿主 `sidebarRight.openResource` 的 `dsh-resource://file/session/…` 只在 `ctx.get('remote.workspaceFiles')` 与 `openResource` 都能取到时额外打开；缺 inject 时 `ctx.get` 返回空，不读 `remote.workspaceFiles` 属性（那条属性会抛 `without inject`）。不注册宿主 `files` kind。附属 `registerFileViewer` 只认 `.dsh-uploads` / `.dsh-artifacts` 路径。
 
@@ -58,7 +58,7 @@
 
 ## 3. 模块地图
 
-`src/` 现 **86** 个文件：宿主 54、客户端 28、词典 4。下表按职责分组，不堆导出清单。
+`src/` 现 **98** 个文件：宿主 57、客户端 37、词典 4。下表按职责分组，不堆导出清单。
 
 ### 3.1 宿主
 
@@ -78,10 +78,10 @@
 | 组 | 文件 | 职责 |
 |---|---|---|
 | 入口 | `index.ts` | 词典、槽位、行徽标层 |
-| 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` | 连接侧栏 + 目录浏览；本机目录走 `uiWorkspace` |
+| 添加工作区 | `flow.tsx` `form.tsx` `flow.module.css` `local-directory.ts` `browse-path.ts` | 连接侧栏 + 目录浏览；路径可输入、左右可拖；本机目录走 `uiWorkspace` |
 | 机器表单 | `machine-form.tsx` `machine-payload.ts` `settings.tsx` `core-status.ts` | 共享表单、payload 纯函数、设置页、远程组件状态文案 |
 | 副工作区 | `side-workspaces.tsx` `side-workspaces.module.css` | 标题栏按钮与面板 |
-| 状态与徽标 | `status.tsx` `status-detail.ts` `probe-schedule.ts` `recheck.ts` `config-host-status.ts` `row-badges.ts` `row-match.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` `conn-state.ts` | 可达性探测调度、重新检测按钮、主机密钥变更提示、SSH 配置主机探测、`data-row-key` 行匹配、行增辉、会话头远程状态 |
+| 状态与徽标 | `status.tsx` `status-detail.ts` `probe-schedule.ts` `recheck.ts` `config-host-status.ts` `row-badges.ts` `row-match.ts` `remote-status.ts` `remote-status-entry.tsx` `route-id.ts` `conn-state.ts` `workspace-hover.ts` | 可达性探测调度、刷新图标、主机密钥变更提示、SSH 配置主机探测、`data-row-key` 行匹配、行增辉、工作区悬停改写、会话头远程状态 |
 | 远程文件 | `remote-files.ts` `remote-files-panel.tsx` `remote-files.module.css` `better-sidebar.ts` | 上传/产物树与预览；optional peer 的 tab 注册 |
 | 驾驶舱 / UI | `cockpit.ts` `ui.ts` `icons.tsx` | 会话连接驾驶舱纯逻辑、无障碍、图标 |
 
