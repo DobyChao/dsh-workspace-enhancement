@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### 修复
+
+- **远程文件原生预览（`BUG-16`）**：以独立资源类型认领远程会话的工作区文件，经有会话/连接/工作区约束的 `workspace.read` 读取正文，不再交给 better-sidebar 本地 stat。原生文件页通过现有 actions 槽显示远端路径；会话 cwd 与内部树键仍保持占位路由。
+- **浏览器远程终端（`BUG-17`）**：shell 探测与查找在终端请求内绑定会话路由，并发会话互不串线，本地调用仍走本地。修复 SSH 默认 shell 探测的空行、候选 shell 缺失错误类型，以及成功写入回调的 `null` 被当成失败。
+
 ## [0.2.5](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-19)
 
 0.2.4 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.5`**

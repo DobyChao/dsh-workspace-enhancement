@@ -41,6 +41,7 @@ import { CoreRoutingFileSystem } from './core-fs.ts'
 import { installRemoteConfinePassthrough } from './remote-confine.ts'
 import { installRemoteSessionUploads } from './session-uploads.ts'
 import { installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
+import { installBrowserTerminalRouting } from './browser-terminal.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -147,4 +148,5 @@ export function apply(ctx: Context, config: Config): void {
   // REQ-I28: remote-session uploads copy into the remote workspace before the
   // upload promise resolves. No-op when the host has no fileUploads service.
   installRemoteSessionUploads(ctx)
+  installBrowserTerminalRouting(ctx)
 }

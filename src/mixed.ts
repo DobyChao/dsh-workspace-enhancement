@@ -45,6 +45,7 @@ import { parseSshTargetKey, remoteRouteFromCwd, sshTargetKey } from './transport
 import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
+import { browserTerminalCwd } from './browser-terminal.ts'
 
 /**
  * R5 → REQ-I7: the side-workspace face the mixed filesystem provider routes
@@ -133,8 +134,8 @@ export function worldOfTargetKey(targetKey: string): ExecutionWorld {
 
 /**
  * Mixed subprocess provider: `spawn`/`spawnTerminal` route on the spec's cwd.
- * `resolveExecutable` is inherently world-less (no cwd parameter) and stays
- * LOCAL — the in-process consumers are host diagnostic tools; the bash/pwsh
+ * World-less lookup stays LOCAL outside a scoped browser-terminal request.
+ * That request pins lookup to the same session route as its later PTY. The bash/pwsh
  * executors never call it (they spawn `bash`/`pwsh` directly).
  *
  * REQ-I7 (ADR-0019): the per-side-workspace exec gate was RETIRED with the
@@ -149,6 +150,8 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
 
   /** @inheritdoc — local world (see class doc: resolveExecutable is world-less). */
   resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string> {
+    const cwd = browserTerminalCwd()
+    if (cwd !== undefined) return this.remote.resolveExecutable(command, env, signal, cwd)
     return this.local.resolveExecutable(command, env, signal)
   }
 
@@ -166,9 +169,12 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
    * delegate. Remote shell facts stay the SSH-side runtime's own answer
    * (`SshSubprocessRuntime` probes the connection — ADR-0026 §4.3); a delegate
    * predating the method gets the same facts computed here, using upstream's
-   * exact formula (`dsh-subprocess-local@0.1.7` `terminalEnvironment`).
+   * exact formula (`dsh-subprocess-local@0.1.7` `terminalEnvironment`). BUG-17:
+   * browser terminal requests carry an explicit async-local session route.
    */
   terminalEnvironment(signal?: AbortSignal): Promise<{ platform: 'posix' | 'windows'; defaultShell?: string }> {
+    const cwd = browserTerminalCwd()
+    if (cwd !== undefined) return this.remote.terminalEnvironment(signal, cwd)
     const viaDelegate = this.local.terminalEnvironment
     if (viaDelegate !== undefined) return viaDelegate.call(this.local, signal)
     const platform = process.platform === 'win32' ? 'windows' : 'posix'

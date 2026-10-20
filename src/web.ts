@@ -39,7 +39,7 @@ import { createCoreWarmup } from './core-provision.ts'
 import { deployCore } from './core-deploy.ts'
 import { isCoreMissingError } from './remote-policy.ts'
 import { previewPathAllowed } from './remote-layout.ts'
-import { PREVIEW_MAX_BYTES, previewDocument, readRemotePreviewFile, sessionWorkspaceFor } from './remote-preview.ts'
+import { PREVIEW_MAX_BYTES, previewDocument, readRemotePreviewFile, sessionWorkspaceFor, workspacePreviewAllowed } from './remote-preview.ts'
 import type { PreviewSftp } from './remote-preview.ts'
 import { sessionFileIndex } from './session-uploads.ts'
 import type { SshTransport } from './transport.ts'
@@ -301,6 +301,7 @@ export const CHANNEL_ENDPOINTS = [
   'browse.list',
   'browse.files',
   'browse.read',
+  'workspace.read',
   'browse.mkdir',
   'session.files',
   'session.route',
@@ -670,11 +671,18 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           assertPreviewPath(id, sessionId, input.path)
           return { ok: true, value: await listFiles(id, input.path, signal) }
         }
+        case 'workspace.read':
         case 'browse.read': {
           const input = requirePayload(payload, isPreviewListPayload, 'browse.read')
           const id = input.id.trim()
           const sessionId = input.sessionId?.trim() ?? ''
-          assertPreviewPath(id, sessionId, input.path)
+          if (endpoint === 'workspace.read') {
+            const agents = ctx.get('agents', false) as { get?: (id: string) => { session?: { header?: { cwd?: string } } } | undefined } | undefined
+            const cwd = sessionId === '' ? undefined : agents?.get?.(sessionId)?.session?.header?.cwd
+            if (!workspacePreviewAllowed(cwd, id, input.path)) throw new Error(`dsw: ${t('rpc.previewDenied')}`)
+          } else {
+            assertPreviewPath(id, sessionId, input.path)
+          }
           try {
             const read = await readRemotePreviewFile(
               await requireConnection(id).getSftp(signal) as unknown as PreviewSftp,

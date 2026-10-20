@@ -64,7 +64,7 @@ export class SshTerminalHandle implements SubprocessTerminalHandle {
     if (this.topLevelExited) return Promise.reject(new Error('terminal process has exited'))
     return new Promise<void>((resolve, reject) => {
       this.channel.write(Buffer.from(data, 'utf8'), (error) => {
-        if (error !== undefined) reject(error)
+        if (error != null) reject(error)
         else resolve()
       })
     })
@@ -149,7 +149,7 @@ export async function spawnSshTerminal(ssh: SshTransport, cwd: string, spec: Sub
     const requested = (spec as { terminalType?: string }).terminalType
     const term = requested !== undefined && requested.length > 0 ? requested : 'xterm-256color'
     client.shell({ term, rows: spec.rows, cols: spec.cols }, (error, stream) => {
-      if (error !== undefined) reject(error)
+      if (error != null) reject(error)
       else resolve(stream)
     })
   })
