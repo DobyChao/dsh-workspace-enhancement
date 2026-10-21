@@ -17,7 +17,7 @@ import type { ConnectionDraft } from './form.tsx'
 import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
 import { configHostProbeTarget, configHostRpc } from './config-host-status.ts'
 import { ConnStatusBadge, createStatusCenter, zhBaseline } from './status.tsx'
-import { backdropDismissProps, cx, useDialogA11y } from './ui.ts'
+import { backdropDismissProps, consumePathEditEscape, cx, pathEditMarker, useDialogA11y } from './ui.ts'
 import { browsePathDraft, clampSplitWidth, connectionEndpoint, connectionHoverTitle, readSplitWidth, SPLIT_DEFAULT, SPLIT_MAX, SPLIT_MIN, SPLIT_STEP, SPLIT_STORAGE_KEY } from './browse-path.ts'
 import { initialBrowseTarget } from './browse-target.ts'
 import {
@@ -354,6 +354,25 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
     setPathDraft(pane.path)
   }
 
+  /** Drop the uncommitted path draft. Blur must not navigate after this. */
+  const cancelPathEdit = (): void => {
+    skipPathCommit.current = true
+    setPathDraft(null)
+  }
+
+  // Window capture runs before the dialog's document listener, so Escape
+  // reverts the draft instead of dismissing the picker (UX-14).
+  const editingPath = pathDraft !== null
+  useEffect(() => {
+    if (!editingPath) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!consumePathEditEscape(event)) return
+      cancelPathEdit()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => { window.removeEventListener('keydown', onKeyDown, true) }
+  }, [editingPath])
+
   const commitPathEdit = (): void => {
     if (skipPathCommit.current) {
       skipPathCommit.current = false
@@ -499,6 +518,8 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
       configGeneration.current += 1
       configRequest.current?.abort()
       configRequest.current = null
+      // A dismiss mid-edit must not resurrect the draft the next time the picker opens.
+      setPathDraft(null)
       return
     }
     generation.current += 1
@@ -1006,6 +1027,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
               {pathDraft !== null ? (
                 <input
                   className={cx(styles.input, styles.pathInput)}
+                  {...pathEditMarker()}
                   aria-label={t('flow.path.input.label')}
                   placeholder={t('flow.path.edit.placeholder')}
                   value={pathDraft}
@@ -1018,9 +1040,10 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
                       event.preventDefault()
                       event.currentTarget.blur()
                     } else if (event.key === 'Escape') {
+                      // Fallback when the window listener did not run. The
+                      // dialog capture listener already ignores this target.
                       event.preventDefault()
-                      skipPathCommit.current = true
-                      setPathDraft(null)
+                      cancelPathEdit()
                     }
                   }}
                 />
@@ -1081,8 +1104,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
               onMouseDown={(event) => { event.preventDefault() }}
               onClick={() => {
                 if (pathDraft !== null) {
-                  skipPathCommit.current = true
-                  setPathDraft(null)
+                  cancelPathEdit()
                   return
                 }
                 beginPathEdit()
