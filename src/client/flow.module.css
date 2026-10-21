@@ -375,6 +375,37 @@
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
+/* Drag handle between the connection list and the directory. The sidebar
+   width itself is an inline style so a drag can change it. */
+.splitter {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 9px;
+  margin: 0 -4px;
+  border: none;
+  padding: 0;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.splitter:hover,
+.splitter:focus-visible {
+  background: var(--dsw-alias-border-l3);
+  outline: none;
+}
+
 /* ---------- right pane ---------- */
 
 .main {
@@ -449,11 +480,23 @@
 .crumbCurrent {
   padding: 3px 6px;
   max-width: 44ch;
+  border-radius: 6px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
+}
+
+.crumbCurrent:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.crumbCurrent:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
 .toolbarActions {
@@ -1048,6 +1091,13 @@
 .input:focus {
   outline: none;
   border-color: var(--dsw-alias-brand-primary);
+}
+
+.input.pathInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  font-family: var(--ds-font-family-code);
 }
 
 .inputError,

@@ -8,7 +8,8 @@
  * 0.1.7+ a row is matched by `data-row-key` (`workspace:<id>` / `session:<id>`);
  * 0.1.5 has no such attribute and falls back to the title index
  * (`row-match.ts`). Each matched row is decorated with a 🌐 + tri-state badge
- * + a "re-check" button that stays visible in every reachability state.
+ * + a refresh icon that stays visible in every reachability state (UX-15;
+ * the accessible name is still the re-check phrase).
  *
  * Showing the list probes automatically (UX-13): debounce, a TTL cache for a
  * reachable result, and backoff after a failure. The button stays as a manual
@@ -50,6 +51,8 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { routeIdOf } from './route-id.ts'
 import { CONN_STATE_COLOR } from './conn-state.ts'
 import { recheckStaysVisible } from './recheck.ts'
+import { rewriteWorkspaceHover } from './workspace-hover.ts'
+import type { HoverMachine } from './workspace-hover.ts'
 import { statusTooltip } from './status-detail.ts'
 import { CONN_STATE_LABEL_KEY, asConnStatus, connectionProbeScheduler, connStatusFallback, zhBaseline } from './status.tsx'
 import type { ConnStatusView } from './status.tsx'
@@ -177,6 +180,8 @@ const COMPACT_KEY = 'dswCompact' as const
  * retry button text/title for ONE language. `paintBadge` replays this after a
  * language switch, and the unit test pins the zh→en transition of the button
  * text and title (the in-place rewrite writes only changed values).
+ * `buttonText` is the button's accessible name. The visible control is a
+ * refresh icon (UX-15); the title stays the longer "re-check and connect".
  * @param view - the connection status view.
  * @param compact - the row's compact variant (session child rows).
  * @param t - the translate seat (active language).
@@ -266,6 +271,27 @@ export function isOwnBadgeMutation(target: Node | { closest(selector: string): u
 
 const isElement = (value: Element | null): value is HTMLElement => value instanceof HTMLElement
 
+/** The same two strokes as RefreshIcon, drawn without JSX for the DOM layer. */
+function mountRefreshIcon(button: HTMLElement): void {
+  if (button.querySelector('svg') !== null) return
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('width', '12')
+  svg.setAttribute('height', '12')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.5')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of ['M13.25 8a5.25 5.25 0 1 1-1.54-3.71', 'M13.5 2.75v2.5h-2.5']) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', d)
+    svg.append(path)
+  }
+  button.append(svg)
+}
+
 /**
  * Install the sidebar row enhancement. Returns the disposer (removes every
  * injected badge, listener, observer, subscription, and timer).
@@ -329,10 +355,25 @@ export function installRowBadges(
     }
   }
 
+  const machineOf = (id: string): HoverMachine | undefined => {
+    const view = statuses.get(id)
+    if (view === undefined) return undefined
+    return { label: view.label, username: view.username, host: view.host, port: view.port }
+  }
+
+  /** UX-16: the host hover card prints the placeholder cwd. Rewrite that one line. */
+  const paintHovers = (): void => {
+    if (typeof document === 'undefined') return
+    for (const element of document.querySelectorAll('div')) {
+      rewriteWorkspaceHover(element, machineOf)
+    }
+  }
+
   const remember = (connId: string, view: ConnStatusView): void => {
     if (disposed) return
     statuses.set(connId, view)
     paintConn(connId)
+    paintHovers()
   }
 
   const paintBadge = (badge: HTMLElement, view: ConnStatusView): void => {
@@ -357,7 +398,8 @@ export function installRowBadges(
     if (button !== null) {
       const display = recheckStaysVisible(view.state) ? '' : 'none'
       if (button.style.display !== display) button.style.display = display
-      if (button.textContent !== texts.buttonText) button.textContent = texts.buttonText
+      mountRefreshIcon(button)
+      if (button.getAttribute('aria-label') !== texts.buttonText) button.setAttribute('aria-label', texts.buttonText)
       if (button.title !== texts.buttonTitle) button.title = texts.buttonTitle
     }
   }
@@ -409,8 +451,9 @@ export function installRowBadges(
     button.type = 'button'
     button.dataset.dswAction = 'reconnect'
     button.title = t('status.retryAction.title')
-    button.textContent = compact ? t('status.retryAction.compact') : t('status.retryAction.recheck')
-    button.style.cssText = 'padding:0 5px;border-radius:5px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.12);color:inherit;cursor:pointer;font-size:10px;line-height:16px;white-space:nowrap;'
+    button.setAttribute('aria-label', compact ? t('status.retryAction.compact') : t('status.retryAction.recheck'))
+    button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border-radius:5px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.12);color:inherit;cursor:pointer;'
+    mountRefreshIcon(button)
     badge.append(globe, dot, label, button)
     return badge
   }
@@ -533,6 +576,7 @@ export function installRowBadges(
         }
       }
       consecutiveFailures = 0
+      paintHovers()
     } catch (error) {
       consecutiveFailures += 1
       if (consecutiveFailures === 1) {

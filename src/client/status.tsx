@@ -22,6 +22,7 @@ import { createProbeScheduler, systemProbeClock } from './probe-schedule.ts'
 import type { ProbeScheduler } from './probe-schedule.ts'
 import { recheckStaysVisible } from './recheck.ts'
 import { statusTooltip } from './status-detail.ts'
+import { RefreshIcon } from './icons.tsx'
 import styles from './status.module.css'
 
 /**
@@ -328,10 +329,13 @@ export function ConnStatusBadge({
           type="button"
           data-dsw-action="reconnect"
           title={actionTitle}
+          aria-label={compact ? t('status.retryAction.compact') : t('status.retryAction.full')}
           disabled={busy}
           className={styles.retry}
           onClick={() => { void reconnect() }}
-        >{compact ? t('status.retryAction.compact') : t('status.retryAction.full')}</button>
+        >
+          <RefreshIcon width={12} height={12} />
+        </button>
       )}
     </span>
   )

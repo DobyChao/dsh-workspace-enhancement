@@ -1,8 +1,9 @@
 /**
  * Shared UI utilities for the dsh-workspace-enhancement client: a class-name joiner and the
  * dialog behavior every modal reuses — a document-level close stack (Esc
- * always dismisses the topmost dialog only), a Tab focus trap, initial focus,
- * and focus restoration. No external focus-management dependency.
+ * dismisses the topmost dialog only, unless the directory path field is
+ * consuming it), a Tab focus trap, initial focus, and focus restoration.
+ * No external focus-management dependency.
  */
 
 import { useEffect, useRef } from 'react'
@@ -23,6 +24,51 @@ const FOCUSABLE = [
 
 /** Live dialog closers; only the top entry reacts to Esc and Tab. */
 const stack: Array<() => void> = []
+
+/**
+ * Attribute on the directory-picker path field (UX-14). Escape reverts that
+ * draft and leaves the picker open; it must not dismiss the dialog.
+ * The field in `flow.tsx` sets this same attribute.
+ */
+export const PATH_EDIT_ATTR = 'data-dsw-path-edit' as const
+
+/** Props for the path field. Spread onto the input so the attribute cannot drift. */
+export function pathEditMarker(): { 'data-dsw-path-edit': '' } {
+  return { [PATH_EDIT_ATTR]: '' }
+}
+
+/** True when `target` is the path field that handles Escape locally. */
+export function isPathEditEscapeTarget(target: EventTarget | null): boolean {
+  if (target === null || typeof target !== 'object') return false
+  const read = (target as { getAttribute?: unknown }).getAttribute
+  if (typeof read !== 'function') return false
+  return (read as (name: string) => unknown).call(target, PATH_EDIT_ATTR) != null
+}
+
+/**
+ * What the dialog capture listener should do with Escape.
+ * `'ignore'` leaves the picker open (the path field reverts its own draft).
+ */
+export function dialogEscapeAction(target: EventTarget | null): 'ignore' | 'dismiss' {
+  return isPathEditEscapeTarget(target) ? 'ignore' : 'dismiss'
+}
+
+/**
+ * Window-capture Escape for the path field. Stops the event before a
+ * document capture listener (the dialog stack) can dismiss the picker.
+ * Returns true when the caller should revert the draft and exit edit mode.
+ */
+export function consumePathEditEscape(event: {
+  key: string
+  target: EventTarget | null
+  preventDefault: () => void
+  stopPropagation: () => void
+}): boolean {
+  if (event.key !== 'Escape' || !isPathEditEscapeTarget(event.target)) return false
+  event.preventDefault()
+  event.stopPropagation()
+  return true
+}
 
 /**
  * Dialog accessibility behavior for one modal while `active`.
@@ -51,6 +97,9 @@ export function useDialogA11y(active: boolean, onClose: () => void): RefObject<H
     const onKeyDown = (event: KeyboardEvent): void => {
       if (stack[stack.length - 1] !== close) return
       if (event.key === 'Escape') {
+        // The path field swallows Escape on window first. If this event still
+        // arrives, leave the picker open so the field can revert its draft.
+        if (dialogEscapeAction(event.target) === 'ignore') return
         event.preventDefault()
         close()
         return
