@@ -400,12 +400,6 @@
   background: var(--dsw-alias-border-l2);
 }
 
-.splitter:hover,
-.splitter:focus-visible {
-  background: var(--dsw-alias-border-l3);
-  outline: none;
-}
-
 /* ---------- right pane ---------- */
 
 .main {

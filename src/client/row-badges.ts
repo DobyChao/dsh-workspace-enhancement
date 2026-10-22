@@ -7,9 +7,9 @@
  * them (UX-8 option B). A MutationObserver watches the session tree. On
  * 0.1.7+ a row is matched by `data-row-key` (`workspace:<id>` / `session:<id>`);
  * 0.1.5 has no such attribute and falls back to the title index
- * (`row-match.ts`). Each matched row is decorated with a 🌐 + tri-state badge
- * + a refresh icon that stays visible in every reachability state (UX-15;
- * the accessible name is still the re-check phrase).
+ * (`row-match.ts`). Each matched row is decorated with a stroke server mark
+ * + tri-state badge + a borderless refresh icon that stays visible in every
+ * reachability state (UX-15; the accessible name is still the re-check phrase).
  *
  * Showing the list probes automatically (UX-13): debounce, a TTL cache for a
  * reachable result, and backoff after a failure. The button stays as a manual
@@ -205,7 +205,7 @@ const MAX_CONSECUTIVE_FAILURES = 3
  * badge ALSO carries `data-dsw-conn-id` (click delegation) while the ROW
  * carries the same attribute (F0 marker), so badge-subtree exclusion must key
  * on this dedicated mark — never on a nested conn-id. t6: without it
- * {@link rowTitleOf} returned the badge's own textContent (🌐 + state label +
+ * {@link rowTitleOf} returned the badge's own textContent (state label +
  * even the display:none reconnect-button text — regularly LONGER than every
  * real title), the C3 撤回 step judged each marked row unmatched, and the
  * badge was withdrawn + re-injected on every scan: the self-sustaining loop.
@@ -270,6 +270,67 @@ export function isOwnBadgeMutation(target: Node | { closest(selector: string): u
 }
 
 const isElement = (value: Element | null): value is HTMLElement => value instanceof HTMLElement
+
+const ROW_BADGE_STYLE_ID = 'dsw-row-badge-chrome'
+
+/**
+ * Sidebar-row chrome. The badge is injected outside React, so it cannot use
+ * the CSS module. Host icon buttons are borderless; a filled gray chip and a
+ * color emoji both sit outside that language.
+ */
+const ROW_BADGE_CSS = `
+[data-dsw-badge]{display:inline-flex;align-items:center;gap:4px;margin:0 4px;vertical-align:middle;flex-shrink:0;user-select:none;}
+[data-dsw-badge] [data-dsw-mark]{display:inline-flex;color:var(--dsw-alias-label-tertiary);}
+[data-dsw-badge] [data-dsw-dot]{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;}
+[data-dsw-badge] [data-dsw-label]{font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap;}
+button[data-dsw-row-retry]{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:none;border-radius:4px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;}
+button[data-dsw-row-retry]:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
+button[data-dsw-row-retry]:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3);}
+button[data-dsw-row-retry] svg,[data-dsw-badge] [data-dsw-mark] svg{display:block;}
+`
+
+function ensureRowBadgeChrome(): void {
+  if (document.getElementById(ROW_BADGE_STYLE_ID) !== null) return
+  const style = document.createElement('style')
+  style.id = ROW_BADGE_STYLE_ID
+  style.textContent = ROW_BADGE_CSS
+  ;(document.head ?? document.documentElement).append(style)
+}
+
+function removeRowBadgeChrome(): void {
+  document.getElementById(ROW_BADGE_STYLE_ID)?.remove()
+}
+
+/** The same strokes as ServerIcon, drawn without JSX for the DOM layer. */
+function mountServerMark(host: HTMLElement): void {
+  if (host.querySelector('svg') !== null) return
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('width', '13')
+  svg.setAttribute('height', '13')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.5')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const box of [
+    { x: '2', y: '1.75', width: '12', height: '5' },
+    { x: '2', y: '9.25', width: '12', height: '5' },
+  ]) {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    rect.setAttribute('x', box.x)
+    rect.setAttribute('y', box.y)
+    rect.setAttribute('width', box.width)
+    rect.setAttribute('height', box.height)
+    rect.setAttribute('rx', '1.25')
+    svg.append(rect)
+  }
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', 'M4.6 4.25h.01M4.6 11.75h.01')
+  svg.append(path)
+  host.append(svg)
+}
 
 /** The same two strokes as RefreshIcon, drawn without JSX for the DOM layer. */
 function mountRefreshIcon(button: HTMLElement): void {
@@ -436,25 +497,24 @@ export function installRowBadges(
     // t15-r2: record the compact variant so the language-switch repaint can
     // re-resolve the retry button text (compact vs recheck) without rebuilding.
     badge.dataset[COMPACT_KEY] = compact ? '1' : '0'
-    badge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin:0 4px;vertical-align:middle;flex-shrink:0;user-select:none;'
-    const globe = document.createElement('span')
-    globe.textContent = '🌐'
-    globe.style.cssText = 'font-size:11px;line-height:1;'
+    const mark = document.createElement('span')
+    mark.dataset.dswMark = ''
+    mark.setAttribute('aria-hidden', 'true')
+    mountServerMark(mark)
     const dot = document.createElement('span')
     dot.dataset.dswDot = ''
-    dot.style.cssText = 'width:7px;height:7px;border-radius:50%;display:inline-block;background:' + CONN_STATE_COLOR.unknown + ';'
+    dot.style.background = CONN_STATE_COLOR.unknown
     const label = document.createElement('span')
     label.dataset.dswLabel = ''
-    label.style.cssText = 'font-size:11px;opacity:.85;white-space:nowrap;'
     label.textContent = t(CONN_STATE_LABEL_KEY.unknown)
     const button = document.createElement('button')
     button.type = 'button'
     button.dataset.dswAction = 'reconnect'
+    button.dataset.dswRowRetry = '1'
     button.title = t('status.retryAction.title')
     button.setAttribute('aria-label', compact ? t('status.retryAction.compact') : t('status.retryAction.recheck'))
-    button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border-radius:5px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.12);color:inherit;cursor:pointer;'
     mountRefreshIcon(button)
-    badge.append(globe, dot, label, button)
+    badge.append(mark, dot, label, button)
     return badge
   }
 
@@ -624,6 +684,7 @@ export function installRowBadges(
   // subtree) — otherwise every paint re-armed the observer for a guaranteed
   // no-write scan; a scan now runs only for real upstream changes (our
   // badge append/removal targets the ROW and still schedules).
+  ensureRowBadgeChrome()
   const observer = new MutationObserver(records => {
     if (records.some(record => !isOwnBadgeMutation(record.target))) scheduleScan()
   })
@@ -651,5 +712,6 @@ export function installRowBadges(
     statuses.clear()
     unsubscribeLocale?.()
     unsubscribe()
+    removeRowBadgeChrome()
   }
 }

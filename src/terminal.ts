@@ -128,8 +128,9 @@ export class SshTerminalHandle implements SubprocessTerminalHandle {
 }
 
 /**
- * Allocate an SSH PTY, replace its login shell with the requested argv, and
- * return the live terminal handle.
+ * Allocate an SSH PTY and exec the requested argv in the scrubbed environment.
+ * The command is the session payload, not keystrokes, so the login shell
+ * cannot echo it.
  * @param ssh - connection owner backing this execution world.
  * @param cwd - resolved absolute remote working directory.
  * @param spec - fully specified terminal-process request.
@@ -145,17 +146,19 @@ export async function spawnSshTerminal(ssh: SshTransport, cwd: string, spec: Sub
   const environment = serializeEnvironment(scrubRemoteEnvironment(remote), spec.env)
   const client = await ssh.getClient()
   spec.signal?.throwIfAborted()
+  const argv = spec.argv.map(quoteShellArg).join(' ')
+  // A shell channel echoes typed input, so writing this line paints every
+  // scrubbed variable on screen. exec carries the same command as the
+  // session payload; the PTY only shows the program that replaces it.
+  const command = `cd ${quoteShellArg(cwd)} && exec env -i -- ${environment} ${argv}`
   const channel = await new Promise<ClientChannel>((resolve, reject) => {
     const requested = (spec as { terminalType?: string }).terminalType
     const term = requested !== undefined && requested.length > 0 ? requested : 'xterm-256color'
-    client.shell({ term, rows: spec.rows, cols: spec.cols }, (error, stream) => {
+    client.exec(command, { pty: { term, rows: spec.rows, cols: spec.cols } }, (error, stream) => {
       if (error != null) reject(error)
       else resolve(stream)
     })
   })
-  const handle = new SshTerminalHandle(channel, spec.graceMs)
-  const argv = spec.argv.map(quoteShellArg).join(' ')
-  await handle.write(`cd ${quoteShellArg(cwd)} && exec env -i -- ${environment} ${argv}\r`)
   spec.signal?.throwIfAborted()
-  return handle
+  return new SshTerminalHandle(channel, spec.graceMs)
 }
