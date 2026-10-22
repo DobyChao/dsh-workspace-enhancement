@@ -45,20 +45,20 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* "重新连接" sits inside a dense meta row, so it takes the compact capsule. */
+/* Quiet icon, same as the sidebar row: no capsule. Hover supplies the fill. */
 .retry {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 11px;
+  border: none;
+  border-radius: 4px;
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 

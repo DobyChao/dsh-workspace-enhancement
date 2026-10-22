@@ -108,19 +108,29 @@ test('BUG-17: unknown routes and cancellation surface instead of falling back to
   assert.equal(f.calls.length, 0)
 })
 
-test('BUG-17: Node writable success callback null is not a terminal allocation failure', async () => {
+test('BUG-17: a null exec callback is not a terminal allocation failure', async () => {
   const channel = new EventEmitter() as EventEmitter & { write(data: unknown, callback: (error: null) => void): void }
   const writes: string[] = []
   channel.write = (data, callback) => { writes.push(String(data)); callback(null) }
+  const execs: Array<{ command: string, options: { pty?: { term?: string, rows?: number, cols?: number } } }> = []
   const ssh = {
     getRemoteEnvironment: async () => ({ PATH: '/usr/bin:/bin', HOME: '/home/test' }),
     exec: async () => ({ exitCode: 0, stdout: 'PATH=/usr/bin:/bin\u0000HOME=/home/test\u0000', stderr: '' }),
-    getClient: async () => ({ shell: (_options: unknown, callback: (error: null, stream: unknown) => void) => callback(null, channel) }),
+    getClient: async () => ({
+      exec: (command: string, options: { pty?: { term?: string, rows?: number, cols?: number } }, callback: (error: null, stream: unknown) => void) => {
+        execs.push({ command, options })
+        callback(null, channel)
+      },
+    }),
   } as unknown as SshTransport
   const terminal = await spawnSshTerminal(ssh, '/srv/project', {
     argv: ['/bin/bash', '-i'], cols: 80, rows: 24, terminalType: 'xterm', graceMs: 20,
   })
-  assert.match(writes[0]!, /cd '\/srv\/project' && exec env -i/)
+  assert.equal(execs.length, 1)
+  assert.match(execs[0]!.command, /cd '\/srv\/project' && exec env -i/)
+  assert.match(execs[0]!.command, /'\/bin\/bash' '-i'$/)
+  assert.deepEqual(execs[0]!.options.pty, { term: 'xterm', rows: 24, cols: 80 })
+  assert.equal(writes.length, 0)
   channel.emit('close', 0, null)
   assert.equal((await terminal.done).exitCode, 0)
 })

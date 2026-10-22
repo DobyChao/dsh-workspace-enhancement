@@ -16,10 +16,6 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| BUG-18 | 连接表单等子弹窗拖选仍关闭 | doing | P2 | BUG-14 只换了目录选择器与副工作区卡。新建连接、新建文件夹、删除、确认仍是窗内按下、背景松开就关。四处改 `backdropDismissProps`。验收 [选择器](./uat/UX-14-picker-chrome.md) |
-| UX-14 | 目录选择器：全名、可编辑路径、可拖拽分区 | doing | P2 | 悬停服务器出全名。当前路径段和铅笔可输入路径，回车跳转，Esc 取消。左右分隔可拖，宽度记在 sessionStorage。验收 [选择器](./uat/UX-14-picker-chrome.md) |
-| UX-15 | 重连/重新检测改为刷新图标 | doing | P2 | 侧栏行、选择器徽章、会话头、设置页都只留刷新图标。悬停和可访问名仍是原说明。验收 [选择器](./uat/UX-14-picker-chrome.md) |
-| UX-16 | 工作区悬停显示服务器与真实路径 | doing | P2 | 宿主悬停卡的占位路径改成服务器和远端路径。复制按钮仍是宿主原文。验收 [选择器](./uat/UX-14-picker-chrome.md) |
 | BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | doing | P1 | 待 CI/合并；原生路径显示与远程文件引用预览见 [验收](./uat/BUG-16-17-remote-panels.md)。better-sidebar 自有目录树的只读适配需上游独立 PR，边界见 [调查](./notes/lab-placeholder-ui.md) §3 |
 | BUG-17 | 远程会话终端按本机 shell 启动 | doing | P1 | 待 CI/合并；终端请求绑定会话路由、候选查找与 null 成功回调修复，验收见 [BUG-16/17](./uat/BUG-16-17-remote-panels.md) |
 | PUB-10 | 0.2.5 发布 | doing | P1 | 插件与远程组件同升 0.2.5。peer 扩到 `^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`。合并后打 tag `v0.2.5`、GitHub Release；npm 发布等所有者 Approve。本 PR 不打 tag、不发布。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |
@@ -53,6 +49,11 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-19 | 远程终端把启动环境变量回显到屏幕 | done | P2 | 启动命令改走带 PTY 的 exec，不再写入登录 shell。环境清理仍在。尾巴：重开远程终端目测 |
+| BUG-18 | 连接表单等子弹窗拖选仍关闭 | done | P2 | 新建连接、新建文件夹、删除拖出不关。验收 [选择器](./uat/UX-14-picker-chrome.md)。SSH 确认框因 lab 无 Host 未走 |
+| UX-14 | 目录选择器：全名、可编辑路径、可拖拽分区 | done | P2 | 全名、可输入路径、分隔可拖且记住宽度。悬停不再铺灰带。验收 [选择器](./uat/UX-14-picker-chrome.md) |
+| UX-15 | 重连/重新检测改为刷新图标 | done | P2 | 侧栏、选择器、会话头、设置页都是无边框刷新图标，悬停才有底色。侧栏远程标记改为线框服务器图标。验收 [选择器](./uat/UX-14-picker-chrome.md) |
+| UX-16 | 工作区悬停显示服务器与真实路径 | done | P2 | 悬停卡显示服务器和远端路径。复制按钮仍是宿主原文。验收 [选择器](./uat/UX-14-picker-chrome.md)。lab 50599 通过 |
 | PUB-9 | 0.2.4 发布 | shipped | P1 | tag [v0.2.4](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.4)；npm latest=0.2.4。档案 [R54](./rounds/R54-pub9-v0.2.4-release.md) |
 | REQ-A6 | 远程上传/产物可在宿主工作区文件页浏览 | done | P2 | 主路径：宿主「工作区文件」页（ctx.fs，不需 better-sidebar）。optional「远程文件」tab 仍作增强。脚本 [REQ-A6](./uat/REQ-A6-remote-files.md)；决定与证据见 [R55](./rounds/R55-req-a6-host-files.md) |
 | UPSTREAM-13 | 子进程契约把 watchLinuxScopeStart 归为内部方法 | done | P2 | PR #76 已合入。`watchLinuxScopeStart` 归入内部方法。drift [39016266340](https://github.com/DobyChao/dsh-workspace-enhancement/actions/runs/39016266340) 仅此两例。issue #75 不关 |

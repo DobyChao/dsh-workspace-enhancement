@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-20 09:22 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-22 13:31 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.5` |
 | npm 已发布版本 | `0.2.5` |
 | 最新 tag | `v0.2.5` |
-| 分支 / HEAD | `fix/BUG-16-17-remote-panels` / `8816ab2` |
-| HEAD 提交 | `docs: record remote file panel and terminal bugs` (2026-10-19) |
+| 分支 / HEAD | `master` / `80fe912` |
+| HEAD 提交 | `fix(picker): stop drag-dismiss on dialogs and compact directory chrome (#81)` (2026-10-21) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 78 |
-| 单测用例（静态计数） | 754 |
+| 单测文件 | 81 |
+| 单测用例（静态计数） | 769 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 56 |
@@ -31,7 +31,7 @@
 | `todo` | 8 |
 | `doing` | 3 |
 | `blocked` | 7 |
-| `done` | 93 |
+| `done` | 98 |
 | `shipped` | 11 |
 | `dropped` | 16 |
 
