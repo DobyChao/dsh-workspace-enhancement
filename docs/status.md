@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-22 15:23 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-22 15:24 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.5` |
 | 最新 tag | `v0.2.5` |
-| 分支 / HEAD | `cursor/release-0.2.6-92aa` / `db71de3` |
-| HEAD 提交 | `fix(client): quiet picker chrome and stop echoing terminal env (#82)` (2026-10-22) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `cursor/release-0.2.6-92aa` / `03eca19` |
+| HEAD 提交 | `chore(release): prepare 0.2.6` (2026-10-22) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
