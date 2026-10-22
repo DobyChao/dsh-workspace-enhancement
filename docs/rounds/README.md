@@ -47,6 +47,7 @@
 | R54 | 发布 npm `v0.2.4` | [R54-pub9-v0.2.4-release.md](./R54-pub9-v0.2.4-release.md) |
 | R55 | REQ-A6：宿主「工作区文件」页即主验收路径 | [R55-req-a6-host-files.md](./R55-req-a6-host-files.md) |
 | R56 | 准备发布 npm `v0.2.5`（声明宿主 0.2.1 家族） | [R56-pub10-v0.2.5-release.md](./R56-pub10-v0.2.5-release.md) |
+| R57 | 准备发布 npm `v0.2.6`（peer 不变） | [R57-pub11-v0.2.6-release.md](./R57-pub11-v0.2.6-release.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 
