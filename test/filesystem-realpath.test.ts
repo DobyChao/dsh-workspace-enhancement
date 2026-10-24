@@ -12,7 +12,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { FsTargetKey } from '@deepseek-ai/dsh-fs'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { SshFileSystemEngine } from '../src/filesystem.ts'
-import type { SshTransport } from '../src/transport.ts'
+import { remoteRouteFromCwd, type SshTransport } from '../src/transport.ts'
 
 function directoryTarget(): FsTarget {
   return { targetKey: FsTargetKey('ssh://c1/home/uuz'), displayPath: 'ssh://c1/home/uuz' }
@@ -83,4 +83,25 @@ test('BUG-20: listing a parent workspace does not open an SSH session per child'
   assert.equal(execs, 0)
   assert.equal(String(created.targetKey), 'ssh://c1/home/uuz/new.txt')
   assert.deepEqual(realpathCalls, ['/home/uuz/new.txt', '/home/uuz'])
+})
+
+test('BUG-22: processPath returns a routable placeholder and fileUrl stays POSIX', () => {
+  const transport = {
+    endpoint: 'u@h',
+    cwd: '/home/uuz',
+    getClient: async () => ({}) as never,
+    getSftp: async () => ({}) as never,
+    getRemoteEnvironment: async () => ({}),
+    exec: async () => ({ exitCode: 0, signal: null, stdout: '', stderr: '' }),
+    resolveRemoteCwd: (cwd?: string) => cwd ?? '/home/uuz',
+  } as unknown as SshTransport
+  const ctx = new Context()
+  ctx.provide('ssh', transport)
+  ctx.provide('sshRegistry', { get: (id: string) => (id === 'c1' ? transport : undefined) })
+  const engine = new SshFileSystemEngine(ctx)
+  const target: FsTarget = { targetKey: FsTargetKey('ssh://c1/home/uuz/eee'), displayPath: '/home/uuz/eee' }
+  const processed = engine.processPath(target)
+  assert.equal(remoteRouteFromCwd(processed)?.connectionId, 'c1')
+  assert.equal(remoteRouteFromCwd(processed)?.path, '/home/uuz/eee')
+  assert.equal(engine.fileUrl(target), 'file:///home/uuz/eee')
 })

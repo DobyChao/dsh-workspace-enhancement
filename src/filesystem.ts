@@ -25,7 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-fs'
 import { quoteShellArg } from './ssh-core.ts'
 import { fileContentVersion, statsVersionMtimeMs } from './fs-version.ts'
-import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
+import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshRoutePlaceholder, sshTargetKey } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
 import type { CoreHub } from './core-hub.ts'
@@ -154,7 +154,13 @@ export class SshFileSystemEngine {
   }
 
   processPath(target: FsTarget): string {
-    return this.pathOf(target)
+    const route = this.routeTarget(target)
+    if (route.connectionId === undefined) return route.path
+    // BUG-22: `working-directory.set` stores this string as the session cwd.
+    // A bare POSIX path is resolved on the host disk, so a Windows subagent
+    // looks for project skills under `C:\home\…` and misses the remote tree.
+    // The placeholder round-trips through `remoteRouteFromCwd`.
+    return sshRoutePlaceholder(route.connectionId, route.path)
   }
 
   /**
@@ -166,7 +172,7 @@ export class SshFileSystemEngine {
   }
 
   fileUrl(target: FsTarget): string {
-    const path = this.processPath(target)
+    const path = this.pathOf(target)
     if (!posix.isAbsolute(path)) throw new Error(`fs-ssh: expected an absolute process path: ${JSON.stringify(path)}`)
     return `file://${path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`
   }

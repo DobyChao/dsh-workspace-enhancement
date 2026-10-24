@@ -1,25 +1,25 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-22 15:24 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-24 09:39 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.6` |
-| npm 已发布版本 | `0.2.5` |
+| npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.5` |
-| 分支 / HEAD | `cursor/release-0.2.6-92aa` / `03eca19` |
-| HEAD 提交 | `chore(release): prepare 0.2.6` (2026-10-22) |
+| 分支 / HEAD | `fix/BUG-20-sftp-canonicalize` / `1731ba4` |
+| HEAD 提交 | `fix(fs): canonicalize remote paths on the shared SFTP channel` (2026-10-24) |
 | 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 81 |
-| 单测用例（静态计数） | 769 |
+| 单测文件 | 83 |
+| 单测用例（静态计数） | 776 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 57 |
@@ -28,10 +28,10 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 8 |
+| `todo` | 9 |
 | `doing` | 1 |
 | `blocked` | 7 |
-| `done` | 100 |
+| `done` | 105 |
 | `shipped` | 12 |
 | `dropped` | 16 |
 

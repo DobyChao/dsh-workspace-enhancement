@@ -24,7 +24,7 @@ import type { WireResult } from './index.ts'
 import { MachineForm } from './machine-form.tsx'
 import type { MachineFormInitial, MachineSaveView } from './machine-form.tsx'
 import { ConnStatusBadge, zhBaseline } from './status.tsx'
-import { coreFailureIsArchRefusal, coreStatusLabel, deployBannerKind } from './core-status.ts'
+import { coreStatusLabel, coreStatusTone, deployBannerKind } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
 import { AlertIcon, CheckIcon, ChevronIcon } from './icons.tsx'
 import styles from './settings.module.css'
@@ -140,15 +140,9 @@ export interface CoreLine {
   tone: CoreTone
 }
 
-/**
- * Tone of a core.status / core.deploy payload: `ok` for a live core,
- * `warn` for a machine whose architecture has no fenced core, and `error`
- * for a plain failure or an RPC throw.
- */
+/** Chip tone. Logic lives in `core-status.ts` so this file stays a view. */
 export function coreToneOf(view: CoreStatusPayload): CoreTone {
-  if (view.ok === true) return 'ok'
-  const detail = typeof view.detail === 'string' ? view.detail : ''
-  return coreFailureIsArchRefusal(detail) ? 'warn' : 'error'
+  return coreStatusTone(view)
 }
 
 const CORE_TONE_CLASS: Record<CoreTone, string | undefined> = {
@@ -165,6 +159,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const [editing, setEditing] = useState<MachineFormInitial | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [warn, setWarn] = useState('')
   const [err, setErr] = useState('')
   const [coreLines, setCoreLines] = useState<Record<string, CoreLine>>({})
   const [moreOpen, setMoreOpen] = useState('')
@@ -184,6 +179,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const startEdit = (machine: MachineView): void => {
     setEditing(editInitialOf(machine))
     setErr('')
+    setWarn('')
     setMsg('')
   }
 
@@ -191,6 +187,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     if (!window.confirm(t('settings.delete.confirm'))) return
     setBusy(true)
     setErr('')
+    setWarn('')
     setMsg('')
     setMoreOpen('')
     try {
@@ -210,6 +207,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const useNow = async (id: string): Promise<void> => {
     setBusy(true)
     setErr('')
+    setWarn('')
     setMsg('')
     setMoreOpen('')
     try {
@@ -235,6 +233,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const forgetKey = async (machine: MachineView): Promise<void> => {
     setBusy(true)
     setErr('')
+    setWarn('')
     setMsg('')
     setMoreOpen('')
     try {
@@ -265,15 +264,20 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const deployCore = async (id: string): Promise<void> => {
     setBusy(true)
     setErr('')
+    setWarn('')
     setMsg('')
     setMoreOpen('')
     try {
       const result = await rpc('core.deploy', { id })
       const view = unwrap<CoreStatusPayload>(result, t('settings.rpc.coreDeployFailed'))
-      const failed = deployBannerKind(view) === 'error'
-      const line: CoreLine = { label: coreStatusLabel(view, t), tone: failed ? 'error' : 'ok' }
+      const kind = deployBannerKind(view)
+      const line: CoreLine = { label: coreStatusLabel(view, t), tone: coreToneOf(view) }
       setCoreLines(current => ({ ...current, [id]: line }))
-      if (failed) setErr(line.label)
+      setErr('')
+      setWarn('')
+      setMsg('')
+      if (kind === 'error') setErr(line.label)
+      else if (kind === 'warn') setWarn(line.label)
       else setMsg(line.label)
     } catch (error) {
       setErr(error instanceof Error ? error.message : String(error))
@@ -285,6 +289,7 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const handleSaved = (view: MachineSaveView): void => {
     setEditing(null)
     setErr('')
+    setWarn('')
     // F2: the page-level banner is the durable acknowledgment (the in-form
     // prompt is remounted away); it must stay visible after the refresh.
     setMsg(savedBanner(view, t))
@@ -299,13 +304,17 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
       {err !== '' ? (
         <div className={`${styles.banner} ${styles.bannerError}`} role="alert">
           <AlertIcon className={styles.bannerIcon} />
-          <span>{err}</span>
+          <span className={styles.bannerBody}>{err}</span>
         </div>
-      ) : null}
-      {msg !== '' ? (
+      ) : warn !== '' ? (
+        <div className={`${styles.banner} ${styles.bannerWarn}`} role="status">
+          <AlertIcon className={styles.bannerIcon} />
+          <span className={styles.bannerBody}>{warn}</span>
+        </div>
+      ) : msg !== '' ? (
         <div className={`${styles.banner} ${styles.bannerSuccess}`} role="status">
           <CheckIcon className={styles.bannerIcon} />
-          <span>{msg}</span>
+          <span className={styles.bannerBody}>{msg}</span>
         </div>
       ) : null}
 
@@ -389,7 +398,14 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
                         ? <span className={`${styles.coreChip} ${styles.coreChipWarn}`}>{t('settings.machines.encryptFallbackBadge')}</span>
                         : null}
                       {core !== undefined
-                        ? <span className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]}`} role="status">{core.label}</span>
+                        ? (
+                          <span
+                            className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]} ${core.label.includes('\n') ? styles.coreChipBlock : ''}`}
+                            role="status"
+                          >
+                            {core.label}
+                          </span>
+                        )
                         : null}
                     </div>
                   </li>

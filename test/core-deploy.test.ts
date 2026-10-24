@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { assertLinuxCore, coreInstallScript, forcedMissingTools, manifestIssues, remoteToolsPresent } from '../src/core-deploy.ts'
-import { coreStatusLabel, deployBannerKind } from '../src/client/core-status.ts'
+import { coreStatusLabel, coreStatusTone, deployBannerKind } from '../src/client/core-status.ts'
+import { en, zh } from '../src/locale/index.ts'
 
 test('assertLinuxCore: linux x86_64 and aarch64 accepted (REQ-I26)', () => {
   assert.deepEqual(assertLinuxCore('Linux', 'x86_64'), { arch: 'linux-x64', manifestArch: 'linux-x86_64' })
@@ -32,6 +33,10 @@ test('coreStatusLabel: installed / missing / unsupported', () => {
   assert.match(coreStatusLabel({ ok: false, detail: 'core artifact missing on linux' }, t), /^miss:/)
   assert.equal(deployBannerKind({ ok: false, detail: 'extract failed' }), 'error')
   assert.equal(deployBannerKind({ ok: true, version: '0.2.4' }), 'success')
+  assert.equal(deployBannerKind({ ok: true, version: '0.2.4', fence: { tier: 'none' } }), 'warn')
+  assert.equal(coreStatusTone({ ok: true, version: '0.2.4', fence: { tier: 'none' } }), 'warn')
+  assert.equal(coreStatusTone({ ok: true, version: '0.2.4', fence: { tier: 'bwrap' } }), 'ok')
+  assert.equal(coreStatusTone({ ok: false, detail: 'uname -s = Darwin' }), 'warn')
 })
 
 test('coreInstallScript: chmod covers the core alone when nothing else is pushed', () => {
@@ -157,12 +162,29 @@ test('coreStatusLabel: the fence tier drives the settings line (REQ-I29)', () =>
     coreStatusLabel({ ok: true, version: '0.2.3', fence: { tier: 'landlock', landlockAbi: 3 } }, t),
     /^settings\.core\.okDegraded:/,
   )
-  // A core without a fence is NOT a green line — the guidance takes the row.
+  // A core without a sandbox is a warning, and the guidance is one sentence per line.
   const noneLine = coreStatusLabel(
-    { ok: true, version: '0.2.3', fence: { tier: 'none' }, detail: 'fence tier: NONE — …' },
+    { ok: true, version: '0.2.3', fence: { tier: 'none', bwrapMissing: true }, detail: 'fence tier: NONE — …' },
     t,
   )
-  assert.match(noneLine, /^settings\.core\.fenceNone:/)
+  const noneRows = noneLine.split('\n')
+  assert.equal(noneRows[0]?.startsWith('settings.core.fenceNone.title:'), true)
+  assert.equal(noneRows[1]?.startsWith('settings.core.fenceNone.summary:'), true)
+  assert.equal(noneRows[2]?.startsWith('settings.core.fenceNone.causeMissing:'), true)
+  assert.equal(noneRows[3]?.startsWith('settings.core.fenceNone.readOnly:'), true)
+  assert.equal(noneRows[4]?.startsWith('settings.core.fenceNone.ways:'), true)
+  assert.ok(noneRows.length > 5, 'install hints keep their own lines')
+  const unusable = coreStatusLabel(
+    { ok: true, version: '0.2.3', fence: { tier: 'none', bwrapProbeErr: 'uid map failed' } },
+    t,
+  )
+  assert.match(unusable, /settings\.core\.fenceNone\.causeUnusable:/)
+  for (const value of [zh['settings.core.fenceNone.summary'], zh['settings.core.fenceNone.ways'], en['settings.core.fenceNone.summary'], en['settings.core.fenceNone.ways']]) {
+    assert.equal(value.includes('无法围栏'), false)
+    assert.equal(/fence/i.test(value), false)
+  }
+  assert.match(zh['settings.core.fenceNone.summary'], /远程沙箱无法使用/)
+  assert.match(en['settings.core.fenceNone.summary'], /remote sandbox is unavailable/)
   // An older same-line core (no fenceinfo answer) keeps the plain ok line.
   assert.match(coreStatusLabel({ ok: true, version: '0.2.3' }, t), /^settings\.core\.ok:/)
 })

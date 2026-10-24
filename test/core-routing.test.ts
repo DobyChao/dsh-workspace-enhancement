@@ -572,3 +572,29 @@ test('BUG-6: core.status answers from the artifact, never from a live session', 
   assert.match(String(after.detail), /cached core session is still running/)
   live.close()
 })
+
+test('BUG-23: core.status reports a sandbox that cannot be enforced', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsw-bug23-'))
+  const base = transport()
+  const probing = {
+    ...base,
+    exec: async (command: string) => ({
+      exitCode: 0,
+      signal: null,
+      stdout: command.includes('fenceinfo')
+        ? '{"tier":"none","bwrapMissing":true,"landlockAbi":0}\n'
+        : '{"version":"0.2.6","arch":"x86_64"}\n',
+      stderr: '',
+    }),
+  } as unknown as SshTransport
+  const hub = createCoreHub(ctxWith(probing), {
+    idleMs: 0,
+    deps: deps(undefined, probing),
+    open: async () => pair(root),
+  })
+  const status = await hub.status('c1')
+  assert.equal(status.ok, true)
+  assert.equal(status.fence?.tier, 'none')
+  assert.match(String(status.detail), /bwrap not installed/)
+  hub.close('c1')
+})
