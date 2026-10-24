@@ -42,6 +42,7 @@ import {
 import type { BackgroundJobHooks, BackgroundJobSource, BackgroundJobs, SwExecConnection, SwExecEnv } from '../src/exec-tools.ts'
 import type { SshRegistry } from '../src/registry.ts'
 import type { SshConnectionSpec } from '../src/connection.ts'
+import { confinedSpawnMarkOf } from '../src/remote-confine-policy.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
 /* --------------------------------------------------------------- 测试替身 */
@@ -169,6 +170,8 @@ interface CapturedSection {
 function fakeToolContext(options: {
   subprocess?: { spawn(spec: SubprocessSpawnSpec): SubprocessHandle }
   jobs?: BackgroundJobs
+  sandbox?: { confine: (argv: readonly string[], policy: unknown) => unknown }
+  sandboxPolicy?: { resolve: () => { mode: string } }
   shell?: {
     resolve?: (request: Record<string, unknown>) => Record<string, unknown>
     run?: (spec: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -196,6 +199,8 @@ function fakeToolContext(options: {
     get: (name: string) => {
       if (name === 'subprocess') return options.subprocess
       if (name === 'jobs') return options.jobs
+      if (name === 'sandbox') return options.sandbox
+      if (name === 'sandboxPolicy') return options.sandboxPolicy
       if (name === 'shell') return options.shell
       return undefined
     },
@@ -493,6 +498,31 @@ test('registerSwExec: explicit server wins; a local session without one errors',
   const resultRel = await execute({ command: 'ls', description: 'List', server: 'c2', workdir: 'src' }, execFace('ssh://c1/srv'))
   assert.equal((resultRel as { cwd?: never }).kind, 'foreground')
   assert.equal(spawned[1]?.cwd, 'ssh://c2/srv/src')
+})
+
+test('BUG-21: a local session marks remote sw_exec and does not call host confine', async () => {
+  let confineCalls = 0
+  const spawned: SubprocessSpawnSpec[] = []
+  const fake = fakeToolContext({
+    subprocess: { spawn: spec => { spawned.push(spec); return fakeHandle(spec, { stdout: 'uuz\n' }) } },
+    sandbox: {
+      confine: () => {
+        confineCalls += 1
+        return Promise.resolve({ argv: ['bwrap', '--', 'bash'] })
+      },
+    },
+    sandboxPolicy: { resolve: () => ({ mode: 'workspace-write' }) },
+  })
+  registerSwExec(fake.ctx, fakeRegistry({ c1: fakeConnection() }))
+  const result = await fake.registered[0]?.execute?.(
+    { command: 'whoami', description: 'Print user', server: 'c1' },
+    execFace('C:\\Users\\me\\proj'),
+  )
+  assert.equal((result as { kind?: string }).kind, 'foreground')
+  assert.equal(confineCalls, 0)
+  assert.deepEqual(spawned[0]?.argv, ['bash', '-c', 'whoami'])
+  assert.deepEqual(confinedSpawnMarkOf(spawned[0]?.argv), { mode: 'workspace-write' })
+  assert.equal(spawned[0]?.cwd, 'ssh://c1/srv/c1')
 })
 
 test('registerSwExec: run_in_background errors honestly without ctx.jobs', async () => {

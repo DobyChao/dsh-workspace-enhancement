@@ -21,6 +21,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I31 | 实验性切机器工具 | todo | P2 | 设置页默认关，关闭时不注册。仅 danger-full-access 可调用，否则拒绝且不改目录。切换后本会话 ctx.fs 走目标机。须测 sw_exec、bash/pwsh、技能扫描、终端的连带变化。见 [笔记](./notes/REQ-I31-switch-machine.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
@@ -47,6 +48,11 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-21 | 本机主工作区对远程副工作区跑 sw_exec 失败 | done | P1 | 本机会话对已连接远程机器同步标记 argv，不再等待宿主 confine。见 [笔记](./notes/BUG-21-22.md) |
+| BUG-22 | 远程会话子代理扫不到项目技能 | done | P1 | processPath 返回可路由占位路径，fileUrl 仍是远端 POSIX。见 [笔记](./notes/BUG-21-22.md) |
+| BUG-23 | 远程沙箱不可用仍显示成绿色成功 | done | P2 | tier none 改为警告色，点状态仍显示沙箱不可用。文案分行，不写「无法围栏」。见 [笔记](./notes/BUG-23-fence-none-green.md) |
+| BUG-24 | 子代理权限显示成 Custom | done | P2 | 审批为 never 且沙箱与预设一致时显示该预设名。不显示成完全权限。见 [笔记](./notes/BUG-24-subagent-custom.md) |
+| BUG-20 | 嵌套远程工作区侧边终端打不开 | done | P1 | 列目录 canonicalize 改走共享 SFTP，不再按路径 exec。取消的终端会关掉已开通道。尾巴：嵌套工作区重开侧边终端目测 |
 | PUB-10 | 0.2.5 发布 | shipped | P1 | tag [v0.2.5](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.5)；npm latest=0.2.5。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |
 | BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | done | P1 | PR [#80](https://github.com/DobyChao/dsh-workspace-enhancement/pull/80) 已合入 master。原生路径与远程预览见 [验收](./uat/BUG-16-17-remote-panels.md)。better-sidebar 目录树仍待上游 |
 | BUG-17 | 远程会话终端按本机 shell 启动 | done | P1 | PR [#80](https://github.com/DobyChao/dsh-workspace-enhancement/pull/80) 已合入 master。终端请求绑定会话路由。验收见 [BUG-16/17](./uat/BUG-16-17-remote-panels.md) |

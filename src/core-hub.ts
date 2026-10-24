@@ -38,7 +38,7 @@ import type { ExecOutcome } from './ssh-core.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { remoteSandboxDepsOf, remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 import type { RemoteSandboxDeps } from './remote-sandbox-fence.ts'
-import type { FenceTierView } from './core-deploy.ts'
+import { fenceTierNote, parseFenceInfo, type FenceTierView } from './core-deploy.ts'
 import {
   CoreMissingError,
   coreServeSandboxOf,
@@ -593,12 +593,28 @@ export function createCoreHub(
           proto?: number
           caps?: string[]
         }
+        // BUG-23: the version probe does not say whether a sandbox can be
+        // enforced. A later status click must still show that, or the row
+        // falls back to a plain installed chip.
+        let fence: FenceTierView | undefined
+        try {
+          const fenceOut = await connection.exec(
+            '"$HOME"/.dsh-core/current/dsh-core fenceinfo',
+            signal !== undefined ? { signal } : undefined,
+          )
+          fence = parseFenceInfo(fenceOut.stdout)
+        } catch {
+          fence = undefined
+        }
+        const fenceDetail = fence?.tier === 'none' ? fenceTierNote(fence) : undefined
         return {
           ok: true,
           version: parsed.version ?? CORE_ARTIFACT_VERSION,
           arch: parsed.arch,
           proto: parsed.proto,
           caps: parsed.caps,
+          ...(fence !== undefined ? { fence } : {}),
+          ...(fenceDetail !== undefined ? { detail: fenceDetail } : {}),
         }
       } catch (error) {
         return { ok: false, detail: error instanceof Error ? error.message : String(error) }
