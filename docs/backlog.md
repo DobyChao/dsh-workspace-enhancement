@@ -47,6 +47,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-20 | 嵌套远程工作区侧边终端打不开 | done | P1 | 列目录 canonicalize 改走共享 SFTP，不再按路径 exec。取消的终端会关掉已开通道。尾巴：嵌套工作区重开侧边终端目测 |
 | PUB-10 | 0.2.5 发布 | shipped | P1 | tag [v0.2.5](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.5)；npm latest=0.2.5。档案 [R56](./rounds/R56-pub10-v0.2.5-release.md) |
 | BUG-16 | 远程会话文件页显示占位路径，打开落到本地 stat | done | P1 | PR [#80](https://github.com/DobyChao/dsh-workspace-enhancement/pull/80) 已合入 master。原生路径与远程预览见 [验收](./uat/BUG-16-17-remote-panels.md)。better-sidebar 目录树仍待上游 |
 | BUG-17 | 远程会话终端按本机 shell 启动 | done | P1 | PR [#80](https://github.com/DobyChao/dsh-workspace-enhancement/pull/80) 已合入 master。终端请求绑定会话路由。验收见 [BUG-16/17](./uat/BUG-16-17-remote-panels.md) |

@@ -159,6 +159,11 @@ export async function spawnSshTerminal(ssh: SshTransport, cwd: string, spec: Sub
       else resolve(stream)
     })
   })
-  spec.signal?.throwIfAborted()
+  try {
+    spec.signal?.throwIfAborted()
+  } catch (error) {
+    channel.close()
+    throw error
+  }
   return new SshTerminalHandle(channel, spec.graceMs)
 }
