@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-24 09:39 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-25 10:05 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -9,10 +9,10 @@
 |---|---|
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
-| 最新 tag | `v0.2.5` |
-| 分支 / HEAD | `fix/BUG-20-sftp-canonicalize` / `1731ba4` |
-| HEAD 提交 | `fix(fs): canonicalize remote paths on the shared SFTP channel` (2026-10-24) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 最新 tag | `v0.2.6` |
+| 分支 / HEAD | `master` / `18e9555` |
+| HEAD 提交 | `fix(remote): repair SFTP paths, confined exec, skill routes, and sandbox status (#84)` (2026-10-25) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 9 |
+| `todo` | 10 |
 | `doing` | 1 |
 | `blocked` | 7 |
 | `done` | 105 |
