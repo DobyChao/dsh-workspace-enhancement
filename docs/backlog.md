@@ -17,7 +17,6 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | PUB-11 | 0.2.6 发布 | doing | P1 | 插件与远程组件同升 0.2.6。peer 不变。合并后所有者打 tag `v0.2.6` 并 Approve npm-publish。本 PR 不打 tag、不发布。档案 [R57](./rounds/R57-pub11-v0.2.6-release.md) |
-| AUDIT-8 | 清理无用单元测试 | doing | P3 | 盘点 test/（83 文件）逐例判定去留，删三类：断言已日落/退役行为的用例、被新用例取代的重复覆盖、断言价值趋零的样板。每删一例在 PR 描述记理由与「该行为仍由谁覆盖」；`npm run check` 全绿才算完。目的是删真无用的，不是压缩测试规模 |
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
@@ -49,6 +48,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| AUDIT-8 | 清理无用单元测试 | done | P3 | PR [#85](https://github.com/DobyChao/dsh-workspace-enhancement/pull/85) 已合入。删 7 个被取代用例（5 文件）+ 零调用死导出 `passthroughConfinedArgv`；83 文件三判据盘点表在 PR 描述，覆盖零丢失 |
 | BUG-21 | 本机主工作区对远程副工作区跑 sw_exec 失败 | done | P1 | 本机会话对已连接远程机器同步标记 argv，不再等待宿主 confine。见 [笔记](./notes/BUG-21-22.md) |
 | BUG-22 | 远程会话子代理扫不到项目技能 | done | P1 | processPath 返回可路由占位路径，fileUrl 仍是远端 POSIX。见 [笔记](./notes/BUG-21-22.md) |
 | BUG-23 | 远程沙箱不可用仍显示成绿色成功 | done | P2 | tier none 改为警告色，点状态仍显示沙箱不可用。文案分行，不写「无法围栏」。见 [笔记](./notes/BUG-23-fence-none-green.md) |
