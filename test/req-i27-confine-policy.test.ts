@@ -1,9 +1,8 @@
 /**
  * REQ-I27 / ADR-0031 单测：confine 标记注册表（`src/remote-confine-policy.ts`）的
  * 契约——进程内身份语义（防伪造核心）、无标记 = 不围栏（`--sandbox off`）、
- * spawnTerminal 的「有标记（模型侧）拒 / 无标记（人开的）放行」（ADR-0031 §4，
- * 所有者 2026-10-11 拍板）、以及 `isRemoteCommandDenial` 从 `remote-confine.ts`
- * 再导出的连续性。
+ * 以及 `isRemoteCommandDenial` 从 `remote-confine.ts` 再导出的连续性。
+ * spawnTerminal 的拒/放行契约（ADR-0031 §4）在 `test/remote-sandbox-wiring.test.ts` §4。
  * @module test/req-i27-confine-policy
  */
 
@@ -21,11 +20,7 @@ import {
   isRemoteCommandDenial as reexportedDenial,
 } from '../src/remote-confine.ts'
 import { createRemoteSandboxFence } from '../src/remote-sandbox-fence.ts'
-import { SshSubprocessEngine } from '../src/subprocess.ts'
 import { REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
-import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import type { SshTransport } from '../src/transport.ts'
 
 /* ------------------------------------------------ 1) 注册表的身份语义 */
 
@@ -83,80 +78,6 @@ test('fence: a confined MARK with no hub stays fail-closed (SANDBOX_UNAVAILABLE)
       assert.equal((error as RemoteSandboxError).code, REMOTE_SANDBOX_UNAVAILABLE)
       return true
     },
-  )
-})
-
-/* --------------- 3) spawnTerminal：有 confined 标记拒 / 无标记放行（§4） */
-
-/** A transport whose every remote-touching member is a loud sentinel. */
-function sentinelTransport(): SshTransport {
-  const boom = (what: string): never => { throw new Error(`TRANSPORT-REACHED: ${what}`) }
-  return {
-    endpoint: 'root@srv.example',
-    cwd: '/srv/work',
-    getClient: () => boom('getClient'),
-    getSftp: () => boom('getSftp'),
-    getRemoteEnvironment: () => boom('getRemoteEnvironment'),
-    exec: () => boom('exec'),
-    resolveRemoteCwd: () => '/srv/work',
-  }
-}
-
-/** A minimal context: aggregate ssh transport + registry `c1` → sentinel. */
-function terminalContext(): Context {
-  const ctx = new Context()
-  ctx.provide('ssh', sentinelTransport())
-  ctx.provide('sshRegistry', {
-    get: (id: string) => (id === 'c1' ? sentinelTransport() : undefined),
-    listMachines: () => ({ machines: [{ id: 'c1' }] }),
-  })
-  return ctx
-}
-
-const terminalSpec = (argv: readonly string[]): SubprocessTerminalSpawnSpec => ({
-  argv: [...argv],
-  cwd: 'ssh://c1/srv/work',
-  cols: 80,
-  rows: 24,
-  graceMs: 1000,
-  signal: new AbortController().signal,
-})
-
-test('spawnTerminal: a MARKED confined argv is refused naming the mode (model-side persistent shell)', async () => {
-  const engine = new SshSubprocessEngine(terminalContext())
-  const mode: SandboxMode = 'read-only'
-  const marked = markConfinedArgv(['bash'], { mode })
-  // NB: the spec must carry the marked array BY REFERENCE — a copying helper
-  // would drop the mark (that is the anti-forgery semantics under test).
-  await assert.rejects(
-    () => engine.spawnTerminal({ ...terminalSpec(['bash']), argv: marked.argv }),
-    (error: unknown) => {
-      assert.ok(error instanceof RemoteSandboxError, String(error))
-      assert.match((error as Error).message, /refuses to open an interactive terminal/)
-      assert.match((error as Error).message, /read-only/)
-      return true
-    },
-  )
-})
-
-test('spawnTerminal: an UNMARKED argv proceeds to the transport (the human browser terminal, §4)', async () => {
-  const engine = new SshSubprocessEngine(terminalContext())
-  await assert.rejects(
-    () => engine.spawnTerminal(terminalSpec(['bash'])),
-    (error: unknown) => {
-      assert.ok(!(error instanceof RemoteSandboxError), 'an unmarked terminal must not be refused')
-      assert.match(String(error), /TRANSPORT-REACHED/)
-      return true
-    },
-  )
-})
-
-test('spawnTerminal: a DANGER mark is not a fence — it proceeds like unmarked', async () => {
-  const engine = new SshSubprocessEngine(terminalContext())
-  const marked = markConfinedArgv(['bash'], { mode: 'danger-full-access' })
-  await assert.rejects(
-    () => engine.spawnTerminal({ ...terminalSpec(['bash']), argv: marked.argv }),
-    /TRANSPORT-REACHED/,
   )
 })
 

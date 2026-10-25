@@ -11,7 +11,6 @@ import assert from 'node:assert/strict'
 import { homedir } from 'node:os'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { confinedSpawnMarkOf, markConfinedArgv } from '../src/remote-confine-policy.ts'
 import { installRemoteSpawnPolicyBridge, isHostLocalShellExec } from '../src/remote-spawn-policy.ts'
 
 type Spec = Record<string, unknown>
@@ -51,16 +50,6 @@ test('BUG-12/REQ-I27: execute receives spec.sandboxPolicy verbatim — no bridge
   // The one-call policy rides the SPEC (official escalation stamps it there);
   // the retired ALS bridge was only ever a workaround for spawns reading it.
   assert.deepEqual(seen, { mode: 'danger-full-access' })
-})
-
-test('BUG-12/REQ-I27: the spawn policy channel is the confine mark — sandboxPolicy needs no bridging', () => {
-  // A danger grant SKIPS confine (official semantics) ⇒ the spawn argv stays
-  // UNMARKED ⇒ the remote spawn runs `--sandbox off` — exactly the grant.
-  const granted = ['pwsh', '-Command', 'Set-Content x']
-  assert.equal(confinedSpawnMarkOf(granted), undefined)
-  // A confined call goes THROUGH confine ⇒ the returned argv IS the mark.
-  const product = markConfinedArgv(['bash', '-c', 'make'], { mode: 'workspace-write' })
-  assert.deepEqual(confinedSpawnMarkOf(product.argv), { mode: 'workspace-write' })
 })
 
 test('BUG-12: resolve pins a remote workdir to the host world', () => {

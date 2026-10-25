@@ -74,32 +74,6 @@ test('REQ-I27: the confine MARK drives the spawn policy — unmarked argv runs -
   assert.equal(coreServeSandboxOf('workspace-write'), 'workspace-write')
 })
 
-test('REQ-I27: the one-call grant rides the SPEC itself — no store between tool and executor', async () => {
-  const ctx = new Context()
-  const seen: unknown[] = []
-  ctx.provide('shell', {
-    async run(spec: { sandboxPolicy?: unknown }) {
-      await Promise.resolve()
-      seen.push(spec.sandboxPolicy)
-    },
-    start(spec: { sandboxPolicy?: unknown }) {
-      seen.push(spec.sandboxPolicy)
-    },
-  })
-  const shell = ctx.get('shell') as {
-    run: (spec: { sandboxPolicy?: unknown }) => Promise<void>
-    start: (spec: { sandboxPolicy?: unknown }) => void
-  }
-  await shell.run({ sandboxPolicy: { mode: 'danger-full-access' } })
-  shell.start({ sandboxPolicy: { mode: 'workspace-write' } })
-  assert.deepEqual(seen, [{ mode: 'danger-full-access' }, { mode: 'workspace-write' }])
-  // And the FENCE channel: a confined call confine-marks the argv it hands spawn.
-  assert.deepEqual(
-    confinedSpawnMarkOf(markConfinedArgv(['bash', '-c', 'x'], { mode: 'workspace-write' }).argv),
-    { mode: 'workspace-write' },
-  )
-})
-
 interface Captured {
   name: string
   description: string
