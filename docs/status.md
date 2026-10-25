@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-25 10:05 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-25 13:09 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `master` / `18e9555` |
-| HEAD 提交 | `fix(remote): repair SFTP paths, confined exec, skill routes, and sandbox status (#84)` (2026-10-25) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `chore/AUDIT-8-prune-useless-tests` / `8adc273` |
+| HEAD 提交 | `docs(backlog): move AUDIT-8 to doing` (2026-10-25) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
 | 单测文件 | 83 |
-| 单测用例（静态计数） | 776 |
+| 单测用例（静态计数） | 769 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 57 |
@@ -28,8 +28,8 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 10 |
-| `doing` | 1 |
+| `todo` | 9 |
+| `doing` | 2 |
 | `blocked` | 7 |
 | `done` | 105 |
 | `shipped` | 12 |

@@ -8,17 +8,9 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import {
   installRemoteConfinePassthrough,
-  passthroughConfinedArgv,
   shouldPassthroughRemoteConfine,
 } from '../src/remote-confine.ts'
 import { installRemoteSpawnPolicyBridge } from '../src/remote-spawn-policy.ts'
-
-test('passthroughConfinedArgv: identity argv, full enforcement', () => {
-  const out = passthroughConfinedArgv(['bash', '-c', 'echo'])
-  assert.deepEqual(out.argv, ['bash', '-c', 'echo'])
-  assert.equal(out.enforcement, 'full')
-  assert.deepEqual(out.denialSignatures, ['read-only file system'])
-})
 
 test('shouldPassthroughRemoteConfine: no initiator stays local', () => {
   assert.equal(shouldPassthroughRemoteConfine(new Context()), false)

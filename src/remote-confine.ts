@@ -30,22 +30,6 @@ interface ConfineHost {
 const patched = new WeakSet<object>()
 
 /**
- * Identity argv for a remote session: the host runner must not wrap the
- * command, but the denial dialect stays the remote core's bwrap text so
- * official bash/pwsh still append the escalation hint. REQ-I27 moved the
- * dialect constants beside the registry (`remote-confine-policy.ts`); this
- * shape is retained for the tests that pin it.
- */
-export function passthroughConfinedArgv(argv: readonly string[]): ConfinedArgv {
-  return {
-    argv: [...argv],
-    enforcement: 'full',
-    denialSignatures: [REMOTE_CORE_DENIAL_SIGNATURE],
-    runnerFailureRules: [{ fatalSignatures: ['bwrap: '] }],
-  }
-}
-
-/**
  * True when the current initiator session's cwd is a remote route (`ssh://`
  * or a placeholder tree). Missing initiator → false (local is the safe default).
  */
