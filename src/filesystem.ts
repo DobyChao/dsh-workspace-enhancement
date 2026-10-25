@@ -25,7 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-fs'
 import { quoteShellArg } from './ssh-core.ts'
 import { fileContentVersion, statsVersionMtimeMs } from './fs-version.ts'
-import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshTargetKey } from './transport.ts'
+import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshRoutePlaceholder, sshTargetKey } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
 import type { CoreHub } from './core-hub.ts'
@@ -33,7 +33,6 @@ import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy
 import { remoteSandboxUnavailable } from './remote-sandbox-fence.ts'
 
 const BINARY_SAMPLE_BYTES = 8192
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 function assertNotAborted(signal: AbortSignal | undefined, operation: string): void {
   if (signal?.aborted === true) throw new FsError(`${operation} aborted`, 'FS_ABORTED')
@@ -63,24 +62,6 @@ function decodeText(bytes: Uint8Array, displayPath: string): string {
   } catch (error: unknown) {
     throw new FsError(`cannot read "${displayPath}": invalid UTF-8 text`, 'FS_NOT_TEXT', { cause: error })
   }
-}
-
-function decodeCanonicalPath(encoded: string): string {
-  if (encoded.length === 0 || !BASE64.test(encoded)) {
-    throw new Error('fs-ssh: canonical path transport returned invalid base64')
-  }
-  const framed = Buffer.from(encoded, 'base64')
-  if (framed.toString('base64') !== encoded || framed.length < 2 || framed.at(-1) !== 0 || framed.subarray(0, -1).includes(0)) {
-    throw new Error('fs-ssh: canonical path transport returned invalid NUL framing')
-  }
-  let path: string
-  try {
-    path = new TextDecoder('utf-8', { fatal: true }).decode(framed.subarray(0, -1))
-  } catch (error: unknown) {
-    throw new Error('fs-ssh: canonical path is not valid UTF-8', { cause: error })
-  }
-  if (!posix.isAbsolute(path)) throw new Error('fs-ssh: canonical path is not absolute')
-  return path
 }
 
 function entryType(stats: Stats): FsInfo['type'] {
@@ -173,7 +154,13 @@ export class SshFileSystemEngine {
   }
 
   processPath(target: FsTarget): string {
-    return this.pathOf(target)
+    const route = this.routeTarget(target)
+    if (route.connectionId === undefined) return route.path
+    // BUG-22: `working-directory.set` stores this string as the session cwd.
+    // A bare POSIX path is resolved on the host disk, so a Windows subagent
+    // looks for project skills under `C:\home\…` and misses the remote tree.
+    // The placeholder round-trips through `remoteRouteFromCwd`.
+    return sshRoutePlaceholder(route.connectionId, route.path)
   }
 
   /**
@@ -185,7 +172,7 @@ export class SshFileSystemEngine {
   }
 
   fileUrl(target: FsTarget): string {
-    const path = this.processPath(target)
+    const path = this.pathOf(target)
     if (!posix.isAbsolute(path)) throw new Error(`fs-ssh: expected an absolute process path: ${JSON.stringify(path)}`)
     return `file://${path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`
   }
@@ -433,14 +420,26 @@ export class SshFileSystemEngine {
     return value
   }
 
+  /**
+   * Canonical path on the shared SFTP channel.
+   *
+   * An exec per path is its own SSH session. OpenSSH's default MaxSessions is
+   * 10, so resolving a parent workspace (and the nested workspaces inside it)
+   * in parallel fills that table and the sidebar terminal's next channel is
+   * rejected as `(SSH) Channel open failure: open failed`.
+   * A missing leaf still follows `realpath -m`: resolve the longest existing
+   * ancestor, then join the absent suffix.
+   */
   private async canonicalPath(path: string, signal?: AbortSignal, transport: SshTransport = this.ssh()): Promise<string> {
-    const result = await transport.exec(
-      `set -o pipefail; realpath -mz -- ${quoteShellArg(path)} | base64 -w0`,
-      signal !== undefined ? { signal } : undefined,
-    )
+    const sftp = await transport.getSftp(signal)
     signal?.throwIfAborted()
-    if (result.exitCode !== 0) throw new Error(result.stderr || `realpath failed for ${path}`)
-    return decodeCanonicalPath(result.stdout.trim())
+    const resolved = await canonicalViaSftp(
+      candidate => sftpRealpath(sftp, candidate),
+      path,
+      signal,
+    )
+    if (!posix.isAbsolute(resolved)) throw new Error('fs-ssh: canonical path is not absolute')
+    return resolved
   }
 
   private async probe(path: string, displayPath: string, signal?: AbortSignal, transport: SshTransport = this.ssh()): Promise<Stats | undefined> {
@@ -750,6 +749,42 @@ export class SshFileSystem extends FileSystem {
       mode === 'workspace-write' ? 'workspace-write' : 'read-only',
       'the remote component hub is not mounted in this composition',
     )
+  }
+}
+
+function sftpRealpath(sftp: SFTPWrapper, path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    sftp.realpath(path, (error, value) => {
+      if (error != null || value === undefined) reject(error ?? new Error('fs-ssh: SFTP realpath returned no path'))
+      else resolve(value)
+    })
+  })
+}
+
+/**
+ * `realpath -m` on an SFTP `realpath` lookup: an existing path comes back
+ * canonical; a missing leaf keeps the resolved ancestor plus the absent suffix.
+ */
+async function canonicalViaSftp(
+  lookup: (path: string) => Promise<string>,
+  path: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const missing: string[] = []
+  let candidate = posix.normalize(path)
+  while (true) {
+    signal?.throwIfAborted()
+    try {
+      const real = await lookup(candidate)
+      return missing.length === 0 ? real : posix.join(real, ...missing)
+    } catch (error) {
+      if (!isNotFound(error)) throw error
+      const parent = posix.dirname(candidate)
+      if (parent === candidate) throw error
+      const base = posix.basename(candidate)
+      if (base !== '' && base !== '/') missing.unshift(base)
+      candidate = parent
+    }
   }
 }
 

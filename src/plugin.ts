@@ -42,6 +42,7 @@ import { installRemoteConfinePassthrough } from './remote-confine.ts'
 import { installRemoteSessionUploads } from './session-uploads.ts'
 import { installRemoteSpawnPolicyBridge } from './remote-spawn-policy.ts'
 import { installBrowserTerminalRouting } from './browser-terminal.ts'
+import { installDelegatedPresetAlias } from './delegated-preset.ts'
 
 /**
  * The config mirrors the disabled rows' schema defaults (direct construction
@@ -126,6 +127,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.plugin(SshRuntime, config)
   installRemoteConfinePassthrough(ctx)
   installRemoteSpawnPolicyBridge(ctx)
+  installDelegatedPresetAlias(ctx)
   // AUDIT-6 (ADR-0020 D4): the AI answerer — a prepend `approval/request`
   // waterfall listener that auto-grants only whitelisted commands on
   // `remoteApproval: 'ai'` machines and delegates everything else (including

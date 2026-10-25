@@ -48,6 +48,7 @@ import type {
   SubprocessOutputReader,
   SubprocessSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import { markConfinedArgv } from './remote-confine-policy.ts'
 import { remoteRouteFromCwd } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import type { SshRegistry } from './registry.ts'
@@ -1081,6 +1082,16 @@ function spawnMarked(
 ): SubprocessHandle {
   const effective = mode ?? resolveRemoteSessionMode(ctx)
   if (!isConfinedSandboxMode(effective)) return spawn(spec)
+  // BUG-21: `ctx.sandbox.confine` is asynchronous and wraps a host runner.
+  // A remote cwd (including a side workspace while the session cwd is still
+  // local) is fenced by the remote component. Marking here stays synchronous,
+  // which background `jobs.start` requires, and never ships the host runner
+  // over SSH. The session-cwd passthrough does not see this case: it only
+  // looks at the initiator session.
+  if (remoteRouteFromCwd(spec.cwd) !== null) {
+    const marked = markConfinedArgv(spec.argv, { mode: effective })
+    return spawn({ ...spec, argv: marked.argv })
+  }
   const sandbox = ctx.get('sandbox', false) as { confine?: (argv: readonly string[], policy: unknown) => { argv: string[] } } | undefined
   if (sandbox === undefined || typeof sandbox.confine !== 'function') return spawn(spec)
   const confined = sandbox.confine(spec.argv, { mode: effective })

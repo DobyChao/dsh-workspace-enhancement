@@ -8,6 +8,7 @@
  */
 
 import type { FenceTierView } from '../core-deploy.ts'
+import { BWRAP_VENDOR } from '../core-vendor-pins.ts'
 
 export interface CoreStatusPayload {
   ok?: boolean
@@ -24,7 +25,12 @@ export type CoreStatusLabelKey =
   | 'settings.core.ok'
   | 'settings.core.okFenced'
   | 'settings.core.okDegraded'
-  | 'settings.core.fenceNone'
+  | 'settings.core.fenceNone.title'
+  | 'settings.core.fenceNone.summary'
+  | 'settings.core.fenceNone.causeMissing'
+  | 'settings.core.fenceNone.causeUnusable'
+  | 'settings.core.fenceNone.readOnly'
+  | 'settings.core.fenceNone.ways'
   | 'settings.core.missing'
   | 'settings.core.unsupported'
 
@@ -37,8 +43,17 @@ export function coreStatusLabel(
     const arch = typeof view.arch === 'string' && view.arch !== '' ? ` ${view.arch}` : ''
     const fence = view.fence
     if (fence?.tier === 'none') {
-      // The core is fine; the FENCE is not — that distinction is the line.
-      return t('settings.core.fenceNone', { version: view.version, arch, detail: view.detail ?? '' })
+      const cause = fence.bwrapProbeErr !== undefined && fence.bwrapProbeErr !== ''
+        ? t('settings.core.fenceNone.causeUnusable', { reason: fence.bwrapProbeErr })
+        : t('settings.core.fenceNone.causeMissing')
+      return [
+        t('settings.core.fenceNone.title', { version: view.version, arch }),
+        t('settings.core.fenceNone.summary'),
+        cause,
+        t('settings.core.fenceNone.readOnly'),
+        t('settings.core.fenceNone.ways'),
+        ...BWRAP_VENDOR.installHints,
+      ].join('\n')
     }
     if (fence?.tier === 'landlock') {
       return t('settings.core.okDegraded', { version: view.version, arch, abi: fence.landlockAbi ?? 0 })
@@ -63,7 +78,18 @@ export function coreFailureIsArchRefusal(detail: string): boolean {
   return /uname|linux only|no build for this architecture/i.test(detail)
 }
 
-/** Deploy result banner: only a live core is success (UX-12). */
-export function deployBannerKind(view: CoreStatusPayload): 'success' | 'error' {
-  return view.ok === true ? 'success' : 'error'
+/** Chip tone for a status or deploy payload. A live core with no sandbox is a warning. */
+export function coreStatusTone(view: CoreStatusPayload): 'ok' | 'warn' | 'error' {
+  if (view.ok === true) return view.fence?.tier === 'none' ? 'warn' : 'ok'
+  const detail = typeof view.detail === 'string' ? view.detail : ''
+  return coreFailureIsArchRefusal(detail) ? 'warn' : 'error'
+}
+
+/**
+ * Deploy result banner. A core that cannot enforce a sandbox is not a
+ * success, even though the binary itself installed.
+ */
+export function deployBannerKind(view: CoreStatusPayload): 'success' | 'warn' | 'error' {
+  if (view.ok !== true) return 'error'
+  return view.fence?.tier === 'none' ? 'warn' : 'success'
 }
