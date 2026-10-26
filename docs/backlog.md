@@ -16,7 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I31 | 实验性切机器工具 | doing | P2 | R58 已实现（分支 `feat/REQ-I31-switch-machine`）：投影优先读缝 + `experimental.ts` 开关 + `sw_use_machine`（danger/连接/登记根三门禁，空机与 `/` 拒）。单测/boot-smoke 绿；待 PR + UAT [R58](./uat/R58-req-i31-switch-machine.md)。裸通道 v1 接受（见笔记） |
+| REQ-I31 | 实验性切机器工具 | doing | P2 | R58 已实现（PR #86，CI 绿）：投影读缝 + 开关 + `sw_use_machine`。设置页/持久化/已有会话工具即时增减已在 lab 50599 真机预验（UAT 步骤 1–4）；待合并 + 用户 UAT 步骤 5–15。裸通道 v1 接受（见笔记） |
 
 ## 2. 已排期（todo，按优先级）
 

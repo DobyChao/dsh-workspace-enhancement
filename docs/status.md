@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-26 08:42 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-26 09:31 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `feat/REQ-I31-switch-machine` / `4e8fd05` |
-| HEAD 提交 | `test(tool): pin the sw_use_machine gate matrix and toggle store` (2026-10-26) |
-| 与远端 | 4 ahead / 0 behind origin/master |
+| 分支 / HEAD | `feat/REQ-I31-switch-machine` / `b69c803` |
+| HEAD 提交 | `docs(req-i31): implementation record, R58 UAT script, and changelog` (2026-10-26) |
+| 与远端 | 5 ahead / 0 behind origin/master |
 
 ## 质量
 
