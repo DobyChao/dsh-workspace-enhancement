@@ -163,6 +163,11 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
   const [err, setErr] = useState('')
   const [coreLines, setCoreLines] = useState<Record<string, CoreLine>>({})
   const [moreOpen, setMoreOpen] = useState('')
+  // REQ-I31: the experimental switch-machine toggle (default off; the tool
+  // registers only while this is on AND the host exposes workingDirectory.set).
+  const [switchMachine, setSwitchMachineState] = useState(false)
+  const [toggleBusy, setToggleBusy] = useState(false)
+  const [toggleNote, setToggleNote] = useState('')
 
   const refresh = async (): Promise<void> => {
     try {
@@ -175,6 +180,36 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     }
   }
   useEffect(() => { void refresh() }, [])
+
+  useEffect(() => {
+    let alive = true
+    void (async (): Promise<void> => {
+      try {
+        const result = await rpc('experimental.get')
+        const state = unwrap<{ switchMachine: unknown }>(result, t('settings.experimental.loadFailed'))
+        if (alive && typeof state.switchMachine === 'boolean') setSwitchMachineState(state.switchMachine)
+      } catch {
+        // An unreadable toggle reads as OFF — the honest default, same as the
+        // host-side file loader; the row stays usable for a retry.
+        if (alive) setSwitchMachineState(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const flipSwitchMachine = async (next: boolean): Promise<void> => {
+    setToggleBusy(true)
+    setToggleNote('')
+    try {
+      const result = await rpc('experimental.set', { switchMachine: next })
+      const state = unwrap<{ switchMachine: unknown }>(result, t('settings.experimental.setFailed'))
+      setSwitchMachineState(state.switchMachine === true)
+    } catch (error) {
+      setToggleNote(error instanceof Error ? error.message : String(error))
+    } finally {
+      setToggleBusy(false)
+    }
+  }
 
   const startEdit = (machine: MachineView): void => {
     setEditing(editInitialOf(machine))
@@ -414,6 +449,23 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
             </ul>
           )
           : <p className={styles.empty}>{t('settings.machines.empty')}</p>}
+      </section>
+
+      <section className={styles.group}>
+        <h2 className={styles.groupTitle}>{t('settings.experimental.title')}</h2>
+        <label className={styles.toggleRow}>
+          <input
+            type="checkbox"
+            checked={switchMachine}
+            disabled={toggleBusy}
+            onChange={event => { void flipSwitchMachine(event.target.checked) }}
+          />
+          <span>{t('settings.experimental.switchMachine')}</span>
+        </label>
+        <p className={styles.toggleHint}>{t('settings.experimental.switchMachineHint')}</p>
+        {toggleNote !== ''
+          ? <p className={styles.toggleHint} role="alert">{toggleNote}</p>
+          : null}
       </section>
 
       <section className={styles.group}>

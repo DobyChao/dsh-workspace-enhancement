@@ -103,6 +103,23 @@ export function sessionProjectionsOf(ctx: Context): SessionProjectionsFace | und
 }
 
 /**
+ * The host `workingDirectory` service face `sw_use_machine` needs (0.2.1
+ * family): `set` validates the target through `ctx.fs` (our remote provider)
+ * and commits the durable `working-directory/change` event. Absent on older
+ * families, where the experimental tool does not register at all.
+ */
+export interface WorkingDirectoryFace {
+  set(agent: unknown, path: string, signal?: AbortSignal): Promise<string>
+}
+
+/** Optional lookup of the host `workingDirectory` service (absent pre-0.2.1). */
+export function workingDirectoryOf(ctx: Context): WorkingDirectoryFace | undefined {
+  if (typeof ctx.get !== 'function') return undefined
+  const value = ctx.get('workingDirectory', false) as WorkingDirectoryFace | undefined
+  return value !== undefined && typeof value.set === 'function' ? value : undefined
+}
+
+/**
  * REQ-I31: one session's EFFECTIVE working directory — the `workingDirectory`
  * projection first, the immutable creation `header.cwd` as the fallback.
  *

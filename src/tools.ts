@@ -34,7 +34,8 @@ import { provisionRemoteCore, createCoreDeployAsk } from './core-provision.ts'
 import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
 import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
-import { isConfinedSandboxMode, resolveRemoteSessionMode, sessionProjectionsOf } from './remote-policy.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode, sessionProjectionsOf, workingDirectoryOf } from './remote-policy.ts'
+import { useMachineToolOf } from './use-machine-tool.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -705,4 +706,37 @@ export function registerWorkspaceTools(
   // REQ-I16: scoped onto agent.ctx when the session cwd is a remote Linux
   // workspace. The session gate still applies at execute time.
   registerWin32Bash(ctx, registry, { sides, connections })
+
+  /**
+   * REQ-I31: the experimental `sw_use_machine` tool registers ONLY while the
+   * settings toggle is on (关闭时工具不注册) AND the host exposes
+   * `workingDirectory.set` (0.2.1 family — the family gate). A toggle flip
+   * re-runs the sync, so the tool never lingers in the model's tool list.
+   */
+  const toggles = ctx.get('experimentalToggles', false)
+  if (toggles !== undefined) {
+    let disposeTool: (() => void) | undefined
+    const syncTool = (): void => {
+      disposeTool?.()
+      disposeTool = undefined
+      const workingDirectory = workingDirectoryOf(ctx)
+      if (!toggles.switchMachine() || workingDirectory === undefined) return
+      const disposer = ctx.tools.register(useMachineToolOf(ctx, {
+        registry,
+        connections,
+        workingDirectory,
+      }))
+      disposeTool = () => disposer()
+    }
+    syncTool()
+    const unsubscribe = toggles.onChange(syncTool)
+    ctx.effect(() => {
+      // The effect body runs at mount (nothing to do — syncTool ran above);
+      // the returned function is the disposal.
+      return () => {
+        unsubscribe()
+        disposeTool?.()
+      }
+    }, 'sw_use_machine tool (experimental)')
+  }
 }

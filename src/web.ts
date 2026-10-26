@@ -23,6 +23,7 @@ import type { ConnectionInput, MachineInput, RegistryConfig } from './registry.t
 import type { SshConnection } from './connection.ts'
 import type { HostKeyMode } from './hostkey.ts'
 import { registerWorkspaceTools } from './tools.ts'
+import { ExperimentalToggles } from './experimental.ts'
 import { sshRoutePlaceholder } from './transport.ts'
 import { parseSshRoute } from './registry.ts'
 import { listRemoteFiles, listRemoteFilesViaCore, listRemoteLevel, listRemoteLevelViaCore, mkdirRemoteViaCore, remoteHome as sharedRemoteHome } from './listing.ts'
@@ -140,6 +141,11 @@ function isPreviewListPayload(value: unknown): value is { id: string; path: stri
 function isSessionRoutePayload(value: unknown): value is { id: string; path: string } {
   return isRecord(value) && isString(value.id) && value.id.trim() !== ''
     && isString(value.path) && posix.isAbsolute(value.path)
+}
+
+/** REQ-I31 experimental-set payload: `{ switchMachine: boolean }`. */
+function isExperimentalSetPayload(value: unknown): value is { switchMachine: boolean } {
+  return isRecord(value) && typeof value.switchMachine === 'boolean'
 }
 
 /** Connection input payload (subset keys, all strings/numbers/arrays). */
@@ -314,6 +320,8 @@ export const CHANNEL_ENDPOINTS = [
   'session.conn.connect',
   'session.conn.disconnect',
   'session.conn.set',
+  'experimental.get',
+  'experimental.set',
   'core.deploy',
   'core.status',
 ] as const
@@ -367,6 +375,13 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
    * to "no session connections" instead of failing assembly.
    */
   void new SessionMachineConnections(ctx)
+  /**
+   * REQ-I31: the experimental-toggles store. Mounted next to the other dsw
+   * stores (this row owns the tools AND the channel); the tools half reads it
+   * by service name to gate `sw_use_machine` registration, the settings page
+   * writes it through `experimental.get` / `experimental.set`.
+   */
+  void new ExperimentalToggles(ctx)
   const hub = (): CoreHub => ensureCoreHub(ctx)
   /**
    * REQ-I14/REQ-I21 background core-gap probe (the PANEL/CHANNEL connect
@@ -830,6 +845,21 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
             if (!previously.has(id)) warmup(id)
           }
           return { ok: true, value: connItems(sessionId) }
+        }
+        case 'experimental.get': {
+          // REQ-I31: the experimental toggles for the settings page —
+          // `{ switchMachine: boolean }` exactly; the client panel is written
+          // against this shape. Default OFF in every fresh install.
+          const value = ctx.get('experimentalToggles', false)
+          if (value === undefined) throw new Error(`dsw: ${t('rpc.experimentalStoreMissing')}`)
+          return { ok: true, value: { switchMachine: value.switchMachine() } }
+        }
+        case 'experimental.set': {
+          const input = requirePayload(payload, isExperimentalSetPayload, 'experimental.set')
+          const value = ctx.get('experimentalToggles', false)
+          if (value === undefined) throw new Error(`dsw: ${t('rpc.experimentalStoreMissing')}`)
+          value.setSwitchMachine(input.switchMachine)
+          return { ok: true, value: { switchMachine: value.switchMachine() } }
         }
         case 'core.status': {
           const input = requirePayload(payload, isIdPayload, 'core.status')

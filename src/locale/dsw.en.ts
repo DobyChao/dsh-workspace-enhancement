@@ -157,6 +157,8 @@ const en: Record<DswKey, string> = {
   'rpc.connUnknownMachine': 'unknown machine id(s): {ids} — known: {known}',
   'rpc.connNoKnownMachines': '(no machines registered)',
   'rpc.connMachineEmpty': 'a machine id must be a non-empty string',
+  // REQ-I31: experimental-toggles store and experimental.* RPC error face
+  'rpc.experimentalStoreMissing': 'the experimental-toggles store is not mounted (is dsw/web mounted?)',
   // registry.ts / transport.ts / session-workspaces.ts protocol/data
   // validation and routing errors (t15-r2: every host-triggerable surface is
   // keyed; see i18n-design.md §13-9, now removed)
@@ -260,6 +262,12 @@ const en: Record<DswKey, string> = {
   'settings.machines.title': 'Configured machines',
   'settings.machines.encryptFallbackBadge': '⚠ encryption unavailable',
   'settings.machines.keychainBadge': 'keychain',
+  // REQ-I31: experimental toggles (default off)
+  'settings.experimental.title': 'Experimental',
+  'settings.experimental.switchMachine': 'Machine switching (sw_use_machine tool)',
+  'settings.experimental.switchMachineHint': 'Registers the sw_use_machine tool for this deployment. The switch itself still requires the danger-full-access tier, a machine connected to the session, and a registered landing directory. Off by default; needs a host with the working-directory service (0.2.1+).',
+  'settings.experimental.loadFailed': 'Failed to read the experimental toggles',
+  'settings.experimental.setFailed': 'Failed to save the experimental toggle',
   'settings.machines.jumpBadge': 'jump {count}',
   'settings.machines.currentBadge': 'current',
   'settings.machines.more': 'More',
@@ -400,6 +408,19 @@ const en: Record<DswKey, string> = {
   'tool.sw_connect.error.noKnownMachines': '(no machines registered — add one in the settings page first)',
   'tool.sw_connect.error.allUnreachable': 'sw_connect: no requested machine was reachable, so this session\'s connections are unchanged.\n{details}',
   'tool.sw_connect.error.noDetail': 'no failure detail',
+
+  /* --------------------------------------------------- tool: sw_use_machine */
+  'tool.sw_use_machine.error.noSession': 'sw_use_machine: this call has no agent session — refusing to switch',
+  'tool.sw_use_machine.error.empty': 'sw_use_machine: machine must be a non-empty string',
+  'tool.sw_use_machine.error.reserved': 'sw_use_machine: "local" is not a switch target — this tool only moves the session between registered remote machines',
+  'tool.sw_use_machine.error.unknown': 'sw_use_machine: unknown machine id {id} — known: {known}',
+  'tool.sw_use_machine.error.notConnected': 'sw_use_machine: machine {id} is not connected to this session (connected: {ids}) — call sw_connect first',
+  'tool.sw_use_machine.error.pathNotAbsolute': 'sw_use_machine: path must be an absolute POSIX directory on the target machine (relative paths, Windows paths, and ssh:// spellings are refused)',
+  'tool.sw_use_machine.error.noRegisteredRoot': 'sw_use_machine: machine {id} has no registered workspace directory and no path was given — pass an absolute POSIX path (landing at / is never allowed)',
+  'tool.sw_use_machine.error.notDanger': 'sw_use_machine: switching machines requires the danger-full-access tier (this session is {mode}) — a one-shot sandbox_permissions approval also works',
+  'tool.sw_use_machine.error.noKnown': '(no machines registered)',
+  'tool.sw_use_machine.output.alreadyActive': 'sw_use_machine: this session is already on {id} (landing: {path}) — nothing changed',
+  'tool.sw_use_machine.output.switched': 'sw_use_machine: session switched to {id}; the working directory is now {path} (committed as {cwd}). Subsequent relative paths, sw_exec\'s default server, project skills, and new terminals run on {id}; already-running processes keep their own directories.',
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.output.background': 'started background job {jobId} on {server} ({endpoint})',

@@ -386,3 +386,31 @@
     margin-left: 0;
   }
 }
+
+/* REQ-I31: the experimental-toggle row (settings page). The native checkbox
+   rides the host's accent color through the alias token; the hint mirrors the
+   editor-note treatment (secondary label color, body-adjacent size). */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggleRow input {
+  accent-color: var(--dsw-alias-fill-accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.toggleHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
