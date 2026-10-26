@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-25 14:24 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-26 01:26 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `master` / `4a0bc48` |
-| HEAD 提交 | `chore(test): prune superseded unit tests and dead passthrough export (#85)` (2026-10-25) |
+| 分支 / HEAD | `master` / `bbf21c1` |
+| HEAD 提交 | `docs(backlog): AUDIT-8 done` (2026-10-25) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -29,10 +29,10 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 9 |
-| `doing` | 1 |
+| `doing` | 0 |
 | `blocked` | 7 |
 | `done` | 106 |
-| `shipped` | 12 |
+| `shipped` | 13 |
 | `dropped` | 16 |
 
 ## 被挡住 / 待拍板
