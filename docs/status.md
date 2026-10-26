@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-26 01:26 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-26 08:42 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `master` / `bbf21c1` |
-| HEAD 提交 | `docs(backlog): AUDIT-8 done` (2026-10-25) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `feat/REQ-I31-switch-machine` / `4e8fd05` |
+| HEAD 提交 | `test(tool): pin the sw_use_machine gate matrix and toggle store` (2026-10-26) |
+| 与远端 | 4 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 83 |
-| 单测用例（静态计数） | 769 |
+| 单测文件 | 85 |
+| 单测用例（静态计数） | 785 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 57 |
@@ -28,8 +28,8 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 9 |
-| `doing` | 0 |
+| `todo` | 8 |
+| `doing` | 1 |
 | `blocked` | 7 |
 | `done` | 106 |
 | `shipped` | 13 |

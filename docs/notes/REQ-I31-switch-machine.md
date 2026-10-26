@@ -1,7 +1,8 @@
 # REQ-I31 — 实验性切机器工具
 
-> 2026-10-24 用户点名的约束。待办在 [`../backlog.md`](../backlog.md)。未开工，工具名未拍板。
+> 2026-10-24 用户点名的约束。待办在 [`../backlog.md`](../backlog.md)。
 > 2026-10-26 Phase 0 侦察完成（见文末「侦察结论」）：机制在 0.2.1-rc 宿主上**已整条存在**，REQ-I31 的定性从「造切换机制」变为「给现成机制加门禁与缺件」。
+> 2026-10-26 **已实现**（分支 `feat/REQ-I31-switch-machine`，R58）：见「实现记录」。
 
 允许 agent 把**本会话**切到另一台已注册机器，使之后的 `ctx.fs` 走那台机器。
 
@@ -24,9 +25,9 @@
 
 ## 未拍板
 
-- 工具名。候选 `sw_use_machine`，与现有 `sw_` 前缀一致。
-- 切回本机的方式：显式参数，还是只允许在已连接的远程机器之间切换。
-- **宿主裸通道怎么处理**（侦察新增，见下）：0.2.1 宿主上模型已能经宿主自带 `working_directory` 工具 `cd ssh://<id>/…` 无门禁切换。接受并在文档声明，还是设法封（profile `cordis.patch.yml` 的 `tool-working-directory` 行按 last-write-wins 可覆盖，但插件以依赖形态安装、能否写 patch 行待查）。
+- ~~工具名~~ → **`sw_use_machine`**（2026-10-26 开工时按默认拍板）。
+- ~~切回本机的方式~~ → **v1 不做**（原始约束本就「保留字 `local` 拒绝」；`set(agent, header.cwd)` 一行即回，留待真实用法反馈）。
+- **宿主裸通道怎么处理**（侦察新增，见下）：0.2.1 宿主上模型已能经宿主自带 `working_directory` 工具 `cd ssh://<id>/…` 无门禁切换。v1 **接受并在本文声明**；如需封堵（profile `cordis.patch.yml` 的 `tool-working-directory` 行按 last-write-wins 可覆盖，但插件以依赖形态安装、能否写 patch 行未查实）另立 backlog。
 
 ## 已消解的旧问题（侦察结论）
 
@@ -69,3 +70,16 @@
 - 空机（③⑤⑧⑩）：`defaultRemoteDir` 无 `workspace`/`cwd` 字段时解析到 `/`——`remember()` 明确忽略 `/`，且为 `/` 铸 serve 等于全机可写。**工具须拒绝无登记根的目标机（或要求显式 path 落点）**。
 - 本机副（②⑨）：切走后声明仍在；本机 WW 权限锚不随切换移动（缺口 5），`widenPolicyToSideRoot` 按目标路径换根仍会命中，本机副根照旧可写。
 - 远程主（⑥）：切走后每轮装配 `ensure()` 兜底，掉线自愈回原项目；原主根的 serve 按 `(machine, mode, workspaceRoot)` 缓存，不主动撤。
+
+## 实现记录（2026-10-26，R58，分支 `feat/REQ-I31-switch-machine`）
+
+侦察结论 1–5 的落地形态：
+
+- **读缝（缺口 1+2）**：`remote-policy.ts` 新增 `effectiveCwdOf` + `sessionProjectionsOf`（按名可选消费 `sessionProjections.stateOf(session, 'workingDirectory')`；string 用投影，null/未注册回 header——init 从 header 折叠，null 永不掩盖 header 值）。消费点全改：`sessionCwdOf`（exec-tools）、`sessionWorkspaceContextOf`（session-remote-context，含两个 has* 透传）、`initiatorEffectiveCwdOf`（core-hub 声明根 / core-fs cwd 默认 / remote-confine / remote-spawn-policy）。
+- **开关（缺口 3 的插件侧）**：`experimental.ts` 文件存储 `dsw-experimental.json`（默认关，corrupt 读全关），服务名 `experimentalToggles`，`onChange` 监听；web 行挂服务 + 新端点 `experimental.get`/`experimental.set`；设置页「实验特性」区一个开关。
+- **工具**：`use-machine-tool.ts`，纯决策核 `decideUseMachine`（校验序：空→`local` 保留字→未知→未连接→path 形状→落点根；落点规则 `workspace`→`cwd`→拒绝，显式 path 须绝对 POSIX 且永不为 `/`；同机无 path 为诚实 no-op）。执行面：`validateEscalationArgs` → 会话/连接门（复用 `connectedMachinesOf` 的 stored∪implicit 并集）→ danger 门（常驻档或 `approveEscalation` 单次提权，subject `'machine switch'`）→ `workingDirectory.set(agent, sshTargetKey(id, landing))`。
+- **注册门**：tools.ts 在 `registerSwExec` 后挂开关监视器——`experimentalToggles.switchMachine()` 且 `workingDirectoryOf(ctx)` 非空才注册（= 家族门 + 开关门），翻动即时重挂/卸载，`ctx.effect` 收尾。
+- **缺口 4（家族门）**：不新增 peer——`workingDirectory`/`sessionProjections` 均按名结构化可选消费（ADR-0021 的 dsh-user-approval 先例），三家族照常安装，老家族上开关等效常关。
+- **缺口 5（宿主权限锚）**：不改（`set` 文档语义「不改已有权限」）；给模型的说明写进工具描述与 locale 输出。
+- **裸通道**：v1 接受（见未拍板第三条）。
+- 验证：typecheck 绿；`check:static` 全过；`test:agent` 724 例全绿（新增 `use-machine-tool.test.ts`、`experimental.test.ts`）；boot-smoke 两条（`connections.list` + `experimental.get`）真 boot 通过（0.2.1-rc.2 宿主）。UAT 脚本 `docs/uat/R58-req-i31-switch-machine.md`。

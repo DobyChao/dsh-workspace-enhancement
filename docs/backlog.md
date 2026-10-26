@@ -16,7 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I31 | 实验性切机器工具 | doing | P2 | 侦察毕（笔记）：0.2.1 宿主已有 `workingDirectory.set` + 宿主 `working_directory` 工具，本工具=门禁包装。默认关、仅 danger、须已连接且有登记根（空机拒）。投影优先读缝修 5 处 `header.cwd` 消费点。见 [笔记](./notes/REQ-I31-switch-machine.md) |
+| REQ-I31 | 实验性切机器工具 | doing | P2 | R58 已实现（分支 `feat/REQ-I31-switch-machine`）：投影优先读缝 + `experimental.ts` 开关 + `sw_use_machine`（danger/连接/登记根三门禁，空机与 `/` 拒）。单测/boot-smoke 绿；待 PR + UAT [R58](./uat/R58-req-i31-switch-machine.md)。裸通道 v1 接受（见笔记） |
 
 ## 2. 已排期（todo，按优先级）
 
