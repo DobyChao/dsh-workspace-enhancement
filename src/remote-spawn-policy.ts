@@ -15,7 +15,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import { pinBashWorkdir, pinPwshWorkdir, sessionLocalCwd } from './region-exec.ts'
-import { initiatorSessionOf } from './remote-policy.ts'
+import { initiatorEffectiveCwdOf } from './remote-policy.ts'
 import { sessionLocalSideRoots } from './side-root-policy.ts'
 
 /** Set while `sw_exec(server: "local")` is inside the host shell. */
@@ -67,7 +67,7 @@ export function adjustShellSpec(ctx: Context, spec: ShellSpec): ShellSpec {
     const { dswLocalExec: _flag, ...rest } = spec
     return rest
   }
-  const sessionCwd = initiatorSessionOf(ctx)?.header?.cwd
+  const sessionCwd = initiatorEffectiveCwdOf(ctx)
   if (process.platform === 'win32') {
     const next = pinPwshWorkdir(spec.workdir, sessionLocalCwd(sessionLocalSideRoots(ctx), homedir()))
     if (next === spec.workdir) return spec

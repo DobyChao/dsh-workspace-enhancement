@@ -15,7 +15,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
-import { initiatorSessionOf, resolveRemoteSessionMode, sandboxModeFromPolicy } from './remote-policy.ts'
+import { initiatorEffectiveCwdOf, resolveRemoteSessionMode, sandboxModeFromPolicy } from './remote-policy.ts'
 import { currentShellWorkdir, isHostLocalShellExec } from './remote-spawn-policy.ts'
 import { widenPolicyToSideRoot } from './side-root-policy.ts'
 import { remoteRouteFromCwd } from './transport.ts'
@@ -35,7 +35,7 @@ const patched = new WeakSet<object>()
  */
 export function shouldPassthroughRemoteConfine(ctx: Context): boolean {
   if (isHostLocalShellExec()) return false
-  const cwd = initiatorSessionOf(ctx)?.header?.cwd
+  const cwd = initiatorEffectiveCwdOf(ctx)
   return remoteRouteFromCwd(cwd) !== null
 }
 

@@ -25,7 +25,7 @@ import { CoreClient, CoreRpcError } from './core-client.ts'
 import { CORE_ERROR_NOT_FOUND, CORE_ERROR_READ_ONLY, CORE_METHODS, asRecord } from './core-protocol.ts'
 import { RemoteSandboxError } from './remote-sandbox.ts'
 import {
-  initiatorSessionOf,
+  initiatorEffectiveCwdOf,
   isConfinedSandboxMode,
   resolveRemoteSessionMode,
   sftpFallbackForCoreGap,
@@ -451,7 +451,7 @@ export class CoreRoutingFileSystem implements FileSystemBranch {
       }
       return this.sftp
     }
-    const sessionCwd = opts?.cwd ?? initiatorSessionOf(this.ctx)?.header?.cwd
+    const sessionCwd = opts?.cwd ?? initiatorEffectiveCwdOf(this.ctx)
     try {
       const client = await this.hub.require(connectionId, {
         policy,

@@ -90,6 +90,52 @@ export function initiatorSessionOf(ctx: Context): { header?: { cwd?: string } } 
   return agents?.currentInitiator?.()?.session
 }
 
+/** The optional host `sessionProjections` face the effective-cwd seam reads (0.2.1 family). */
+export interface SessionProjectionsFace {
+  stateOf(session: unknown, key: string): unknown
+}
+
+/** Optional lookup of the host `sessionProjections` service (absent pre-0.2.1). */
+export function sessionProjectionsOf(ctx: Context): SessionProjectionsFace | undefined {
+  if (typeof ctx.get !== 'function') return undefined
+  const value = ctx.get('sessionProjections', false) as SessionProjectionsFace | undefined
+  return value !== undefined && typeof value.stateOf === 'function' ? value : undefined
+}
+
+/**
+ * REQ-I31: one session's EFFECTIVE working directory — the `workingDirectory`
+ * projection first, the immutable creation `header.cwd` as the fallback.
+ *
+ * On 0.2.1-family hosts the projection is the truth: `workingDirectory.set`
+ * commits `working-directory/change` events (the header keeps the original
+ * project forever), and every host consumer (fs tools, skills, terminal,
+ * subagents) already reads it. Pre-0.2.1 families have no projection at all,
+ * so the lookup is optional and the header stays the only cwd source.
+ *
+ * `stateOf` drives the fallback: a string is the committed value
+ * (header-initialized, `set`-replaced); `null` means the session never had a
+ * cwd — and because the unit's `init` folds `header.cwd ?? null`, a null
+ * state can never hide a header value; `undefined` means the key is not
+ * registered (old family). Both non-string cases fall back to the header.
+ */
+export function effectiveCwdOf(
+  projections: SessionProjectionsFace | undefined,
+  session: unknown,
+  headerCwd: string | undefined,
+): string | undefined {
+  if (projections !== undefined && session !== undefined) {
+    const state = projections.stateOf(session, 'workingDirectory')
+    if (typeof state === 'string') return state
+  }
+  return headerCwd
+}
+
+/** The initiator session's effective cwd (projection first, header fallback). */
+export function initiatorEffectiveCwdOf(ctx: Context): string | undefined {
+  const session = initiatorSessionOf(ctx)
+  return effectiveCwdOf(sessionProjectionsOf(ctx), session, session?.header?.cwd)
+}
+
 /**
  * Effective sandbox mode for one remote capability call.
  *
