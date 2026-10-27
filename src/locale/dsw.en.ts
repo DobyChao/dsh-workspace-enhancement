@@ -419,6 +419,7 @@ const en: Record<DswKey, string> = {
   'tool.sw_use_machine.error.noRegisteredRoot': 'sw_use_machine: machine {id} has no registered workspace directory and no path was given — pass an absolute POSIX path (landing at / is never allowed)',
   'tool.sw_use_machine.error.notDanger': 'sw_use_machine: switching machines requires the danger-full-access tier (this session is {mode}) — a one-shot sandbox_permissions approval also works',
   'tool.sw_use_machine.error.noKnown': '(no machines registered)',
+  'tool.sw_use_machine.error.commitMismatch': 'sw_use_machine: the host committed {committed}, which does not route to machine {id} — the switch was rolled back; please report this as a defect',
   'tool.sw_use_machine.output.alreadyActive': 'sw_use_machine: this session is already on {id} (landing: {path}) — nothing changed',
   'tool.sw_use_machine.output.switched': 'sw_use_machine: session switched to {id}; the working directory is now {path} (committed as {cwd}). Subsequent relative paths, sw_exec\'s default server, project skills, and new terminals run on {id}; already-running processes keep their own directories.',
 

@@ -848,11 +848,17 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
         }
         case 'experimental.get': {
           // REQ-I31: the experimental toggles for the settings page —
-          // `{ switchMachine: boolean }` exactly; the client panel is written
-          // against this shape. Default OFF in every fresh install.
+          // `{ switchMachine }` plus the tool-row gate diagnostics. Default
+          // OFF in every fresh install.
           const value = ctx.get('experimentalToggles', false)
           if (value === undefined) throw new Error(`dsw: ${t('rpc.experimentalStoreMissing')}`)
-          return { ok: true, value: { switchMachine: value.switchMachine() } }
+          return {
+            ok: true,
+            value: {
+              switchMachine: value.switchMachine(),
+              ...(typeof value.gateState === 'function' ? { gate: value.gateState() } : {}),
+            },
+          }
         }
         case 'experimental.set': {
           const input = requirePayload(payload, isExperimentalSetPayload, 'experimental.set')

@@ -58,6 +58,8 @@ export function loadExperimentalToggles(
 export class ExperimentalToggles extends Service {
   private readonly file: string
   private switchMachineValue: boolean
+  /** REQ-I31 diagnostics: what the tool-row gate last saw (tests/UAT read it via `experimental.get`). */
+  private gateStateValue = 'unmounted'
   private readonly listeners = new Set<() => void>()
 
   constructor(ctx: Context, opts?: { file?: string }) {
@@ -69,6 +71,16 @@ export class ExperimentalToggles extends Service {
   /** The physical state file (tests/displays). */
   get statePath(): string {
     return this.file
+  }
+
+  /** The tool-row gate's last outcome (mount visibility + toggle + service faces). */
+  gateState(): string {
+    return this.gateStateValue
+  }
+
+  /** Record the tool-row gate's outcome (diagnostics surface for `experimental.get`). */
+  reportGateState(state: string): void {
+    this.gateStateValue = state
   }
 
   /** Whether the experimental switch-machine tool may register (default false). */

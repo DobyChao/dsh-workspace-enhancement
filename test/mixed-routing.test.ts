@@ -282,13 +282,16 @@ test('MixedSubprocessRuntime: a local cwd executes on the local branch (process-
 
 /* ------------------------------------------------- 3) 文件系统门面分支委派 */
 
-function stubFileSystemBranch(label: 'local' | 'remote'): FileSystemBranch & { calls: string[] } {
+function stubFileSystemBranch(label: 'local' | 'remote'): FileSystemBranch & { calls: string[]; cwdSeen: string[] } {
   const calls: string[] = []
+  const cwdSeen: string[] = []
   return {
     calls,
+    cwdSeen,
     ...(label === 'local' ? { sandboxMode: 'workspace-write' } : {}),
-    async resolve(path: string): Promise<FsTarget> {
+    async resolve(path: string, opts?: { cwd?: string }): Promise<FsTarget> {
       calls.push(`resolve:${label}:${path}`)
+      cwdSeen.push(opts?.cwd ?? '')
       const key = label === 'remote' ? `ssh://c1/${path}` : `key-${label}`
       return { targetKey: FsTargetKey(key), displayPath: path }
     },
@@ -487,6 +490,31 @@ test('REQ-I11: a remote spelling routes remote with no side store and a local cw
   await mixed.resolve(join(sshRoutesRoot(), 'c1', 'srv', 'work'), { cwd: LOCAL_CWD })
   assert.deepEqual(remote.calls.slice(2), ['resolve:remote:/srv/work'])
   assert.deepEqual(local.calls, [])
+})
+
+test('BUG-20: a machine-bearing path binds to ITS machine, a remote session cwd cannot override it', async () => {
+  const local = stubFileSystemBranch('local')
+  const remote = stubFileSystemBranch('remote')
+  const mixed = new MixedFileSystem(local, remote as never)
+
+  // The R58 step-11 shape: `workingDirectory.set` always passes the session's
+  // CURRENT cwd — here machine c1's placeholder — while the path argument
+  // names machine c2. The old `opts?.cwd ??` preference resolved, stat'ed, and
+  // committed `ssh://c1/...` silently when the landing path existed on c1 too.
+  await mixed.resolve('ssh://c2/home/u', { cwd: join(sshRoutesRoot(), 'c1', 'srv', 'work') })
+  assert.deepEqual(remote.calls, ['resolve:remote:/home/u'])
+  assert.deepEqual(remote.cwdSeen, ['ssh://c2/home/u'], 'the path spelling owns the machine binding')
+  assert.deepEqual(local.calls, [])
+
+  // The placeholder spelling of the path argument is the same decision.
+  await mixed.resolve(join(sshRoutesRoot(), 'c2', 'home', 'u'), { cwd: join(sshRoutesRoot(), 'c1', 'srv', 'work') })
+  assert.deepEqual(remote.calls.slice(1), ['resolve:remote:/home/u'])
+  assert.deepEqual(remote.cwdSeen.slice(1), ['ssh://c2/home/u'])
+  assert.deepEqual(local.calls, [], 'the c1 session cwd must not pull the c2 path into c1')
+
+  // A machine-less path still follows the caller cwd's world (unchanged rule).
+  await mixed.resolve('rel/file.txt', { cwd: join(sshRoutesRoot(), 'c1', 'srv', 'work') })
+  assert.deepEqual(remote.calls.slice(2), ['resolve:remote:rel/file.txt'])
 })
 
 test('BUG-10: a win32-joined directory-package path reaches the remote branch in POSIX spelling', async () => {

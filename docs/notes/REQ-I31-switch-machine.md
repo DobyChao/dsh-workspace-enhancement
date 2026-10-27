@@ -83,3 +83,18 @@
 - **缺口 5（宿主权限锚）**：不改（`set` 文档语义「不改已有权限」）；给模型的说明写进工具描述与 locale 输出。
 - **裸通道**：v1 接受（见未拍板第三条）。
 - 验证：typecheck 绿；`check:static` 全过；`test:agent` 724 例全绿（新增 `use-machine-tool.test.ts`、`experimental.test.ts`）；boot-smoke 两条（`connections.list` + `experimental.get`）真 boot 通过（0.2.1-rc.2 宿主）。UAT 脚本 `docs/uat/R58-req-i31-switch-machine.md`。
+
+## BUG-20（2026-10-27，UAT 步骤 11 失败的根因与修复）
+
+**症状**（owner 实测）：`sw_use_machine(machine:"b", path:…)` 报成功切到 b，但 `workingDirectory`/committed 仍停在 `dsw-routes\a\…`；换端口复测仍复现。
+
+**根因**：`mixed.resolve` 的远程拼写分支把 `opts.cwd` 的机器绑定置于路径拼写之上——注释声称「路径里的机器 id 就是全部决定」，实现却只把 `route.path`（纯 POSIX）下传、机器交给 cwd。`workingDirectory.set` 必带会话当前 cwd（a 的占位路径），于是落点路径在 **a 的连接**上 resolve+stat（同构容器上恰好存在）→ 静默提交 `ssh://a/<path>`。`lstat` 分支一直是正确写法（绑路径自己的机器），只有 `resolve` 带 `opts?.cwd ??` 偏好。步骤 6「碰巧对」是因为本地 cwd 落到聚合 `ctx.ssh` = 注册表当前机器（恰好是目标 a）——同一 bug 的另一面。
+
+**修复**：
+1. `mixed.ts` `resolve`：带机器 id 的路径（`ssh://` 与占位两种拼写）一律绑到**路径自己的机器**，cwd 取 `sshTargetKey(route.connectionId, route.path)`（与 `lstat` 同构）。
+2. `use-machine-tool.ts` 保险（BUG-20 belt）：`set()` 后校验 `remoteRouteFromCwd(committed)?.connectionId === 目标机`，不匹配则回滚到切换前 cwd 并抛 `commitMismatch`——跨机错提交永不报成功。
+3. 注册门禁遥测：`experimental.get` 增加 `gate` 字段（toggle/workingDirectory/sessionProjections 三态 + 注册失败原因），`tools.ts` 门禁日志走可选链（测试无 logger 的假 ctx 不炸）。
+
+**重验**（lab 50599，宿主 0.2.1-rc.2，全新会话 + danger）：`local→c3(path=/home/marisa)` 提交 `dsw-routes\c3\home\marisa` ✓ 读回一致 ✓；`c3→c1(默认落点)` 提交 `dsw-routes\c1\home\uuz` ✓ 读回一致 ✓。测试 +3（mixed BUG-20 机器绑定双向、工具层错提交回滚、正常提交）。
+
+**附带发现**（UAT 排障记录）：换装 tarball 后旧宿主进程若未重启，页面报 "Failed to load plugins"（运行中文件被换）；且模型可能被旧对话历史带偏、幻觉称工具不存在——会话日志 `request/header` 的 tools 数组与 `tool-addition` developer 消息才是权威（本次 seq 50 头里有 `sw_use_machine` 而模型称无）。UAT 验证工具存在性应在**全新会话**里做。

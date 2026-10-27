@@ -201,11 +201,29 @@ export function useMachineToolOf(
       if (decision.action === 'noop') {
         return { text: t('tool.sw_use_machine.output.alreadyActive', { id: decision.machineId, path: decision.landing }) }
       }
+      // BUG-20 belt: capture the committed cwd so a cross-machine mis-commit
+      // can be rolled back before failing loud — a switch must never report
+      // success while the session actually stays on (or moves within) another
+      // machine's route tree.
+      const previous = deps.workingDirectory.get(agent.session)
       const committed = await deps.workingDirectory.set(
         agent,
         sshTargetKey(decision.machineId, decision.landing),
         exec.signal,
       )
+      const committedRoute = remoteRouteFromCwd(committed)
+      if (committedRoute === null || committedRoute.connectionId !== decision.machineId) {
+        try {
+          await deps.workingDirectory.set(agent, previous, exec.signal)
+        } catch {
+          // Best-effort rollback: the loud failure below is the contract;
+          // a failed restore only means the session keeps the (wrong) commit.
+        }
+        throw new Error(t('tool.sw_use_machine.error.commitMismatch', {
+          id: decision.machineId,
+          committed,
+        }))
+      }
       if (exec.signal?.aborted === true) throw new Error(TOOL_ABORTED)
       return { text: t('tool.sw_use_machine.output.switched', {
         id: decision.machineId,

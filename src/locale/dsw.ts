@@ -428,6 +428,7 @@ export const zh = {
   'tool.sw_use_machine.error.noRegisteredRoot': 'sw_use_machine：机器 {id} 没有登记的工作区目录且未给出 path——请传绝对 POSIX 路径（落点永不允许是 /）',
   'tool.sw_use_machine.error.notDanger': 'sw_use_machine：切换机器要求 danger-full-access 档（本会话当前为 {mode}）——单次 sandbox_permissions 批准也可以',
   'tool.sw_use_machine.error.noKnown': '（尚未注册任何机器）',
+  'tool.sw_use_machine.error.commitMismatch': 'sw_use_machine：宿主落盘为 {committed}，并不路由到机器 {id}——已回滚本次切换，请将此作为缺陷上报',
   'tool.sw_use_machine.output.alreadyActive': 'sw_use_machine：本会话已在 {id} 上（落点：{path}）——未做任何更改',
   'tool.sw_use_machine.output.switched': 'sw_use_machine：会话已切到 {id}；工作目录现在是 {path}（落盘为 {cwd}）。之后的相对路径、sw_exec 默认机、项目技能与新终端都在 {id} 上；已运行的进程保留各自目录。',
 

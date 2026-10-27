@@ -105,10 +105,13 @@ export function sessionProjectionsOf(ctx: Context): SessionProjectionsFace | und
 /**
  * The host `workingDirectory` service face `sw_use_machine` needs (0.2.1
  * family): `set` validates the target through `ctx.fs` (our remote provider)
- * and commits the durable `working-directory/change` event. Absent on older
- * families, where the experimental tool does not register at all.
+ * and commits the durable `working-directory/change` event; `get` reads the
+ * committed value (the tool captures it pre-switch so a mis-commit can be
+ * rolled back). Absent on older families, where the experimental tool does
+ * not register at all.
  */
 export interface WorkingDirectoryFace {
+  get(session: unknown): string
   set(agent: unknown, path: string, signal?: AbortSignal): Promise<string>
 }
 
@@ -116,7 +119,9 @@ export interface WorkingDirectoryFace {
 export function workingDirectoryOf(ctx: Context): WorkingDirectoryFace | undefined {
   if (typeof ctx.get !== 'function') return undefined
   const value = ctx.get('workingDirectory', false) as WorkingDirectoryFace | undefined
-  return value !== undefined && typeof value.set === 'function' ? value : undefined
+  return value !== undefined && typeof value.get === 'function' && typeof value.set === 'function'
+    ? value
+    : undefined
 }
 
 /**

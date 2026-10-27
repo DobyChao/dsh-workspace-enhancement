@@ -282,9 +282,15 @@ export class MixedFileSystem implements FileSystemBranch {
     // cwd consideration — the machine id in the path is the whole decision.
     const route = remoteRouteFromCwd(path)
     if (route !== null) {
-      // Prefer the session cwd. Using the FILE path as cwd minted a sibling
-      // jail at each ancestor (including `/`) via gitWorkingTreeOf.
-      const cwd = opts?.cwd ?? sshTargetKey(route.connectionId, posix.dirname(route.path))
+      // BUG-20 (R58 step 11): a machine-bearing path binds to ITS OWN machine —
+      // exactly what `lstat` below has always done. The old `opts?.cwd ??`
+      // preference let a remote session cwd override the path's machine id:
+      // `workingDirectory.set` (which always passes the current session cwd)
+      // switching a→b resolved, stat'ed, and committed `ssh://a/<path>`
+      // silently whenever the landing path also existed on a. The path
+      // spelling is the whole MACHINE decision; the caller cwd only selects
+      // the world for machine-less paths.
+      const cwd = sshTargetKey(route.connectionId, route.path)
       return this.remote.resolve(route.path, { cwd, ...(opts?.signal !== undefined ? { signal: opts.signal } : {}) })
     }
     // R5 T2: a side-workspace PATH wins over the cwd world — an absolute path

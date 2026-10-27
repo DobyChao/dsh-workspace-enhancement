@@ -59,8 +59,13 @@
 
 - **2026-10-26 代理预验（lab 50599，0.2.6 分支 tarball，宿主 0.2.1-rc.2）**：步骤 1（设置页「实验特性」区渲染、默认关）、
   步骤 2（开启后同一新建会话模型清单含 `sw_use_machine`）、步骤 3（**不重启**关开关，同一会话下一轮模型明确
-  「sw_use_machine 不存在」并更正前答）、步骤 4（`dsw-experimental.json` true/false 双向落盘）已实测通过；
-  用户 UAT 从步骤 5（danger 门）继续即可。
+  「sw_use_machine 不存在」并更正前答）、步骤 4（`dsw-experimental.json` true/false 双向落盘）已实测通过。
+- **2026-10-27 BUG-20 修复后重验**：步骤 11 双向在 lab 通过——`local→c3(path)` 提交 `dsw-routes\c3\home\marisa`、
+  `c3→c1(默认落点)` 提交 `dsw-routes\c1\home\uuz`，两次 `working_directory` 读回与提交一致；错机提交现在会回滚并报
+  `commitMismatch`。owner 环境的 a/b 复测仍以本脚本为准。
+- **UAT 排障提示**：验证工具存在性用**全新会话**——模型可能被「该工具不存在」的旧对话带偏（幻觉）；权威证据是
+  会话日志 `request/header` 的 tools 数组与 `tool-addition` developer 消息。换装 tarball 后必须重启 lab 宿主，
+  否则旧进程报 "Failed to load plugins"。`experimental.get` 现带 `gate` 遥测字段可直接看门禁三态。
 - 步骤 5–6 覆盖「拒绝且不改目录」的门禁语义；步骤 8 记录 sw_exec 默认机的**实际形态**
   （直连 c1 或「用 bash」提示），两种都是投影生效的证据。
 - 步骤 11 的 `/home/u` 只是落点示例；落点在 WW 下是否可写取决于声明根（ADR-0028 §5），

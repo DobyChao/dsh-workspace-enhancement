@@ -714,19 +714,39 @@ export function registerWorkspaceTools(
    * re-runs the sync, so the tool never lingers in the model's tool list.
    */
   const toggles = ctx.get('experimentalToggles', false)
+  if (toggles === undefined) {
+    // Diagnostics only — a logger-less test context must not break the mount.
+    ctx.logger?.warn?.('dsw: sw_use_machine gate: the experimentalToggles store is not visible at tool-row mount — the toggle cannot register the tool')
+  }
   if (toggles !== undefined) {
     let disposeTool: (() => void) | undefined
     const syncTool = (): void => {
       disposeTool?.()
       disposeTool = undefined
       const workingDirectory = workingDirectoryOf(ctx)
+      const projections = sessionProjectionsOf(ctx)
+      toggles.reportGateState(
+        `toggle=${toggles.switchMachine() ? 'on' : 'off'}`
+        + ` workingDirectory=${workingDirectory !== undefined ? 'present' : 'absent'}`
+        + ` sessionProjections=${projections !== undefined ? 'present' : 'absent'}`,
+      )
+      ctx.logger?.info?.(`dsw: sw_use_machine gate: ${toggles.gateState()}`)
       if (!toggles.switchMachine() || workingDirectory === undefined) return
-      const disposer = ctx.tools.register(useMachineToolOf(ctx, {
-        registry,
-        connections,
-        workingDirectory,
-      }))
-      disposeTool = () => disposer()
+      try {
+        const disposer = ctx.tools.register(useMachineToolOf(ctx, {
+          registry,
+          connections,
+          workingDirectory,
+        }))
+        disposeTool = () => disposer()
+        ctx.logger?.info?.('dsw: sw_use_machine tool registered')
+      } catch (error) {
+        // A registration failure must be visible: the toggle UI would
+        // otherwise claim the tool exists while the model never sees it.
+        toggles.reportGateState(`registration-failed: ${error instanceof Error ? error.message : String(error)}`)
+        ctx.logger?.warn?.(`dsw: sw_use_machine registration failed: ${error instanceof Error ? error.message : String(error)}`)
+        throw error
+      }
     }
     syncTool()
     const unsubscribe = toggles.onChange(syncTool)

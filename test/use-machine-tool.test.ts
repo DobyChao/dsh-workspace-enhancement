@@ -7,9 +7,13 @@
  */
 
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import { test } from 'node:test'
-import { decideUseMachine, type UseMachineTarget } from '../src/use-machine-tool.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { decideUseMachine, useMachineToolOf, type UseMachineTarget } from '../src/use-machine-tool.ts'
 import { effectiveCwdOf, type SessionProjectionsFace } from '../src/remote-policy.ts'
+import { sshRoutesRoot } from '../src/transport.ts'
 
 const machines: UseMachineTarget[] = [
   { id: 'c1', workspace: '/home/u/alpha', cwd: '/home/u' },
@@ -82,4 +86,62 @@ test('effectiveCwdOf: an unregistered key or absent service keeps the header beh
   assert.equal(effectiveCwdOf(undefined, {}, '/local/alpha'), '/local/alpha')
   // No session carrier → the header is all there is.
   assert.equal(effectiveCwdOf(projectionsOf('ssh://c2/srv'), undefined, '/local/alpha'), '/local/alpha')
+})
+
+/* ------------------------------------------------ tool execute (BUG-20 belt) */
+
+interface WdFake {
+  get(): string
+  set(_agent: unknown, path: string): Promise<string>
+}
+
+const toolHarness = (commitResult: () => string): {
+  sets: string[]
+  wd: WdFake
+  execute(args: { machine?: string; path?: string }): Promise<{ text: string }>
+} => {
+  const sets: string[] = []
+  const wd = {
+    get: () => 'C:/local/proj',
+    set: async (_agent: unknown, path: string) => {
+      sets.push(path)
+      return commitResult()
+    },
+  }
+  const ctx = {
+    get: (name: string) => (name === 'sandboxPolicy'
+      ? { resolve: () => ({ mode: 'danger-full-access', workspaceRoot: 'C:/w' }) }
+      : undefined),
+  } as unknown as Context
+  const tool = useMachineToolOf(ctx, {
+    registry: () => ({
+      listMachines: () => ({ machines: [{ id: 'b', workspace: '/w' }], currentId: 'b' }),
+      get: () => ({ exec: async () => ({ code: 0, stdout: '', stderr: '' }) }),
+    }) as never,
+    connections: () => ({ listFor: () => ['b'] }) as never,
+    workingDirectory: wd as never,
+  })
+  const exec = {
+    agent: { session: { header: { id: 's1', cwd: 'C:/local/proj' } } },
+    signal: new AbortController().signal,
+    callId: 'call-1',
+  } as unknown as ToolRunContext
+  return { sets, wd, execute: (args) => tool.execute(args, exec) }
+}
+
+test('execute: a committed route on ANOTHER machine is rolled back and fails loud (BUG-20)', async () => {
+  const harness = toolHarness(() => join(sshRoutesRoot(), 'a', 'w'))
+  await assert.rejects(
+    harness.execute({ machine: 'b' }),
+    /does not route to machine b/u,
+    'the belt must never report success on a cross-machine mis-commit',
+  )
+  assert.deepEqual(harness.sets, ['ssh://b/w', 'C:/local/proj'], 'the wrong commit is restored to the previous cwd')
+})
+
+test('execute: a committed route on the TARGET machine reports the switch', async () => {
+  const harness = toolHarness(() => join(sshRoutesRoot(), 'b', 'w'))
+  const out = await harness.execute({ machine: 'b' })
+  assert.match(out.text, /b/u)
+  assert.deepEqual(harness.sets, ['ssh://b/w'], 'no restore happens on a correct commit')
 })
