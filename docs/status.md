@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-27 03:20 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-27 11:23 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `feat/REQ-I31-switch-machine` / `f0d0a08` |
-| HEAD 提交 | `docs(req-i31): record the lab pre-verification of toggle liveness` (2026-10-26) |
-| 与远端 | 6 ahead / 0 behind origin/master |
+| 分支 / HEAD | `master` / `98534ef` |
+| HEAD 提交 | `feat(tool): experimental sw_use_machine machine switching (REQ-I31)` (2026-10-27) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 8 |
+| `todo` | 9 |
 | `doing` | 1 |
 | `blocked` | 7 |
 | `done` | 106 |
