@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-27 12:06 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-27 12:08 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `cursor/release-0.2.7-71a5` / `9344fa2` |
-| HEAD 提交 | `docs(req-i8): norepo workspace survey; fork+cwd dead, 0.2.1 workingDirectory is the path` (2026-10-27) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `cursor/release-0.2.7-71a5` / `d95b22c` |
+| HEAD 提交 | `chore(release): prepare 0.2.7` (2026-10-27) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
