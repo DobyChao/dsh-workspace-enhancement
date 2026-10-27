@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-27 11:23 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-27 11:37 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,8 +10,8 @@
 | package.json 版本 | `0.2.6` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `master` / `98534ef` |
-| HEAD 提交 | `feat(tool): experimental sw_use_machine machine switching (REQ-I31)` (2026-10-27) |
+| 分支 / HEAD | `master` / `a28aa8a` |
+| HEAD 提交 | `docs(backlog): record REQ-I32 multi-folder workspace creation menu` (2026-10-27) |
 | 与远端 | in sync with origin/master |
 
 ## 质量

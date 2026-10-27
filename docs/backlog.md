@@ -29,7 +29,7 @@
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
 | REQ-A5 | 旧 dsh-ssh-routes 占位树退役 | todo | P3 | 仓库侧旧树已删（10-12 核实）；剩 `transport.ts:78` 运行时仍读 $DSH_HOME 下 pre-rename 同名树——定退役时点（改读 dsw-routes + 迁移或告警）+ home 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
-| REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 核列表/resume/标题。产出 ADR（可行 → 生命周期；不可行 → fork 留档 + 新会话） |
+| REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 10-27 调查：原案死——fork 官方存在但不收 cwd 覆盖；正道=0.2.1 `workingDirectory.set`（0.2.0 无）。改向「目录即会话上下文」（A 会话中迁移 / B cwd-only 开场），开工前先拍需求。见 [survey](./notes/req-i8-norepo-workspace-survey.md) |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
 ## 3. 被挡住 / 待拍板（blocked）
 
