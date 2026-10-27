@@ -1,17 +1,17 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-27 11:37 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-27 12:06 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.6` |
+| package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.6` |
 | 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `master` / `a28aa8a` |
-| HEAD 提交 | `docs(backlog): record REQ-I32 multi-folder workspace creation menu` (2026-10-27) |
+| 分支 / HEAD | `cursor/release-0.2.7-71a5` / `9344fa2` |
+| HEAD 提交 | `docs(req-i8): norepo workspace survey; fork+cwd dead, 0.2.1 workingDirectory is the path` (2026-10-27) |
 | 与远端 | in sync with origin/master |
 
 ## 质量
@@ -22,14 +22,14 @@
 | 单测用例（静态计数） | 788 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
-| 轮次报告 | 57 |
+| 轮次报告 | 58 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 9 |
-| `doing` | 1 |
+| `doing` | 2 |
 | `blocked` | 7 |
 | `done` | 106 |
 | `shipped` | 13 |
