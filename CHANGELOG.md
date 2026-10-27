@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### 变更
+
+- **实验性切机器工具 `sw_use_machine`（`REQ-I31`，默认关）**：设置页新增「实验特性」区的开关（`dsw-experimental.json` 持久化，默认关，关闭时工具不注册、翻动即生效）。开启后（且宿主带 `workingDirectory` 服务，即 0.2.1+ 家族）注册 `sw_use_machine`：把**本会话**切到另一台已连接的注册机器，切换走宿主 `workingDirectory.set`，之后的相对路径、文件工具、`sw_exec` 默认机、项目技能扫描与新终端都跟随新机器。门禁：仅 `danger-full-access` 档（单次 `sandbox_permissions` 提权也算）、目标须本会话已连接（`sw_connect`）、落点必须是登记根（机器 `workspace`/`cwd`，或显式绝对 POSIX `path`；两者皆无或为 `/` 时拒绝）。拒绝不改目录；已在该机为诚实 no-op。
+- **投影优先的会话 cwd 读缝（`REQ-I31`）**：插件内原先读冻结 `header.cwd` 的 5 处（`sw_exec`/win32 bash 会话 cwd、`sw-remote` 与 `tool:*` 提示段、core hub 声明根、core fs cwd 默认、远程 confine 与 spawn 策略）改为经 `effectiveCwdOf` 读 `workingDirectory` 投影、header 兜底。0.2.1 宿主上模型经宿主 `working_directory` 工具改目录后，插件的远程机制不再滞留旧机器；0.2.1 前家族与无 cwd 会话行为不变。
+
 ## [0.2.6](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-10-22)
 
 0.2.5 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.6`**

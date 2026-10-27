@@ -58,7 +58,7 @@ import { worldOfCwd } from './mixed.ts'
 import { lookup, type TranslateFn } from './locale/index.ts'
 import { hostLocaleOf } from './locale/host.ts'
 import { isRemoteCommandDenial } from './remote-confine.ts'
-import { isConfinedSandboxMode, isSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
+import { effectiveCwdOf, isConfinedSandboxMode, isSandboxMode, resolveRemoteSessionMode, sessionProjectionsOf } from './remote-policy.ts'
 import { bashDescription, bashParams, swExecDescription, swExecParams } from './tool-schema.ts'
 import { modelPrompt } from './model-prompts.ts'
 import { hasRemoteSessionContext, hasRemoteWorkspaceContext, sessionIdOf } from './session-remote-context.ts'
@@ -1113,10 +1113,14 @@ function signalAborted(signal: AbortSignal): boolean {
   return signal.aborted
 }
 
-/** The session cwd the tools need for server derivation and relative workdirs. */
-function sessionCwdOf(exec: ToolRunContext): string | undefined {
+/**
+ * The session's EFFECTIVE cwd the tools need for server derivation and
+ * relative workdirs (REQ-I31: projection first, header fallback — a
+ * `working_directory` change must move sw_exec's default machine).
+ */
+function sessionCwdOf(ctx: Context, exec: ToolRunContext): string | undefined {
   const agent = exec.agent as { readonly session?: { readonly header?: { readonly cwd?: string } } } | undefined
-  return agent?.session?.header?.cwd
+  return effectiveCwdOf(sessionProjectionsOf(ctx), agent?.session, agent?.session?.header?.cwd)
 }
 
 /** Resolve `ctx.subprocess` lazily (mixed provider; a missing seam is honest). */
@@ -1256,7 +1260,7 @@ async function runLocalSwExec(
     ...(exec.agent !== undefined ? { session: (exec.agent as { session?: unknown }).session } : {}),
   })
   const mode = granted ?? standing?.mode
-  const sessionHost = sessionCwdOf(exec)
+  const sessionHost = sessionCwdOf(ctx, exec)
   const sessionRoot = sessionHost !== undefined && isLocalWorkdirSpelling(sessionHost, 'linux') ? sessionHost : undefined
   const sandboxPolicy = mode !== undefined || standing !== undefined || sessionRoot !== undefined
     ? {
@@ -1406,7 +1410,7 @@ export function registerSwExec(
       validateSwExecArgs(args, t)
       if (signalAborted(exec.signal)) throw toolAbortError()
       const env = swExecEnvOf(ctx, registry, t)
-      const sessionCwd = sessionCwdOf(exec)
+      const sessionCwd = sessionCwdOf(ctx, exec)
       const route = remoteRouteFromCwd(sessionCwd)
       const requested = args.server !== undefined && args.server.trim() !== '' ? args.server.trim() : undefined
       const decision = decideSwExec({
@@ -1509,7 +1513,7 @@ export function registerSwExec(
     // a remote cwd route, a side workspace, or at least one connected machine.
     // A plain local session with zero connections sees no sw_exec prompt text
     // at all, even though the tool stays globally registered.
-    text: (context) => (hasRemoteSessionContext(context, opts.sides, opts.connections) ? modelPrompt('sectionSwExec') : ''),
+    text: (context) => (hasRemoteSessionContext(context, opts.sides, opts.connections, () => sessionProjectionsOf(ctx)) ? modelPrompt('sectionSwExec') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:sw-exec system prompt section')
 }
@@ -1583,8 +1587,8 @@ export function registerWin32Bash(
     },
     async execute(args, exec: ToolRunContext): Promise<BashBackground | BashForeground> {
       validateBashToolArgs(args, t)
-      const cwd = resolveWin32BashWorkdir(args.workdir, sessionCwdOf(exec))
-      const sessionRoute = remoteRouteFromCwd(sessionCwdOf(exec))
+      const cwd = resolveWin32BashWorkdir(args.workdir, sessionCwdOf(ctx, exec))
+      const sessionRoute = remoteRouteFromCwd(sessionCwdOf(ctx, exec))
       const targetRoute = cwd === undefined ? null : remoteRouteFromCwd(cwd)
       if (sessionRoute === null && targetRoute !== null) throw new Error(BASH_USE_SW_EXEC_LOCAL_SESSION)
       if (sessionRoute !== null && targetRoute !== null && targetRoute.connectionId !== sessionRoute.connectionId) {
@@ -1606,7 +1610,7 @@ export function registerWin32Bash(
       const route = remoteRouteFromCwd(cwd)
       if (connectionStore !== undefined && route !== null) {
         const connected = connectedMachinesOf(
-          sessionCwdOf(exec),
+          sessionCwdOf(ctx, exec),
           sessionIdOf({ ...(exec.agent !== undefined ? { scope: exec.agent as object } : {}) }),
           sessionId => connectionStore.listFor(sessionId),
           registry(),
@@ -1718,7 +1722,7 @@ export function registerWin32Bash(
     order: 105,
     // REQ-I6 + REQ-I16: English only (ADR-0014). Empty on a local Windows
     // session; the tool itself is also absent there (scoped register).
-    text: (context) => (hasRemoteWorkspaceContext(context, options.sides) ? modelPrompt('sectionBash') : ''),
+    text: (context) => (hasRemoteWorkspaceContext(context, options.sides, () => sessionProjectionsOf(ctx)) ? modelPrompt('sectionBash') : ''),
   })
   ctx.effect(() => sectionDisposer, 'tool:bash system prompt section')
 }

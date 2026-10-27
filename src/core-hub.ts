@@ -42,7 +42,7 @@ import { fenceTierNote, parseFenceInfo, type FenceTierView } from './core-deploy
 import {
   CoreMissingError,
   coreServeSandboxOf,
-  initiatorSessionOf,
+  initiatorEffectiveCwdOf,
   isConfinedSandboxMode,
   resolveRemoteSessionMode,
 } from './remote-policy.ts'
@@ -245,7 +245,7 @@ export function createCoreHub(
 
   const knownRootsOf = (connectionId: string): string[] => {
     const machine = deps.machine(connectionId)
-    const initiator = remoteRouteFromCwd(initiatorSessionOf(ctx)?.header?.cwd)
+    const initiator = remoteRouteFromCwd(initiatorEffectiveCwdOf(ctx))
     const declared = uniquePosixRoots([
       machine?.workspace,
       machine?.cwd,

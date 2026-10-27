@@ -34,7 +34,8 @@ import { provisionRemoteCore, createCoreDeployAsk } from './core-provision.ts'
 import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
 import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
-import { isConfinedSandboxMode, resolveRemoteSessionMode } from './remote-policy.ts'
+import { isConfinedSandboxMode, resolveRemoteSessionMode, sessionProjectionsOf, workingDirectoryOf } from './remote-policy.ts'
+import { useMachineToolOf } from './use-machine-tool.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
 const textOutSchema = {
@@ -666,11 +667,15 @@ export function registerWorkspaceTools(
    * - 两段在「无远程事实」时都返回 '' ⇒ 本地零连接会话零注入；
    *   清单**只在 context 里渲染一次**，section 不再重复。
    */
+  // REQ-I31: both prompt halves read the EFFECTIVE session cwd (projection
+  // first, header fallback) so a `working_directory` change moves the
+  // remote-world prompt with the rest of the machinery.
+  const projections = () => sessionProjectionsOf(ctx)
   const sectionDisposer = ctx.systemPrompt.section({
     name: 'sw-remote',
     order: 90,
     text: (context) => {
-      const { cwd } = sessionWorkspaceContextOf(context, sides)
+      const { cwd } = sessionWorkspaceContextOf(context, sides, projections)
       const route = cwd !== undefined ? remoteRouteFromCwd(cwd) : null
       if (route === null) return ''
       const machine = registry().listMachines().machines.find(entry => entry.id === route.connectionId)
@@ -682,7 +687,7 @@ export function registerWorkspaceTools(
     name: 'dsw-session-workspace',
     order: 90,
     text: (context) => {
-      const facts = sessionWorkspaceContextOf(context, sides)
+      const facts = sessionWorkspaceContextOf(context, sides, projections)
       const { cwd, sides: attached } = facts
       return renderSessionWorkspaceContext(
         connectedFactsOf(sessionIdOf(context), cwd),
@@ -701,4 +706,57 @@ export function registerWorkspaceTools(
   // REQ-I16: scoped onto agent.ctx when the session cwd is a remote Linux
   // workspace. The session gate still applies at execute time.
   registerWin32Bash(ctx, registry, { sides, connections })
+
+  /**
+   * REQ-I31: the experimental `sw_use_machine` tool registers ONLY while the
+   * settings toggle is on (关闭时工具不注册) AND the host exposes
+   * `workingDirectory.set` (0.2.1 family — the family gate). A toggle flip
+   * re-runs the sync, so the tool never lingers in the model's tool list.
+   */
+  const toggles = ctx.get('experimentalToggles', false)
+  if (toggles === undefined) {
+    // Diagnostics only — a logger-less test context must not break the mount.
+    ctx.logger?.warn?.('dsw: sw_use_machine gate: the experimentalToggles store is not visible at tool-row mount — the toggle cannot register the tool')
+  }
+  if (toggles !== undefined) {
+    let disposeTool: (() => void) | undefined
+    const syncTool = (): void => {
+      disposeTool?.()
+      disposeTool = undefined
+      const workingDirectory = workingDirectoryOf(ctx)
+      const projections = sessionProjectionsOf(ctx)
+      toggles.reportGateState(
+        `toggle=${toggles.switchMachine() ? 'on' : 'off'}`
+        + ` workingDirectory=${workingDirectory !== undefined ? 'present' : 'absent'}`
+        + ` sessionProjections=${projections !== undefined ? 'present' : 'absent'}`,
+      )
+      ctx.logger?.info?.(`dsw: sw_use_machine gate: ${toggles.gateState()}`)
+      if (!toggles.switchMachine() || workingDirectory === undefined) return
+      try {
+        const disposer = ctx.tools.register(useMachineToolOf(ctx, {
+          registry,
+          connections,
+          workingDirectory,
+        }))
+        disposeTool = () => disposer()
+        ctx.logger?.info?.('dsw: sw_use_machine tool registered')
+      } catch (error) {
+        // A registration failure must be visible: the toggle UI would
+        // otherwise claim the tool exists while the model never sees it.
+        toggles.reportGateState(`registration-failed: ${error instanceof Error ? error.message : String(error)}`)
+        ctx.logger?.warn?.(`dsw: sw_use_machine registration failed: ${error instanceof Error ? error.message : String(error)}`)
+        throw error
+      }
+    }
+    syncTool()
+    const unsubscribe = toggles.onChange(syncTool)
+    ctx.effect(() => {
+      // The effect body runs at mount (nothing to do — syncTool ran above);
+      // the returned function is the disposal.
+      return () => {
+        unsubscribe()
+        disposeTool?.()
+      }
+    }, 'sw_use_machine tool (experimental)')
+  }
 }

@@ -167,6 +167,8 @@ export const zh = {
   'rpc.connUnknownMachine': '未知机器 id：{ids} — 已知：{known}',
   'rpc.connNoKnownMachines': '（注册表中没有机器）',
   'rpc.connMachineEmpty': '机器 id 必须是非空字符串',
+  // REQ-I31：实验开关存储与 experimental.* RPC 的错误面
+  'rpc.experimentalStoreMissing': '实验开关存储未挂载（是否已挂载 dsw/web？）',
   // registry.ts / transport.ts / session-workspaces.ts 的协议/数据校验与
   // 路由错误（t15-r2 拍板：host 可触发面全部键化，见 i18n-design.md §13-9 已移除）
   'rpc.hostEmpty': 'host 必须是非空字符串',
@@ -269,6 +271,12 @@ export const zh = {
   'settings.machines.title': '已配置的机器',
   'settings.machines.encryptFallbackBadge': '⚠ 加密不可用',
   'settings.machines.keychainBadge': '钥匙串',
+  // REQ-I31：实验特性开关（默认关）
+  'settings.experimental.title': '实验特性',
+  'settings.experimental.switchMachine': '切换机器（sw_use_machine 工具）',
+  'settings.experimental.switchMachineHint': '为本部署注册 sw_use_machine 工具。切换本身仍要求 danger-full-access 档、目标机已连接到会话、且有登记的落点目录。默认关闭；需要带工作目录服务的宿主（0.2.1+）。',
+  'settings.experimental.loadFailed': '读取实验开关失败',
+  'settings.experimental.setFailed': '保存实验开关失败',
   'settings.machines.jumpBadge': '跳板 {count}',
   'settings.machines.currentBadge': '当前',
   'settings.machines.more': '更多',
@@ -409,6 +417,20 @@ export const zh = {
   'tool.sw_connect.error.noKnownMachines': '（注册表中没有机器——请先在设置页添加）',
   'tool.sw_connect.error.allUnreachable': 'sw_connect: 没有一台机器可达，本会话连接保持不变。\n{details}',
   'tool.sw_connect.error.noDetail': '无错误详情',
+
+  /* --------------------------------------------------- tool: sw_use_machine */
+  'tool.sw_use_machine.error.noSession': 'sw_use_machine：本次调用没有 agent 会话——拒绝切换',
+  'tool.sw_use_machine.error.empty': 'sw_use_machine：machine 必须是非空字符串',
+  'tool.sw_use_machine.error.reserved': 'sw_use_machine："local" 不是切换目标——本工具只在已注册的远程机器之间移动会话',
+  'tool.sw_use_machine.error.unknown': 'sw_use_machine：未知机器 id {id}——已知：{known}',
+  'tool.sw_use_machine.error.notConnected': 'sw_use_machine：机器 {id} 未连接到本会话（已连接：{ids}）——请先调用 sw_connect',
+  'tool.sw_use_machine.error.pathNotAbsolute': 'sw_use_machine：path 必须是目标机上的绝对 POSIX 目录（拒绝相对路径、Windows 路径与 ssh:// 写法）',
+  'tool.sw_use_machine.error.noRegisteredRoot': 'sw_use_machine：机器 {id} 没有登记的工作区目录且未给出 path——请传绝对 POSIX 路径（落点永不允许是 /）',
+  'tool.sw_use_machine.error.notDanger': 'sw_use_machine：切换机器要求 danger-full-access 档（本会话当前为 {mode}）——单次 sandbox_permissions 批准也可以',
+  'tool.sw_use_machine.error.noKnown': '（尚未注册任何机器）',
+  'tool.sw_use_machine.error.commitMismatch': 'sw_use_machine：宿主落盘为 {committed}，并不路由到机器 {id}——已回滚本次切换，请将此作为缺陷上报',
+  'tool.sw_use_machine.output.alreadyActive': 'sw_use_machine：本会话已在 {id} 上（落点：{path}）——未做任何更改',
+  'tool.sw_use_machine.output.switched': 'sw_use_machine：会话已切到 {id}；工作目录现在是 {path}（落盘为 {cwd}）。之后的相对路径、sw_exec 默认机、项目技能与新终端都在 {id} 上；已运行的进程保留各自目录。',
 
   /* -------------------------------------------------------------- tool: sw_exec */
   'tool.sw_exec.output.background': '已在 {server}（{endpoint}）上启动后台任务 {jobId}',

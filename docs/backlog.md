@@ -16,11 +16,12 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| REQ-I31 | 实验性切机器工具 | doing | P2 | R58 已实现 + BUG-20 修复（PR #86）：mixed.resolve 绑路径自己的机器 + 工具层错提交回滚 + gate 遥测。lab 双向重验通过（c3/c1 提交与读回一致）。待 owner a/b 复测 + UAT 步骤 5–15。裸通道 v1 接受（见笔记） |
+
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| REQ-I31 | 实验性切机器工具 | todo | P2 | 设置页默认关，关闭时不注册。仅 danger-full-access 可调用，否则拒绝且不改目录。切换后本会话 ctx.fs 走目标机。须测 sw_exec、bash/pwsh、技能扫描、终端的连带变化。见 [笔记](./notes/REQ-I31-switch-machine.md) |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |

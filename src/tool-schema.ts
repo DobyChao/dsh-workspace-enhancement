@@ -39,6 +39,29 @@ export function bashDescription(backgroundEnabled: boolean): string {
   return withBackground(BASH_DESCRIPTION, backgroundEnabled)
 }
 
+export const SW_USE_MACHINE_DESCRIPTION = 'Switch THIS session to another connected remote machine: the session working directory becomes a directory on the target machine, so subsequent relative paths, file operations, sw_exec\'s default server, project skill scanning, and new terminals all run there. Already-running processes keep their own directories; the switch is durable for this session and reversible by switching to another connected machine. Experimental and deliberately strict: it requires the danger-full-access tier (a one-shot sandbox_permissions approval counts), a machine id connected to this session (sw_connect), and a landing directory — the machine\'s registered workspace by default, or an explicit absolute POSIX path. Machines without a registered workspace require the explicit path.'
+
+export const SW_USE_MACHINE_PARAMS: ParameterSchemaSpec = {
+  machine: {
+    type: 'string',
+    required: true,
+    description: 'Registry machine id to switch this session to. Must be connected to this session (see sw_connect); "local" is not a valid target.',
+  },
+  path: {
+    type: 'string',
+    description: 'Landing directory on the target machine, absolute POSIX path. Defaults to the machine\'s registered workspace directory; machines without one require this parameter. Relative paths, Windows paths, and ssh:// spellings are refused.',
+  },
+  sandbox_permissions: {
+    type: 'string' as const,
+    enum: ['danger-full-access'] as const,
+    description: 'The tool requires the danger-full-access tier. When the session is not already in it, request a one-shot approval here (always together with justification).',
+  },
+  justification: {
+    type: 'string',
+    description: 'Required with sandbox_permissions: one sentence for the user explaining why this session should switch machine.',
+  },
+}
+
 const COMMAND_PARAM = 'The command to execute on the target server.'
 
 const DESCRIPTION_PARAM = 'Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies".'

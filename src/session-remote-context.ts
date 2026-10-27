@@ -19,6 +19,7 @@
  */
 
 import { remoteRouteFromCwd } from './transport.ts'
+import { effectiveCwdOf, type SessionProjectionsFace } from './remote-policy.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 
 /**
@@ -79,9 +80,12 @@ export interface SessionWorkspaceContext {
 export function sessionWorkspaceContextOf(
   context: { readonly scope?: object },
   store?: () => SessionSideWorkspaceStore | undefined,
+  projections?: () => SessionProjectionsFace | undefined,
 ): SessionWorkspaceContext {
   const agent = context.scope as PromptAgentFace | undefined
-  const cwd = agent?.session?.header.cwd
+  // REQ-I31: the EFFECTIVE cwd (projection first, header fallback) — a
+  // `working_directory` change must move the remote-world facts with it.
+  const cwd = effectiveCwdOf(projections?.(), agent?.session, agent?.session?.header.cwd)
   const sessionId = agent?.session?.header.id
   return {
     ...(cwd !== undefined ? { cwd } : {}),
@@ -102,8 +106,9 @@ export function sessionWorkspaceContextOf(
 export function hasRemoteWorkspaceContext(
   context: { readonly scope?: object },
   store?: () => SessionSideWorkspaceStore | undefined,
+  projections?: () => SessionProjectionsFace | undefined,
 ): boolean {
-  const facts = sessionWorkspaceContextOf(context, store)
+  const facts = sessionWorkspaceContextOf(context, store, projections)
   if (facts.sides.length > 0) return true
   return facts.cwd !== undefined && remoteRouteFromCwd(facts.cwd) !== null
 }
@@ -143,7 +148,8 @@ export function hasRemoteSessionContext(
   context: { readonly scope?: object },
   store?: () => SessionSideWorkspaceStore | undefined,
   connections?: () => SessionConnectionsFace | undefined,
+  projections?: () => SessionProjectionsFace | undefined,
 ): boolean {
-  if (hasRemoteWorkspaceContext(context, store)) return true
+  if (hasRemoteWorkspaceContext(context, store, projections)) return true
   return connectedMachineIdsOf(context, connections).length > 0
 }
