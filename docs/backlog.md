@@ -16,6 +16,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | doing | P0 | 混合 spawn 改写 argv 后搬移已有标记。无标记仍是 off。单测与 typecheck 已过。待 PR。 |
 | PUB-12 | 0.2.7 发布 | doing | P1 | 插件与远程组件同升 0.2.7。peer 不变。合并后所有者打 tag `v0.2.7` 并 Approve npm-publish。本 PR 不打 tag、不发布。档案 [R59](./rounds/R59-pub12-v0.2.7-release.md) |
 | REQ-I31 | 实验性切机器工具 | doing | P2 | R58 已实现 + BUG-20 修复（PR #86）：mixed.resolve 绑路径自己的机器 + 工具层错提交回滚 + gate 遥测。lab 双向重验通过（c3/c1 提交与读回一致）。待 owner a/b 复测 + UAT 步骤 5–15。裸通道 v1 接受（见笔记） |
 

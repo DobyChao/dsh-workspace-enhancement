@@ -10,6 +10,10 @@
  * ADR-0031 §1.1), so the exact array `ctx.sandbox.confine` returned is the
  * key. A copied array intentionally loses the mark: spawn then treats it as
  * unmarked (`--sandbox off`, ADR-0031 §3.1) — no escape gain, just no fence.
+ * The one sanctioned copy is {@link carryConfinedSpawnMark}: the mixed
+ * subprocess facade rewrites argv (Windows program name → remote PATH name)
+ * and must move the existing mark onto that new array (BUG-25). It never
+ * invents a mark, so a danger grant (unmarked) stays off.
  *
  * The registry is the ONLY policy channel into the remote spawn path; the
  * retired `remote-spawn-policy` ALS store existed because
@@ -70,4 +74,20 @@ export function markConfinedArgv(
 export function confinedSpawnMarkOf(argv: readonly string[] | undefined): ConfinedSpawnMark | undefined {
   if (argv === undefined) return undefined
   return marks.get(argv)
+}
+
+/**
+ * Move an existing confine mark onto the argv array that will be spawned.
+ * No-op when `from` is unmarked or is already `to`. Does not create a mode:
+ * a danger grant never called `confine`, so its argv stays unmarked and the
+ * remote engine keeps `--sandbox off`.
+ */
+export function carryConfinedSpawnMark<T extends readonly string[]>(
+  from: readonly string[] | undefined,
+  to: T,
+): T {
+  if (from === undefined || from === to) return to
+  const mark = marks.get(from)
+  if (mark !== undefined) marks.set(to, mark)
+  return to
 }

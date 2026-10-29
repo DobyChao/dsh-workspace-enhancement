@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-30 01:55 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-30 05:06 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.7` |
 | 最新 tag | `v0.2.7` |
-| 分支 / HEAD | `cursor/ux-18-backlog-9981` / `75b8ced` |
-| HEAD 提交 | `docs(status): refresh snapshot after the queue close` (2026-10-30) |
-| 与远端 | 3 ahead / 1 behind origin/master |
+| 分支 / HEAD | `HEAD` / `7744085` |
+| HEAD 提交 | `docs(backlog): record UX-18 system prompt omits sw_status (#94)` (2026-10-30) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 86 |
-| 单测用例（静态计数） | 792 |
+| 单测文件 | 87 |
+| 单测用例（静态计数） | 800 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 58 |
@@ -29,7 +29,7 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 11 |
-| `doing` | 2 |
+| `doing` | 3 |
 | `blocked` | 5 |
 | `done` | 107 |
 | `shipped` | 13 |

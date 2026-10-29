@@ -11,6 +11,7 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import {
   REMOTE_CORE_DENIAL_SIGNATURE,
+  carryConfinedSpawnMark,
   confinedSpawnMarkOf,
   isRemoteCommandDenial,
   markConfinedArgv,
@@ -49,6 +50,22 @@ test('anti-forgery: a copied array loses the mark — [...marked] never matches'
   const product = markConfinedArgv(ARGV, { mode: 'read-only' })
   const copied = [...product.argv]
   assert.equal(confinedSpawnMarkOf(copied), undefined)
+})
+
+test('BUG-25: carryConfinedSpawnMark moves an existing mark and does not invent one', () => {
+  const product = markConfinedArgv(ARGV, { mode: 'workspace-write' })
+  const copied = [...product.argv]
+  assert.equal(confinedSpawnMarkOf(copied), undefined)
+  assert.equal(carryConfinedSpawnMark(product.argv, copied), copied)
+  assert.deepEqual(confinedSpawnMarkOf(copied), { mode: 'workspace-write' })
+  assert.equal(carryConfinedSpawnMark(product.argv, product.argv), product.argv)
+
+  const unmarked = ['bash', '-c', 'plain']
+  const target = ['bash', '-c', 'plain']
+  carryConfinedSpawnMark(unmarked, target)
+  assert.equal(confinedSpawnMarkOf(target), undefined)
+  carryConfinedSpawnMark(undefined, target)
+  assert.equal(confinedSpawnMarkOf(target), undefined)
 })
 
 test('anti-forgery: a NEW array with identical CONTENT never matches (no prefix protocol)', () => {

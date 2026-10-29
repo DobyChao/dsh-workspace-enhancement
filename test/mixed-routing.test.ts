@@ -19,6 +19,7 @@ import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import { sshRoutesRoot, resolveSshCwd, remoteRouteFromCwd } from '../src/transport.ts'
 import { MixedFileSystem, MixedSubprocessRuntime, remoteArgvOf, worldOfCwd, worldOfTargetKey } from '../src/mixed.ts'
+import { confinedSpawnMarkOf, markConfinedArgv } from '../src/remote-confine-policy.ts'
 import type { FileSystemBranch, SubprocessBranch } from '../src/mixed.ts'
 
 const REMOTE_CWD = join(sshRoutesRoot(), 'c1', 'srv', 'work')
@@ -240,6 +241,88 @@ test('t6: MixedSubprocessRuntime remote spawn rewrites a Windows argv[0] (rg.exe
     graceMs: 1000,
   }))
   assert.deepEqual(seen, ['argv0:rg'])
+})
+
+function remoteSpawnCapture(): { branch: SubprocessBranch; seen: SubprocessSpawnSpec[] } {
+  const seen: SubprocessSpawnSpec[] = []
+  const branch: SubprocessBranch = {
+    async resolveExecutable(command: string): Promise<string> {
+      return command
+    },
+    spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+      seen.push(spec)
+      throw new Error('capture')
+    },
+    async spawnTerminal(): Promise<never> {
+      throw new Error('unexpected terminal')
+    },
+  }
+  return { branch, seen }
+}
+
+const SPAWN_REST = {
+  stdio: { stdin: 'ignore' as const, stdout: { maxBytes: 64 }, stderr: { maxBytes: 64 } },
+  graceMs: 1000,
+}
+
+test('BUG-25: remote spawn carries the confine mark across the argv copy', () => {
+  const local = stubSubprocessBranch('local')
+  const { branch, seen } = remoteSpawnCapture()
+  const mixed = new MixedSubprocessRuntime(local, branch as never)
+  const marked = markConfinedArgv(['bash', '-c', 'echo hi'], { mode: 'workspace-write' })
+  assert.throws(() => mixed.spawn({ argv: marked.argv, cwd: remotePlaceholder(), ...SPAWN_REST }))
+  assert.equal(seen.length, 1)
+  const delivered = seen[0]?.argv
+  assert.ok(delivered !== undefined)
+  assert.notEqual(delivered, marked.argv)
+  assert.deepEqual([...delivered], ['bash', '-c', 'echo hi'])
+  assert.deepEqual(confinedSpawnMarkOf(delivered), { mode: 'workspace-write' })
+  assert.deepEqual(confinedSpawnMarkOf([...delivered]), undefined)
+})
+
+test('BUG-25: a rewritten Windows argv[0] keeps the same confine mark', () => {
+  const local = stubSubprocessBranch('local')
+  const { branch, seen } = remoteSpawnCapture()
+  const mixed = new MixedSubprocessRuntime(local, branch as never)
+  const marked = markConfinedArgv([String.raw`C:\tools\rg.exe`, '--path', '.'], { mode: 'read-only' })
+  assert.throws(() => mixed.spawn({ argv: marked.argv, cwd: remotePlaceholder(), ...SPAWN_REST }))
+  const delivered = seen[0]?.argv
+  assert.ok(delivered !== undefined)
+  assert.deepEqual([...delivered], ['rg', '--path', '.'])
+  assert.deepEqual(confinedSpawnMarkOf(delivered), { mode: 'read-only' })
+})
+
+test('BUG-25: an unmarked remote argv stays unmarked', () => {
+  const local = stubSubprocessBranch('local')
+  const { branch, seen } = remoteSpawnCapture()
+  const mixed = new MixedSubprocessRuntime(local, branch as never)
+  assert.throws(() => mixed.spawn({
+    argv: ['bash', '-c', 'echo hi'],
+    cwd: remotePlaceholder(),
+    ...SPAWN_REST,
+  }))
+  assert.equal(confinedSpawnMarkOf(seen[0]?.argv), undefined)
+})
+
+test('BUG-25: a local cwd keeps the original marked argv object', () => {
+  const seen: SubprocessSpawnSpec[] = []
+  const local: SubprocessBranch = {
+    async resolveExecutable(command: string): Promise<string> {
+      return command
+    },
+    spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+      seen.push(spec)
+      throw new Error('capture')
+    },
+    async spawnTerminal(): Promise<never> {
+      throw new Error('unexpected terminal')
+    },
+  }
+  const mixed = new MixedSubprocessRuntime(local, stubSubprocessBranch('remote') as never)
+  const marked = markConfinedArgv(['bash', '-c', 'echo hi'], { mode: 'workspace-write' })
+  assert.throws(() => mixed.spawn({ argv: marked.argv, cwd: LOCAL_CWD, ...SPAWN_REST }))
+  assert.equal(seen[0]?.argv, marked.argv)
+  assert.deepEqual(confinedSpawnMarkOf(seen[0]?.argv), { mode: 'workspace-write' })
 })
 
 /** 进程级探测：本地 cwd 经混合门面真实执行 node（本地世界，非 SSH 分支）。 */
