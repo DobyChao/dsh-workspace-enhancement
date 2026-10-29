@@ -8,4 +8,8 @@ test('initialBrowseTarget: explicit id wins, else the current machine (UX-11)', 
   assert.deepEqual(initialBrowseTarget('', 'missing', ['c1']), { kind: 'local' })
   assert.deepEqual(initialBrowseTarget('gone', 'c1', ['c1']), { kind: 'local' })
   assert.deepEqual(initialBrowseTarget('  ', '', []), { kind: 'local' })
+  // UX-17: the local sentinel is this computer, even if a caller lists it.
+  assert.deepEqual(initialBrowseTarget('', 'local', ['c1', 'c2']), { kind: 'local' })
+  assert.deepEqual(initialBrowseTarget('c2', 'local', ['c1', 'c2']), { kind: 'remote', id: 'c2' })
+  assert.deepEqual(initialBrowseTarget('local', 'c1', ['c1', 'local']), { kind: 'local' })
 })
