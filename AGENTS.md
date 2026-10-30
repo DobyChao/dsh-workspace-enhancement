@@ -26,8 +26,8 @@
 | 某一轮做了什么 | `docs/rounds/`（**档案，不是现状**） |
 | 测试 / 兼容 / 验收 | `docs/testing.md` · `docs/compatibility.md` · `docs/uat/` |
 
-`docs/backlog.md`：**分区 = 状态列**（`doing` 只在 §1，不得留在 §2）；§2 按 P0→P3；
-备注只写未做动作 + 指针（闸门限长）。调查进 `docs/rounds/` / `docs/decisions/`。
+`docs/backlog.md`：**分区 = 状态列**（`doing` 只在 §1，不得留在 §2）；§2 按 P0→P3，有「提出」列；
+§4 有「完成」列（都是 `YYYY-MM-DD`）。备注只写未做动作 + 指针（闸门限长）。调查进 `docs/rounds/` / `docs/decisions/`。
 
 `drafts/`、`.agent-teams/`、`.workbuddy/`、`.tmp/` 是**本地素材**（不入库、可能含机器专属数据）。
 任何结论一旦拍板，必须搬进 `docs/README.md` 点名的那些文件——否则下一个 clone 的人看不到。

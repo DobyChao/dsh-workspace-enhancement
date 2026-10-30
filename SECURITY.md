@@ -33,7 +33,7 @@
   （旧门的已知绕过见 `ADR-0012`，已作废）。workspace-write 下，一次写（按目标路径）或一条命令（按 cwd）
   落在本会话挂的哪个根，就以哪个根为可写根，本机与远程同规则；**挂副根即放宽写范围**，所以挂载只开放给
   面板上的人，模型工具不能挂。在主根里跑的命令写并列副根要提权。完整真值表见 `docs/architecture.md` §4.1。
-- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 远程组件（代码与协议中仍称 core）时，围栏档的**写与 spawn** fail-closed、不退 SFTP；**读**可见降级到 SFTP（`REQ-I15`，否则宿主项目根探测会挡住纯聊天）。`danger-full-access` 保持今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
+- **远端权限跟会话 `/permission`（`ADR-0025`）**：远程命令与文件工具走与本地同一套沙箱档和官方提权卡。无 Linux 远程组件（代码与协议中仍称 core）时，围栏档的**写与 spawn** fail-closed、不退 SFTP；**读**可见降级到 SFTP（`REQ-I15`，否则宿主项目根探测会挡住纯聊天）。`danger-full-access` 有组件时走 `dsh-core serve --sandbox off`，没有组件才是今天的 SFTP + SSH。可选的**逐机器审批门**（`remoteApproval: 'off' | 'human' | 'ai'`，默认 `'off'`）在
   shell 形状的远程命令与远程终端执行前经平台审批服务决定。该门**明确不覆盖**（诚实边界，`ADR-0020` D1）：
   1. **审批门不覆盖 fs 写**——围栏档的写由远程组件 jail 覆盖；danger 且无远程组件时仍是 SFTP；
   2. **插件自有固定探针**不设门（注册表 `probe`/`reconnect`、`sw_status` 环境自检、`sw_exec` 的
@@ -58,16 +58,17 @@
   做在工具层（用户 2026-09-12 拍板「门控只做在工具层与提示层」）。命令级仍有审批门兜底（该路径
   argv 仍是 shell 形状）；**强制层**只有远端 OS 权限（低权用户/容器）与远程组件 jail
   （会话 `/permission` 为 `read-only` / `workspace-write` 时命令**与文件工具**同进 jail；
-  `danger-full-access` 走 SFTP + 裸 exec）。
+  `danger-full-access` 有组件时同样进组件（`--sandbox off`），没有组件才是 SFTP + 裸 exec）。
 - SSH 固有：远端 pid / 前台进程组不可见。
 - 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进远程组件 tarball，由设置页 `core.deploy`
   上传。远程组件缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
   `read-only` 下官方 `write` 工作区外失败且文件不存在），读仍走 SFTP；只有 `danger-full-access`
-  是 SFTP + 裸 exec。宿主组合里没有 `sandboxPolicy` 服务时按 `read-only` 处理（fail-safe）。
+  在没有组件时是 SFTP + 裸 exec。宿主组合里没有 `sandboxPolicy` 服务时按 `read-only` 处理（fail-safe）。
   交互终端见下一条（`ADR-0031` §4 拆两半）。供应链（二进制来源、签名、校验和）是新信任根。
 - **围栏改走 `confine` 逐次策略后的收窄清单（`ADR-0031` §5，所有者 2026-10-08 接受 / 10-11 实施）**：
   策略的唯一载体是 `ctx.sandbox.confine` 的进程内注册表（按 argv 对象身份，不认字符串前缀——
-  伪造同形 argv 无逃逸收益，只会失去围栏）。**不经 `confine` 的调用在远端不受围栏**（无标记 =
+  伪造同形 argv 无逃逸收益，只会失去围栏）。混合门面自己的 argv 改写会把已有标记搬到新数组
+  （`BUG-25`）；模型另造的同内容数组仍然对不上。**不经 `confine` 的调用在远端不受围栏**（无标记 =
   `--sandbox off`，与官方本地语义一致）：宿主的 git 探针（`dsh-workspace-changes`）、ripgrep
   （`dsh-tool-fs-search`）、语音推理 worker、以及任何挂 `-local` 执行器的组合；fs 写不受影响
   （`dsh-fs-sandbox` 进程内栅栏，非 argv 语义）。**交互终端两半**（所有者 2026-10-11 拍板）：

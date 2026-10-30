@@ -91,6 +91,25 @@ export const MODEL_PROMPTS = {
   /** REQ-I28: one copied remote path. */
   remoteFileItem: '- `{path}`',
   /**
+   * Volatile runtime-context heading: one line per connected machine says
+   * whether `dsh-core` is actually in effect. The heading states the
+   * consequence once; each line is only the fact.
+   */
+  remoteComponentHeading:
+    '**Remote component (dsh-core) on this session\'s machines**: "in effect" means file tools and commands on that machine go through it, including danger-full-access (`dsh-core serve --sandbox off`). "Not in effect" means confined writes and bash refuse, and danger-full-access falls back to SFTP and SSH. A missing, cross-line, or unknown binary is replaced by the next `sw_connect` or the first confined use.',
+  /** Same major.minor and a known (or unhashed) binary. */
+  remoteComponentActive: '- `{id}`: in effect ({version}).',
+  /** No artifact on disk. */
+  remoteComponentMissing: '- `{id}`: not in effect (not installed).',
+  /** On this line, but the sha256 is not one this plugin shipped. */
+  remoteComponentUntrusted: '- `{id}`: not in effect ({version}; sha256 is not a binary this plugin shipped).',
+  /** On this line, but the probe could not read a sha256. */
+  remoteComponentUnreadable: '- `{id}`: not in effect ({version}; sha256 could not be read).',
+  /** A different major.minor than the binary this plugin ships. */
+  remoteComponentMismatch: '- `{id}`: not in effect ({found}; this plugin ships {expected}).',
+  /** Probe failed, or the machine is not in the registry. */
+  remoteComponentError: '- `{id}`: not in effect ({detail}).',
+  /**
    * Kept for older tests/callers; the session-sandbox sentence above now
    * covers the fence. Empty so a leftover inject is a no-op.
    */

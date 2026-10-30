@@ -46,6 +46,7 @@ import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
 import { browserTerminalCwd } from './browser-terminal.ts'
+import { carryConfinedSpawnMark } from './remote-confine-policy.ts'
 
 /**
  * R5 → REQ-I7: the side-workspace face the mixed filesystem provider routes
@@ -158,7 +159,14 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   /** @inheritdoc */
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     if (worldOfCwd(spec.cwd) === 'remote') {
-      return this.remote.spawn({ ...spec, argv: remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined) })
+      // remoteArgvOf and filter each allocate. The confine mark is the argv
+      // object's identity (ADR-0031), so the copy must take the mark with it.
+      // Otherwise a workspace-write bash runs `dsh-core serve --sandbox off`
+      // (BUG-25). An unmarked argv (danger grant, or a caller that skipped
+      // confine) stays unmarked.
+      const argv = remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined)
+      carryConfinedSpawnMark(spec.argv, argv)
+      return this.remote.spawn({ ...spec, argv })
     }
     return this.local.spawn(spec)
   }

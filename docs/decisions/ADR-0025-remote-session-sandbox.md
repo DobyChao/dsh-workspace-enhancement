@@ -8,6 +8,8 @@
   「`/permission` 只影响本地、`remoteSandbox` 是权限轴」；提示词改写触及
   **ADR-0020 D6** 的 `remoteNoSandbox` 句（语义被本 ADR 取代，不是删审批门）
 
+> **后来改过的句子，不要按原文实现。** §2.3「confine 返回原 argv」和 §2.10「用 AsyncLocalStorage 把档位带进 spawn」已被 [ADR-0031](./ADR-0031-remote-fence-confine-policy.md) 取代：档位记在 argv 对象上，没有标记就是 `--sandbox off`。§3「不随连接自动安装核心」已被 2026-10-29（`BUG-26`）取代：`sw_connect` 和围栏档第一次使用在缺组件或版本过期时直接部署，不弹审批。现行格子以 [`architecture.md`](../architecture.md) §4.1 为准。下面没被点名的句子仍然有效。
+
 ## 0. 结论
 
 远端与本地同一套权限：会话 `/permission` + 官方工具的 `sandbox_permissions`
@@ -50,6 +52,7 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
 3. **远程感知的 `confine` 短路**。发起会话 cwd 是远程路由时，`ctx.sandbox.confine`
    返回原 argv（enforcement `full`），这样拿掉钉档后本机 runner 仍不会进入远端命令行。
    本地会话仍走原来的 provider。官方提权发生在 confine **之前**，短路不跳过弹卡。
+   **本句的「返回原 argv、spawn 再按会话档围栏」已被 ADR-0031 取代**：远程 confine 把本次档位登记在返回的 argv 对象上，spawn 按对象身份读取；没有标记就是 `--sandbox off`。提权仍发生在 confine 之前。
 4. **Windows / 非 amd64 / 未部署**：无核心。围栏档的远程写与 spawn 拒绝；danger
    保持 SFTP+SSH。不在本轮做 Windows 核心。
 5. **设置页** `remoteSandbox` 下拉不再作为权限控件（文案改为遗留/忽略）。部署核心按钮保留。
@@ -73,12 +76,13 @@ policy 选 `--sandbox read-only|workspace-write|off`（`off` = 本地
     `read-only file system` 拒绝方言，官方 bash/pwsh 才能打出提权 hint。区域矩阵
     （工具绑世界、远程副根按根多开 WW）是 **REQ-I19**，见
     [ADR-0028](./ADR-0028-region-permission-matrix.md)。
+    **「AsyncLocalStorage 覆盖会话档」已被 ADR-0031 取代**：`remote-spawn-policy.ts` 只保留 workdir 世界钉。档位只通过 confine 标记到达 spawn。提权到 danger 就是跳过 confine。
 
 ## 3. 不做
 
-- 不随连接自动安装核心。
 - 不把 `/permission` 与机器围栏做成双重上限。
 - 不改 3080 / 产品 profile。
+- ~~不随连接自动安装核心。~~ **2026-10-29（`BUG-26`）作废。** 缺组件或版本过期时，`sw_connect` 和围栏档第一次使用直接部署，不弹审批。面板或通道把机器连上时仍只探测，不上传。已是当前版本不部署。
 
 ## 4. 验收
 

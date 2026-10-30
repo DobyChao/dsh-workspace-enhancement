@@ -7,6 +7,8 @@
 - 关联: 产品方向只认 **ADR-0023** / **REQ-I5**；围栏语义与审批门顺序仍认 **ADR-0022** /
   **ADR-0020**（本 ADR 不改「谁做 syscall」）
 
+> **后来改过的句子，不要按原文实现。** §0「`remoteSandbox: off` 就走 SFTP」、§1.5「围栏返回原 argv」、§1.6「围栏档终端一律拒绝」、§6.1「`off` 永不拉起」和「自动安装走首用审批」都已过时。权限轴是会话档（[ADR-0025](./ADR-0025-remote-session-sandbox.md)），命令档位在 confine 标记上（[ADR-0031](./ADR-0031-remote-fence-confine-policy.md)），部署不弹审批（2026-10-29，`BUG-26`，见 §3 末段）。协议、jail、工作区键仍以本文为准。现行格子以 [`architecture.md`](../architecture.md) §4.1 为准。
+
 ## 0. 结论
 
 v1 核心是 Linux x86_64 上一个可校验 tarball，**只含第一方 `dsh-core`**；第三方工具按
@@ -36,8 +38,10 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
    **读面**降到 SFTP（REQ-I15 / ADR-0025 §2.1，2026-09-19 修订；本条原「禁止读面退回
    SFTP」已由那次修订取代）。
 5. 审批门仍看**未包装** argv（ADR-0022 §2.2）。插件侧围栏从「包装 argv」变成
-   「确保核心会话活着」，返回原 argv。
-6. 交互终端在围栏档仍拒绝（ADR-0022 §2.4）。
+   「确保核心会话活着」，返回原 argv。**「spawn 不看这次 argv 上的档位」已被
+   ADR-0031 取代**：返回的 argv 对象上登记了本次档位，spawn 按对象身份读取。
+6. 交互终端：模型侧 persistent shell 在围栏档仍拒绝（ADR-0022 §2.4）。人开的
+   浏览器终端没有标记，ADR-0031 §4 放行。
 7. `remoteSandboxRunner` 不再被读取；runner 由核心自己解析（见 §1.2 / §3）。
 
 ## 2. 线协议
@@ -124,7 +128,12 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   hash 不是——打开 serve 后插件经控制通道 `sha256sum` 磁盘二进制，不在
   `core/artifact.json` 的 `compatHashes` 白名单内即拒（围栏档 `SANDBOX_UNAVAILABLE`、
   danger 落 SFTP，都不运行来历不明二进制）；活会话复用不重查（进程在它自己的
-  open 时已验，事后换文件改不了运行中的 inode）。部署侧收口：装后校验
+  open 时已验，事后换文件改不了运行中的 inode）。**2026-10-29（`BUG-27`）**：
+  白名单是历次官方发布实际装过的二进制之和，不是「这一次 git 里提交过的哈希」。
+  发布工作流在打包前从 npm 上已发布的版本把那些哈希并进来，所以同一条
+  major.minor 上升级插件时，机器上那份官方组件继续可用，不用逐台再部署。
+  名单外的仍然不运行；`sw_connect` 和围栏档第一次使用会把它换成这份插件自带的。
+  部署侧收口：装后校验
   安装哈希 = MANIFEST 声明值。清单维护是**构建自登记**：Go 构建跨工具链不可
   字节复现（CI 首日实锤：重建产物 hash 与本地不同），所以 `ensure-core`
   在保证 tarball 在场后把其二进制 hash 登进 `compatHashes` 并重投影 TS 常量
@@ -133,12 +142,18 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
   陈旧投影（登记晚于编译）发不出去。诚实边界：插件侧
   `sha256sum` 依赖远端 coreutils 诚实，防的是误换/损坏/伪造版本串，不是
   全面攻陷的远端。
-  **同日用户终拍板（部署必问）**：部署是审批动作，三条规则——①凡**尝试部署**
+  **同日用户终拍板（部署必问）**：部署是审批动作——①凡**尝试部署**
   必先经平台 approval 问（`sw_connect` 同步梯子与首用 gap 都接同一 ask；
-  拒绝=报告行+保持现状，再跑会再问）；②**danger-full-access 会话不尝试部署**
-  （核心非必需）；③**磁盘已是当前版本不问也不装**。后台预热（面板/通道路径）
-  在模型 turn 之外**问不了** ⇒ 降级为纯探测+告警（日志点名缺口），部署只发生在
-  能问的路径上。自动安装与「无感化」表述就此作废——本条为准。
+  拒绝=报告行+保持现状，再跑会再问）；②**磁盘已是当前版本不问也不装**。
+  当日另有一条「danger-full-access 会话不尝试部署（核心非必需）」。
+  后台预热（面板/通道路径）在模型 turn 之外问不了，降级为纯探测+告警。
+  **2026-10-29 修订（`BUG-26`）**：上面两条「必问」和「完全权限不部署」作废。
+  完全权限有组件时读写和命令仍走 `dsh-core serve --sandbox off`，没有才退回
+  SFTP 与裸 SSH，所以缺了就该装。`sw_connect` 对每台可达机器走
+  status→直接部署，不弹审批；围栏档第一次打开失败且磁盘确证缺失/过期时
+  同样直接部署并重试一次。已是当前版本且哈希在白名单内仍不装。哈希不在
+  名单里的不运行，下次 `sw_connect` 换成这份插件自带的。面板/通道连接仍只探测，
+  上传发生在下一次 `sw_connect` 或围栏档的第一次使用。
 - **核心版本门（2026-09-21，`REQ-I17`；宽度放宽 2026-09-30 用户拍板）**：围栏档
   只认本插件随包 `CORE_ARTIFACT_VERSION` 的 **major.minor 线**——patch 漂移
   （新旧皆可）按依赖语义直接可用，不问不部署；跨 minor/major 才
@@ -185,13 +200,13 @@ flowchart TB
 
 | 问题 | 决定 |
 |---|---|
-| 何时启动 | 惰性：围栏档第一次 fs / spawn / browse 才 `exec`。`off` 永不拉起。 |
-| 活着的判据 | exec stdout 仍开。channel `end`/`error` → 从 hub 丢掉；下次 `require` 再拉。失败仍 fail-closed，不退 SFTP。 |
+| 何时启动 | 惰性：第一次需要组件的 fs / spawn / browse 才 `exec`。围栏档带 `--sandbox <mode>`；完全权限在组件已安装时带 `--sandbox off`。没有组件且是完全权限时不拉起，走 SFTP / 裸 SSH。 |
+| 活着的判据 | exec stdout 仍开。channel `end`/`error` → 从 hub 丢掉；下次 `require` 再拉。围栏档失败仍 fail-closed，不退 SFTP。完全权限缺组件或校验不过才退 SFTP。 |
 | 崩溃 / 重连 | `conn.reconnect`、删机器、SSH dispose **关掉该机全部 serve**。只重 exec `current`，**不**自动再上传。 |
 | 空闲 | 最后一次 RPC 之后 **10 分钟**（`CORE_IDLE_MS`，常量，暂不上设置页）且没有未结束的 spawn job，杀掉该 serve。根身份记得住，下次 `require` 再拉同一 `--workspace`。不做 systemd user service。 |
 | `core.status` | 有活会话时发 **不走缓存** 的 `hello`（证明进程在）。只有缓存 hello 不能当活着。无活会话则 `dsh-core version`（只证明产物在）。 |
 | SSH keepalive | **不**改 `keepaliveInterval` 默认 0。TCP keepalive 是机器配置；核心活着靠 channel + 空闲重启。不为核心单独再做 RPC ping 循环。 |
-| 自动安装 | **2026-09-29 修订（`REQ-I14`，见 §3「部署无感化」）**：围栏≠off 机器连进会话后后台预热部署第一方工件；模型工具路径上的安装仍禁止——那条路走的是首用审批（人拍板）。原表述「禁止。Cursor 的 `cursor-server` 随连接静默安装；本插件只认设置页『部署核心』」由预热+审批取代：区别在于装的是本插件自己的第一方工件、且经用户自己的 SSH 通道，不是从第三方源拉软件。 |
+| 自动安装 | **2026-10-29（`BUG-26`）**：缺组件或版本跨 major.minor 时，`sw_connect` 与围栏档第一次使用直接部署本插件的第一方工件，不弹审批。已是当前版本不部署。面板 / 通道连接只探测、不上传。设置页按钮仍可手动部署。 |
 
 ### 6.2 工作区键
 
