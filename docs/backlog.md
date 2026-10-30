@@ -25,6 +25,7 @@
 |---|---|---|---|---|
 | REQ-I32 | 新建工作区二级菜单：免进入建多文件夹工作区 | todo | P2 | 2026-10-27 用户提。现状建工作区须先进入再逐个挂副目录。目标：「新建工作区」入口加二级菜单，创建时一次选定多个源文件夹（本机+已连机器；形态参考宿主「创建项目」弹窗的源文件夹多选区）。挂点（宿主按钮可否挂槽/替换）与验收待开工调查；归工作区生命周期线（ADR-0019） |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
+| UX-18 | 系统提示叙述段未点名 sw_status | todo | P3 | 2026-10-29 用户发现。工具已注册且 schema 有描述；插件注入的 sw-remote / tool:sw-exec / tool:bash 会点名 sw_connect、sw_exec，但不点名 sw_status（仅 schema 与 sw_exec description 顺带提及）。处置待定：在 sw-remote 补一句，或加 tool:sw-status 段。只入库，不做实现。 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
 | INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
