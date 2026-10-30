@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-30 01:12 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-30 01:18 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.7` |
 | 最新 tag | `v0.2.7` |
-| 分支 / HEAD | `chore/queue-close-reversible-window` / `e1b3397` |
-| HEAD 提交 | `ci(release): create GitHub Release after npm publish (#88)` (2026-10-28) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `cursor/ux-18-backlog-9981` / `0463b52` |
+| HEAD 提交 | `docs(queue): close the expired reversible window` (2026-10-30) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -28,7 +28,7 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 10 |
+| `todo` | 11 |
 | `doing` | 2 |
 | `blocked` | 5 |
 | `done` | 106 |
