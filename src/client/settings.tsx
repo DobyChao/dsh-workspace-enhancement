@@ -1,6 +1,6 @@
 /**
  * Minimal remote-machine management settings page (machine registry edition):
- * machine list (edit / delete / set current / forget host key) plus the shared
+ * machine list (edit / delete / set default / forget host key) plus the shared
  * {@link MachineForm} (mode="settings") — one form component with the flow's
  * add-connection form (R2 表单并集; see docs/ui-merge-design.md). No forwards /
  * audit / update sections — those belong to dsh-remote only and are
@@ -27,6 +27,7 @@ import { ConnStatusBadge, zhBaseline } from './status.tsx'
 import { coreStatusLabel, coreStatusTone, deployBannerKind } from './core-status.ts'
 import type { CoreStatusPayload } from './core-status.ts'
 import { AlertIcon, CheckIcon, ChevronIcon } from './icons.tsx'
+import { isDefaultStart, LOCAL_MACHINE_ID, machineRowPolicy } from './machine-list.ts'
 import styles from './settings.module.css'
 // The control vocabulary (capsule buttons, 32px fields) is owned by the form
 // stylesheet, which the editor hosted below already renders with — reusing it
@@ -247,7 +248,9 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     setMoreOpen('')
     try {
       const clicked = machines.find(machine => machine.id === id)
-      const label = clicked?.label !== undefined && clicked.label !== '' ? clicked.label : id
+      const label = id === LOCAL_MACHINE_ID
+        ? t('settings.machines.localName')
+        : (clicked?.label !== undefined && clicked.label !== '' ? clicked.label : id)
       const result = await rpc('machines.setCurrent', { id })
       const state = unwrap<{ machines: unknown; currentId: unknown; ok: boolean }>(result, t('settings.rpc.switchFailed'))
       setMachines(Array.isArray(state.machines) ? state.machines.map(asMachineView).filter((m): m is MachineView => m !== null) : [])
@@ -331,6 +334,12 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
     void refresh()
   }
 
+  const remoteIds = machines.map(machine => machine.id)
+  const settingsRows: Array<{ id: string; machine: MachineView | null }> = [
+    { id: LOCAL_MACHINE_ID, machine: null },
+    ...machines.map(machine => ({ id: machine.id, machine })),
+  ]
+
   return (
     <div className={styles.section}>
       <h1 className={styles.title}>{t('settings.title')}</h1>
@@ -355,100 +364,117 @@ export function RemoteWorkspaceSettingsPage({ rpc, t: tSeat }: SettingsInjected 
 
       <section className={styles.group}>
         <h2 className={styles.groupTitle}>{t('settings.machines.title')}</h2>
-        {machines.length > 0
-          ? (
-            <ul className={styles.rows}>
-              {machines.map(machine => {
-                const isCurrent = machine.id === currentId
-                const core = coreLines[machine.id]
-                return (
-                  <li key={machine.id} className={`${styles.rowCard} ${isCurrent ? styles.rowCardCurrent : ''}`}>
-                    <div className={styles.rowHead}>
-                      <div className={styles.rowIdentity}>
-                        <span className={styles.rowName}>{machine.label}</span>
-                        {/* Configured traits ride with the name; live state and the
-                            endpoint belong to the facts line below, so the action
-                            cluster always keeps its place on the first line. */}
-                        {machine.credentialBackend !== '' && machine.credentialBackend !== 'plain'
-                          ? <span className={styles.rowTag}>{t('settings.machines.keychainBadge')}</span>
-                          : null}
-                        {machine.jumpHosts.length > 0
-                          ? <span className={styles.rowTag}>{t('settings.machines.jumpBadge', { count: machine.jumpHosts.length })}</span>
-                          : null}
-                        {isCurrent ? <span className={`${styles.rowTag} ${styles.rowTagCurrent}`}>{t('settings.machines.currentBadge')}</span> : null}
-                      </div>
+        <ul className={styles.rows}>
+          {settingsRows.map(row => {
+            const policy = machineRowPolicy(row.id)
+            const isDefault = isDefaultStart(currentId, row.id, remoteIds)
+            const machine = row.machine
+            const core = machine !== null ? coreLines[machine.id] : undefined
+            const showMore = policy.canForgetKey || policy.canCoreStatus || policy.canDeploy || policy.canDelete
+            return (
+              <li key={row.id} className={`${styles.rowCard} ${isDefault ? styles.rowCardCurrent : ''}`}>
+                <div className={styles.rowHead}>
+                  <div className={styles.rowIdentity}>
+                    <span className={styles.rowName}>{machine !== null ? machine.label : t('settings.machines.localName')}</span>
+                    {/* Configured traits ride with the name; live state and the
+                        endpoint belong to the facts line below, so the action
+                        cluster always keeps its place on the first line. */}
+                    {machine !== null && machine.credentialBackend !== '' && machine.credentialBackend !== 'plain'
+                      ? <span className={styles.rowTag}>{t('settings.machines.keychainBadge')}</span>
+                      : null}
+                    {machine !== null && machine.jumpHosts.length > 0
+                      ? <span className={styles.rowTag}>{t('settings.machines.jumpBadge', { count: machine.jumpHosts.length })}</span>
+                      : null}
+                    {isDefault ? <span className={`${styles.rowTag} ${styles.rowTagCurrent}`}>{t('settings.machines.currentBadge')}</span> : null}
+                  </div>
 
-                      <div className={styles.rowActions}>
-                        {!isCurrent && (
-                          <button
-                            type="button"
-                            className={`${form.secondaryButton} ${form.small}`}
-                            disabled={busy}
-                            onClick={() => void useNow(machine.id)}
-                          >{t('settings.machines.setCurrent')}</button>
-                        )}
-                        <button
-                          type="button"
-                          className={`${form.secondaryButton} ${form.small}`}
-                          disabled={busy}
-                          onClick={() => startEdit(machine)}
-                        >{t('settings.machines.edit')}</button>
+                  <div className={styles.rowActions}>
+                    {policy.canSetDefault && !isDefault && (
+                      <button
+                        type="button"
+                        className={`${form.secondaryButton} ${form.small}`}
+                        disabled={busy}
+                        onClick={() => void useNow(row.id)}
+                      >{t('settings.machines.setCurrent')}</button>
+                    )}
+                    {policy.canEdit && machine !== null && (
+                      <button
+                        type="button"
+                        className={`${form.secondaryButton} ${form.small}`}
+                        disabled={busy}
+                        onClick={() => startEdit(machine)}
+                      >{t('settings.machines.edit')}</button>
+                    )}
 
-                        <details
-                          className={styles.more}
-                          open={moreOpen === machine.id}
-                          onToggle={event => {
-                            const isOpen = (event.currentTarget as HTMLDetailsElement).open
-                            setMoreOpen(current => (isOpen ? machine.id : current === machine.id ? '' : current))
-                          }}
+                    {showMore && machine !== null && (
+                      <details
+                        className={styles.more}
+                        open={moreOpen === machine.id}
+                        onToggle={event => {
+                          const isOpen = (event.currentTarget as HTMLDetailsElement).open
+                          setMoreOpen(current => (isOpen ? machine.id : current === machine.id ? '' : current))
+                        }}
+                      >
+                        <summary
+                          className={`${form.secondaryButton} ${form.small} ${styles.moreSummary} ${moreOpen === machine.id ? styles.moreSummaryOpen : ''}`}
+                          aria-label={t('settings.machines.more')}
                         >
-                          <summary
-                            className={`${form.secondaryButton} ${form.small} ${styles.moreSummary} ${moreOpen === machine.id ? styles.moreSummaryOpen : ''}`}
-                            aria-label={t('settings.machines.more')}
-                          >
-                            {t('settings.machines.more')}
-                            <ChevronIcon className={styles.moreChevron} width={12} height={12} />
-                          </summary>
-                          <div className={styles.moreMenu} role="menu">
+                          {t('settings.machines.more')}
+                          <ChevronIcon className={styles.moreChevron} width={12} height={12} />
+                        </summary>
+                        <div className={styles.moreMenu} role="menu">
+                          {policy.canForgetKey && (
                             <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
                               onClick={() => void forgetKey(machine)}>{t('settings.machines.forgetKey')}</button>
+                          )}
+                          {policy.canCoreStatus && (
                             <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
                               onClick={() => void refreshCore(machine.id)}>{t('settings.machines.coreStatus')}</button>
+                          )}
+                          {policy.canDeploy && (
                             <button type="button" role="menuitem" className={styles.moreItem} disabled={busy}
                               onClick={() => void deployCore(machine.id)}>{t('settings.machines.deployCore')}</button>
-                            <div className={styles.moreSep} />
+                          )}
+                          {policy.canDelete && <div className={styles.moreSep} />}
+                          {policy.canDelete && (
                             <button type="button" role="menuitem"
                               className={`${styles.moreItem} ${styles.moreItemDanger}`}
                               disabled={busy}
                               onClick={() => void del(machine.id)}>{t('settings.machines.delete')}</button>
-                          </div>
-                        </details>
-                      </div>
-                    </div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                </div>
 
-                    <div className={styles.rowMeta}>
-                      <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
-                      <span className={styles.rowEndpoint}>{machine.username}@{machine.host}:{machine.port}</span>
-                      {machine.encryptFallback === true
-                        ? <span className={`${styles.coreChip} ${styles.coreChipWarn}`}>{t('settings.machines.encryptFallbackBadge')}</span>
-                        : null}
-                      {core !== undefined
-                        ? (
-                          <span
-                            className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]} ${core.label.includes('\n') ? styles.coreChipBlock : ''}`}
-                            role="status"
-                          >
-                            {core.label}
-                          </span>
-                        )
-                        : null}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )
-          : <p className={styles.empty}>{t('settings.machines.empty')}</p>}
+                <div className={styles.rowMeta}>
+                  {machine !== null
+                    ? (
+                      <>
+                        <ConnStatusBadge id={machine.id} rpc={rpc} t={t} />
+                        <span className={styles.rowEndpoint}>{machine.username}@{machine.host}:{machine.port}</span>
+                        {machine.encryptFallback === true
+                          ? <span className={`${styles.coreChip} ${styles.coreChipWarn}`}>{t('settings.machines.encryptFallbackBadge')}</span>
+                          : null}
+                        {core !== undefined
+                          ? (
+                            <span
+                              className={`${styles.coreChip} ${CORE_TONE_CLASS[core.tone]} ${core.label.includes('\n') ? styles.coreChipBlock : ''}`}
+                              role="status"
+                            >
+                              {core.label}
+                            </span>
+                          )
+                          : null}
+                      </>
+                    )
+                    : <span className={styles.rowEndpoint}>{t('settings.machines.localHint')}</span>}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
       </section>
 
       <section className={styles.group}>

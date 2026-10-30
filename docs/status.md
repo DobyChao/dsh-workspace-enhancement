@@ -1,25 +1,25 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-27 12:08 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-30 01:18 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.7` |
-| npm 已发布版本 | `0.2.6` |
-| 最新 tag | `v0.2.6` |
-| 分支 / HEAD | `cursor/release-0.2.7-71a5` / `d95b22c` |
-| HEAD 提交 | `chore(release): prepare 0.2.7` (2026-10-27) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| npm 已发布版本 | `0.2.7` |
+| 最新 tag | `v0.2.7` |
+| 分支 / HEAD | `cursor/ux-17-default-local-bfa2` / `c09f623` |
+| HEAD 提交 | `docs(queue): close the expired reversible window` (2026-10-30) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 85 |
-| 单测用例（静态计数） | 788 |
+| 单测文件 | 86 |
+| 单测用例（静态计数） | 792 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 58 |
@@ -28,20 +28,18 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 9 |
+| `todo` | 10 |
 | `doing` | 2 |
-| `blocked` | 7 |
-| `done` | 106 |
+| `blocked` | 5 |
+| `done` | 107 |
 | `shipped` | 13 |
-| `dropped` | 16 |
+| `dropped` | 17 |
 
 ## 被挡住 / 待拍板
 
 - UPSTREAM-6 — 官方 SSH 运行时定位拍板
 - REQ-A7 — 包改名为远程工作区类名称
-- REQ-I25 — 混合门面未知方法默认转发本地委托
 - INFRA-8 — AgentTeams 标准 profile 注册
-- AUDIT-5 — 分组视图下会话子行拿不到 compact 徽标
 - INFRA-8a — `dsw-round` profile
 - INFRA-8b — `dsw-spike` profile
 

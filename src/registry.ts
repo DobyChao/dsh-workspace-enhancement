@@ -37,6 +37,12 @@ import { configProbeId } from './config-probe.ts'
 import { probeFailureMessage } from './host-key-changed.ts'
 import type { TranslateFn } from './locale/index.ts'
 
+/**
+ * This computer. Never stored as an SSH row (same spelling as `LOCAL_SERVER_ID`).
+ * Settings may persist it as `currentId` so a new workspace starts locally (UX-17).
+ */
+const LOCAL_CURRENT_ID = 'local'
+
 /** Registry plugin config. */
 export interface RegistryConfig {
   /**
@@ -742,7 +748,7 @@ export class SshRegistry extends Service {
     }
     let maxId = 0
     for (const spec of state.list) {
-      if (spec.id === 'local') {
+      if (spec.id === LOCAL_CURRENT_ID) {
         throw new Error(`dsw: ${this.t('rpc.machineIdReserved', { id: spec.id })}`)
       }
       const numeric = /^c(\d+)$/.exec(spec.id)
@@ -864,7 +870,7 @@ export class SshRegistry extends Service {
     const prev = input.id !== undefined ? this.specs.get(input.id) : undefined
     const label = (input.label ?? '').trim() || (input.name ?? '').trim() || prev?.label || `${username}@${host}`
     const id = prev !== undefined ? prev.id : input.id ?? this.allocateId()
-    if (id === 'local') throw new Error(`dsw: ${this.t('rpc.machineIdReserved', { id })}`)
+    if (id === LOCAL_CURRENT_ID) throw new Error(`dsw: ${this.t('rpc.machineIdReserved', { id })}`)
     // A caller-supplied id unknown to the table (created outside this registry
     // instance, or a `cN` id whose record was removed) must still be visible to
     // the allocator: leaving nextId behind it would let the next auto-allocation
@@ -955,9 +961,13 @@ export class SshRegistry extends Service {
     return true
   }
 
-  /** Make a machine current. Returns whether the id exists. */
+  /**
+   * Make a machine the default start for a new workspace (UX-11 / UX-17).
+   * A saved id, or the local sentinel {@link LOCAL_CURRENT_ID}. The sentinel
+   * is not inserted into the machine table.
+   */
   setCurrent(id: string): boolean {
-    if (!this.specs.has(id)) return false
+    if (id !== LOCAL_CURRENT_ID && !this.specs.has(id)) return false
     this.currentId = id
     void this.persist()
     return true
