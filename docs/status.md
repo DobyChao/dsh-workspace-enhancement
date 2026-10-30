@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-30 05:08 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-30 05:10 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.7` |
 | 最新 tag | `v0.2.7` |
-| 分支 / HEAD | `HEAD` / `3d2410b` |
-| HEAD 提交 | `fix(sandbox): keep the confine mark across remote argv rewrite` (2026-10-30) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `fix/BUG-25-remote-confine-mark` / `3db1b6e` |
+| HEAD 提交 | `docs(status): refresh snapshot after the confine-mark fix` (2026-10-30) |
+| 与远端 | 2 ahead / 0 behind origin/master |
 
 ## 质量
 
