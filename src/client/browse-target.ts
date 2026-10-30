@@ -1,12 +1,14 @@
 /**
- * Where the directory flow starts browsing (UX-11).
+ * Where the directory flow starts browsing (UX-11 / UX-17).
  *
- * An explicit connection id wins. With none, the registry's current machine
- * is the start — that is what Settings "set as current" is for. An unknown
- * id falls back to the local home.
+ * An explicit connection id wins. With none, the registry current id is the
+ * start — Settings "set as default" writes that id. The sentinel `local`,
+ * and any other unknown id, is this computer.
  *
  * @module dsh-workspace-enhancement/client/browse-target
  */
+
+import { LOCAL_MACHINE_ID } from './machine-list.ts'
 
 export type BrowseTarget =
   | { kind: 'local' }
@@ -24,9 +26,12 @@ export function initialBrowseTarget(
 ): BrowseTarget {
   const explicit = explicitId.trim()
   if (explicit !== '') {
-    return knownIds.includes(explicit) ? { kind: 'remote', id: explicit } : { kind: 'local' }
+    if (explicit === LOCAL_MACHINE_ID || !knownIds.includes(explicit)) return { kind: 'local' }
+    return { kind: 'remote', id: explicit }
   }
   const current = currentId.trim()
-  if (current !== '' && knownIds.includes(current)) return { kind: 'remote', id: current }
+  if (current !== '' && current !== LOCAL_MACHINE_ID && knownIds.includes(current)) {
+    return { kind: 'remote', id: current }
+  }
   return { kind: 'local' }
 }

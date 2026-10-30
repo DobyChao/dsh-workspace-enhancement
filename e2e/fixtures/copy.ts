@@ -58,7 +58,7 @@ export const COPY = {
   'settings.machines.empty': { zh: '还没有机器。在下方添加。', en: 'No machines yet. Add one below.' },
   'settings.machines.edit': { zh: '编辑', en: 'Edit' },
   'settings.machines.delete': { zh: '删除', en: 'Delete' },
-  'settings.machines.setCurrent': { zh: '设为当前', en: 'Set as current' },
+  'settings.machines.setCurrent': { zh: '设为默认', en: 'Set as default' },
   'settings.machines.forgetKey': { zh: '忘记指纹', en: 'Forget key' },
   'settings.form.addTitle': { zh: '添加机器', en: 'Add machine' },
   'settings.form.editTitle': { zh: '编辑机器', en: 'Edit machine' },

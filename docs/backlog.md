@@ -50,6 +50,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UX-17 | 设为默认，并在机器列表露出不可编辑的本机 | done | P3 | 设置页按钮改为「设为默认」。列表含本机：不可编辑、不能部署远程组件，可成为新建工作区的起始。脚本 [UX-17](./uat/UX-17-settings.md) |
 | PUB-11 | 0.2.6 发布 | shipped | P1 | tag [v0.2.6](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.6)；npm latest=0.2.6。档案 [R57](./rounds/R57-pub11-v0.2.6-release.md) |
 | AUDIT-8 | 清理无用单元测试 | done | P3 | PR [#85](https://github.com/DobyChao/dsh-workspace-enhancement/pull/85) 已合入。删 7 个被取代用例（5 文件）+ 零调用死导出 `passthroughConfinedArgv`；83 文件三判据盘点表在 PR 描述，覆盖零丢失 |
 | BUG-21 | 本机主工作区对远程副工作区跑 sw_exec 失败 | done | P1 | 本机会话对已连接远程机器同步标记 argv，不再等待宿主 confine。见 [笔记](./notes/BUG-21-22.md) |
