@@ -34,7 +34,7 @@
 | 注册 | order | 落在 |
 |---|---|---|
 | `section('sw-remote')`（`src/tools.ts`） | 90 | persona `0` 与 `PLAN_POLICY` `500` 之间。截图里远程段因此紧贴身份行 |
-| `context('dsw-session-workspace')` | 90 | 官方上下文 110 之前。易变清单走 user-role 快照，不在系统提示词面板里 |
+| `context('dsw-session-workspace')` | 90 | 官方上下文 110 之前。易变清单（已连接机器、副根、每台机器的组件是否生效）走 user-role 快照，整段与上一份相同则宿主不追加。不在系统提示词面板里 |
 | `section('tool:sw-exec')` / `section('tool:bash')`（`src/exec-tools.ts`） | 105 | 同一条空档，仍在官方 `TOOL_BASH` 1000 之前 |
 
 `tool:bash` 与官方段同名。同一 layer 重名会在注册时抛错。这台 Windows lab 能起来并显示远程段，说明 90/105 已生效；官方 `tool:bash` 要么没挂进这个 profile，要么不在同一 layer。Linux 上两边都挂载时要单独核对。

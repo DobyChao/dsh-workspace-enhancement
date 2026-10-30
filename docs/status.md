@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-10-30 05:10 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-10-30 09:07 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.7` |
 | npm 已发布版本 | `0.2.7` |
 | 最新 tag | `v0.2.7` |
-| 分支 / HEAD | `fix/BUG-25-remote-confine-mark` / `3db1b6e` |
-| HEAD 提交 | `docs(status): refresh snapshot after the confine-mark fix` (2026-10-30) |
-| 与远端 | 2 ahead / 0 behind origin/master |
+| 分支 / HEAD | `fix/BUG-25-remote-confine-mark` / `9b491e4` |
+| HEAD 提交 | `docs(status): name the branch in the snapshot after rebase` (2026-10-30) |
+| 与远端 | 3 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 87 |
-| 单测用例（静态计数） | 800 |
+| 单测文件 | 88 |
+| 单测用例（静态计数） | 808 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 58 |
@@ -29,10 +29,10 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 11 |
-| `doing` | 3 |
+| `doing` | 4 |
 | `blocked` | 5 |
 | `done` | 107 |
-| `shipped` | 13 |
+| `shipped` | 14 |
 | `dropped` | 17 |
 
 ## 被挡住 / 待拍板

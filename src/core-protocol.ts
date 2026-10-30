@@ -15,7 +15,7 @@
 export const CORE_PROTO = 1
 
 /** Single-frame payload cap (bytes of JSON, not including the length prefix). */
-import { CORE_ARTIFACT_VERSION as SHIPPED_CORE_VERSION } from './core-artifact.ts'
+import { CORE_ARTIFACT_VERSION, CORE_COMPAT_HASHES } from './core-artifact.ts'
 
 export const CORE_MAX_FRAME = 16 * 1024 * 1024
 
@@ -35,15 +35,16 @@ export { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_TARGETS, CORE_ARTIFACT_VERSION, CORE_
  * REQ-I17 gate width (relaxed 2026-09-30, user decision): a fenced session
  * accepts ANY core of the same `major.minor` as the shipped artifact — patch
  * drift in either direction is dependency-style compatible (`0.2.1` remote
- * with `0.2.2` shipped, and vice versa); only a minor/major step refuses and
- * rides the ask-gated redeploy. The proto + caps checks at open still catch a
- * genuinely incompatible newer core. Versions that do not parse as plain
+ * with `0.2.2` shipped, and vice versa); only a minor/major step refuses.
+ * A cross-line binary is replaced by the next `sw_connect` or the first
+ * confined use, with no approval card. The proto + caps checks at open still
+ * catch a genuinely incompatible newer core. Versions that do not parse as plain
  * `X.Y.Z` fall back to exact equality (conservative).
  *
  * A tighter floor stays available later via `core/artifact.json` (a `min`
  * field for a must-have patch fix); this round deliberately ships none.
  */
-export function coreVersionAccepted(remote: string, shipped: string = SHIPPED_CORE_VERSION): boolean {
+export function coreVersionAccepted(remote: string, shipped: string = CORE_ARTIFACT_VERSION): boolean {
   if (remote === shipped) return true
   const parse = (value: string): [number, number] | undefined => {
     const match = /^(\d+)\.(\d+)\.\d+(?:[-+][\w.-]+)?$/u.exec(value.trim())
@@ -53,6 +54,39 @@ export function coreVersionAccepted(remote: string, shipped: string = SHIPPED_CO
   const b = parse(shipped)
   if (a === undefined || b === undefined) return false
   return a[0] === b[0] && a[1] === b[1]
+}
+
+/**
+ * REQ-I17 provenance: the on-disk file must be byte-identical to a binary this
+ * package ships or inherited from an earlier official release. The version
+ * string is self-reported; the hash is not.
+ */
+export function isKnownCoreBinary(hash: string | undefined): boolean {
+  return hash !== undefined && hash.length === 64
+    && (CORE_COMPAT_HASHES as readonly string[]).includes(hash.toLowerCase())
+}
+
+/**
+ * Whether an on-disk core can stay in place.
+ *
+ * Same major.minor is not enough. When the probe hashed the file (`sha256`
+ * is present, `null` if it could not be read), the hash must be one this
+ * plugin shipped. A status that never hashed is judged on the version line
+ * only, so older probes do not force a redeploy.
+ */
+export function coreDiskCurrent(status: {
+  ok: boolean
+  version?: string | undefined
+  sha256?: string | null | undefined
+}): boolean {
+  if (!status.ok || !coreVersionAccepted(status.version ?? '')) return false
+  if (!Object.prototype.hasOwnProperty.call(status, 'sha256')) return true
+  return isKnownCoreBinary(status.sha256 ?? undefined)
+}
+
+/** The first sha256 token in `sha256sum` output, if it is a full hex digest. */
+export function sha256OfSumOutput(stdout: string): string | undefined {
+  return /^([0-9a-f]{64})\b/u.exec(stdout.trim().toLowerCase())?.[1]
 }
 
 /** v1 capability names advertised by `hello`. */

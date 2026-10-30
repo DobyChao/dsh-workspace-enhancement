@@ -38,6 +38,7 @@ import { ensureCoreHub } from './core-hub.ts'
 import type { CoreHub } from './core-hub.ts'
 import { createCoreWarmup } from './core-provision.ts'
 import { deployCore } from './core-deploy.ts'
+import { forgetCoreEffect } from './remote-component-context.ts'
 import { isCoreMissingError } from './remote-policy.ts'
 import { previewPathAllowed } from './remote-layout.ts'
 import { PREVIEW_MAX_BYTES, previewDocument, readRemotePreviewFile, sessionWorkspaceFor, workspacePreviewAllowed } from './remote-preview.ts'
@@ -385,11 +386,9 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
   const hub = (): CoreHub => ensureCoreHub(ctx)
   /**
    * REQ-I14/REQ-I21 background core-gap probe (the PANEL/CHANNEL connect
-   * paths): these run OUTSIDE any model turn, so the deploy approval ask can
-   * never fire there — and per the 2026-09-30 user policy a deploy that
-   * cannot ask must not deploy. The probe only names the gap in the host log;
-   * the next tool-path provision (sw_connect, or the hub's first-use ask)
-   * offers the ask-gated deploy.
+   * paths): these only name the gap in the host log. The upload happens on
+   * the next sw_connect, or on the first confined use that needs the core.
+   * Neither path asks for approval (BUG-26).
    */
   const warmup = createCoreWarmup({
     machine: (id) => registry().listMachines().machines.find(machine => machine.id === id),
@@ -403,7 +402,10 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
       if (connection === undefined) return Promise.resolve({ ok: false, detail: 'machine is not usable as a registry connection' })
       return deployCore(connection as unknown as SshTransport, signal !== undefined ? { signal } : {})
     },
-    afterDeploy: (id) => { hub().close(id) },
+    afterDeploy: (id) => {
+      forgetCoreEffect(id)
+      hub().close(id)
+    },
     warn: (text) => { ctx.logger.warn(text) },
   })
   /** R5: a remote side workspace must name a registered machine. */
@@ -880,6 +882,7 @@ export function apply(ctx: Context, config: WebChannelConfig): void {
           const id = input.id.trim()
           const connection = requireConnection(id)
           const view = await deployCore(connection as unknown as SshTransport, { signal })
+          if (view.ok) forgetCoreEffect(id)
           hub().close(id)
           return { ok: true, value: view }
         }

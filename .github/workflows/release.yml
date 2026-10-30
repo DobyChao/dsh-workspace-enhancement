@@ -76,6 +76,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Trust core binaries shipped by earlier releases
+        run: node scripts/inherit-published-core-hashes.mjs
+
       - name: Quality gate (npm publish also re-runs prepublishOnly)
         run: npm run check
 
