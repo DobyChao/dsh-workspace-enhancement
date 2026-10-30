@@ -32,6 +32,7 @@
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 10-27 调查：原案死——fork 官方存在但不收 cwd 覆盖；正道=0.2.1 `workingDirectory.set`（0.2.0 无）。改向「目录即会话上下文」（A 会话中迁移 / B cwd-only 开场），开工前先拍需求。见 [survey](./notes/req-i8-norepo-workspace-survey.md) |
 | REQ-I1 | 对话/轨迹区可扩展面板 Tab | todo | P3 | 往后排。走 `conversation.view`（ADR-0016 / 0017）。tab id 进 localStorage，发布后不可改名 |
+| REQ-I25 | 混合门面未知方法默认转发本地委托 | todo | P3 | 可逆窗 2026-10-28 到期，采纳 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md) 选项 B。实现未做：只拦带路径或 cwd 的方法，其余默认转发本地委托。 |
 ## 3. 被挡住 / 待拍板（blocked）
 
 推荐、代价与期限在 [拍板队列](./decisions/queue.md)。逾期的可逆项会让静态闸门变红。
@@ -40,9 +41,7 @@
 |---|---|---|---|---|
 | UPSTREAM-6 | 官方 SSH 运行时定位拍板 | blocked | P1 | 10-08 复核：四包 `next`=`0.2.0-rc.2` 已进 rc，仍拒 win32 宿主、未接 Web、不进默认组合。细化对比（含 A′/B′）见 [ADR-0029](./decisions/ADR-0029-positioning-review.md)，推荐 A′。**待所有者**拍板；拍定即解挡 `REQ-A7` |
 | REQ-A7 | 包改名为远程工作区类名称 | blocked | P2 | 候选 `dsh-remote-workspace`，旧包 `npm deprecate` 指向新包；`sw_` / `dsw` 不动。**挡于** `UPSTREAM-6`（A/A′/C 才改，B 另议）。见 [ADR-0029](./decisions/ADR-0029-positioning-review.md) §4.1 |
-| REQ-I25 | 混合门面未知方法默认转发本地委托 | blocked | P3 | ADR-0030 选项 B：仍是唯一提供者，只拦带路径 / cwd 的方法，其余默认转发；`sandboxMode` 等 getter 单列。验收：纯本地会话与官方一致，三条矩阵行保持，boot-smoke 过。**挡于 ADR-0030 拍板** |
 | INFRA-8 | AgentTeams 标准 profile 注册 | blocked | P2 | 配置在 `docs/agents.md`。**需所有者**写入宿主组合（代理不碰产品 profile）。子项 §6 |
-| AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | blocked | P2 | 2026-09-22 先挡住：这个徽标还要不要修未拍板。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。确认前勿改 |
 
 ## 4. 已完成（done / shipped，ID 留作追溯）
 
@@ -89,7 +88,7 @@
 | AUDIT-7 | 远程权限真值表 + 重叠机制清理 | done | P1 | PR #61。真值表 §4.1；远程只剩远程组件一条路。**尾巴**：子路径行实机。档案 [R49](./rounds/R49-side-root-sandbox-batch.md) |
 | REQ-I24 | 本机副根与主根同权（第一级） | done | P2 | PR #61。并列副根与主根同权；祖先目录与盘符根不放宽。**尾巴**：Windows ACL 实机 [R49](./uat/R49-side-root-sandbox-batch.md)。见 ADR-0028 §5 |
 | UX-7 | 去掉设置页「远程命令审批」 | done | P3 | PR #61。审批下拉与徽标已删；执行门保留，旧 `remoteApproval` 仍生效。**尾巴**：lab 目测。档案 R49 |
-| REQ-I23 | Spike：本地接缝交还官方 | done | P3 | PR #61。路由层留作唯一提供者，推荐默认转发，见 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md)（待拍板）。实现是 `REQ-I25`。档案 R49 |
+| REQ-I23 | Spike：本地接缝交还官方 | done | P3 | PR #61。路由层留作唯一提供者，默认转发已采纳，见 [ADR-0030](./decisions/ADR-0030-local-seams-stay-routed.md)。实现是 REQ-I25。档案 R49 |
 | UX-9 | 术语：「核心」改称「远程组件」 | done | P3 | PR #61。用户可见文案已改；标识符、线协议、面向模型的 core 不改。档案 R49 |
 | PUB-8 | 0.2.3 发布 | shipped | P1 | tag `v0.2.3`；publish run 36737916290（OIDC，owner Approve）。发布前终检九项全过（含 0.2.0-rc.2 宿主安装+boot 实证）。npm `latest=0.2.3`。档案 [R47](./rounds/R47-pub8-v0.2.3-release.md) |
 | REQ-I21 | 核心供给并入 sw_connect/sw_status；部署必问 + sha256 溯源 | done | P1 | PR #55（四次拍板）。`sw_connect` 同步供给报结果、`sw_status` 报核心态；部署必问；版本门同 major.minor 线；sha256 白名单（构建自登记）。**尾巴**：弹问闭环 UAT 待实机。档案 R46 |
@@ -174,6 +173,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| AUDIT-5 | 分组视图下会话子行拿不到 compact 徽标 | dropped | — | 可逆窗 2026-10-28 到期，compact 徽标不再修。证据 [R17](./rounds/R17-rc2-badge-verification.md) §6。 |
 | REQ-A2 | 向上游提 PR（行级槽位） | dropped | — | `ADR-0011`；改 DOM 增辉层 |
 | UPSTREAM-12 | 向上游提多根写策略需求 | dropped | — | 上游不接受 issue（所有者 10-08）。副根停在第一级，跨根写走提权。ADR-0029 §4.3 |
 | REQ-X1 | 镜像/同步 | dropped | — | `ADR-0003` |
