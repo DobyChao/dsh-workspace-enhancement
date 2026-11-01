@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-subprocess'
 import { quoteShellArg } from './ssh-core.ts'
 import type { SshTransport } from './transport.ts'
-import { readRemoteEnvironment, scrubRemoteEnvironment, serializeEnvironment } from './environment.ts'
+import { overlayBundledRg, readRemoteEnvironment, scrubRemoteEnvironment, serializeEnvironment } from './environment.ts'
 import { SshOutputCollector } from './output.ts'
 
 function isCollect(mode: SubprocessOutputMode): mode is SubprocessCollect {
@@ -104,7 +104,8 @@ async function buildCommand(
   argv: readonly string[],
 ): Promise<string> {
   const remote = await readRemoteEnvironment(ssh)
-  const environment = serializeEnvironment(scrubRemoteEnvironment(remote), spec.env)
+  const scrubbed = scrubRemoteEnvironment(remote)
+  const environment = serializeEnvironment(scrubbed, overlayBundledRg(scrubbed, spec.env, argv[0]))
   const serialized = argv.map(quoteShellArg).join(' ')
   const prefix = `cd -- ${quoteShellArg(cwd)} && env -i -- ${environment}`
   if (spec.stdio.stdin === 'pipe') {

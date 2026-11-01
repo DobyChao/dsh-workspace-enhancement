@@ -212,6 +212,41 @@ test('handle run(): no resolveArgv is identity — the serialized text keeps its
   assert.doesNotMatch(command, /echo \$\$/)
 })
 
+test('handle run(): bare rg appends the deployed core bin after PATH (BUG-28)', async () => {
+  const transport = recordingTransport()
+  const handle = new SshSubprocessHandle(
+    transport,
+    '/srv/work',
+    spawnSpec(['rg', '--files']),
+    mkdtempSync(join(tmpdir(), 'dsh-bug28-rg-')),
+  )
+  assert.equal((await handle.done).exitCode, 0)
+  const command = transport.commands[0] as string
+  assert.match(command, /'PATH=\/usr\/bin:\/bin:\/root\/\.dsh-core\/current\/bin'/)
+  assert.match(command, / 'rg' '--files'/)
+})
+
+test('handle run(): a caller PATH for rg is extended, and bash is not', async () => {
+  const transport = recordingTransport()
+  const rg = new SshSubprocessHandle(
+    transport,
+    '/srv/work',
+    { ...spawnSpec(['rg', '--files']), env: { PATH: '/opt/bin' } },
+    mkdtempSync(join(tmpdir(), 'dsh-bug28-rg-explicit-')),
+  )
+  assert.equal((await rg.done).exitCode, 0)
+  assert.match(transport.commands[0] as string, /'PATH=\/opt\/bin:\/root\/\.dsh-core\/current\/bin'/)
+  const bash = new SshSubprocessHandle(
+    transport,
+    '/srv/work',
+    { ...spawnSpec(COMMAND_ARGV), env: { PATH: '/opt/bin' } },
+    mkdtempSync(join(tmpdir(), 'dsh-bug28-bash-explicit-')),
+  )
+  assert.equal((await bash.done).exitCode, 0)
+  assert.match(transport.commands[1] as string, /'PATH=\/opt\/bin'/)
+  assert.doesNotMatch(transport.commands[1] as string, /dsh-core/)
+})
+
 test('handle run(): a rejection from resolveArgv fails done and NOTHING reaches the transport', async () => {
   const transport = recordingTransport()
   const handle = new SshSubprocessHandle(

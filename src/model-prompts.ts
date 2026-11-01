@@ -27,14 +27,17 @@
 export const MODEL_PROMPTS = {
   /** R4 remote emphasis paragraph (`sw-remote` section, order 90). */
   remoteEmphasis:
-    '⚠ Your current workspace is a **remote SSH workspace**: `{endpoint}:{displayPath}` (routed through the local placeholder path `{placeholderRoot}\\{connectionId}\\…`; the placeholder path you see is only a routing alias — **all commands and file operations truly happen on the remote server**, and the working directory is a POSIX absolute path).',
+    '⚠ Your current workspace is a **remote SSH workspace**: `{endpoint}:{displayPath}` (routed through the local placeholder path `{placeholderRoot}\\{connectionId}\\…`; the placeholder path you see is only a routing alias — **all commands and file operations truly happen on the remote server**, and the working directory is a POSIX absolute path). Search this workspace with the grep and glob tools; they run on the remote server. Do not use bash find, grep, or rg for that.',
   /** One side-workspace line (REQ-I7: declaration only, no permission marks). */
   sideItem: '- Side workspace **{label}**: `{rootKey}`',
+  /** A side root on the machine the effective cwd is already on. */
+  sideItemSameMachine:
+    '- Side workspace **{label}**: `{rootPath}` on this machine. Use this POSIX path; do not prefix it with `ssh://`.',
   /** Side-workspace list heading (R5). */
   sideHeading: '**Extra workspaces linked to this session (side directories the model can operate on directly)**:',
   /** Side-workspace boundary note, tier-free since REQ-I7 (ADR-0019). */
   sideNote:
-    'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default. When the main workspace is remote, bash runs there; sw_exec is for a different server. Local commands use pwsh on Windows, or sw_exec with server "local" on Linux.',
+    'A side workspace is an extra directory this session can operate on directly. Commands run in the main workspace by default. When the main workspace is remote, bash runs commands there and the grep and glob tools search there; sw_exec is for a different server. Local commands use pwsh on Windows, or sw_exec with server "local" on Linux.',
   /**
    * REQ-I11: heading of the per-session CONNECTED-MACHINE list (`sw-remote`
    * section). The list is the session's coarse gate made visible: the store
@@ -45,6 +48,12 @@ export const MODEL_PROMPTS = {
   connectedItem: '- `{id}` — {endpoint}{note}',
   /** REQ-I11: the note appended to a machine that did not answer its ping. */
   connectedUnreachable: ' (was unreachable at connect time)',
+  /**
+   * Current effective directory in the runtime context: the POSIX path and
+   * the concrete placeholder that names it. Recomputed every assembly.
+   */
+  currentWorkspacePaths:
+    '**Current directory** (this line follows a machine switch): remote `{remotePath}`, shown locally as the placeholder `{placeholder}`. Bash, grep, glob, and file tools on this machine take the remote path. Omit a search path to use this directory. The placeholder is only a local routing alias.',
   /** `sw_status` remote-toolbox report heading. */
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */
@@ -61,10 +70,10 @@ export const MODEL_PROMPTS = {
    * copy states the precondition instead of leaving the model to discover it.
    */
   sectionSwExec:
-    'sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. If this session\'s main workspace is already that server, use bash instead. On Windows, local paths use pwsh, not sw_exec. On Linux, server "local" runs on this host only while the main workspace is remote. workdir defaults to that server\'s primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.',
+    'sw_exec executes a command on the specified server. The server must be connected to this session: use an id from the connected-machine list, or call sw_connect first. If this session\'s main workspace is already that server, run commands with bash and search with the grep and glob tools, not sw_exec. On Windows, local paths use pwsh, not sw_exec. On Linux, server "local" runs on this host only while the main workspace is remote. workdir defaults to that server\'s primary workspace. Check the [exit code: N] marker of each result; investigate non-zero exits before continuing.',
   /** `tool:bash` section (order 105, win32 hosts) — empty unless this session has a remote workspace. */
   sectionBash:
-    'The bash tool runs `bash -c` on this session\'s remote Linux workspace. It does not run on the local machine or on a different server: use pwsh for local Windows commands and sw_exec for another server. Check the [exit code: N] marker of each result.',
+    'The bash tool runs `bash -c` on this session\'s remote Linux workspace. It does not run on the local machine or on a different server: use pwsh for local Windows commands and sw_exec for another server. Search this workspace with the grep and glob tools; they run on this remote server. Pass the remote POSIX path, or omit the path to use the current directory. Do not use bash find, grep, or rg for that. Check the [exit code: N] marker of each result.',
   /**
    * REQ-I13 / ADR-0025: remote fs/spawn follow this session's `/permission`
    * (and official `sandbox_permissions` escalation) via the Linux core.
@@ -99,6 +108,9 @@ export const MODEL_PROMPTS = {
     '**Remote component (dsh-core) on this session\'s machines**: "in effect" means file tools and commands on that machine go through it, including danger-full-access (`dsh-core serve --sandbox off`). "Not in effect" means confined writes and bash refuse, and danger-full-access falls back to SFTP and SSH. A missing, cross-line, or unknown binary is replaced by the next `sw_connect` or the first confined use.',
   /** Same major.minor and a known (or unhashed) binary. */
   remoteComponentActive: '- `{id}`: in effect ({version}).',
+  /** Installed, but neither bubblewrap nor Landlock can confine the machine. */
+  remoteComponentReadOnly:
+    '- `{id}`: in effect ({version}), but this machine cannot sandbox. A confined session is read-only. When a write or command is refused, retry that exact operation once with sandbox_permissions set to danger-full-access and a justification; the approval prompt asks the user.',
   /** No artifact on disk. */
   remoteComponentMissing: '- `{id}`: not in effect (not installed).',
   /** On this line, but the sha256 is not one this plugin shipped. */

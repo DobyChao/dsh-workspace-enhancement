@@ -51,4 +51,6 @@ export const CORE_COMPAT_HASHES = [
   'd9a02a8adc276d8d3d3ae2d4deb3dd286374b84991281fd8aee6a36506b8c6c5',
   'ebceaccc7888ee6a1167f15e157047109e8858e2fa170bb3f1cab276ce7a7eae',
   '152c3a06258902350ddda7f486482ba34b62f2ccc2a50866cde5e2f33dcfe3c0',
+  '9ccd4d89d69976fcda9e926d996e42f7c49a7c2f117388e64fd81b105efe4c38',
+  '0a1dfc3df97c8dde31acbc1e05dadfe520b2ad17153d375bfbcb6b0dacac4103',
 ] as const

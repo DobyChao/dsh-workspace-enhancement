@@ -44,6 +44,12 @@ test('renderRemoteComponentContext: lists every machine, in order, in English', 
   assert.ok(c1 >= 0 && c2 > c1 && c7 > c2, text)
   assert.match(text, /Remote component \(dsh-core\) on this session's machines/)
   assert.match(text, new RegExp(`- \`c1\`: in effect \\(${CORE_ARTIFACT_VERSION}\\)\\.`))
+  const readOnly = renderRemoteComponentContext([
+    { id: 'c8', view: { ok: true, version: CORE_ARTIFACT_VERSION, sha256: known, fence: { tier: 'none', bwrapMissing: true } } },
+  ])
+  assert.match(readOnly, /cannot sandbox/)
+  assert.match(readOnly, /read-only/)
+  assert.match(readOnly, /danger-full-access/)
   assert.match(text, /- `c2`: not in effect \(not installed\)\./)
   assert.match(text, new RegExp(`- \`c3\`: not in effect \\(0\\.1\\.9; this plugin ships ${CORE_ARTIFACT_VERSION}\\)\\.`))
   assert.match(text, new RegExp(`- \`c4\`: not in effect \\(${CORE_ARTIFACT_VERSION}; sha256 is not a binary this plugin shipped\\)\\.`))

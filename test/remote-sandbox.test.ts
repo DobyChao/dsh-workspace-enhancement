@@ -21,6 +21,7 @@ import {
   coreMissingHint,
   isUsableRemoteWorkspaceRoot,
   remoteProfileArgs,
+  isUnconfinableMachine,
   remoteSandboxUnavailableError,
   resolveRemoteWorkspaceRoot,
 } from '../src/remote-sandbox.ts'
@@ -114,6 +115,17 @@ test('remoteSandboxUnavailableError: carries the code and the mode, with and wit
   assert.match(detailed.message, /sandbox mode "workspace-write"/)
   assert.match(detailed.message, /Cause: no registry connection/)
   assert.equal(remoteSandboxUnavailableError('read-only', '').message, plain.message)
+})
+
+test('remoteSandboxUnavailableError: an unconfinable machine asks for full access, otherwise read-only', () => {
+  const detail = 'SANDBOX_UNAVAILABLE: sandbox mode "workspace-write" cannot be confined — bubblewrap is not installed; and the kernel does not expose Landlock'
+  assert.equal(isUnconfinableMachine(detail), true)
+  assert.equal(isUnconfinableMachine('core is missing cap fs.write'), false)
+  const refusal = remoteSandboxUnavailableError('workspace-write', detail)
+  assert.match(refusal.message, /confined session is read-only/)
+  assert.match(refusal.message, /sandbox_permissions set to danger-full-access/)
+  assert.match(refusal.message, /approval prompt asks the user/)
+  assert.equal(remoteSandboxUnavailableError('workspace-write', 'no registry connection').message.includes('danger-full-access'), false)
 })
 
 test('coreMissingHint: only a missing component binary gets the redeploy hint', () => {

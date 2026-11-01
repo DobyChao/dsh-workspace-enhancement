@@ -23,8 +23,8 @@ import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from '.
 import { REMOTE_UPLOAD_DIR, renderRemoteFileLines } from './session-uploads.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
-import type { SshRegistry } from './registry.ts'
-import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
+import { parseSshRoute, type SshRegistry } from './registry.ts'
+import { remoteRouteFromCwd, sshRoutePlaceholder, sshRoutesRoot } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
@@ -143,13 +143,27 @@ export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspaceP
  * label + root only, no permission marks.
  * ENGLISH ONLY (ADR-0014).
  */
-export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
+export function renderSideWorkspaces(
+  items: readonly SideWorkspaceItem[],
+  currentConnectionId?: string,
+): string {
   if (items.length === 0) return ''
-  const lines = items.map(item => {
-    const fact = sideWorkspacePromptFact(item)
-    return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey })
-  })
+  const lines = items.map(item => sidePromptLine(item, currentConnectionId))
   return `${modelPrompt('sideHeading')}\n${lines.join('\n')}\n${modelPrompt('sideNote')}`
+}
+
+/**
+ * A side root on the machine the effective cwd is already on is spelled as a
+ * POSIX path. Another machine keeps its stored `ssh://<id>/…` key. Callers
+ * that omit the current machine (stable prompt, local cwd) keep the stored key.
+ */
+function sidePromptLine(item: SideWorkspaceItem, currentConnectionId: string | undefined): string {
+  const fact = sideWorkspacePromptFact(item)
+  const route = fact.rootKey.startsWith('ssh://') ? parseSshRoute(fact.rootKey) : null
+  if (route !== null && currentConnectionId !== undefined && route.id === currentConnectionId) {
+    return modelPrompt('sideItemSameMachine', { label: fact.label, rootPath: plainPromptPath(route.path) })
+  }
+  return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey })
 }
 
 /**
@@ -202,28 +216,57 @@ export function renderConnectedStatusLine(
 }
 
 /**
- * REQ-I11 (ADR-0021 §2.8): the VOLATILE session-workspace state — the connected
- * machine list and the side-root list — rendered as ONE runtime-context
- * contribution. Both lists are re-evaluated per assembly, so a `sw_connect` call
- * or a panel toggle becomes visible to the model inside the same conversation
- * (a `section()` alone would only be re-read in the header prompt). Both empty →
- * `''`, which is how a local session with zero connections keeps zero injection.
+ * REQ-I11 (ADR-0021 §2.8): the VOLATILE session-workspace state — the current
+ * directory pair, the connected machine list, and the side-root list —
+ * rendered as ONE runtime-context contribution. Everything is re-evaluated
+ * per assembly from the effective cwd, so a `sw_connect`, a panel toggle, or
+ * `sw_use_machine` becomes visible inside the same conversation (a `section()`
+ * alone would only be re-read in the header prompt). All empty → `''`, which
+ * is how a local session with zero connections keeps zero injection.
  * ENGLISH ONLY (ADR-0014).
  * @param connected - one fact per connected machine, in connection order.
  * @param sides - the session's side roots (薄声明清单, REQ-I7).
+ * @param remoteFiles - optional per-session remote file lines.
+ * @param cwd - the effective session cwd for this assembly. A remote route
+ *   adds the POSIX path next to its placeholder, and rewrites same-machine
+ *   side roots to that POSIX path. A local cwd adds neither.
  */
 export function renderSessionWorkspaceContext(
   connected: readonly ConnectedMachineFact[],
   sides: readonly SideWorkspaceItem[],
   remoteFiles = '',
+  cwd?: string,
 ): string {
   const parts: string[] = []
+  const here = renderCurrentDirectory(cwd)
+  if (here !== '') parts.push(here)
   const machines = renderConnectedMachines(connected)
   if (machines !== '') parts.push(machines)
-  const side = renderSideWorkspaces(sides)
+  const route = cwd === undefined ? null : remoteRouteFromCwd(cwd)
+  const side = renderSideWorkspaces(sides, route?.connectionId)
   if (side !== '') parts.push(side)
   if (remoteFiles !== '') parts.push(remoteFiles)
   return parts.join('\n')
+}
+
+/**
+ * The current effective directory, as the remote POSIX path and the concrete
+ * local placeholder that names the same directory. Empty for a local cwd.
+ * Recomputed every assembly, so a mid-session machine switch replaces it.
+ */
+function renderCurrentDirectory(cwd: string | undefined): string {
+  if (cwd === undefined) return ''
+  const route = remoteRouteFromCwd(cwd)
+  if (route === null) return ''
+  return modelPrompt('currentWorkspacePaths', {
+    remotePath: plainPromptPath(route.path),
+    placeholder: plainPromptPath(sshRoutePlaceholder(route.connectionId, route.path)),
+  })
+}
+
+/** Drop prompt-interpolation braces so a path cannot throw during assembly. */
+function plainPromptPath(value: string): string {
+  return value.replaceAll('{{', '').replaceAll('}}', '')
 }
 
 /**
@@ -692,7 +735,8 @@ export function registerWorkspaceTools(
    * REQ-I11（ADR-0021 §2.8）**两段分工**：
    * - **稳定框架**（远程强调 + `remoteNoSandbox` + `remoteGateActive`）留在这条
    *   `section('sw-remote', order 90)`；
-   * - **易变状态**（本会话已连接机器清单 + 副根清单 + 每台机器的远程组件是否生效）走
+   * - **易变状态**（当前有效目录的远端路径与占位路径 + 本会话已连接机器清单
+   *   + 副根清单 + 每台机器的远程组件是否生效）走
    *   `systemPrompt.context({ name: 'dsw-session-workspace', order 90 })`——
    *   `context()` 的契约是「每次 assembly 求值、以耐久 user-role 快照进入对话」，
    *   这正是「会话中途插入一条状态注记」的正典机制（宿主自己的运行时上下文也走
@@ -730,6 +774,7 @@ export function registerWorkspaceTools(
         connectedFactsOf(sessionIdOf(context), cwd),
         attached,
         renderRemoteFileLines(facts.sessionId),
+        cwd,
       )
     },
   })

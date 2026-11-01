@@ -71,7 +71,10 @@ function plain(detail: string): string {
 function lineOf(fact: RemoteComponentFact): string {
   const { id, view } = fact
   const version = view.version ?? 'unknown'
-  if (coreDiskCurrent(view)) return modelPrompt('remoteComponentActive', { id, version })
+  if (coreDiskCurrent(view)) {
+    if (view.fence?.tier === 'none') return modelPrompt('remoteComponentReadOnly', { id, version })
+    return modelPrompt('remoteComponentActive', { id, version })
+  }
   if (view.ok && coreVersionAccepted(version)) {
     if (view.sha256 === null) return modelPrompt('remoteComponentUnreadable', { id, version })
     return modelPrompt('remoteComponentUntrusted', { id, version })

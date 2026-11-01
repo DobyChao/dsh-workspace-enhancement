@@ -35,6 +35,7 @@ import {
   requireConnectedServer,
 } from '../src/exec-tools.ts'
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
+import { sshRoutePlaceholder } from '../src/transport.ts'
 import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
 import type { CoreProvisionOutcome } from '../src/core-provision.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
@@ -496,6 +497,51 @@ test('renderSessionWorkspaceContext: a machine with no registry fact falls back 
 test('renderSessionWorkspaceContext: an unreachable machine is marked honestly', () => {
   const text = renderSessionWorkspaceContext([{ id: 'c1', endpoint: 'root@10.0.0.5', reachable: false }], [])
   assert.ok(text.includes('was unreachable at connect time'), text)
+})
+
+test('renderSessionWorkspaceContext: current directory pairs the remote path with its placeholder', () => {
+  const text = renderSessionWorkspaceContext([], [], '', 'ssh://c1/home/uuz/eee')
+  assert.ok(text.includes('`/home/uuz/eee`'), text)
+  assert.ok(text.includes(sshRoutePlaceholder('c1', '/home/uuz/eee')), text)
+  assert.ok(text.includes('Current directory'), text)
+  assert.ok(text.includes('grep, glob, and file tools'), text)
+  assert.ok(!/[\p{Script=Han}]/u.test(text), 'model-facing text must be English only')
+})
+
+test('renderSessionWorkspaceContext: a machine switch rewrites the current directory pair', () => {
+  const first = renderSessionWorkspaceContext([], [], '', 'ssh://c1/home/uuz/eee')
+  const second = renderSessionWorkspaceContext([], [], '', 'ssh://c2/srv/other')
+  assert.ok(first.includes('`/home/uuz/eee`'))
+  assert.ok(!first.includes('/srv/other'))
+  assert.ok(second.includes('`/srv/other`'))
+  assert.ok(second.includes(sshRoutePlaceholder('c2', '/srv/other')))
+  assert.ok(!second.includes('/home/uuz/eee'))
+})
+
+test('renderSessionWorkspaceContext: a side root on the current machine is a POSIX path', () => {
+  const text = renderSessionWorkspaceContext(
+    [],
+    [
+      { id: 'sw-1', kind: 'remote', rootKey: 'ssh://c1/home/uuz/other', label: 'other' },
+      { id: 'sw-2', kind: 'remote', rootKey: 'ssh://c2/srv/away', label: 'away' },
+    ],
+    '',
+    'ssh://c1/home/uuz/eee',
+  )
+  assert.ok(text.includes('`/home/uuz/other` on this machine'), text)
+  assert.ok(!text.includes('ssh://c1/'), text)
+  assert.ok(text.includes('`ssh://c2/srv/away`'), text)
+})
+
+test('renderSessionWorkspaceContext: a local cwd adds no directory pair', () => {
+  const text = renderSessionWorkspaceContext(
+    [connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' })],
+    [],
+    '',
+    'C:\\Users\\me\\proj',
+  )
+  assert.ok(!text.includes('Current directory'), text)
+  assert.ok(text.includes('`c1`'), text)
 })
 
 /* --------------------- REQ-I21: core provision inside the tool surface ----- */

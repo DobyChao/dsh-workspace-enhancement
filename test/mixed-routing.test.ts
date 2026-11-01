@@ -128,6 +128,11 @@ test('t6: remoteArgvOf rewrites Windows argv[0] to a bare POSIX command name', (
   assert.deepEqual(remoteArgvOf(['rg', '--path', '.']), ['rg', '--path', '.'])
   assert.deepEqual(remoteArgvOf(['/usr/bin/rg', 'a']), ['/usr/bin/rg', 'a'])
   assert.deepEqual(remoteArgvOf(['bash', '-c', 'echo']), ['bash', '-c', 'echo'])
+  // BUG-28: a placeholder or ssh:// search root becomes the remote POSIX path.
+  assert.deepEqual(remoteArgvOf(['rg', '--', remotePlaceholder()]), ['rg', '--', '/srv/work'])
+  assert.deepEqual(remoteArgvOf(['rg', '--', 'ssh://c1/srv/work']), ['rg', '--', '/srv/work'])
+  assert.deepEqual(remoteArgvOf([String.raw`C:\host\rg.exe`, '--files', '--', remotePlaceholder()]), ['rg', '--files', '--', '/srv/work'])
+  assert.deepEqual(remoteArgvOf(['rg', '--glob=**/*.ts', 'src']), ['rg', '--glob=**/*.ts', 'src'])
 })
 
 /* ------------------------------------------------ 2) 子进程门面分支委派 */
