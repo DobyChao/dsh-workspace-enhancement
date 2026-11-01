@@ -22,7 +22,7 @@
 | BUG-26 | 完全权限下 sw_connect 不部署远程组件 | doing | P1 | 完全权限有组件仍走 serve --sandbox off，缺了才退 SFTP。sw_connect 与首用缺口直接部署，不弹审批。现行规则在 architecture §4.1。 |
 | BUG-27 | 升级后官方远程组件过不了 sha 白名单 | doing | P1 | 白名单累计历次官方发布的二进制。同一条版本线且哈希在名单里继续用。名单外不运行，下次 sw_connect 替换。 |
 | REQ-I31 | 实验性切机器工具 | doing | P2 | 2026-10-27 已合入（PR #86）。待 owner a/b 复测 + UAT 步骤 5–15。见 [笔记](./notes/REQ-I31-switch-machine.md) |
-| BUG-28 | 远程会话用 bash 代替 grep/glob | doing | P1 | 提示改为搜索用 grep/glob。占位路径参数改写成远端 POSIX。裸 SSH 的 rg 跟上组件 bin。待提交。 |
+| BUG-28 | 远程会话用 bash 代替 grep/glob | doing | P1 | 待核结果路径回显的 Windows 盘符及 read/edit 消费链；验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
 
 ## 2. 已排期（todo，按优先级）
 
