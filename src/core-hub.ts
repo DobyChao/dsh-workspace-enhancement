@@ -17,8 +17,9 @@ import {
   CORE_ARTIFACT_TARGETS,
   CORE_ARTIFACT_VERSION,
   CORE_CAPS,
-  CORE_COMPAT_HASHES,
   coreVersionAccepted,
+  isKnownCoreBinary,
+  sha256OfSumOutput,
   CORE_ERROR_SANDBOX,
   CORE_PROTO,
   CORE_REMOTE_HOME,
@@ -60,6 +61,8 @@ export interface CoreStatusView {
   arch?: string | undefined
   proto?: number | undefined
   caps?: readonly string[] | undefined
+  /** sha256 of `current/dsh-core`. `null` means the probe tried and could not read one. Absent means this status did not hash. */
+  sha256?: string | null | undefined
   /** REQ-I29: the fence tier the remote can really enforce (deploy/status probe). */
   fence?: FenceTierView | undefined
   detail?: string | undefined
@@ -76,11 +79,12 @@ export interface CoreOpenRequest {
 export type CoreSessionOpener = (request: CoreOpenRequest) => Promise<CoreClient>
 
 /**
- * REQ-I14 first-use approval: the hub asks this once when a **confined** open
- * fails and the ON-DISK artifact is verifiably missing or stale. Resolving
- * `true` means "the matching core is deployed now; retry the open" — the hub
- * then re-execs `current` exactly once. Any other ending (no approval service,
- * denied, deploy failed) falls through to the original fail-closed error.
+ * REQ-I14 first-use deploy (ask removed 2026-10-29, BUG-26): the hub calls
+ * this once when a **confined** open fails and the ON-DISK artifact is
+ * verifiably missing or stale. Resolving `true` means "the matching core is
+ * deployed now; retry the open" — the hub then re-execs `current` exactly
+ * once. A missing connection or a failed deploy falls through to the original
+ * fail-closed error.
  */
 export type CoreGapResolver = (connectionId: string, facts: {
   /** Disk-reported core version; `undefined` when no core answered. */
@@ -140,10 +144,7 @@ export function coreBinaryHashCommand(): string {
   return 'sha256sum -- "$HOME"/.dsh-core/current/dsh-core'
 }
 
-/** Whether a hashed binary is one this plugin shipped (the compat list). */
-export function isKnownCoreBinary(hash: string | undefined): boolean {
-  return hash !== undefined && (CORE_COMPAT_HASHES as readonly string[]).includes(hash.toLowerCase())
-}
+export { isKnownCoreBinary } from './core-protocol.ts'
 
 export function coreArtifactName(arch: string = CORE_ARTIFACT_ARCH): string {
   return `dsh-core-${CORE_ARTIFACT_VERSION}-${arch}.tar.gz`
@@ -212,7 +213,7 @@ export function createCoreHub(
     open?: CoreSessionOpener
     statusOf?: (connectionId: string, signal?: AbortSignal) => Promise<CoreStatusView>
     idleMs?: number
-    /** REQ-I14: approval-backed core deploy on a confined open's missing/stale gap. */
+    /** REQ-I14: deploy the shipped core on a confined open's missing/stale gap. */
     resolveGap?: CoreGapResolver
   } = {},
 ): CoreHub {
@@ -364,7 +365,7 @@ export function createCoreHub(
         signal !== undefined ? { signal } : undefined,
       )
       if (outcome.exitCode !== 0) return undefined
-      return /^([0-9a-f]{64})\b/u.exec(outcome.stdout.trim().toLowerCase())?.[1]
+      return sha256OfSumOutput(outcome.stdout)
     } catch {
       return undefined
     }
@@ -479,12 +480,18 @@ export function createCoreHub(
       try {
         client = await openOnce()
       } catch (error) {
-        // REQ-I14 first-use approval: only when the DISK artifact is verifiably
+        // REQ-I14 first-use deploy: only when the DISK artifact is verifiably
         // missing/stale (a bwrap-less host or a dead network is not a deploy
         // gap), only once per attempt, and only for confined callers.
         if (!confined || resolveGap === undefined) throw mapOpenError(error)
         const disk = await diskVersionOf(connection, opts?.signal)
-        if (disk.ok && coreVersionAccepted(disk.version ?? '')) throw mapOpenError(error)
+        if (disk.ok && coreVersionAccepted(disk.version ?? '')) {
+          // Same line AND a hash we shipped: the failure is not a deploy gap
+          // (bwrap missing, proto, network). An unknown or unreadable hash is.
+          // The binary must not run, and the next deploy replaces it.
+          const hash = await coreBinaryHashOf(connection, opts?.signal)
+          if (isKnownCoreBinary(hash)) throw mapOpenError(error)
+        }
         let resolved = false
         try {
           resolved = await resolveGap(connectionId, {
@@ -593,6 +600,9 @@ export function createCoreHub(
           proto?: number
           caps?: string[]
         }
+        // The version string is self-reported. The file hash decides whether
+        // this binary may stay (BUG-27): unknown hashes are replaced, not run.
+        const sha256 = await coreBinaryHashOf(connection, signal) ?? null
         // BUG-23: the version probe does not say whether a sandbox can be
         // enforced. A later status click must still show that, or the row
         // falls back to a plain installed chip.
@@ -613,6 +623,7 @@ export function createCoreHub(
           arch: parsed.arch,
           proto: parsed.proto,
           caps: parsed.caps,
+          sha256,
           ...(fence !== undefined ? { fence } : {}),
           ...(fenceDetail !== undefined ? { detail: fenceDetail } : {}),
         }
@@ -642,9 +653,9 @@ export function coreHubOf(ctx: Context): CoreHub | undefined {
  * so the aggregate row, the web channel, and the directory picker share one
  * session cache. Effect-bound: unloading the row drops the name.
  *
- * The production hub carries the REQ-I14 first-use approval resolver (ask the
- * platform approval service, deploy, retry once); tests that build their own
- * hub via {@link createCoreHub} stay resolver-free.
+ * The production hub carries the REQ-I14 first-use resolver (deploy the
+ * shipped core, retry once). There is no approval card (BUG-26). Tests that
+ * build their own hub via {@link createCoreHub} stay resolver-free.
  */
 export function ensureCoreHub(ctx: Context): CoreHub {
   const existing = coreHubOf(ctx)

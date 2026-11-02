@@ -46,6 +46,7 @@ import { parseSshRoute } from './registry.ts'
 import type { SshSubprocessEngine } from './subprocess.ts'
 import type { SideWorkspaceItem } from './session-workspaces.ts'
 import { browserTerminalCwd } from './browser-terminal.ts'
+import { carryConfinedSpawnMark } from './remote-confine-policy.ts'
 
 /**
  * R5 → REQ-I7: the side-workspace face the mixed filesystem provider routes
@@ -104,12 +105,17 @@ export function worldOfCwd(cwd: string | undefined, platform: NodeJS.Platform = 
 }
 
 /**
- * Rewrite one argv vector for the REMOTE world: a Windows-style absolute
- * argv[0] (`C:\…\rg.exe`, `\\server\share\…`) cannot exist on a POSIX host —
- * the only honest remote interpretation is its bare command name (with the
- * `.exe` suffix dropped), resolved by the remote PATH. Bare names and POSIX
- * absolute paths pass through unchanged; the rest of the argv is untouched
- * (the callers' own path arguments are the tools' responsibility).
+ * Rewrite one argv vector for the REMOTE world.
+ *
+ * A Windows-style absolute argv[0] (`C:\…\rg.exe`, `\\server\share\…`) cannot
+ * exist on a POSIX host — the remote interpretation is its bare command name
+ * (with the `.exe` suffix dropped), resolved by the remote PATH. Bare names
+ * and POSIX absolute paths pass through unchanged.
+ *
+ * Later arguments that are a placeholder or `ssh://<id>/…` become the remote
+ * POSIX path (BUG-28). Official grep/glob put the model's `path` behind `--`;
+ * leaving the Windows placeholder there makes remote ripgrep search a path
+ * that does not exist, and the model then retries with bash.
  */
 export function remoteArgvOf(argv: readonly (string | undefined)[]): (string | undefined)[] {
   const program = argv[0]
@@ -120,8 +126,16 @@ export function remoteArgvOf(argv: readonly (string | undefined)[]): (string | u
     rewritten = firstSlash >= 0 ? program.slice(firstSlash + 1) : program
   }
   if (rewritten.toLowerCase().endsWith('.exe')) rewritten = rewritten.slice(0, -4)
-  if (rewritten === program) return [...argv]
-  return [rewritten, ...argv.slice(1)]
+  const rest = argv.slice(1).map(remotePathArgument)
+  if (rewritten === program && rest.every((value, index) => value === argv[index + 1])) return [...argv]
+  return [rewritten, ...rest]
+}
+
+/** One argv element: a route spelling becomes its remote POSIX path. */
+function remotePathArgument(value: string | undefined): string | undefined {
+  if (value === undefined || value.length === 0) return value
+  const route = remoteRouteFromCwd(value)
+  return route === null ? value : route.path
 }
 
 /**
@@ -158,7 +172,14 @@ export class MixedSubprocessRuntime implements SubprocessBranch {
   /** @inheritdoc */
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     if (worldOfCwd(spec.cwd) === 'remote') {
-      return this.remote.spawn({ ...spec, argv: remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined) })
+      // remoteArgvOf and filter each allocate. The confine mark is the argv
+      // object's identity (ADR-0031), so the copy must take the mark with it.
+      // Otherwise a workspace-write bash runs `dsh-core serve --sandbox off`
+      // (BUG-25). An unmarked argv (danger grant, or a caller that skipped
+      // confine) stays unmarked.
+      const argv = remoteArgvOf(spec.argv as (string | undefined)[]).filter((value): value is string => value !== undefined)
+      carryConfinedSpawnMark(spec.argv, argv)
+      return this.remote.spawn({ ...spec, argv })
     }
     return this.local.spawn(spec)
   }

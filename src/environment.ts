@@ -27,6 +27,36 @@ export function scrubRemoteEnvironment(environment: Readonly<Record<string, stri
   return scrubbed
 }
 
+/** Vendored ripgrep sits next to a deployed core, after the login PATH. */
+const BUNDLED_RG_DIR = '.dsh-core/current/bin'
+
+/**
+ * PATH overlay for a bare `rg` on the SSH leg (BUG-28).
+ *
+ * Official grep/glob are unmarked, so a missing core runs them as plain SSH.
+ * The login PATH often has no ripgrep; the deployed core's `bin/rg` is the
+ * fallback, and a system `rg` earlier in PATH still wins. Other programs are
+ * left alone. A caller-supplied `PATH` is extended, not replaced.
+ * @param scrubbed - the scrubbed remote base (needs `HOME` to locate the core).
+ * @param explicit - deliberate caller overrides.
+ * @param program - argv[0] after the remote rewrite.
+ * @returns the explicit overlay to serialize, or the original when nothing changes.
+ */
+export function overlayBundledRg(
+  scrubbed: ReadonlyMap<string, string>,
+  explicit: Readonly<NodeJS.ProcessEnv> | undefined,
+  program: string | undefined,
+): Readonly<NodeJS.ProcessEnv> | undefined {
+  if (program !== 'rg') return explicit
+  const home = explicit?.HOME ?? scrubbed.get('HOME')
+  if (home === undefined || home.length === 0 || home.includes('\0')) return explicit
+  const bin = `${home.replace(/\/+$/, '')}/${BUNDLED_RG_DIR}`
+  const base = explicit?.PATH ?? scrubbed.get('PATH') ?? ''
+  if (base.split(':').includes(bin)) return explicit
+  const path = base.length === 0 ? bin : `${base}:${bin}`
+  return { ...explicit, PATH: path }
+}
+
 /**
  * Overlay explicit entries and serialize one validated environment for `env -i`.
  * @param scrubbed - the scrubbed remote base.

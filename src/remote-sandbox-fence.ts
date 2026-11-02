@@ -1,20 +1,19 @@
 /**
- * REQ-I9 / ADR-0022 → ADR-0025 / AUDIT-7: the remote sandbox fence — WIRING.
+ * REQ-I9 / ADR-0022 → ADR-0025 → ADR-0031: the remote sandbox fence — WIRING.
  *
- * One rule: the SESSION mode (`/permission`, or a one-shot grant carried by
- * `remote-spawn-policy`) decides, and the remote component (code name core)
- * enforces it. The fence is the closure the subprocess seam awaits per spawn
- * on routes that do not go through the hub directly:
+ * One rule: the confine MARK on this argv decides, not the session mode.
+ * A marked argv opens `dsh-core serve --sandbox <mode>`. An unmarked argv is
+ * `--sandbox off` (a danger grant skips confine on purpose). When the core
+ * is missing, a confined mark fails closed; an unmarked argv falls back to
+ * today's SSH exec.
  *
- *  - danger-full-access → identity argv (today's bare SSH exec);
- *  - a confined mode → ensure a jailed core session for the route and return
- *    the argv unchanged (the jail runs it), or **throw** `SANDBOX_UNAVAILABLE`
- *    when there is no registry connection or no hub — never run unconfined.
+ * The approval gate still runs FIRST and sees the unwrapped argv (ADR-0022
+ * §2.2). Terminals are decided in `spawnTerminal`: a marked argv is the
+ * model's persistent shell and is refused while confined; an unmarked argv
+ * is the human's browser terminal and opens.
  *
  * There is no host-side bwrap wrap and no per-machine `remoteSandbox` field
- * any more (AUDIT-7). The approval gate still runs FIRST and sees the
- * unwrapped argv (ADR-0022 §2.2). Interactive terminals are refused in a
- * confined mode (ADR-0022 §2.4).
+ * (AUDIT-7).
  *
  * @module dsh-workspace-enhancement/remote-sandbox-fence
  */

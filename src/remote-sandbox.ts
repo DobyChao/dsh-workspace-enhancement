@@ -135,6 +135,12 @@ export const REMOTE_SANDBOX_MESSAGES = {
   /** ADR-0022 §2.4: a confined session never opens an unfenced PTY. */
   terminalUnsupported:
     'remote sandbox refuses to open an interactive terminal: mode "{mode}" cannot fence a PTY session, and an unfenced terminal would be dishonest',
+  /**
+   * Appended when the remote can run the component but neither bubblewrap
+   * nor Landlock can confine it. The retry is what raises the user's card.
+   */
+  unconfinedReadOnly:
+    'This machine cannot enforce a sandbox, so a confined session is read-only: reads still work, and writes and commands stay refused. Retry this exact operation once with sandbox_permissions set to danger-full-access and a one-sentence justification; the approval prompt asks the user. A narrower mode cannot confine this machine.',
 } as const
 
 /**
@@ -191,6 +197,14 @@ export function coreMissingHint(detail: string | undefined): string | undefined 
  * The refusal raised when a confined mode cannot be enforced. Fail closed:
  * the caller must not fall back to an unconfined command.
  */
+/**
+ * True when `detail` is the component's "neither bubblewrap nor Landlock"
+ * refusal. A missing binary is a different fact and must not take this hint.
+ */
+export function isUnconfinableMachine(detail: string | undefined): boolean {
+  return detail !== undefined && detail !== '' && /cannot be confined/i.test(detail)
+}
+
 export function remoteSandboxUnavailableError(
   mode: RemoteSandboxConfinementMode,
   detail?: string,
@@ -199,5 +213,6 @@ export function remoteSandboxUnavailableError(
   if (detail !== undefined && detail !== '') parts.push(interpolate(REMOTE_SANDBOX_MESSAGES.detail, { detail }))
   const hint = coreMissingHint(detail)
   if (hint !== undefined) parts.push(hint)
+  if (isUnconfinableMachine(detail)) parts.push(REMOTE_SANDBOX_MESSAGES.unconfinedReadOnly)
   return new RemoteSandboxError(parts.join(' '))
 }

@@ -23,18 +23,29 @@ import { connectedMachineIdsOf, sessionIdOf, sessionWorkspaceContextOf } from '.
 import { REMOTE_UPLOAD_DIR, renderRemoteFileLines } from './session-uploads.ts'
 import type { SessionConnectionsFace } from './session-remote-context.ts'
 import type { RemoteApprovalMode } from './remote-approval-gate.ts'
-import type { SshRegistry } from './registry.ts'
-import { remoteRouteFromCwd, sshRoutesRoot } from './transport.ts'
+import { parseSshRoute, type SshRegistry } from './registry.ts'
+import { remoteRouteFromCwd, sshRoutePlaceholder, sshRoutesRoot } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 import type { RemoteRouteRef } from './transport.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from './session-workspaces.ts'
 import { coreHubOf } from './core-hub.ts'
 import type { CoreHub, CoreStatusView } from './core-hub.ts'
-import { provisionRemoteCore, createCoreDeployAsk } from './core-provision.ts'
+import {
+  cachedCoreEffect,
+  forgetCoreEffect,
+  appendComponentLines,
+  cachedComponentFacts,
+  rememberCoreEffect,
+  renderRemoteComponentContext,
+  withRemoteComponentLines,
+} from './remote-component-context.ts'
+import type { RemoteComponentFact } from './remote-component-context.ts'
+import { provisionRemoteCore } from './core-provision.ts'
 import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
-import { CORE_ARTIFACT_VERSION, coreVersionAccepted } from './core-protocol.ts'
-import { isConfinedSandboxMode, resolveRemoteSessionMode, sessionProjectionsOf, workingDirectoryOf } from './remote-policy.ts'
+import { CORE_ARTIFACT_VERSION, coreVersionAccepted, isKnownCoreBinary } from './core-protocol.ts'
+import { sessionProjectionsOf, workingDirectoryOf } from './remote-policy.ts'
+import { registerWorkingDirectoryContext } from './working-directory-context.ts'
 import { useMachineToolOf } from './use-machine-tool.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
@@ -135,13 +146,27 @@ export function sideWorkspacePromptFact(item: SideWorkspaceItem): SideWorkspaceP
  * label + root only, no permission marks.
  * ENGLISH ONLY (ADR-0014).
  */
-export function renderSideWorkspaces(items: readonly SideWorkspaceItem[]): string {
+export function renderSideWorkspaces(
+  items: readonly SideWorkspaceItem[],
+  currentConnectionId?: string,
+): string {
   if (items.length === 0) return ''
-  const lines = items.map(item => {
-    const fact = sideWorkspacePromptFact(item)
-    return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey })
-  })
+  const lines = items.map(item => sidePromptLine(item, currentConnectionId))
   return `${modelPrompt('sideHeading')}\n${lines.join('\n')}\n${modelPrompt('sideNote')}`
+}
+
+/**
+ * A side root on the machine the effective cwd is already on is spelled as a
+ * POSIX path. Another machine keeps its stored `ssh://<id>/…` key. Callers
+ * that omit the current machine (stable prompt, local cwd) keep the stored key.
+ */
+function sidePromptLine(item: SideWorkspaceItem, currentConnectionId: string | undefined): string {
+  const fact = sideWorkspacePromptFact(item)
+  const route = fact.rootKey.startsWith('ssh://') ? parseSshRoute(fact.rootKey) : null
+  if (route !== null && currentConnectionId !== undefined && route.id === currentConnectionId) {
+    return modelPrompt('sideItemSameMachine', { label: fact.label, rootPath: plainPromptPath(route.path) })
+  }
+  return modelPrompt('sideItem', { label: fact.label, rootKey: fact.rootKey })
 }
 
 /**
@@ -194,28 +219,57 @@ export function renderConnectedStatusLine(
 }
 
 /**
- * REQ-I11 (ADR-0021 §2.8): the VOLATILE session-workspace state — the connected
- * machine list and the side-root list — rendered as ONE runtime-context
- * contribution. Both lists are re-evaluated per assembly, so a `sw_connect` call
- * or a panel toggle becomes visible to the model inside the same conversation
- * (a `section()` alone would only be re-read in the header prompt). Both empty →
- * `''`, which is how a local session with zero connections keeps zero injection.
+ * REQ-I11 (ADR-0021 §2.8): the VOLATILE session-workspace state — the current
+ * directory pair, the connected machine list, and the side-root list —
+ * rendered as ONE runtime-context contribution. Everything is re-evaluated
+ * per assembly from the effective cwd, so a `sw_connect`, a panel toggle, or
+ * `sw_use_machine` becomes visible inside the same conversation (a `section()`
+ * alone would only be re-read in the header prompt). All empty → `''`, which
+ * is how a local session with zero connections keeps zero injection.
  * ENGLISH ONLY (ADR-0014).
  * @param connected - one fact per connected machine, in connection order.
  * @param sides - the session's side roots (薄声明清单, REQ-I7).
+ * @param remoteFiles - optional per-session remote file lines.
+ * @param cwd - the effective session cwd for this assembly. A remote route
+ *   adds the POSIX path next to its placeholder, and rewrites same-machine
+ *   side roots to that POSIX path. A local cwd adds neither.
  */
 export function renderSessionWorkspaceContext(
   connected: readonly ConnectedMachineFact[],
   sides: readonly SideWorkspaceItem[],
   remoteFiles = '',
+  cwd?: string,
 ): string {
   const parts: string[] = []
+  const here = renderCurrentDirectory(cwd)
+  if (here !== '') parts.push(here)
   const machines = renderConnectedMachines(connected)
   if (machines !== '') parts.push(machines)
-  const side = renderSideWorkspaces(sides)
+  const route = cwd === undefined ? null : remoteRouteFromCwd(cwd)
+  const side = renderSideWorkspaces(sides, route?.connectionId)
   if (side !== '') parts.push(side)
   if (remoteFiles !== '') parts.push(remoteFiles)
   return parts.join('\n')
+}
+
+/**
+ * The current effective directory, as the remote POSIX path and the concrete
+ * local placeholder that names the same directory. Empty for a local cwd.
+ * Recomputed every assembly, so a mid-session machine switch replaces it.
+ */
+function renderCurrentDirectory(cwd: string | undefined): string {
+  if (cwd === undefined) return ''
+  const route = remoteRouteFromCwd(cwd)
+  if (route === null) return ''
+  return modelPrompt('currentWorkspacePaths', {
+    remotePath: plainPromptPath(route.path),
+    placeholder: plainPromptPath(sshRoutePlaceholder(route.connectionId, route.path)),
+  })
+}
+
+/** Drop prompt-interpolation braces so a path cannot throw during assembly. */
+function plainPromptPath(value: string): string {
+  return value.replaceAll('{{', '').replaceAll('}}', '')
 }
 
 /**
@@ -428,19 +482,22 @@ export function registerWorkspaceTools(
   const coreStatusOf = async (id: string, signal?: AbortSignal): Promise<CoreStatusView> => {
     const hub = coreHubOf(ctx)
     const budget = signal !== undefined ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000)
-    if (hub !== undefined) return hub.status(id, budget)
-    const transport = transportOf(id)
-    if (transport === undefined) return { ok: false, detail: 'machine is not usable as a registry connection' }
-    return coreStatusViaExec(transport, budget)
+    const view = hub !== undefined
+      ? await hub.status(id, budget)
+      : await (async (): Promise<CoreStatusView> => {
+        const transport = transportOf(id)
+        if (transport === undefined) return { ok: false, detail: 'machine is not usable as a registry connection' }
+        return coreStatusViaExec(transport, budget)
+      })()
+    rememberCoreEffect(id, view)
+    return view
   }
   /**
-   * REQ-I21: the synchronous provision `sw_connect` awaits per reachable
-   * machine — status, ASK when a deploy is actually needed (user policy
-   * 2026-09-30: deploys always ask; no ask face ⇒ no deploy), deploy on
-   * `allowed-once`, drop stale serves after the flip. Injected fakes keep the
-   * tool tests hermetic.
+   * REQ-I21 / BUG-26: the synchronous provision `sw_connect` awaits per
+   * reachable machine — status, then deploy when the disk artifact is missing
+   * or stale. No approval card. A current core deploys nothing. Injected
+   * fakes keep the tool tests hermetic.
    */
-  const coreDeployAsk = createCoreDeployAsk(ctx)
   const provisionOf = provisionCore ?? ((id: string, signal?: AbortSignal): Promise<CoreProvisionOutcome> =>
     provisionRemoteCore({
       machine: (mid) => registry().listMachines().machines.find(entry => entry.id === mid),
@@ -451,10 +508,32 @@ export function registerWorkspaceTools(
         if (transport === undefined) return Promise.resolve({ ok: false, detail: 'machine is not usable as a registry connection' })
         return deployCore(transport, sig !== undefined ? { signal: sig } : {})
       },
-      afterDeploy: (mid) => { coreHubOf(ctx)?.close(mid) },
-      approve: (mid, facts) => coreDeployAsk(mid, facts),
+      afterDeploy: (mid) => {
+        forgetCoreEffect(mid)
+        coreHubOf(ctx)?.close(mid)
+      },
       warn: (text) => { ctx.logger.warn(text) },
     }, id, signal))
+  /**
+   * One probe per connected machine, reusing a fresh cache entry.
+   * An unregistered id is still listed: the model asked to see every machine.
+   */
+  const remoteComponentFacts = async (ids: readonly string[]): Promise<RemoteComponentFact[]> =>
+    Promise.all(ids.map(async (id): Promise<RemoteComponentFact> => {
+      if (machineFaceOf(id) === undefined) return { id, view: { ok: false, detail: 'not registered' } }
+      const cached = cachedCoreEffect(id)
+      if (cached !== undefined) return { id, view: cached }
+      try {
+        return { id, view: await coreStatusOf(id) }
+      } catch (error) {
+        const view: CoreStatusView = {
+          ok: false,
+          detail: error instanceof Error ? error.message : String(error),
+        }
+        rememberCoreEffect(id, view)
+        return { id, view }
+      }
+    }))
   /** REQ-I11: the session's connected ids (store ∪ implicit main machine). */
   const connectedIdsOf = (sessionId: string | undefined, cwd: string | undefined): string[] => {
     if (sessionId === undefined) return []
@@ -516,8 +595,10 @@ export function registerWorkspaceTools(
           } catch (error) {
             view = { ok: false, detail: error instanceof Error ? error.message : String(error) }
           }
-          if (view.ok && coreVersionAccepted(view.version ?? '')) {
+          if (view.ok && coreVersionAccepted(view.version ?? '') && (!('sha256' in view) || isKnownCoreBinary(view.sha256 ?? undefined))) {
             lines.push(t('tool.sw_status.core.current', { id, version: view.version }))
+          } else if (view.ok && coreVersionAccepted(view.version ?? '')) {
+            lines.push(t('tool.sw_status.core.untrusted', { id, version: view.version ?? 'unknown' }))
           } else if (view.ok) {
             lines.push(t('tool.sw_status.core.mismatch', {
               id,
@@ -581,15 +662,14 @@ export function registerWorkspaceTools(
         store.set(sessionId, reachable.map(probe => probe.id))
         // Honest per-machine report: the resulting connected set, one line each,
         // including the machines that did NOT answer (they are not connected).
-        // REQ-I21: every reachable machine gets the synchronous provision
-        // ladder (status → ASK when a deploy is needed → deploy on approval)
-        // and the outcome rides the report — the model sees the core state it
-        // will fence with; declined/failed deploys are report lines, never a
-        // failed connect (reads still work via SFTP). A danger-full-access
-        // session never attempts a deploy (the core is not needed there).
+        // REQ-I21 / BUG-26: every reachable machine gets the synchronous
+        // provision ladder (status → deploy when missing or stale) and the
+        // outcome rides the report. No approval card. Session mode does not
+        // skip it: danger-full-access still runs through the core
+        // (`serve --sandbox off`) when one is installed, and only falls back
+        // to SFTP/SSH when it is not. A failed deploy is a report line, never
+        // a failed connect (reads still work via SFTP).
         const signal = (exec as { signal?: AbortSignal }).signal
-        const sessionMode = resolveRemoteSessionMode(ctx)
-        const provisionWanted = isConfinedSandboxMode(sessionMode)
         const lines = [t('tool.sw_connect.output.heading')]
         for (const probe of probes) {
           const endpoint = `${machineFaceOf(probe.id)?.username ?? '<user>'}@${machineFaceOf(probe.id)?.host ?? '<host>'}`
@@ -599,7 +679,7 @@ export function registerWorkspaceTools(
               id: probe.id,
               detail: probe.detail === '' ? t('tool.sw_connect.error.noDetail') : probe.detail,
             }))
-          if (!probe.ok || !provisionWanted) continue
+          if (!probe.ok) continue
           let outcome: CoreProvisionOutcome
           try {
             outcome = await provisionOf(probe.id, signal)
@@ -658,12 +738,17 @@ export function registerWorkspaceTools(
    * REQ-I11（ADR-0021 §2.8）**两段分工**：
    * - **稳定框架**（远程强调 + `remoteNoSandbox` + `remoteGateActive`）留在这条
    *   `section('sw-remote', order 90)`；
-   * - **易变状态**（本会话已连接机器清单 + 副根清单）走
+   * - **易变状态**（当前有效目录的远端路径与占位路径 + 本会话已连接机器清单
+   *   + 副根清单 + 每台机器的远程组件是否生效）走
    *   `systemPrompt.context({ name: 'dsw-session-workspace', order 90 })`——
    *   `context()` 的契约是「每次 assembly 求值、以耐久 user-role 快照进入对话」，
    *   这正是「会话中途插入一条状态注记」的正典机制（宿主自己的运行时上下文也走
    *   它，`suppressRuntimeContext()` 是官方静音口）。放进 section 只会让状态变化
    *   等到下一次头部 prompt 重写才可见。
+   * - 组件是否生效要一次 SSH 探测，而 `text` 只能同步返回。探测在 assemble 里做，
+   *   结果进缓存。`text` 读这份缓存：宿主发请求前会 `refreshContext`，只保留
+   *   provider 原文，assemble 追加的行留不住（BUG-29）。本会话有几台机器
+   *   （store ∪ cwd 上的主工作区）就写几行。
    * - 两段在「无远程事实」时都返回 '' ⇒ 本地零连接会话零注入；
    *   清单**只在 context 里渲染一次**，section 不再重复。
    */
@@ -683,20 +768,43 @@ export function registerWorkspaceTools(
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')
+  registerWorkingDirectoryContext(ctx)
   const contextDisposer = ctx.systemPrompt.context({
     name: 'dsw-session-workspace',
     order: 90,
     text: (context) => {
       const facts = sessionWorkspaceContextOf(context, sides, projections)
       const { cwd, sides: attached } = facts
-      return renderSessionWorkspaceContext(
+      const body = renderSessionWorkspaceContext(
         connectedFactsOf(sessionIdOf(context), cwd),
         attached,
         renderRemoteFileLines(facts.sessionId),
+        cwd,
       )
+      const lines = renderRemoteComponentContext(cachedComponentFacts(connectedIdsOf(sessionIdOf(context), cwd)))
+      return appendComponentLines(body, lines)
     },
   })
   ctx.effect(() => contextDisposer, 'dsw-session-workspace runtime context')
+  // `text` is synchronous, so the per-machine component lines are patched
+  // after assembly. An untagged plugin listener still sees this scoped event.
+  ctx.effect(() => ctx.on('system-prompt/assemble' as never, (async (
+    _assembly: unknown,
+    context: { readonly scope?: object },
+    next: () => Promise<{ contexts: ReadonlyArray<{ name: string; text: string }> }>,
+  ) => {
+    const current = await next()
+    try {
+      const facts = sessionWorkspaceContextOf(context, sides, projections)
+      const ids = connectedIdsOf(sessionIdOf(context), facts.cwd)
+      if (ids.length === 0) return current
+      const rows = await remoteComponentFacts(ids)
+      return withRemoteComponentLines(current, renderRemoteComponentContext(rows))
+    } catch (error) {
+      ctx.logger?.warn?.(`dsw: remote component context skipped: ${error instanceof Error ? error.message : String(error)}`)
+      return current
+    }
+  }) as never), 'dsw remote component runtime context')
 
   // S1+S2 + REQ-I16: sw_exec always (server-parameterized remote execution);
   // win32 bash is injected per remote-cwd session (not globally).

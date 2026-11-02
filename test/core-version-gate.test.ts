@@ -16,7 +16,7 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { CoreClient } from '../src/core-client.ts'
 import { serveFakeCore } from '../src/core-fake.ts'
-import { CORE_ARTIFACT_VERSION, CORE_COMPAT_HASHES, coreVersionAccepted } from '../src/core-protocol.ts'
+import { CORE_ARTIFACT_VERSION, CORE_COMPAT_HASHES, coreDiskCurrent, coreVersionAccepted } from '../src/core-protocol.ts'
 import { createCoreHub } from '../src/core-hub.ts'
 import { REMOTE_SANDBOX_MESSAGES, REMOTE_SANDBOX_UNAVAILABLE, RemoteSandboxError } from '../src/remote-sandbox.ts'
 import { CoreMissingError, isCoreMissingError } from '../src/remote-policy.ts'
@@ -197,6 +197,14 @@ test('coreVersionAccepted: the range rule in one place', () => {
   assert.equal(coreVersionAccepted('weird', 'weird'), true, 'identical unparseable spellings still match exactly')
 })
 
+test('coreDiskCurrent: same line with a shipped hash stays; an unknown hash does not', () => {
+  assert.equal(coreDiskCurrent({ ok: true, version: CORE_ARTIFACT_VERSION }), true)
+  assert.equal(coreDiskCurrent({ ok: true, version: '0.2.2', sha256: CORE_COMPAT_HASHES[0] }), true)
+  assert.equal(coreDiskCurrent({ ok: true, version: CORE_ARTIFACT_VERSION, sha256: '11'.repeat(32) }), false)
+  assert.equal(coreDiskCurrent({ ok: true, version: CORE_ARTIFACT_VERSION, sha256: null }), false)
+  assert.equal(coreDiskCurrent({ ok: true, version: '0.1.0', sha256: CORE_COMPAT_HASHES[0] }), false)
+})
+
 test('REQ-I17: the matching artifact still opens (the gate is exact, not paranoid)', async () => {
   const fresh = pair(root())
   const hub = createCoreHub(ctxWith(), { deps: deps(), open: async () => fresh })
@@ -224,6 +232,41 @@ test('REQ-I14: resolver flow (stale disk → ask → deploy → retry) — see c
   const client = await hub.require('c1')
   assert.equal(client, fresh)
   assert.deepEqual(facts, [{ found: '0.0.1-old', expected: CORE_ARTIFACT_VERSION }])
+  fresh.close()
+})
+
+test('REQ-I17: a current version with an unknown sha256 is a deploy gap', async () => {
+  const fresh = pair(root())
+  let asks = 0
+  let hash: string = '11'.repeat(32)
+  const machine: RemoteSandboxMachineFace = { id: 'c1', workspace: '/work', cwd: '/work' }
+  const connection = {
+    exec: async (command: string): Promise<ExecOutcome> => {
+      if (command.includes('dsh-core version')) {
+        return execOutcome(`${JSON.stringify({ version: CORE_ARTIFACT_VERSION, arch: 'x86_64', proto: 1, caps: [] })}\n`)
+      }
+      if (command.startsWith('sha256sum')) {
+        return execOutcome(`${hash}  dsh-core\n`)
+      }
+      return execOutcome()
+    },
+  }
+  const hub = createCoreHub(ctxWith(), {
+    deps: {
+      machine: (id) => (id === 'c1' ? machine : undefined),
+      connection: (id) => (id === 'c1' ? connection as never : undefined),
+      unavailable: (confinement, detail) => new RemoteSandboxError(`${confinement}: ${detail}`, REMOTE_SANDBOX_UNAVAILABLE),
+    },
+    open: async () => fresh,
+    resolveGap: async () => {
+      asks += 1
+      hash = CORE_COMPAT_HASHES[0]
+      return true
+    },
+  })
+  const client = await hub.require('c1')
+  assert.equal(asks, 1, 'an unlisted hash is replaced instead of left in place')
+  assert.equal(client, fresh)
   fresh.close()
 })
 

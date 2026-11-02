@@ -35,9 +35,11 @@ import {
   requireConnectedServer,
 } from '../src/exec-tools.ts'
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
+import { sshRoutePlaceholder } from '../src/transport.ts'
 import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
 import type { CoreProvisionOutcome } from '../src/core-provision.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
+import { CORE_COMPAT_HASHES } from '../src/core-protocol.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
 /* --------------------------------------------------------------- 测试替身 */
@@ -497,6 +499,51 @@ test('renderSessionWorkspaceContext: an unreachable machine is marked honestly',
   assert.ok(text.includes('was unreachable at connect time'), text)
 })
 
+test('renderSessionWorkspaceContext: current directory pairs the remote path with its placeholder', () => {
+  const text = renderSessionWorkspaceContext([], [], '', 'ssh://c1/home/uuz/eee')
+  assert.ok(text.includes('`/home/uuz/eee`'), text)
+  assert.ok(text.includes(sshRoutePlaceholder('c1', '/home/uuz/eee')), text)
+  assert.ok(text.includes('Current directory'), text)
+  assert.ok(text.includes('grep, glob, and file tools'), text)
+  assert.ok(!/[\p{Script=Han}]/u.test(text), 'model-facing text must be English only')
+})
+
+test('renderSessionWorkspaceContext: a machine switch rewrites the current directory pair', () => {
+  const first = renderSessionWorkspaceContext([], [], '', 'ssh://c1/home/uuz/eee')
+  const second = renderSessionWorkspaceContext([], [], '', 'ssh://c2/srv/other')
+  assert.ok(first.includes('`/home/uuz/eee`'))
+  assert.ok(!first.includes('/srv/other'))
+  assert.ok(second.includes('`/srv/other`'))
+  assert.ok(second.includes(sshRoutePlaceholder('c2', '/srv/other')))
+  assert.ok(!second.includes('/home/uuz/eee'))
+})
+
+test('renderSessionWorkspaceContext: a side root on the current machine is a POSIX path', () => {
+  const text = renderSessionWorkspaceContext(
+    [],
+    [
+      { id: 'sw-1', kind: 'remote', rootKey: 'ssh://c1/home/uuz/other', label: 'other' },
+      { id: 'sw-2', kind: 'remote', rootKey: 'ssh://c2/srv/away', label: 'away' },
+    ],
+    '',
+    'ssh://c1/home/uuz/eee',
+  )
+  assert.ok(text.includes('`/home/uuz/other` on this machine'), text)
+  assert.ok(!text.includes('ssh://c1/'), text)
+  assert.ok(text.includes('`ssh://c2/srv/away`'), text)
+})
+
+test('renderSessionWorkspaceContext: a local cwd adds no directory pair', () => {
+  const text = renderSessionWorkspaceContext(
+    [connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' })],
+    [],
+    '',
+    'C:\\Users\\me\\proj',
+  )
+  assert.ok(!text.includes('Current directory'), text)
+  assert.ok(text.includes('`c1`'), text)
+})
+
 /* --------------------- REQ-I21: core provision inside the tool surface ----- */
 
 /** One canned provision outcome builder. */
@@ -562,22 +609,24 @@ test('REQ-I21 sw_connect: a DECLINED deploy keeps the disk state and says so', a
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
   assert.ok(text.includes('remote component: deploy was not approved (left at 0.0.1-old'), text)
-  assert.ok(text.includes('it will ask again'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'], 'the machine stays connected — only the deploy was declined')
 })
 
-test('REQ-I21 sw_connect: a danger-full-access session never attempts a provision', async () => {
+test('BUG-26 sw_connect: a danger-full-access session still provisions the remote component', async () => {
   const store = new FakeStore()
   let provisioned = 0
   const mounted = mountWorkspaceTools(
     () => store as unknown as SessionConnectionsFace,
     fakeRegistry(),
-    async (id) => { provisioned += 1; return outcomeOf(id, {}) },
+    async (id) => {
+      provisioned += 1
+      return outcomeOf(id, { skipped: false, deployed: true, version: '0.2.2-test' })
+    },
     'danger-full-access',
   )
   const text = await runTool(toolOf(mounted, 'sw_connect'), { machines: ['c1'] }, runContext(SESSION))
-  assert.equal(provisioned, 0, 'danger sessions do not attempt deploys')
-  assert.ok(!text.includes('remote component:'), text)
+  assert.equal(provisioned, 1, 'danger sessions deploy too: the core is the better path even with --sandbox off')
+  assert.ok(text.includes('remote component: deployed 0.2.2-test (fenced tools ready)'), text)
   assert.deepEqual(store.listFor(SESSION), ['c1'], 'the connect itself is unaffected')
 })
 
@@ -590,6 +639,9 @@ function fencedRegistry(version: string | null): unknown {
       if (command.includes('dsh-core version')) {
         if (version === null) return { exitCode: 127, signal: null, stdout: '', stderr: 'No such file or directory' }
         return { exitCode: 0, signal: null, stdout: `${JSON.stringify({ version, arch: 'x86_64', proto: 1, caps: [] })}\n`, stderr: '' }
+      }
+      if (command.startsWith('sha256sum')) {
+        return { exitCode: 0, signal: null, stdout: `${CORE_COMPAT_HASHES[0]}  dsh-core\n`, stderr: '' }
       }
       return { exitCode: 0, signal: null, stdout: 'ok\n', stderr: '' }
     },

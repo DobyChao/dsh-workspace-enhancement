@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SFTPWrapper } from 'ssh2'
-import { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION } from './core-protocol.ts'
+import { CORE_ARTIFACT_ARCH, CORE_ARTIFACT_VERSION, sha256OfSumOutput } from './core-protocol.ts'
 import { coreArtifactName, coreTargetForUname, type CoreStatusView } from './core-hub.ts'
 import { extractGzipTarMember } from './gzip-tar.ts'
 import { bwrapInstallHints, ensureRgVendorFor, rgSourceFor } from './core-vendor.ts'
@@ -372,12 +372,15 @@ export async function coreStatusViaExec(transport: SshTransport, signal?: AbortS
   const fenceDetail = fence !== undefined && fence.tier === 'none' ? fenceTierNote(fence) : undefined
   try {
     const parsed = JSON.parse(text) as { version?: string; arch?: string; proto?: number; caps?: string[] }
+    const hashed = await transport.exec('sha256sum -- "$HOME"/.dsh-core/current/dsh-core', execOptions)
+    const sha256 = hashed.exitCode === 0 ? sha256OfSumOutput(hashed.stdout) ?? null : null
     return {
       ok: true,
       version: parsed.version,
       arch: parsed.arch,
       proto: parsed.proto,
       caps: parsed.caps,
+      sha256,
       fence,
       ...(fenceDetail !== undefined ? { detail: fenceDetail } : {}),
     }

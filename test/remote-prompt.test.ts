@@ -110,6 +110,8 @@ test('renderRemotePrompt: the emphasis paragraph is ENGLISH ONLY and carries end
   assert.ok(text.includes('uuz@c1:/srv/proj'))
   assert.ok(text.includes('dsw-routes\\c1\\…'))
   assert.ok(text.includes('all commands and file operations truly happen on the remote server'))
+  assert.ok(text.includes('Search this workspace with the grep and glob tools'))
+  assert.ok(text.includes('Do not use bash find, grep, or rg'))
   assert.ok(text.includes('POSIX absolute path'))
   // The pre-ADR Chinese copy is gone from the model-facing path.
   assert.ok(!text.includes('远程 SSH 工作区'))

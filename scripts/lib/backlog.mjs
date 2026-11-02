@@ -61,6 +61,19 @@ export function parseBacklog(markdown) {
     if (!ROW_ID.test(line)) continue
     const parts = line.split(/(?<!\\)\|/)
     const cells = parts.slice(1, -1).map(cell => cell.trim())
+    if (section === 2 || section === 4) {
+      const label = section === 2 ? 'proposed' : 'done'
+      if (cells.length !== 6) {
+        errors.push(`${cells[0] ?? '?'}: §${section} expected 6 columns, got ${cells.length}`)
+        continue
+      }
+      const [id, title, status, priority, dated, note] = cells
+      if (!/^\d{4}-\d{2}-\d{2}$/u.test(dated)) {
+        errors.push(`${id}: §${section} ${label} date must be YYYY-MM-DD`)
+      }
+      rows.push({ id, title, status, priority, note, section, [label]: dated })
+      continue
+    }
     if (cells.length !== 5) {
       errors.push(`${cells[0] ?? '?'}: expected 5 columns, got ${cells.length}`)
       continue

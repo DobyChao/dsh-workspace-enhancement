@@ -25,6 +25,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SshRegistry } from '../src/registry.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
 import type { SessionSideWorkspaceStore, SideWorkspaceItem } from '../src/session-workspaces.ts'
+import { CORE_ARTIFACT_VERSION } from '../src/core-protocol.ts'
+import { CORE_COMPAT_HASHES } from '../src/core-artifact.ts'
+import { clearCoreEffectCache, rememberCoreEffect } from '../src/remote-component-context.ts'
 import { registerWorkspaceTools } from '../src/tools.ts'
 import { sshRoutesRoot } from '../src/transport.ts'
 
@@ -224,4 +227,17 @@ test('mount: a REMOTE session lists the main machine once (context), never twice
   const sections = injectedTexts(mounted.sections, remote).join('\n')
   assert.ok(!sections.includes('Machines connected to this session'),
     'the machine list must not be duplicated in the stable section')
+})
+
+test('mount: a cached component probe is part of the context provider text (BUG-29)', () => {
+  clearCoreEffectCache()
+  rememberCoreEffect('c1', { ok: true, version: CORE_ARTIFACT_VERSION, sha256: CORE_COMPAT_HASHES[0] })
+  try {
+    const mounted = mount()
+    const text = injectedTexts(mounted.contexts, assemblyContext('ssh://c1/srv/work', 's1')).join('\n')
+    assert.match(text, /- `c1`: in effect/)
+    assert.equal(text.split('Remote component').length, 2)
+  } finally {
+    clearCoreEffectCache()
+  }
 })

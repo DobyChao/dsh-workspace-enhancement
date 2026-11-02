@@ -274,6 +274,7 @@ export class SshSubprocessEngine {
           this.spillDir,
           undefined,
           async (argv) => argv,
+          connectionId,
         )
       const handle = sshFallback === undefined
         ? new CoreSubprocessHandle(hub, connectionId, route.cwd, spec, this.spillDir, preflight, policy)
@@ -292,7 +293,15 @@ export class SshSubprocessEngine {
       argv,
       ...(spec.signal !== undefined ? { signal: spec.signal } : {}),
     })
-    const handle = new SshSubprocessHandle(route.transport, route.cwd, spec, this.spillDir, preflight, resolveArgv)
+    const handle = new SshSubprocessHandle(
+      route.transport,
+      route.cwd,
+      spec,
+      this.spillDir,
+      preflight,
+      resolveArgv,
+      route.connectionId,
+    )
     this.live.add(handle)
     const release = async (): Promise<void> => {
       await handle.waitForExit()

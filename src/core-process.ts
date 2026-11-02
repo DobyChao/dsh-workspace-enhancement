@@ -20,6 +20,7 @@ import type {
 import { CoreClient } from './core-client.ts'
 import { CORE_EVENTS, CORE_METHODS, asRecord } from './core-protocol.ts'
 import { SshOutputCollector } from './output.ts'
+import { RgStdoutRewriter } from './rg-paths.ts'
 import type { CoreHub } from './core-hub.ts'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { isCoreMissingError } from './remote-policy.ts'
@@ -60,6 +61,7 @@ export class CoreSubprocessHandle implements SubprocessHandle {
 
   private readonly stdoutCollector: SshOutputCollector | undefined
   private readonly stderrCollector: SshOutputCollector | undefined
+  private readonly rgRewriter: RgStdoutRewriter | undefined
   private settled = false
   private job: string | undefined
   private unsub: (() => void) | undefined
@@ -94,6 +96,9 @@ export class CoreSubprocessHandle implements SubprocessHandle {
       ...(this.stdoutCollector !== undefined ? { stdout: this.stdoutCollector } : {}),
       ...(this.stderrCollector !== undefined ? { stderr: this.stderrCollector } : {}),
     }
+    this.rgRewriter = spec.argv[0] === 'rg' && this.stdoutCollector !== undefined
+      ? new RgStdoutRewriter(connectionId)
+      : undefined
     this.stdin = spec.stdio.stdin === 'pipe' ? new PassThrough() : undefined
     spec.signal?.addEventListener('abort', this.onAbort, { once: true })
     this.done = this.run()
@@ -161,6 +166,7 @@ export class CoreSubprocessHandle implements SubprocessHandle {
     if (this.settled) return
     this.settled = true
     this.unsub?.()
+    this.rgRewriter?.flush(bytes => { this.stdoutCollector?.push(bytes) })
     this.stdoutCollector?.seal()
     this.stderrCollector?.seal()
     this.spec.signal?.removeEventListener('abort', this.onAbort)
@@ -221,6 +227,12 @@ export class CoreSubprocessHandle implements SubprocessHandle {
           const bytes = Buffer.from(String(rec.b64 ?? ''), 'base64')
           const which = method === CORE_EVENTS.spawnStdout ? 'stdout' : 'stderr'
           const mode = which === 'stdout' ? this.spec.stdio.stdout : this.spec.stdio.stderr
+          if (which === 'stdout' && this.rgRewriter !== undefined && mode !== 'inherit' && mode !== 'pipe') {
+            this.rgRewriter.push(bytes, rewritten => {
+              pushChunk(this.stdoutCollector, this.stdout, false, 'stdout', rewritten)
+            })
+            return
+          }
           pushChunk(
             which === 'stdout' ? this.stdoutCollector : this.stderrCollector,
             which === 'stdout' ? this.stdout : this.stderr,
