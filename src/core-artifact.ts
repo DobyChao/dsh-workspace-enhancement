@@ -4,7 +4,7 @@
  */
 
 /** Artifact/hello version of the remote core (ADR-0024). */
-export const CORE_ARTIFACT_VERSION = '0.2.7'
+export const CORE_ARTIFACT_VERSION = '0.2.8'
 
 /** Filename arch segment of the primary (linux-x64) core tarball. */
 export const CORE_ARTIFACT_ARCH = 'linux-x64'
@@ -53,4 +53,6 @@ export const CORE_COMPAT_HASHES = [
   '152c3a06258902350ddda7f486482ba34b62f2ccc2a50866cde5e2f33dcfe3c0',
   '9ccd4d89d69976fcda9e926d996e42f7c49a7c2f117388e64fd81b105efe4c38',
   '0a1dfc3df97c8dde31acbc1e05dadfe520b2ad17153d375bfbcb6b0dacac4103',
+  '0910d1ec6f2ef79a1c83f05dff7c8df51c0da1b66d494b21992f9d28a1a8daa8',
+  '302e833f3f981f644d3e9644bce7e3eed2c1aebf880a4dde6c00be026bb81a41',
 ] as const
