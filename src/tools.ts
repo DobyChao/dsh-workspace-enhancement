@@ -33,6 +33,8 @@ import type { CoreHub, CoreStatusView } from './core-hub.ts'
 import {
   cachedCoreEffect,
   forgetCoreEffect,
+  appendComponentLines,
+  cachedComponentFacts,
   rememberCoreEffect,
   renderRemoteComponentContext,
   withRemoteComponentLines,
@@ -43,6 +45,7 @@ import type { CoreProvisionOutcome } from './core-provision.ts'
 import { coreStatusViaExec, deployCore } from './core-deploy.ts'
 import { CORE_ARTIFACT_VERSION, coreVersionAccepted, isKnownCoreBinary } from './core-protocol.ts'
 import { sessionProjectionsOf, workingDirectoryOf } from './remote-policy.ts'
+import { registerWorkingDirectoryContext } from './working-directory-context.ts'
 import { useMachineToolOf } from './use-machine-tool.ts'
 
 /** Pure text output contract shared by every sw_* tool. */
@@ -742,9 +745,10 @@ export function registerWorkspaceTools(
    *   这正是「会话中途插入一条状态注记」的正典机制（宿主自己的运行时上下文也走
    *   它，`suppressRuntimeContext()` 是官方静音口）。放进 section 只会让状态变化
    *   等到下一次头部 prompt 重写才可见。
-   * - 组件是否生效要一次 SSH 探测，而 `text` 只能同步返回。机器清单仍在 `text`
-   *   里渲染；组件行在 `system-prompt/assemble` 里补上（探测结果缓存，部署成功后清掉）。
-   *   本会话有几台机器（store ∪ cwd 上的主工作区）就写几行。
+   * - 组件是否生效要一次 SSH 探测，而 `text` 只能同步返回。探测在 assemble 里做，
+   *   结果进缓存。`text` 读这份缓存：宿主发请求前会 `refreshContext`，只保留
+   *   provider 原文，assemble 追加的行留不住（BUG-29）。本会话有几台机器
+   *   （store ∪ cwd 上的主工作区）就写几行。
    * - 两段在「无远程事实」时都返回 '' ⇒ 本地零连接会话零注入；
    *   清单**只在 context 里渲染一次**，section 不再重复。
    */
@@ -764,18 +768,21 @@ export function registerWorkspaceTools(
     },
   })
   ctx.effect(() => sectionDisposer, 'sw-remote system prompt section')
+  registerWorkingDirectoryContext(ctx)
   const contextDisposer = ctx.systemPrompt.context({
     name: 'dsw-session-workspace',
     order: 90,
     text: (context) => {
       const facts = sessionWorkspaceContextOf(context, sides, projections)
       const { cwd, sides: attached } = facts
-      return renderSessionWorkspaceContext(
+      const body = renderSessionWorkspaceContext(
         connectedFactsOf(sessionIdOf(context), cwd),
         attached,
         renderRemoteFileLines(facts.sessionId),
         cwd,
       )
+      const lines = renderRemoteComponentContext(cachedComponentFacts(connectedIdsOf(sessionIdOf(context), cwd)))
+      return appendComponentLines(body, lines)
     },
   })
   ctx.effect(() => contextDisposer, 'dsw-session-workspace runtime context')

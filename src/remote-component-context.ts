@@ -3,9 +3,11 @@
  * `dsw-session-workspace` runtime context.
  *
  * The host evaluates `PromptContext.text` synchronously, before the
- * `system-prompt/assemble` waterfall. A live SSH probe cannot run inside
- * `text`. Callers probe (or reuse {@link cachedCoreEffect}) and then
- * {@link withRemoteComponentLines} on the assembly the waterfall returns.
+ * `system-prompt/assemble` waterfall, and again in `refreshContext` before
+ * the request. That second pass keeps only the provider text, so a line
+ * appended solely in the waterfall never reaches the model (BUG-29).
+ * A live SSH probe still cannot run inside `text`. The assemble listener
+ * probes and {@link rememberCoreEffect}; `text` reads {@link cachedCoreEffect}.
  *
  * "In effect" is {@link coreDiskCurrent}: same major.minor, and a known
  * sha256 when the probe hashed the file. A version-only status that never
@@ -44,6 +46,16 @@ export function rememberCoreEffect(id: string, view: CoreStatusView, at = Date.n
 /** Drop one machine's probe. Call this after a deploy replaces the binary. */
 export function forgetCoreEffect(id: string): void {
   cache.delete(id)
+}
+
+/** Cached probes for the given machines, in order. A miss is omitted. */
+export function cachedComponentFacts(ids: readonly string[], now = Date.now()): RemoteComponentFact[] {
+  const facts: RemoteComponentFact[] = []
+  for (const id of ids) {
+    const view = cachedCoreEffect(id, now)
+    if (view !== undefined) facts.push({ id, view })
+  }
+  return facts
 }
 
 /** Last probe for `id`, or `undefined` once {@link CORE_EFFECT_TTL_MS} has passed. */
@@ -114,9 +126,20 @@ export function withRemoteComponentLines<T extends ContextAssembly>(assembly: T,
   const contexts = assembly.contexts.map((entry) => {
     if (entry.name !== SESSION_WORKSPACE_CONTEXT) return entry
     found = true
-    const text = entry.text === '' ? lines : `${entry.text}\n${lines}`
-    return { ...entry, text }
+    return { ...entry, text: appendComponentLines(entry.text, lines) }
   })
   if (!found) return assembly
   return { ...assembly, contexts }
+}
+
+/**
+ * Join component lines onto one context body.
+ *
+ * A body that already contains the heading is returned unchanged, so a warm
+ * cache plus the assemble patch cannot print the block twice.
+ */
+export function appendComponentLines(body: string, lines: string): string {
+  if (lines === '') return body
+  if (body.includes(modelPrompt('remoteComponentHeading'))) return body
+  return body === '' ? lines : `${body}\n${lines}`
 }

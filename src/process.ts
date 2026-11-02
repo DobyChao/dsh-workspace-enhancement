@@ -11,6 +11,7 @@ import type {
   SubprocessOutputMode,
   SubprocessSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import { RgStdoutRewriter } from './rg-paths.ts'
 import { quoteShellArg } from './ssh-core.ts'
 import type { SshTransport } from './transport.ts'
 import { overlayBundledRg, readRemoteEnvironment, scrubRemoteEnvironment, serializeEnvironment } from './environment.ts'
@@ -135,6 +136,7 @@ export class SshSubprocessHandle implements SubprocessHandle {
   private readonly stdoutCollector: SshOutputCollector | undefined
   private readonly stderrCollector: SshOutputCollector | undefined
   private channel: ClientChannel | undefined
+  private readonly rgRewriter: RgStdoutRewriter | undefined
   private graceTimer: NodeJS.Timeout | undefined
   private closeTimer: NodeJS.Timeout | undefined
   private settled = false
@@ -163,6 +165,7 @@ export class SshSubprocessHandle implements SubprocessHandle {
     private readonly spillDir: string,
     private readonly preflight?: () => Promise<void>,
     private readonly resolveArgv?: (argv: readonly string[]) => Promise<readonly string[]>,
+    connectionId?: string,
   ) {
     const outMode = spec.stdio.stdout
     const errMode = spec.stdio.stderr
@@ -178,6 +181,9 @@ export class SshSubprocessHandle implements SubprocessHandle {
       ...(this.stdoutCollector !== undefined ? { stdout: this.stdoutCollector } : {}),
       ...(this.stderrCollector !== undefined ? { stderr: this.stderrCollector } : {}),
     }
+    this.rgRewriter = spec.argv[0] === 'rg' && connectionId !== undefined && this.stdoutCollector !== undefined
+      ? new RgStdoutRewriter(connectionId)
+      : undefined
     this.stdin = spec.stdio.stdin === 'pipe' ? new PassThrough() : undefined
 
     spec.signal?.addEventListener('abort', this.onAbort, { once: true })
@@ -253,6 +259,7 @@ export class SshSubprocessHandle implements SubprocessHandle {
     if (this.closeTimer !== undefined) clearTimeout(this.closeTimer)
     this.graceTimer = undefined
     this.closeTimer = undefined
+    this.rgRewriter?.flush(bytes => { this.stdoutCollector?.push(bytes) })
     this.stdoutCollector?.seal()
     this.stderrCollector?.seal()
     this.spec.signal?.removeEventListener('abort', this.onAbort)
@@ -312,11 +319,20 @@ export class SshSubprocessHandle implements SubprocessHandle {
     })
   }
 
+  /** rg stdout is rewritten before it is collected. Other programs pass through. */
+  private pushStdout(data: Buffer): void {
+    if (this.rgRewriter === undefined) {
+      this.stdoutCollector?.push(data)
+      return
+    }
+    this.rgRewriter.push(data, bytes => { this.stdoutCollector?.push(bytes) })
+  }
+
   private wireStdout(channel: ClientChannel): void {
     const mode = this.spec.stdio.stdout
     if (mode === 'pipe') channel.pipe(this.stdout as PassThrough)
     else if (mode === 'inherit') channel.pipe(process.stdout)
-    else channel.on('data', (data: Buffer) => { this.stdoutCollector?.push(data) })
+    else channel.on('data', (data: Buffer) => { this.pushStdout(data) })
   }
 
   private wireStderr(channel: ClientChannel): void {

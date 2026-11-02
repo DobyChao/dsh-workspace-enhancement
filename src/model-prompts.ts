@@ -54,6 +54,11 @@ export const MODEL_PROMPTS = {
    */
   currentWorkspacePaths:
     '**Current directory** (this line follows a machine switch): remote `{remotePath}`, shown locally as the placeholder `{placeholder}`. Bash, grep, glob, and file tools on this machine take the remote path. Omit a search path to use this directory. The placeholder is only a local routing alias.',
+  /** UX-19: same wording as the official local cwd contribution. */
+  workingDirectoryLocal: 'Current working directory: {directory}.',
+  /** UX-19: replace the ambiguous cwd label in the remote agent scope. */
+  workingDirectoryRemote:
+    'Current working directory (remote): {remotePath}.\n\nLocal routing placeholder: {placeholder} (routing alias only; commands and file operations execute on the remote machine).',
   /** `sw_status` remote-toolbox report heading. */
   envHeading: 'Remote environment:',
   /** `sw_status` hint when the remote toolbox is incomplete (never auto-installs). */

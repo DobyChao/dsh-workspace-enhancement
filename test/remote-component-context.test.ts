@@ -80,6 +80,8 @@ test('withRemoteComponentLines: appends to the session context and leaves the re
   assert.match(workspace, /- `c1`: in effect/)
   assert.match(workspace, /- `c2`: not in effect \(not installed\)/)
   assert.ok(workspace.indexOf('Machines connected') < workspace.indexOf('Remote component'))
+  const again = withRemoteComponentLines(patched, lines)
+  assert.equal(again.contexts[1]?.text, workspace)
 })
 
 test('withRemoteComponentLines: does not invent a context when runtime context is absent', () => {
