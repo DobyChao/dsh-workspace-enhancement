@@ -18,6 +18,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| PUB-13 | 0.2.8 发布 | doing | P1 | 插件与远程组件同升 0.2.8。peer 不变。合并后所有者打 tag `v0.2.8` 并 Approve npm-publish。本 PR 不打 tag、不发布。档案 [R60](./rounds/R60-pub13-v0.2.8-release.md) |
 | BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | doing | P0 | 混合 spawn 改写 argv 后搬移已有标记。无标记仍是 off。单测与 typecheck 已过。待 PR。 |
 | BUG-26 | 完全权限下 sw_connect 不部署远程组件 | doing | P1 | 完全权限有组件仍走 serve --sandbox off，缺了才退 SFTP。sw_connect 与首用缺口直接部署，不弹审批。现行规则在 architecture §4.1。 |
 | BUG-27 | 升级后官方远程组件过不了 sha 白名单 | doing | P1 | 白名单累计历次官方发布的二进制。同一条版本线且哈希在名单里继续用。名单外不运行，下次 sw_connect 替换。 |
