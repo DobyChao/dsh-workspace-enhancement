@@ -200,6 +200,18 @@ test('REQ-I15: fenced + dead core reads via SFTP; writes stay fail-closed', asyn
     () => fs.writeText(target('/work/a.txt'), 'nope', undefined, undefined, { mode: 'workspace-write' }),
     (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
   )
+  await assert.rejects(
+    () => fs.patchText(target('/work/a.txt'), [], undefined, undefined, { mode: 'workspace-write' }),
+    (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
+  )
+  await assert.rejects(
+    () => fs.deleteFile(target('/work/a.txt'), undefined, undefined, { mode: 'workspace-write' }),
+    (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
+  )
+  await assert.rejects(
+    () => fs.moveFile(target('/work/a.txt'), target('/work/b.txt'), {}, undefined, { mode: 'workspace-write' }),
+    (error: unknown) => error instanceof FsError && error.code === 'FS_SANDBOX_DENIED',
+  )
   assert.deepEqual(tracked.writes, [])
 })
 
