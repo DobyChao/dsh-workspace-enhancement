@@ -118,6 +118,7 @@ export const CORE_METHODS = {
   fsListDir: 'fs.listDir',
   fsWrite: 'fs.write',
   fsMkdir: 'fs.mkdir',
+  fsUnlink: 'fs.unlink',
   spawnStart: 'spawn.start',
   spawnStdin: 'spawn.stdin',
   spawnTerminate: 'spawn.terminate',

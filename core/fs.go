@@ -169,7 +169,7 @@ func fsListDir(path string) ([]listEntry, error) {
 	return out, nil
 }
 
-func fsWrite(path string, data []byte, createIfAbsent bool) (*statOK, error) {
+func fsWrite(path string, data []byte, createIfAbsent bool, mode uint32) (*statOK, error) {
 	if createIfAbsent {
 		_, err := os.Lstat(path)
 		if err == nil {
@@ -179,9 +179,13 @@ func fsWrite(path string, data []byte, createIfAbsent bool) (*statOK, error) {
 			return nil, err
 		}
 	}
+	perm := os.FileMode(0o600)
+	if mode > 0 && mode <= 0o777 {
+		perm = os.FileMode(mode)
+	}
 	dir := filepath.Dir(path)
 	tmp := filepath.Join(dir, ".dsh-core-"+nonce())
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	if err := os.WriteFile(tmp, data, perm); err != nil {
 		return nil, err
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -195,6 +199,20 @@ func fsWrite(path string, data []byte, createIfAbsent bool) (*statOK, error) {
 	return statFromInfo(path, info), nil
 }
 
+// fsUnlink removes one non-directory. A directory is refused so a confined
+// delete cannot walk a tree. Symlinks are removed themselves (Lstat), which
+// matches a resolved regular-file target: the caller already followed links.
+func fsUnlink(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return errIsDirSentinel
+	}
+	return os.Remove(path)
+}
+
 func fsMkdir(path string) error {
 	err := os.Mkdir(path, 0o755)
 	if err != nil {
@@ -204,6 +222,7 @@ func fsMkdir(path string) error {
 }
 
 var errExistsSentinel = errors.New("exists")
+var errIsDirSentinel = errors.New("is a directory")
 
 func nonce() string {
 	var b [8]byte
@@ -217,6 +236,9 @@ func mapFSError(err error) (code, message string) {
 	}
 	if errors.Is(err, errExistsSentinel) {
 		return errExists, err.Error()
+	}
+	if errors.Is(err, errIsDirSentinel) {
+		return errIsDir, err.Error()
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		return errNotFound, err.Error()

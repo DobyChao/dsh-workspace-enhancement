@@ -107,7 +107,7 @@
 
 ### 4.1 权限真值表（AUDIT-7）
 
-「本次档」从这次调用来，不是从机器字段来。文件工具看调用上的 `sandboxPolicy`（会话 `/permission`，或这一次已批准的 `sandbox_permissions`）。命令看 argv 上的 confine 标记：围栏档会打上标记，`danger-full-access` 不打，没有标记就按完全权限执行。下一次调用重新判定。远程组件 = 部署到远端的 Linux 二进制（代码与协议中称 core）。
+「本次档」从这次调用来，不是从机器字段来。文件工具看调用上的 `sandboxPolicy`（会话 `/permission`，或这一次已批准的 `sandbox_permissions`）。`patchText`、`deleteFile`、`moveFile` 与 `writeText`/`editText` 同一条写面：有远程组件时补丁在宿主算完再 `fs.write`，删除走 `fs.unlink`；没有组件的围栏档拒绝；完全权限走 SFTP。命令看 argv 上的 confine 标记：围栏档会打上标记，`danger-full-access` 不打，没有标记就按完全权限执行。下一次调用重新判定。远程组件 = 部署到远端的 Linux 二进制（代码与协议中称 core）。
 
 **A. 远程世界：谁执行、拦什么**
 

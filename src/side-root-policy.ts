@@ -60,6 +60,78 @@ interface PolicyResolver {
  * resolves exactly as the official backend would before the swap.
  */
 export class SideRootSandboxedFileSystem extends SandboxedFileSystem {
+  /**
+   * The 0.2.2 seam adds concrete `patchText` / `deleteFile` / `moveFile` on
+   * `SandboxedFileSystem`. Declaring them with `override` fails to compile on
+   * older families (TS4113); omitting `override` fails on 0.2.2 (TS4114,
+   * `noImplicitOverride`). Wrapping the inherited methods when they exist
+   * widens the workspace root the same way `writeText` does, on both lines.
+   */
+  constructor(ctx: Context, config: { cwd?: string; diffBasisMaxBytes?: number }) {
+    super(ctx, config)
+    this.installSeamMutations()
+  }
+
+  private installSeamMutations(): void {
+    const proto = SandboxedFileSystem.prototype as unknown as Record<string, unknown>
+    const self = this as unknown as Record<string, unknown>
+    const patch = proto.patchText
+    if (typeof patch === 'function') {
+      self.patchText = (
+        target: FsTarget,
+        hunks: unknown,
+        expected: unknown,
+        signal: AbortSignal | undefined,
+        sandboxPolicy: SandboxExecutionPolicy | undefined,
+      ) => (patch as (...args: unknown[]) => Promise<unknown>).call(
+        this, target, hunks, expected, signal, this.policyFor(target, sandboxPolicy),
+      )
+    }
+    const remove = proto.deleteFile
+    if (typeof remove === 'function') {
+      self.deleteFile = (
+        target: FsTarget,
+        expected: unknown,
+        signal: AbortSignal | undefined,
+        sandboxPolicy: SandboxExecutionPolicy | undefined,
+      ) => (remove as (...args: unknown[]) => Promise<unknown>).call(
+        this, target, expected, signal, this.policyFor(target, sandboxPolicy),
+      )
+    }
+    const move = proto.moveFile
+    if (typeof move === 'function') {
+      self.moveFile = (
+        source: FsTarget,
+        destination: FsTarget,
+        options: unknown,
+        signal: AbortSignal | undefined,
+        sandboxPolicy: SandboxExecutionPolicy | undefined,
+      ) => (move as (...args: unknown[]) => Promise<unknown>).call(
+        this, source, destination, options, signal, this.policyForAll([source, destination], sandboxPolicy),
+      )
+    }
+  }
+
+  /**
+   * One policy for every path in the call. Paths that widen to the same side
+   * root share that root; a split (main plus side, or two sides) keeps the
+   * caller's policy so the official fence still denies the cross-root write.
+   */
+  private policyForAll(
+    targets: readonly FsTarget[],
+    sandboxPolicy: SandboxExecutionPolicy | undefined,
+  ): SandboxExecutionPolicy | undefined {
+    const widened = targets.map(target => this.policyFor(target, sandboxPolicy))
+    const rootOf = (policy: SandboxExecutionPolicy | undefined): string | undefined => {
+      if (typeof policy !== 'object' || policy === null) return undefined
+      const root = (policy as { workspaceRoot?: unknown }).workspaceRoot
+      return typeof root === 'string' ? root : undefined
+    }
+    const roots = widened.map(rootOf)
+    if (roots.every(root => root === roots[0])) return widened[0]
+    return sandboxPolicy
+  }
+
   private policyFor(target: FsTarget, sandboxPolicy: SandboxExecutionPolicy | undefined): SandboxExecutionPolicy | undefined {
     const resolver = (this.ctx as unknown as { sandboxPolicy?: PolicyResolver }).sandboxPolicy
     const base = sandboxPolicy ?? resolver?.resolve?.()

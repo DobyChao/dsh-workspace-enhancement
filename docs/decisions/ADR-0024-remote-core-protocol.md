@@ -54,13 +54,16 @@ syscall / 子进程。围栏档的远程 `ctx.fs` 与 browse mkdir **不再走 S
 - `hello` 返回 `proto`、`version`、`arch`、`caps`（v1：`fs` / `spawn` / `rg`）、
   当前 sandbox。
 - `fs` cap：`fs.realpath` `fs.stat` `fs.lstat` `fs.read` `fs.readRange`
-  `fs.listDir` `fs.write` `fs.mkdir`。
+  `fs.listDir` `fs.write` `fs.mkdir` `fs.unlink`（`UPSTREAM-14`：删除单个非目录；
+  可选 `fs.write` 的 `mode` 让 `moveFile` 带上源文件权限，缺省仍是 `0600`）。
 - `spawn` cap：`spawn.start` `spawn.stdin` `spawn.terminate` + 事件
   `spawn.stdout` `spawn.stderr` `spawn.exit`。
 - **未知 `m` → `err.code=UNIMPLEMENTED`**。JSON 多出来的字段忽略。
 - 插件只调用 `hello.caps` 里出现的能力；新插件碰老核心按 cap 降级或
   `SANDBOX_UNAVAILABLE`，不静默走 SFTP。
-- `editText` 留在宿主：read + patch + `fs.write`。`processPathFromHostPath`
+- `editText` 与 `patchText` 留在宿主：read + 变换 + `fs.write`。`deleteFile` 与
+  `moveFile` 的源删除走 `fs.unlink`。老核心没有该方法时返回 `UNIMPLEMENTED`，
+  插件把它变成 `FsError`，**不**退回 SFTP。`processPathFromHostPath`
   远程仍返回 `undefined`。
 
 ## 3. 产物与部署

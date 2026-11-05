@@ -171,7 +171,7 @@ func (s *server) dispatch(method string, raw json.RawMessage) (any, string, erro
 			return nil, errBadRequest, err
 		}
 		createIfAbsent := boolField(raw, "createIfAbsent")
-		st, err := fsWrite(nativePath(path), data, createIfAbsent)
+		st, err := fsWrite(nativePath(path), data, createIfAbsent, optionalMode(raw))
 		if err != nil {
 			c, m := mapFSError(err)
 			return nil, c, fmt.Errorf("%s", m)
@@ -186,6 +186,19 @@ func (s *server) dispatch(method string, raw json.RawMessage) (any, string, erro
 			return nil, errReadOnly, fmt.Errorf("read-only file system")
 		}
 		if err := fsMkdir(nativePath(path)); err != nil {
+			c, m := mapFSError(err)
+			return nil, c, fmt.Errorf("%s", m)
+		}
+		return map[string]any{"path": path}, "", nil
+	case "fs.unlink":
+		path, err := strField(raw, "path")
+		if err != nil {
+			return nil, errBadRequest, err
+		}
+		if !s.canWrite(path) {
+			return nil, errReadOnly, fmt.Errorf("read-only file system")
+		}
+		if err := fsUnlink(nativePath(path)); err != nil {
 			c, m := mapFSError(err)
 			return nil, c, fmt.Errorf("%s", m)
 		}
@@ -307,6 +320,20 @@ func intField(raw json.RawMessage, key string) int64 {
 	default:
 		return 0
 	}
+}
+
+// optionalMode reads a permission bitfield. Absent or out of range means
+// "keep fsWrite's default" (signalled by 0).
+func optionalMode(raw json.RawMessage) uint32 {
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return 0
+	}
+	n, ok := obj["mode"].(float64)
+	if !ok || n <= 0 || n > 0o777 {
+		return 0
+	}
+	return uint32(n)
 }
 
 func boolField(raw json.RawMessage, key string) bool {

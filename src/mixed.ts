@@ -33,6 +33,7 @@ import type {
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
 import { FsError } from '@deepseek-ai/dsh-fs'
+import type { FsDeleteResult, FsMoveOptions, FsMoveResult, PatchHunk } from './fs-patch.ts'
 import type {
   SubprocessHandle,
   SubprocessSpawnSpec,
@@ -267,6 +268,39 @@ export type FileSystemBranch = {
     signal?: AbortSignal,
     sandboxPolicy?: unknown,
   ): Promise<FsEditOutcome>
+  /**
+   * Apply parsed hunks. Optional **on delegates only**: the 0.2.2 `FileSystem`
+   * made it abstract, and a pre-0.2.2 local backend does not have it. The
+   * facade always implements it (see `test/mixed-fs-contract.test.ts`).
+   */
+  patchText?(
+    target: FsTarget,
+    hunks: readonly PatchHunk[],
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsEditOutcome>
+  /**
+   * Remove one regular file. Optional on delegates for the same reason as
+   * {@link patchText}. A directory must not be removed recursively.
+   */
+  deleteFile?(
+    target: FsTarget,
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsDeleteResult>
+  /**
+   * Publish source text at the destination, then remove the source. Optional
+   * on delegates. Source and destination must belong to the same world.
+   */
+  moveFile?(
+    source: FsTarget,
+    destination: FsTarget,
+    options: FsMoveOptions,
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsMoveResult>
 }
 
 /**
@@ -512,5 +546,79 @@ export class MixedFileSystem implements FileSystemBranch {
     return worldOfTargetKey(String(target.targetKey)) === 'remote'
       ? this.remote.editText(target, edit, expected, signal, sandboxPolicy)
       : this.local.editText(target, edit, expected, signal, sandboxPolicy)
+  }
+
+  /**
+   * UPSTREAM-14: the 0.2.2 host calls `ctx.get('fs').patchText`. Remote targets
+   * follow the SSH/core writer; a local delegate that predates the method fails
+   * with `FS_IO_ERROR` instead of a `TypeError`.
+   */
+  async patchText(
+    target: FsTarget,
+    hunks: readonly PatchHunk[],
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsEditOutcome> {
+    const remote = worldOfTargetKey(String(target.targetKey)) === 'remote'
+    const branch = remote ? this.remote : this.local
+    const patch = branch.patchText
+    if (patch === undefined) {
+      throw new FsError(
+        `cannot patch "${target.displayPath}": the ${remote ? 'remote' : 'local'} filesystem backend does not support patches (dsh-fs before the 0.2.2 line)`,
+        'FS_IO_ERROR',
+      )
+    }
+    return patch.call(branch, target, hunks, expected, signal, sandboxPolicy)
+  }
+
+  /** @inheritdoc — same routing and old-delegate guard as {@link patchText}. */
+  async deleteFile(
+    target: FsTarget,
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsDeleteResult> {
+    const remote = worldOfTargetKey(String(target.targetKey)) === 'remote'
+    const branch = remote ? this.remote : this.local
+    const remove = branch.deleteFile
+    if (remove === undefined) {
+      throw new FsError(
+        `cannot delete "${target.displayPath}": the ${remote ? 'remote' : 'local'} filesystem backend does not support deletion (dsh-fs before the 0.2.2 line)`,
+        'FS_IO_ERROR',
+      )
+    }
+    return remove.call(branch, target, expected, signal, sandboxPolicy)
+  }
+
+  /**
+   * @inheritdoc — both targets must sit in one world. A cross-world move would
+   * publish through one backend and delete through another, which neither
+   * sandbox fence can see as a single mutation.
+   */
+  async moveFile(
+    source: FsTarget,
+    destination: FsTarget,
+    options: FsMoveOptions,
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsMoveResult> {
+    const sourceRemote = worldOfTargetKey(String(source.targetKey)) === 'remote'
+    const destRemote = worldOfTargetKey(String(destination.targetKey)) === 'remote'
+    if (sourceRemote !== destRemote) {
+      throw new FsError(
+        `cannot move "${source.displayPath}" to "${destination.displayPath}": source and destination are in different filesystem worlds`,
+        'FS_IO_ERROR',
+      )
+    }
+    const branch = sourceRemote ? this.remote : this.local
+    const move = branch.moveFile
+    if (move === undefined) {
+      throw new FsError(
+        `cannot move "${source.displayPath}": the ${sourceRemote ? 'remote' : 'local'} filesystem backend does not support moves (dsh-fs before the 0.2.2 line)`,
+        'FS_IO_ERROR',
+      )
+    }
+    return move.call(branch, source, destination, options, signal, sandboxPolicy)
   }
 }

@@ -7,15 +7,17 @@
  *   带图请求直接 `TypeError` → 被 LLM 适配器包成 `LlmError(…, 'TRANSPORT')`。
  * - UPSTREAM-1：0.1.5 线新增第 14 个方法 `readByteRange`，宿主同样经 `ctx.get('fs')`
  *   取值 —— 门面不实现就是同一个 `TypeError`。
- * - UPSTREAM-5：0.1.7 线（rc.2）在具体后端上新增第 15 个方法 `watch`
+ * - UPSTREAM-5：0.1.7 线（rc.2）在具体后端上新增 `watch`
  *   （`LocalFileSystem.watch`，chokidar），drift 哨兵 2026-09-25 首次抓到 ——
  *   门面照 `readByteRange` 的先例补齐（local 委托可选、remote 诚实拒绝）。
+ * - UPSTREAM-14：0.2.2 线把 `patchText` / `deleteFile` / `moveFile` 提成抽象成员。
+ *   门面三者都实现；老家族的 local 委托没有它们时显式 `FS_IO_ERROR`。
  *
  * 为什么是**反射 + 静态清单**两条断言：
  *
  * - 反射（具体后端原型链）跟随**已安装家族**：装 0.1.7 时能把"上游又加了方法而我们
  *   没实现"抓出来；装 0.1.5 时它只反射出 14 个，抓不到 `watch`。
- * - 静态清单（`REQUIRED_SEAM_METHODS`）锁死"门面必须有这 15 个"，与装哪个家族无关
+ * - 静态清单（`REQUIRED_SEAM_METHODS`）锁死门面必须有的全集，与装哪个家族无关
  *   —— 这是老家族下仍然能挡住回归的那一条。
  *
  * 为什么不能只反射 `FileSystem.prototype`：`FileSystem` 的抽象成员被 TS 擦除，
@@ -42,7 +44,17 @@ import { sshRoutesRoot } from '../src/transport.ts'
 import type { SshFileSystemEngine } from '../src/filesystem.ts'
 
 /** 具体后端上的内部实现细节：不是接缝契约的一部分，不参与反射断言。 */
-const INTERNAL_METHODS = new Set(['constructor', 'withLock', 'versionAfterWrite', 'checkedTarget'])
+const INTERNAL_METHODS = new Set([
+  'constructor',
+  'withLock',
+  'withLocks',
+  'versionAfterWrite',
+  'checkedTarget',
+  // 0.2.2 local backend helpers. They sit on the prototype but are not seam methods.
+  'writeTarget',
+  'requireFile',
+  'patchContent',
+])
 
 /** 一个具体后端原型链上的**公共方法名**全集（去重、去内部方法）。 */
 function seamMethodNames(root: object): string[] {
@@ -77,11 +89,12 @@ const PRE_015_METHODS = [
 ]
 
 /**
- * 0.1.5 起**已知**的接缝增量：`readByteRange`（0.1.5 线，UPSTREAM-1）、
- * `watch`（0.1.7 线，UPSTREAM-5）。上游再加方法时，反射断言会点名新名字，
+ * 0.1.5 起**已知**的接缝增量：`readByteRange`（0.1.5，UPSTREAM-1）、
+ * `watch`（0.1.7，UPSTREAM-5）、`patchText` / `deleteFile` / `moveFile`
+ * （0.2.2，UPSTREAM-14）。上游再加方法时，反射断言会点名新名字，
  * 把它挪进这张表并给门面补实现。
  */
-const KNOWN_ADDITIONS = ['readByteRange', 'watch']
+const KNOWN_ADDITIONS = ['readByteRange', 'watch', 'patchText', 'deleteFile', 'moveFile']
 
 /** 门面必须实现的**全集**：13 个老方法 + 已知增量。 */
 const REQUIRED_SEAM_METHODS = [...PRE_015_METHODS, ...KNOWN_ADDITIONS].sort()
@@ -245,7 +258,7 @@ test('contract: MixedFileSystem covers everything the installed backend exposes'
 test('contract: the reflection assertion turns red when the facade lacks a method', () => {
   // 反例自证：从门面自身的方法集合里删掉方法，断言必须点名它（这正是修复前的形状：
   // `FileSystemBranch` 类型没有该方法 → 门面也没有）。三个踩过的方法都自证一遍。
-  for (const method of ['processPathFromHostPath', 'readByteRange', 'watch']) {
+  for (const method of ['processPathFromHostPath', 'readByteRange', 'watch', 'patchText', 'deleteFile', 'moveFile']) {
     const own: Record<string, unknown> = {}
     for (const key of Object.getOwnPropertyNames(MixedFileSystem.prototype)) {
       const descriptor = Object.getOwnPropertyDescriptor(MixedFileSystem.prototype, key)

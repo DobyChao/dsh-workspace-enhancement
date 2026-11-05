@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -57,7 +59,7 @@ func TestProfileJSONMatchesExpectedTokens(t *testing.T) {
 func TestFsWriteAndRead(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
-	st, err := fsWrite(path, []byte("hello"), true)
+	st, err := fsWrite(path, []byte("hello"), true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,11 +98,37 @@ func TestFsRealpathMissingLeaf(t *testing.T) {
 func TestFsCreateIfAbsent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
-	if _, err := fsWrite(path, []byte("a"), true); err != nil {
+	if _, err := fsWrite(path, []byte("a"), true, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fsWrite(path, []byte("b"), true); err == nil {
+	if _, err := fsWrite(path, []byte("b"), true, 0); err == nil {
 		t.Fatal("expected exists")
+	}
+}
+
+func TestFsUnlinkRefusesDirectory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if _, err := fsWrite(path, []byte("hello"), true, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shipped core is Linux-only. Windows reports a fixed permission mask
+	// from os.WriteFile, so the 0640 carry is asserted where the OS honors it.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
+		t.Fatalf("mode %o", info.Mode().Perm())
+	}
+	if err := fsUnlink(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("file still present: %v", err)
+	}
+	if err := fsUnlink(dir); !errors.Is(err, errIsDirSentinel) {
+		t.Fatalf("directory unlink: %v", err)
 	}
 }
 

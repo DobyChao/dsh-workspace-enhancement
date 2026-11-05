@@ -422,18 +422,28 @@ test('subpath fs: a confined write with no remote component hub is refused, neve
     const { fs, target } = subpathFs(mode)
     await assert.rejects(() => fs.writeText(target as never, 'x'), isUnavailable)
     await assert.rejects(() => fs.editText(target as never, { oldText: 'a', newText: 'b' } as never), isUnavailable)
+    await assert.rejects(() => fs.patchText(target as never, []), isUnavailable)
+    await assert.rejects(() => fs.deleteFile(target as never), isUnavailable)
+    await assert.rejects(() => fs.moveFile(target as never, target as never, {}), isUnavailable)
   }
 })
 
 test('subpath fs: a danger write keeps the plain SFTP path', async () => {
   const { fs, target } = subpathFs('danger-full-access')
+  const other = { targetKey: sshTargetKey('c1', '/srv/work/b.txt'), displayPath: '/srv/work/b.txt' }
   await assert.rejects(() => fs.writeText(target as never, 'x'), /TRANSPORT-REACHED: getSftp/)
+  await assert.rejects(() => fs.patchText(target as never, []), /TRANSPORT-REACHED: getSftp/)
+  await assert.rejects(() => fs.deleteFile(target as never), /TRANSPORT-REACHED: getSftp/)
+  await assert.rejects(() => fs.moveFile(target as never, other as never, {}), /TRANSPORT-REACHED: getSftp/)
 })
 
 test('subpath fs: with the coreHub service a write goes through the remote component', async () => {
   const { hub, calls } = fakeHub(new Error('HUB-REACHED'))
   const { fs, target } = subpathFs('workspace-write', hub)
   await assert.rejects(() => fs.writeText(target as never, 'x'), /HUB-REACHED/)
-  assert.equal(calls.length, 1)
+  await assert.rejects(() => fs.patchText(target as never, []), /HUB-REACHED/)
+  await assert.rejects(() => fs.deleteFile(target as never), /HUB-REACHED/)
+  await assert.rejects(() => fs.moveFile(target as never, target as never, {}), /HUB-REACHED/)
+  assert.equal(calls.length, 4)
   assert.equal(calls[0]?.[0], 'c1')
 })

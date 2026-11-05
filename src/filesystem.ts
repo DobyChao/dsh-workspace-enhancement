@@ -25,6 +25,8 @@ import type {
 } from '@deepseek-ai/dsh-fs'
 import { quoteShellArg } from './ssh-core.ts'
 import { fileContentVersion, statsVersionMtimeMs } from './fs-version.ts'
+import { applyHunks, DIFF_BASIS_MAX_BYTES, seamFsError } from './fs-patch.ts'
+import type { FsDeleteResult, FsMoveOptions, FsMoveResult, PatchHunk } from './fs-patch.ts'
 import { parseSshTargetKey, resolveSshCwd, resolveSshTargetKey, sshRoutePlaceholder, sshTargetKey } from './transport.ts'
 import type { SshTransport } from './transport.ts'
 import { CoreRoutingFileSystem } from './core-fs.ts'
@@ -397,15 +399,192 @@ export class SshFileSystemEngine {
     })
   }
 
-  private async withLock<T>(targetKey: string, operation: () => Promise<T>): Promise<T> {
-    const prior = this.locks.get(targetKey) ?? Promise.resolve()
-    const run = prior.then(operation, operation)
-    const tail = run.then(() => undefined, () => undefined)
-    this.locks.set(targetKey, tail)
+  private withLock<T>(targetKey: string, operation: () => Promise<T>): Promise<T> {
+    return this.withLocks([targetKey], operation)
+  }
+
+  /**
+   * Acquire distinct keys in lexical order so a two-target move cannot deadlock
+   * against another move of the same pair. Same ordering as the host local backend.
+   */
+  private async withLocks<T>(targetKeys: readonly string[], operation: () => Promise<T>): Promise<T> {
+    const ordered = [...new Set(targetKeys)].sort()
+    const acquire = async (index: number): Promise<T> => {
+      const key = ordered[index]
+      if (key === undefined) return operation()
+      const prior = this.locks.get(key) ?? Promise.resolve()
+      const run = prior.then(() => acquire(index + 1), () => acquire(index + 1))
+      const tail = run.then(() => undefined, () => undefined)
+      this.locks.set(key, tail)
+      try {
+        return await run
+      } finally {
+        if (this.locks.get(key) === tail) this.locks.delete(key)
+      }
+    }
+    return acquire(0)
+  }
+
+  /**
+   * Apply parsed hunks and publish the result. Version guard and line-ending
+   * restoration match `editText`; a miss is `FS_PATCH_MISMATCH`, not a partial write.
+   */
+  async patchText(
+    target: FsTarget,
+    hunks: readonly PatchHunk[],
+    expected?: { version: ReturnType<typeof FsVersion> },
+    signal?: AbortSignal,
+  ): Promise<FsEditOutcome> {
+    return this.withLock(String(target.targetKey), async () => {
+      const existing = await this.requireMutableFile(target, expected, 'patch', signal)
+      const raw = await this.readForEdit(target, signal)
+      const before = normalizeLineEndings(raw)
+      const after = this.patchContent(target, before, hunks)
+      const storage = restoreLineEndings(after, detectsCrlf(raw))
+      const version = await this.writeAtomic(target, storage, existing, false, signal)
+      return { version, before, after }
+    })
+  }
+
+  /**
+   * Remove one regular file. The basis is bounded like the host local backend;
+   * a directory is refused rather than walked.
+   */
+  async deleteFile(
+    target: FsTarget,
+    expected?: { version: ReturnType<typeof FsVersion> },
+    signal?: AbortSignal,
+  ): Promise<FsDeleteResult> {
+    return this.withLock(String(target.targetKey), async () => {
+      const existing = await this.requireMutableFile(target, expected, 'delete', signal)
+      const before = await this.readBasis(target, Number(existing.size), signal)
+      const route = this.routeTarget(target)
+      await this.unlinkFile(route.path, target.displayPath, signal, route.transport)
+      return { before }
+    })
+  }
+
+  /**
+   * Publish the source text (optionally patched) at the destination, then remove
+   * the source. The two effects are separate: a published destination whose
+   * source could not be removed is a final `sourceDeleted: false` outcome.
+   * Destination mode follows the source, as on the host local backend.
+   */
+  async moveFile(
+    source: FsTarget,
+    destination: FsTarget,
+    options: FsMoveOptions,
+    signal?: AbortSignal,
+  ): Promise<FsMoveResult> {
+    if (String(source.targetKey) === String(destination.targetKey)) {
+      throw seamFsError(`cannot move "${source.displayPath}" to itself`, 'FS_SAME_TARGET')
+    }
+    return this.withLocks([String(source.targetKey), String(destination.targetKey)], async () => {
+      const sourceInfo = await this.requireMutableFile(source, options.expectedSource, 'move', signal)
+      const destRoute = this.routeTarget(destination)
+      const existingDest = await this.probe(destRoute.path, destination.displayPath, signal, destRoute.transport)
+      if (existingDest !== undefined && !existingDest.isFile()) {
+        throw new FsError(`cannot write "${destination.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+      }
+      this.checkWriteIntent(existingDest, options.expectedDestination, destination)
+      const raw = await this.readForEdit(source, signal)
+      const before = normalizeLineEndings(raw)
+      const after = options.hunks === undefined ? before : this.patchContent(source, before, options.hunks)
+      const storage = restoreLineEndings(after, detectsCrlf(raw))
+      const destBefore = existingDest !== undefined && Buffer.byteLength(after, 'utf8') < DIFF_BASIS_MAX_BYTES
+        ? await this.readBasis(destination, Number(existingDest.size), signal)
+        : null
+      const version = await this.writeAtomic(
+        destination,
+        storage,
+        existingDest,
+        options.expectedDestination?.kind === 'createIfAbsent',
+        signal,
+        sourceInfo.mode & 0o777,
+      )
+      const outcome: FsWriteOutcome = {
+        operation: existingDest === undefined ? 'create' : 'update',
+        version,
+        before: destBefore,
+        after,
+      }
+      const sourceBefore = Buffer.byteLength(before, 'utf8') < DIFF_BASIS_MAX_BYTES ? before : null
+      const sourceRoute = this.routeTarget(source)
+      try {
+        await this.unlinkFile(sourceRoute.path, source.displayPath, signal, sourceRoute.transport)
+      } catch (error: unknown) {
+        if (!(error instanceof FsError)) throw error
+        return {
+          sourceBefore,
+          destination: outcome,
+          sourceDeleted: false,
+          sourceFailure: { code: error.code, message: error.message },
+        }
+      }
+      return { sourceBefore, destination: outcome, sourceDeleted: true }
+    })
+  }
+
+  private patchContent(target: FsTarget, before: string, hunks: readonly PatchHunk[]): string {
+    const result = applyHunks(before, hunks)
+    if (!result.ok) {
+      throw seamFsError(
+        `cannot patch "${target.displayPath}": hunk at patch line ${result.failure.hunkLineNumber} (${result.failure.stage}) does not match`,
+        'FS_PATCH_MISMATCH',
+      )
+    }
+    return result.after
+  }
+
+  private async requireMutableFile(
+    target: FsTarget,
+    expected: { version: ReturnType<typeof FsVersion> } | undefined,
+    verb: string,
+    signal?: AbortSignal,
+  ): Promise<Stats> {
+    const route = this.routeTarget(target)
+    const existing = await this.probe(route.path, target.displayPath, signal, route.transport)
+    if (existing === undefined) {
+      throw new FsError(`cannot ${verb} "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
+    }
+    if (!existing.isFile()) {
+      throw new FsError(`cannot ${verb} "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+    }
+    if (expected !== undefined && entryVersion(existing, route.path) !== expected.version) {
+      throw new FsError(`cannot ${verb} "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
+    }
+    return existing
+  }
+
+  /** Bounded LF basis. Over-cap, binary, and unreadable files yield null; abort still throws. */
+  private async readBasis(target: FsTarget, byteLength: number, signal?: AbortSignal): Promise<string | null> {
+    if (byteLength >= DIFF_BASIS_MAX_BYTES) return null
     try {
-      return await run
-    } finally {
-      if (this.locks.get(targetKey) === tail) this.locks.delete(targetKey)
+      return await this.readForDiff(target, signal)
+    } catch (error: unknown) {
+      if (error instanceof FsError && error.code === 'FS_ABORTED') throw error
+      return null
+    }
+  }
+
+  /** Remove one non-directory path. Callers have already rejected directories. */
+  private async unlinkFile(
+    path: string,
+    displayPath: string,
+    signal: AbortSignal | undefined,
+    transport: SshTransport,
+  ): Promise<void> {
+    assertNotAborted(signal, 'delete')
+    const sftp = await transport.getSftp()
+    try {
+      await new Promise<void>((resolve, reject) => {
+        sftp.unlink(path, error => {
+          if (error != null) reject(error)
+          else resolve()
+        })
+      })
+    } catch (error: unknown) {
+      throw mapError(error, 'delete', displayPath, signal)
     }
   }
 
@@ -511,6 +690,7 @@ export class SshFileSystemEngine {
     existing: Stats | undefined,
     createIfAbsent: boolean,
     signal?: AbortSignal,
+    modeBits?: number,
   ): Promise<ReturnType<typeof FsVersion>> {
     assertNotAborted(signal, 'write')
     const route = this.routeTarget(target)
@@ -528,7 +708,7 @@ export class SshFileSystemEngine {
         sftp.writeFile(temporary, content, error => { if (error !== undefined) reject(error); else resolve() })
       })
       assertNotAborted(signal, 'write')
-      const mode = existing === undefined ? 0o600 : existing.mode & 0o777
+      const mode = modeBits ?? (existing === undefined ? 0o600 : existing.mode & 0o777)
       await route.transport.exec(`chmod ${mode.toString(8)} -- ${quoteShellArg(temporary)}`, signal !== undefined ? { signal } : undefined)
       assertNotAborted(signal, 'write')
       if (createIfAbsent) {
@@ -727,6 +907,50 @@ export class SshFileSystem extends FileSystem {
     return routed === undefined
       ? this.engine.editText(target, edit, expected, signal)
       : routed.editText(target, edit, expected, signal, sandboxPolicy)
+  }
+
+  /**
+   * Deliberately without `override`: these three members are abstract on the
+   * 0.2.2 `FileSystem` and absent before it. `override` is TS4113 on the older
+   * families this plugin still compiles against (same rule as `readByteRange`).
+   * Confined sessions go through the remote component; danger stays on SFTP.
+   */
+  async patchText(
+    target: FsTarget,
+    hunks: readonly PatchHunk[],
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsEditOutcome> {
+    const routed = this.confinedWriter(sandboxPolicy)
+    return routed === undefined
+      ? this.engine.patchText(target, hunks, expected, signal)
+      : routed.patchText(target, hunks, expected, signal, sandboxPolicy)
+  }
+
+  async deleteFile(
+    target: FsTarget,
+    expected?: { version: FsVersion },
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsDeleteResult> {
+    const routed = this.confinedWriter(sandboxPolicy)
+    return routed === undefined
+      ? this.engine.deleteFile(target, expected, signal)
+      : routed.deleteFile(target, expected, signal, sandboxPolicy)
+  }
+
+  async moveFile(
+    source: FsTarget,
+    destination: FsTarget,
+    options: FsMoveOptions,
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown,
+  ): Promise<FsMoveResult> {
+    const routed = this.confinedWriter(sandboxPolicy)
+    return routed === undefined
+      ? this.engine.moveFile(source, destination, options, signal)
+      : routed.moveFile(source, destination, options, signal, sandboxPolicy)
   }
 
   private routed: CoreRoutingFileSystem | undefined

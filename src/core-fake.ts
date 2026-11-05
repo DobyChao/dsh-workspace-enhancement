@@ -7,7 +7,7 @@
  * @module dsh-workspace-enhancement/core-fake
  */
 
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, readdirSync, lstatSync, existsSync, type Stats } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync, readdirSync, lstatSync, existsSync, type Stats } from 'node:fs'
 import { dirname, join, posix, resolve, sep } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 import {
@@ -15,6 +15,7 @@ import {
   CORE_CAPS,
   CORE_ERROR_EXISTS,
   CORE_ERROR_IO,
+  CORE_ERROR_IS_DIR,
   CORE_ERROR_NOT_DIR,
   CORE_ERROR_NOT_FOUND,
   CORE_ERROR_PERMISSION,
@@ -226,8 +227,31 @@ export function serveFakeCore(stdin: Readable, stdout: Writable, options: FakeCo
           throw Object.assign(new Error('exists'), { code: CORE_ERROR_EXISTS })
         }
         writeFileSync(host, bytes)
+        if (typeof p.mode === 'number' && p.mode > 0 && p.mode <= 0o777) chmodSync(host, p.mode)
         const stats = statSync(host)
         return statOk(path, stats)
+      }
+      case CORE_METHODS.fsUnlink: {
+        const path = String(p.path ?? '')
+        if (!writable(options, path)) {
+          throw Object.assign(new Error('read-only file system'), { code: CORE_ERROR_READ_ONLY })
+        }
+        const host = hostPath(options.root, path)
+        let stats: Stats
+        try {
+          stats = lstatSync(host)
+        } catch (error) {
+          const code = (error as { code?: string }).code
+          if (code === 'ENOENT') {
+            throw Object.assign(new Error('not found'), { code: CORE_ERROR_NOT_FOUND })
+          }
+          throw error
+        }
+        if (stats.isDirectory()) {
+          throw Object.assign(new Error('is a directory'), { code: CORE_ERROR_IS_DIR })
+        }
+        unlinkSync(host)
+        return { path }
       }
       case CORE_METHODS.fsMkdir: {
         const path = String(p.path ?? '')

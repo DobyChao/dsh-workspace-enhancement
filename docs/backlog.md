@@ -18,6 +18,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
+| UPSTREAM-14 | 0.2.2 文件接缝 patch/delete/move | doing | P1 | SshFileSystem 与混合门面实现 patchText/deleteFile/moveFile。围栏写走 coreHub：补丁 fs.write，删除 fs.unlink。peer 不扩 0.2.2。待合并后关 #93 #91。 |
 | PUB-13 | 0.2.8 发布 | doing | P1 | 插件与远程组件同升 0.2.8。peer 不变。合并后所有者打 tag `v0.2.8` 并 Approve npm-publish。本 PR 不打 tag、不发布。档案 [R60](./rounds/R60-pub13-v0.2.8-release.md) |
 | BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | doing | P0 | 混合 spawn 改写 argv 后搬移已有标记。无标记仍是 off。单测与 typecheck 已过。待 PR。 |
 | BUG-26 | 完全权限下 sw_connect 不部署远程组件 | doing | P1 | 完全权限有组件仍走 serve --sandbox off，缺了才退 SFTP。sw_connect 与首用缺口直接部署，不弹审批。现行规则在 architecture §4.1。 |
