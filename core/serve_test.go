@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -115,7 +116,9 @@ func TestFsUnlinkRefusesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o640 {
+	// The shipped core is Linux-only. Windows reports a fixed permission mask
+	// from os.WriteFile, so the 0640 carry is asserted where the OS honors it.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
 		t.Fatalf("mode %o", info.Mode().Perm())
 	}
 	if err := fsUnlink(path); err != nil {
