@@ -236,7 +236,7 @@ check('@deepseek-ai/dsh-* devDependencies declare one range', devRanges.size ===
 const peerCore = [...peerRanges.keys()][0] ?? ''
 const devCore = [...devRanges.keys()][0] ?? ''
 // A union range spells each alternative with its own operator
-// (`^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1`). The FAMILY identity of an
+// (`^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1 || ^0.2.2-rc.1`). The FAMILY identity of an
 // alternative is the bare version, so strip the operator per alternative
 // (UPSTREAM-10) — the workflow probe check greps for the bare family string.
 // Host boot (dsh-app-boot) satisfies peers with includePrerelease; npm/pnpm

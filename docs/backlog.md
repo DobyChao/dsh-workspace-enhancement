@@ -18,8 +18,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-14 | 0.2.2 文件接缝 patch/delete/move | doing | P1 | SshFileSystem 与混合门面实现 patchText/deleteFile/moveFile。围栏写走 coreHub：补丁 fs.write，删除 fs.unlink。peer 不扩 0.2.2。待合并后关 #93 #91。 |
-| PUB-13 | 0.2.8 发布 | doing | P1 | 插件与远程组件同升 0.2.8。peer 不变。合并后所有者打 tag `v0.2.8` 并 Approve npm-publish。本 PR 不打 tag、不发布。档案 [R60](./rounds/R60-pub13-v0.2.8-release.md) |
+| UPSTREAM-14 | 0.2.2 文件接缝 patch/delete/move | doing | P1 | #97 已合入 master（#93 #91 已关）。SshFileSystem 实现 patchText/deleteFile/moveFile。0.2.9 把 13 个 seam peer 追加 `^0.2.2-rc.1`。 |
 | BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | doing | P0 | 混合 spawn 改写 argv 后搬移已有标记。无标记仍是 off。单测与 typecheck 已过。待 PR。 |
 | BUG-26 | 完全权限下 sw_connect 不部署远程组件 | doing | P1 | 完全权限有组件仍走 serve --sandbox off，缺了才退 SFTP。sw_connect 与首用缺口直接部署，不弹审批。现行规则在 architecture §4.1。 |
 | BUG-27 | 升级后官方远程组件过不了 sha 白名单 | doing | P1 | 白名单累计历次官方发布的二进制。同一条版本线且哈希在名单里继续用。名单外不运行，下次 sw_connect 替换。 |
@@ -59,6 +58,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 完成 | 备注 |
 |---|---|---|---|---|---|
+| PUB-13 | 0.2.8 发布 | shipped | P1 | 2026-11-03 | tag [v0.2.8](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.8)；npm latest=0.2.8。档案 [R60](./rounds/R60-pub13-v0.2.8-release.md) |
 | PUB-12 | 0.2.7 发布 | shipped | P1 | 2026-10-28 | tag [v0.2.7](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.7)；npm latest=0.2.7。档案 [R59](./rounds/R59-pub12-v0.2.7-release.md) |
 | UX-17 | 设为默认，并在机器列表露出不可编辑的本机 | done | P3 | 2026-10-30 | 设置页按钮改为「设为默认」。列表含本机：不可编辑、不能部署远程组件，可成为新建工作区的起始。脚本 [UX-17](./uat/UX-17-settings.md) |
 | PUB-11 | 0.2.6 发布 | shipped | P1 | 2026-10-26 | tag [v0.2.6](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.6)；npm latest=0.2.6。档案 [R57](./rounds/R57-pub11-v0.2.6-release.md) |

@@ -50,6 +50,7 @@
 | R57 | 准备发布 npm `v0.2.6`（peer 不变） | [R57-pub11-v0.2.6-release.md](./R57-pub11-v0.2.6-release.md) |
 | R59 | 准备发布 npm `v0.2.7`（peer 不变） | [R59-pub12-v0.2.7-release.md](./R59-pub12-v0.2.7-release.md) |
 | R60 | 准备发布 npm `v0.2.8`（peer 不变） | [R60-pub13-v0.2.8-release.md](./R60-pub13-v0.2.8-release.md) |
+| R61 | 准备发布 npm `v0.2.9`（peer 追加 `^0.2.2-rc.1`） | [R61-v0.2.9-release.md](./R61-v0.2.9-release.md) |
 
 尚未做的工作以 [`backlog.md`](../backlog.md) 为准，不在本表开「尚未开工」栏。
 
