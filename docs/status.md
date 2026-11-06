@@ -1,18 +1,18 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-11-05 07:07 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-11-06 09:19 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.8` |
+| package.json 版本 | `0.2.9` |
 | npm 已发布版本 | `0.2.8` |
 | 最新 tag | `v0.2.8` |
-| 分支 / HEAD | `cursor/fs-022-seam-mutate-46b1` / `166388e` |
-| HEAD 提交 | `chore(release): bump to 0.2.8 (#96)` (2026-11-03) |
-| 与远端 | in sync with origin/master |
+| 分支 / HEAD | `cursor/bump-0.2.9-37d3` / `887c4aa` |
+| HEAD 提交 | `chore(release): prepare 0.2.9` (2026-11-06) |
+| 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
@@ -22,17 +22,17 @@
 | 单测用例（静态计数） | 840 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
-| 轮次报告 | 59 |
+| 轮次报告 | 60 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 11 |
-| `doing` | 9 |
+| `doing` | 8 |
 | `blocked` | 5 |
 | `done` | 107 |
-| `shipped` | 14 |
+| `shipped` | 15 |
 | `dropped` | 17 |
 
 ## 被挡住 / 待拍板

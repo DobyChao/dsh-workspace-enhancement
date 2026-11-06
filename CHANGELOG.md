@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+## [0.2.9](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-06)
+
+0.2.8 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.9`**
+（hello / `dsh-core version` / 工件名同步）。版本门仍按 **major.minor** 接受已部署的 0.2.x，
+同线 patch **不强制**重部署。`compatHashes` 保留已发布二进制的哈希；本版构建再登记新哈希。
+
+13 个 seam peer 在原联合范围后追加 `^0.2.2-rc.1`，成为
+`^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1 || ^0.2.2-rc.1`
+（devDependencies 仍是 `^0.1.7-rc.2`；`@deepseek-ai/cordis`、`@deepseek-ai/schemastery`、`dsh-better-sidebar` 不动）。
+caret 只覆盖同一 `[major, minor, patch]` tuple 的更晚预发布，所以 `^0.2.2-rc.1` 含
+`0.2.2-rc.2`，不含 `0.2.2-alpha.*`。本版发布时宿主 `@deepseek-ai/dsh` 的 `latest` 与 `next`
+都是 `0.2.2-rc.1`（`alpha` 是 `0.2.2-alpha.3`）。`upstream.yml` 的 `next` 通道安装
+`0.2.2-rc.*`；`next` 离开 0.2.1 后增加 `pinned-0.2.1-rc.1`。
+
+### 修复
+
+- **远程文件系统补上三个抽象方法（#97，Fixes #93 / #91）**：`SshFileSystem` 实现上游 `@deepseek-ai/dsh@0.2.2-rc.1` `FileSystem` 的 `patchText` / `deleteFile` / `moveFile`。写路径与 `writeText` 相同：引擎加 `confinedWriter`。这是 npm `0.2.8` 相对该宿主缺的成员。
+
+### 变更
+
+- **peer 联合 pin 纳入 0.2.2-rc**：13 个 seam peer 从 `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1` 扩为 `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1 || ^0.2.2-rc.1`。旧范围保留。drift：`next` 探 0.2.2（当前 `0.2.2-rc.1`，且 `latest` 同为该版本），`pinned-0.2.1-rc.1` 精确安装离开 `next` 的 0.2.1 家族。
+
 ## [0.2.8](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-02)
 
 0.2.7 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.8`**
