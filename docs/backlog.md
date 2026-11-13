@@ -26,6 +26,9 @@
 | BUG-28 | 远程会话用 bash 代替 grep/glob | doing | P1 | rg 打出的 POSIX 绝对路径在进收集器前改写成占位路径。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
 | BUG-29 | 组件状态被 refreshContext 刷掉 | doing | P1 | context provider 读探测缓存。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
 | UX-19 | 运行时目录标明远端与本地占位 | doing | P2 | 待 PR #95 审查。验收见 [UX-19](./uat/UX-19-cwd-placeholder.md)。 |
+| BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | doing | P1 | 宿主 0.2.2 标题簇 overflow:clip + mask，弹层 portal 到 document.body。0.2.1 无此裁切。随 0.2.10 发布。验收矩阵 U1。 |
+| REQ-I33 | 斜杠指令新增工作区 | doing | P2 | `/workspace` 打开添加工作区目录流，选中后登记并打开。无 commandUi 的旧宿主不注册。随 0.2.10。验收矩阵 U2。 |
+| INFRA-25 | 发版前 UI 操作冒烟 | doing | P2 | 矩阵 §4.1 增加 U1/U2，与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。首轮实机随 0.2.10。 |
 
 ## 2. 已排期（todo，按优先级）
 

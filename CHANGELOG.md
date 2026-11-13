@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+## [0.2.10](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-13)
+
+0.2.9 之后的客户端修复。远程组件仍是 `0.2.9`（本版不改 Go 源码、不重部署）。peer 范围不变。
+
+### 修复
+
+- **0.2.2 标题栏「工作区」弹层被裁掉（`BUG-30`）**：宿主 0.2.2 的标题簇对 `conversation.session.header.actions` 使用 `overflow: clip` 和遮罩，原地 `position: fixed` 的驾驶舱画在按钮条里。0.2.1 没有这层裁切。面板改 portal 到 `document.body`。
+
+### 变更
+
+- **斜杠指令 `/workspace`（`REQ-I33`）**：在有 `commandUi` 的宿主上注册。选中后打开添加工作区目录流，把选中的本机目录或远程占位路径登记为工作区并打开。没有 `commandUi` 的旧宿主不注册这条指令。
+- **发版前 UI 点击（`INFRA-25`）**：`docs/uat/matrix.md` §4.1 增加 U1（标题栏工作区弹层）和 U2（`/workspace`）。与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。
+
 ## [0.2.9](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-06)
 
 0.2.8 之后合入 master、随本版发布。插件与远程组件工件**同为 `0.2.9`**

@@ -262,4 +262,6 @@ test('the panel derives through cockpit.ts and re-reads the connected store', ()
   // The pickOnly add-side flow is untouched.
   assert.match(panel, /<SshWorkspaceFlow/)
   assert.match(panel, /pickOnly/)
+  // BUG-30: 0.2.2 clips the header action row, so the overlay must leave it.
+  assert.match(panel, /createPortal\(panel, document\.body\)/)
 })

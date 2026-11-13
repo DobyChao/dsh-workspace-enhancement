@@ -25,10 +25,17 @@
  * the directory seats and the session-feed seats the main-workspace section
  * reads — the same `remoteFacts`/`subscribeRemote` pair the remote-status header
  * cell consumes).
+ *
+ * Host 0.2.2 clips and fades that action row (`overflow: clip` plus a mask on
+ * the title cluster). A `position: fixed` overlay rendered in place is painted
+ * into that strip and never covers the page. 0.2.1 did not clip the cluster.
+ * The slot contract says overlays must portal, so the open panel (and the
+ * picker it mounts) is portaled to `document.body`.
  * @module dsh-workspace-enhancement/client/side-workspaces
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FlowInjected } from './flow.tsx'
 import { SshWorkspaceFlow } from './flow.tsx'
@@ -106,6 +113,9 @@ function useSessionCwd(props: SideWorkspacesProps): string | undefined {
 export function SideWorkspacesAction(props: SideWorkspacesProps): JSX.Element {
   const t = props.t ?? zhBaseline
   const [open, setOpen] = useState(false)
+  const panel = open
+    ? <SideWorkspacesPanel {...props} t={t} injected={props} onClose={() => setOpen(false)} />
+    : null
   return (
     <>
       <button
@@ -117,7 +127,7 @@ export function SideWorkspacesAction(props: SideWorkspacesProps): JSX.Element {
         <PlusIcon width={13} height={13} />
         {t('side.headerAction.label')}
       </button>
-      {open ? <SideWorkspacesPanel {...props} t={t} injected={props} onClose={() => setOpen(false)} /> : null}
+      {panel !== null && typeof document !== 'undefined' ? createPortal(panel, document.body) : panel}
     </>
   )
 }

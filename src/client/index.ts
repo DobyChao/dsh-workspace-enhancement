@@ -36,6 +36,9 @@ import { NativeRemoteFile, NativeRemotePath } from './native-remote-files-view.t
 import { asPreviewWire, remoteWorkspaceOf } from './remote-files.ts'
 import { RemoteFileViewer, RemoteFilesTab } from './remote-files-panel.tsx'
 import { SideWorkspacesAction } from './side-workspaces.tsx'
+import { WorkspaceCommandHost } from './workspace-command-host.tsx'
+import { WORKSPACE_COMMAND, adoptPickedWorkspace, createWorkspaceCommandBridge } from './workspace-command.ts'
+import type { AdoptMessages, WorkspaceCreator, WorkspaceOpener } from './workspace-command.ts'
 
 /** Local, self-contained wire contracts (no cross-plugin value imports). */
 export interface WireEntry {
@@ -247,6 +250,55 @@ export function apply(ctx: Context): void {
   // exists (see ADR-0017).
   ctx.slots.inject(REMOTE_STATUS_SLOT, () =>
     ctx.slots.register({ ...remoteStatusRegisterOptions(t), inject: injected }, RemoteStatusAction))
+  // REQ-I33: `/workspace` opens the same directory flow as「添加工作区」.
+  // `commandUi` and `conversation.input.overlay` arrived with host 0.2.2.
+  // `slots.inject` / `ctx.inject` wait; an older host simply never shows the
+  // command, and the rest of this apply does not depend on them.
+  const workspaceCommand = createWorkspaceCommandBridge()
+  const adoptMessages = (): AdoptMessages => ({
+    empty: t('command.workspace.empty'),
+    unavailable: t('command.workspace.unavailable'),
+    noId: t('command.workspace.noId'),
+  })
+  ctx.slots.inject('conversation.input.overlay', () => {
+    ctx.inject(['commandUi'], (scope) => {
+      const commands = scope.get('commandUi') as {
+        register(contribution: {
+          name: string
+          label?: () => string
+          description?: () => string
+          available: (session: { sessionId: string }) => boolean
+          ui: { kind: 'action'; run: (session: { sessionId: string }) => void }
+        }): () => void
+      }
+      scope.effect(() => commands.register({
+        name: WORKSPACE_COMMAND,
+        label: () => t('command.workspace.label'),
+        description: () => t('command.workspace.description'),
+        available: (session) => session.sessionId.trim() !== '',
+        ui: {
+          kind: 'action',
+          run: (session) => { workspaceCommand.open(session.sessionId) },
+        },
+      }), 'dsw: workspace command')
+    })
+    return ctx.slots.register({
+      name: 'conversation.input.overlay',
+      id: 'dsh-workspace-enhancement-add',
+      order: 40,
+      locale: 'dsw',
+      inject: () => ({
+        ...injected(),
+        bridge: workspaceCommand,
+        adoptWorkspace: (path: string) => adoptPickedWorkspace(
+          path,
+          ctx.get('workspaces') as WorkspaceCreator | undefined,
+          ctx.get('uiWorkspace') as WorkspaceOpener | undefined,
+          adoptMessages(),
+        ),
+      }),
+    }, WorkspaceCommandHost)
+  })
   installSidebarRowBadges(ctx)
   installNativeRemoteFiles(ctx as unknown as NativeFilesHost, NativeRemoteFile, NativeRemotePath)
   // REQ-A6: optional peer. No inject — a missing better-sidebar must not

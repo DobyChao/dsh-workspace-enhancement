@@ -1,25 +1,25 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-11-06 09:19 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-11-13 04:35 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
-| package.json 版本 | `0.2.9` |
-| npm 已发布版本 | `0.2.8` |
-| 最新 tag | `v0.2.8` |
-| 分支 / HEAD | `cursor/bump-0.2.9-37d3` / `887c4aa` |
-| HEAD 提交 | `chore(release): prepare 0.2.9` (2026-11-06) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| package.json 版本 | `0.2.10` |
+| npm 已发布版本 | `0.2.9` |
+| 最新 tag | `v0.2.9` |
+| 分支 / HEAD | `master` / `01c799b` |
+| HEAD 提交 | `chore(release): bump to 0.2.9 (#98)` (2026-11-06) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 92 |
-| 单测用例（静态计数） | 840 |
+| 单测文件 | 93 |
+| 单测用例（静态计数） | 844 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 60 |
@@ -29,7 +29,7 @@
 | 状态 | 数量 |
 |---|---|
 | `todo` | 11 |
-| `doing` | 8 |
+| `doing` | 11 |
 | `blocked` | 5 |
 | `done` | 107 |
 | `shipped` | 15 |

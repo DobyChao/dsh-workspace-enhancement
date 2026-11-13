@@ -306,6 +306,11 @@ export const zh = {
   'settings.form.addTitle': '添加机器',
   'settings.form.editNote': '留空的密码 / 私钥口令字段表示保持已保存的值不变。',
   'settings.label': '远程工作区',
+  'command.workspace.label': '新增工作区',
+  'command.workspace.description': '选择本机或已连接机器上的目录，登记为工作区并打开',
+  'command.workspace.empty': '请选择一个目录',
+  'command.workspace.unavailable': '当前宿主不能登记工作区',
+  'command.workspace.noId': '工作区已登记，但没有返回编号',
 
   /* ---------------------------------------------------- side-workspaces.tsx */
   'side.rpc.failed': 'dsw: 请求失败',
