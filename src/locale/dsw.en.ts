@@ -297,11 +297,6 @@ const en: Record<DswKey, string> = {
   'settings.form.addTitle': 'Add machine',
   'settings.form.editNote': 'An empty password / passphrase field keeps the stored value.',
   'settings.label': 'Remote workspaces',
-  'command.workspace.label': 'Add workspace',
-  'command.workspace.description': 'Pick a local directory or one on a connected machine, register it as a workspace, and open it',
-  'command.workspace.empty': 'Choose a directory',
-  'command.workspace.unavailable': 'This host cannot register a workspace',
-  'command.workspace.noId': 'The workspace was registered but returned no id',
 
   /* ---------------------------------------------------- side-workspaces.tsx */
   'side.rpc.failed': 'dsw: request failed',

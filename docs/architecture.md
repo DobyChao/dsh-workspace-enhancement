@@ -46,7 +46,6 @@
 | `conversation.hero.workspace.directoryFlow` + `sidebar.workspaces.directoryFlow` | `SshWorkspaceFlow` | 添加工作区目录流 |
 | `settings.section` | `RemoteWorkspaceSettingsPage` | 设置页机器管理 |
 | `conversation.session.header.actions` | `SideWorkspacesAction` | 标题栏「工作区」按钮与副工作区面板。0.2.2 起弹层 portal 到 `document.body`（标题簇 `overflow: clip` 会裁掉原地 `fixed`） |
-| `conversation.input.overlay` + `ctx.commandUi` | `WorkspaceCommandHost` | `/workspace` 打开添加工作区目录流（仅宿主有 `commandUi` 时注册），弹层同样 portal 到 `document.body` |
 | `conversation.session.header.utilities`（`REMOTE_STATUS_SLOT`） | `RemoteStatusAction` | 会话头远程状态 |
 
 会话栏分组行没有官方槽位（Session 行 0.1.7 起有槽，本插件不迁）。分组行徽标由 `installRowBadges` 注入，优先按 `data-row-key` 对齐，没有该属性时回退标题（ADR-0011）。侧栏列出远程机器、添加工作区里的已保存连接和 SSH 配置主机，或远程会话打开时自动探测。SSH 配置主机里已经保存过的连接复用该机器的探测；只存在于 `~/.ssh/config` 的别名走 `config.probe`，不写入注册表。重新检测在检测中、可连接、不可连接都保留，控件是刷新图标（悬停仍说明「重新检测并尝试连接」），会话头和设置页同样。工作区悬停卡没有槽位，行层把占位 cwd 改写成服务器和远端真实路径。被动探测不把未见过的主机密钥写入 known_hosts（已记录的密钥对不上则不可连接，悬停提示主机密钥已变更，和网络不通分开）；连接和添加机器仍按 accept-new 记录。可达性文案是检测中 / 可连接 / 不可连接，和会话里的「已连接」分开。本机目录列举走可选服务 `uiWorkspace`，不走 `workspaces`（BUG-3）。

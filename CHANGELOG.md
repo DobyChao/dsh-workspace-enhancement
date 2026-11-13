@@ -14,8 +14,7 @@
 
 ### 变更
 
-- **斜杠指令 `/workspace`（`REQ-I33`）**：在有 `commandUi` 的宿主上注册。选中后打开添加工作区目录流，把选中的本机目录或远程占位路径登记为工作区并打开。没有 `commandUi` 的旧宿主不注册这条指令。
-- **发版前 UI 点击（`INFRA-25`）**：`docs/uat/matrix.md` §4.1 增加 U1（标题栏工作区弹层）和 U2（`/workspace`）。与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。
+- **发版前 UI 点击（`INFRA-25`）**：`docs/uat/matrix.md` §4.1 增加 U1（标题栏工作区弹层）。与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。`REQ-I33` 斜杠指令本版不带，形态未定。
 
 ## [0.2.9](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-06)
 
