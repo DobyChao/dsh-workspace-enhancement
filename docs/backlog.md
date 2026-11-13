@@ -26,12 +26,15 @@
 | BUG-28 | 远程会话用 bash 代替 grep/glob | doing | P1 | rg 打出的 POSIX 绝对路径在进收集器前改写成占位路径。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
 | BUG-29 | 组件状态被 refreshContext 刷掉 | doing | P1 | context provider 读探测缓存。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
 | UX-19 | 运行时目录标明远端与本地占位 | doing | P2 | 待 PR #95 审查。验收见 [UX-19](./uat/UX-19-cwd-placeholder.md)。 |
+| BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | doing | P1 | 宿主 0.2.2 标题簇 overflow:clip + mask，弹层 portal 到 document.body。0.2.1 无此裁切。随 0.2.10 发布。验收矩阵 U1。 |
+| INFRA-25 | 发版前 UI 操作冒烟 | doing | P2 | 矩阵 §4.1 增加 U1，与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。首轮实机随 0.2.10。 |
 
 ## 2. 已排期（todo，按优先级）
 
 | ID | 标题 | 状态 | 优先级 | 提出 | 备注 |
 |---|---|---|---|---|---|
 | REQ-I32 | 新建工作区二级菜单：免进入建多文件夹工作区 | todo | P2 | 2026-10-27 | 2026-10-27 用户提。现状建工作区须先进入再逐个挂副目录。目标：「新建工作区」入口加二级菜单，创建时一次选定多个源文件夹（本机+已连机器；形态参考宿主「创建项目」弹窗的源文件夹多选区）。挂点（宿主按钮可否挂槽/替换）与验收待开工调查；归工作区生命周期线（ADR-0019） |
+| REQ-I33 | 斜杠指令新增工作区 | todo | P2 | 2026-11-13 | 2026-11-13 用户提，同日从 0.2.10 撤回：指令形态未定。目标仍是用斜杠指令新增工作区。 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
 | UX-18 | 系统提示叙述段未点名 sw_status | todo | P3 | 2026-10-29 | 2026-10-29 用户发现。工具已注册且 schema 有描述；插件注入的 sw-remote / tool:sw-exec / tool:bash 会点名 sw_connect、sw_exec，但不点名 sw_status（仅 schema 与 sw_exec description 顺带提及）。处置待定：在 sw-remote 补一句，或加 tool:sw-status 段。只入库，不做实现。 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 2026-09-08 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
