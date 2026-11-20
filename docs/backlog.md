@@ -19,6 +19,7 @@
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
 | REQ-I31 | 实验性切机器工具 | doing | P2 | 2026-10-27 已合入（PR #86）。待 owner a/b 复测 + UAT 步骤 5–15。见 [笔记](./notes/REQ-I31-switch-machine.md) |
+| BUG-31 | 装好 bubblewrap 后同会话围栏仍失败 | doing | P1 | 可恢复围栏失败（缺 bubblewrap）下一次 require 重开一次；仍失败则 15s 内不再开 serve。版本与缺组件仍等到 close。单测已覆盖。待合并。 |
 
 ## 2. 已排期（todo，按优先级）
 
