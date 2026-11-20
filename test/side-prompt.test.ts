@@ -70,6 +70,7 @@ test('composeWorkspacePrompt: local cwd without sides renders empty', () => {
 test('composeWorkspacePrompt: local cwd with sides renders ONLY the side list', () => {
   const text = composeWorkspacePrompt(resolve(tmpdir(), 'main'), undefined, [item({})])
   assert.ok(!text.includes('remote SSH workspace'))
+  assert.ok(!text.includes('sw_status'))
   assert.ok(text.includes('Side workspace'))
 })
 
@@ -78,6 +79,8 @@ test('composeWorkspacePrompt: remote cwd without sides keeps the pure R4 text + 
   const text = composeWorkspacePrompt('ssh://c1/srv/work', machine, [])
   assert.ok(text.includes('remote SSH workspace'))
   assert.ok(text.includes('uuz@127.0.0.1'))
+  // UX-18: the stable remote section names sw_status, same voice as sw_connect / sw_exec.
+  assert.ok(text.includes('Call sw_status first to orient on the current remote machine and connection health, or when an sw_* call fails.'))
   // AUDIT-6 (ADR-0020 D6): every remote-main-workspace session carries the
   // local-sandbox honesty sentence; the gate sentence appears only when the
   // machine's gate is on (covered by the dedicated test below).
@@ -85,7 +88,8 @@ test('composeWorkspacePrompt: remote cwd without sides keeps the pure R4 text + 
   assert.ok(!text.includes('approval decision before they run'))
   assert.ok(!text.includes('Side workspace'))
   assert.ok(text.includes('.dsh-uploads'))
-  assert.equal(text.split('\n\n').length, 3)
+  // R4 emphasis + UX-18 sw_status + AUDIT-6 honesty + REQ-I28 uploads.
+  assert.equal(text.split('\n\n').length, 4)
 })
 
 test('composeWorkspacePrompt: AUDIT-6 — the gate expectation sentence appears exactly when the machine gate is on', () => {
@@ -127,8 +131,9 @@ test('composeWorkspacePrompt: remote cwd with sides renders ALL parts', () => {
   const machine = { username: 'uuz', host: '127.0.0.1' }
   const text = composeWorkspacePrompt('ssh://c1/srv/work', machine, [item({ kind: 'remote', rootKey: 'ssh://c1/deploy', label: '部署' })])
   assert.ok(text.includes('remote SSH workspace'))
+  assert.ok(text.includes('Call sw_status first to orient'))
   assert.ok(text.includes('follow this session\'s /permission sandbox'))
   assert.ok(text.includes('Side workspace **部署**'))
-  // R4 强调 + AUDIT-6 诚实句 + REQ-I28 上传句 + R5 副清单
-  assert.equal(text.split('\n\n').length, 4)
+  // R4 强调 + UX-18 sw_status + AUDIT-6 诚实句 + REQ-I28 上传句 + R5 副清单
+  assert.equal(text.split('\n\n').length, 5)
 })

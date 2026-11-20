@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # scripts/dev-lab.ps1 — isolated lab sandbox launcher for dsh-workspace-enhancement
 #
 # Usage (run from anywhere):
@@ -95,35 +95,54 @@ if ($Smoke) {
   if ($null -eq $proc) { throw 'failed to start dsh web process' }
   try {
     $deadline = (Get-Date).AddSeconds(120)
-    $resp = $null
+    # FIX-8: ADR-0018 moved the channel under /api. A bare GET / is a 303, not
+    # 200, until the launch token is redeemed — same sequence as boot-smoke.mjs
+    # and dev-lab-wsl.sh. The envelope method is the path below /api.
+    $listenUrl = $null
     while ((Get-Date) -lt $deadline) {
       if ($proc.HasExited) {
         throw "dsh web exited early (code $($proc.ExitCode)); see $stderr"
       }
-      try {
-        $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 3
-        if ($resp.StatusCode -eq 200) { break }
-      } catch {
-        Start-Sleep -Seconds 3
+      $log = Get-Content -Raw -Path $stdout -ErrorAction SilentlyContinue
+      if ($log -match 'http://127\.0\.0\.1:\d+/\?token=[\w.-]+') {
+        $listenUrl = $Matches[0]
+        break
       }
+      Start-Sleep -Seconds 3
     }
-    if ($null -eq $resp -or $resp.StatusCode -ne 200) {
-      throw "web did not answer 200 at http://127.0.0.1:$Port/ within 120s; see $stderr"
+    if (-not $listenUrl) {
+      throw "web did not print a listening URL at http://127.0.0.1:$Port/ within 120s; see $stderr"
     }
+    Write-Host "[dev-lab] smoke: listening ($listenUrl)"
+    $redeem = Invoke-WebRequest -UseBasicParsing -Uri $listenUrl -MaximumRedirection 0 -SkipHttpErrorCheck -TimeoutSec 10
+    if ($redeem.StatusCode -ne 303 -and $redeem.StatusCode -ne 200) {
+      throw "GET /?token=… -> HTTP $($redeem.StatusCode) (expected 303/200)"
+    }
+    Write-Host "[dev-lab] smoke: GET /?token=… -> HTTP $($redeem.StatusCode)"
+    $cookieParts = @(
+      @($redeem.Headers['Set-Cookie']) | ForEach-Object {
+        if (-not [string]::IsNullOrEmpty($_)) { ($_ -split ';', 2)[0] }
+      }
+    ) | Where-Object { -not [string]::IsNullOrEmpty($_) }
+    $cookie = $cookieParts -join '; '
+    if ([string]::IsNullOrEmpty($cookie)) { throw 'token exchange returned no session cookie' }
+    $sessionHeaders = @{ Cookie = $cookie }
+
+    $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -Headers $sessionHeaders -TimeoutSec 10
+    if ($resp.StatusCode -ne 200) { throw "GET / (session) -> HTTP $($resp.StatusCode) (expected 200)" }
     Write-Host "[dev-lab] smoke: HTTP 200 on http://127.0.0.1:$Port/ ($($resp.RawContentLength) bytes)"
     $bundleReferenced = $resp.Content -match 'dsh-workspace-enhancement/client\.js'
     Write-Host "[dev-lab] smoke: index references plugin client bundle: $bundleReferenced"
     if (-not $bundleReferenced) { throw 'plugin client bundle is not injected into the served index' }
 
-    # /dsw RPC channel probe: the browser transport POSTs to <channel>/<endpoint>.
-    $body = '{"type":"client-request","rpcId":"lab-smoke-1","method":"connections.list","payload":{}}'
-    $rpc = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/dsw/connections.list" `
-      -ContentType 'application/json' -Body $body -TimeoutSec 10
+    $body = '{"type":"client-request","rpcId":"lab-smoke-1","method":"dsw/connections.list","payload":{}}'
+    $rpc = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/api/dsw/connections.list" `
+      -Headers $sessionHeaders -ContentType 'application/json' -Body $body -TimeoutSec 10
     $value = $rpc.result.value
     $wire = if ($null -ne $value) { $value | ConvertTo-Json -Compress } else { 'null' }
-    Write-Host "[dev-lab] smoke: POST /dsw/connections.list -> ok=$($rpc.result.ok), value=$wire"
-    if (-not $rpc.result.ok) { throw 'RPC channel /dsw returned ok=false' }
-    Write-Host '[dev-lab] smoke: PASS (HTTP + client bundle + /dsw RPC channel)'
+    Write-Host "[dev-lab] smoke: POST /api/dsw/connections.list -> ok=$($rpc.result.ok), value=$wire"
+    if (-not $rpc.result.ok) { throw 'RPC channel /api/dsw returned ok=false' }
+    Write-Host '[dev-lab] smoke: PASS (HTTP + client bundle + /api/dsw RPC channel)'
   } finally {
     if ($null -ne $proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
     # dsh.cmd is a wrapper: the node server child survives Stop-Process, so

@@ -28,10 +28,7 @@
 | REQ-I32 | 新建工作区二级菜单：免进入建多文件夹工作区 | todo | P2 | 2026-10-27 | 2026-10-27 用户提。现状建工作区须先进入再逐个挂副目录。目标：「新建工作区」入口加二级菜单，创建时一次选定多个源文件夹（本机+已连机器；形态参考宿主「创建项目」弹窗的源文件夹多选区）。挂点（宿主按钮可否挂槽/替换）与验收待开工调查；归工作区生命周期线（ADR-0019） |
 | REQ-I33 | 斜杠指令新增工作区 | todo | P2 | 2026-11-13 | 2026-11-13 用户提，同日从 0.2.10 撤回：指令形态未定。目标仍是用斜杠指令新增工作区。 |
 | REQ-I20 | 系统提示段对齐官方 order | todo | P3 | 2026-09-22 | 2026-09-22。远程段紧跟 persona：`sw-remote`=90、工具段=105，夹在身份 0 与 `PLAN_POLICY` 500 之间。官方工具段从 1000 起，段名也是 `tool:bash`。先定落点。见 [prompt-section-order](./notes/prompt-section-order.md) |
-| UX-18 | 系统提示叙述段未点名 sw_status | todo | P3 | 2026-10-29 | 2026-10-29 用户发现。工具已注册且 schema 有描述；插件注入的 sw-remote / tool:sw-exec / tool:bash 会点名 sw_connect、sw_exec，但不点名 sw_status（仅 schema 与 sw_exec description 顺带提及）。处置待定：在 sw-remote 补一句，或加 tool:sw-status 段。只入库，不做实现。 |
 | REQ-A4 | 端口转发（local/reverse + autoStart） | todo | P3 | 2026-09-08 | 移植 dsh-remote forwards。延后见 `ADR-0005`。2026-09-22 从 P2 降到 P3 |
-| FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | todo | P3 | 2026-09-29 | ADR-0018 后通道在 /api/dsw/<端点>，-Smoke 仍 POST /dsw/connections.list 必 404（09-29 升 0.2.0 实机时实锤）。改为 /api/dsw/ + 会话 cookie（对齐 boot-smoke） |
-| INFRA-12 | boot-smoke 成功后不退出 | todo | P3 | 2026-09-12 | 显式 `process.exit`；只清 `dsh-boot-smoke-*`。验收：SMOKE PASS 后 5s 内退出、码 0 |
 | REQ-A5 | 旧 dsh-ssh-routes 占位树退役 | todo | P3 | 2026-09-08 | 仓库侧旧树已删（10-12 核实）；剩 `transport.ts:78` 运行时仍读 $DSH_HOME 下 pre-rename 同名树——定退役时点（改读 dsw-routes + 迁移或告警）+ home 归档盘点 |
 | AUDIT-4 | 远程状态：判定与渲染合成一份被测函数 | todo | P3 | 2026-09-11 | `remoteCellOf` + 测试改指它（`ADR-0017` §7.6）。不要并进 `AUDIT-5` |
 | REQ-I8 | Spike：fork + 换 cwd（norepo 挂工作区） | todo | P3 | 2026-09-12 | 10-27 调查：原案死——fork 官方存在但不收 cwd 覆盖；正道=0.2.1 `workingDirectory.set`（0.2.0 无）。改向「目录即会话上下文」（A 会话中迁移 / B cwd-only 开场），开工前先拍需求。见 [survey](./notes/req-i8-norepo-workspace-survey.md) |
@@ -53,6 +50,9 @@
 
 | ID | 标题 | 状态 | 优先级 | 完成 | 备注 |
 |---|---|---|---|---|---|
+| FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | done | P3 | 2026-11-20 | -Smoke 兑换会话 cookie 后 POST /api/dsw/connections.list。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
+| INFRA-12 | boot-smoke 成功后不退出 | done | P3 | 2026-11-20 | 显式 process.exit；只删 dsh-boot-smoke-*。SMOKE PASS 后 5s 内退出、码 0。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
+| UX-18 | 系统提示叙述段未点名 sw_status | done | P3 | 2026-11-20 | sw-remote 补一句：何时调用 sw_status，措辞对齐 sw_connect / sw_exec。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
 | PUB-15 | 0.2.10 发布 | shipped | P1 | 2026-11-13 | tag [v0.2.10](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.10)；npm latest=0.2.10。档案 [R62](./rounds/R62-pub15-v0.2.10-release.md) |
 | BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | done | P1 | 2026-11-13 | PR [#99](https://github.com/DobyChao/dsh-workspace-enhancement/pull/99) 合入，随 0.2.10 发布。弹层 portal 到 document.body。尾巴：矩阵 U1 实机未记。 |
 | INFRA-25 | 发版前 UI 操作冒烟 | done | P2 | 2026-11-13 | 矩阵 §4.1 增加 U1，与 L2 一起在发版前跑。随 0.2.10 发布。尾巴：首轮实机没有完成记录。 |

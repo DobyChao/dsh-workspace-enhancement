@@ -301,6 +301,7 @@ export function composeWorkspacePrompt(
   const parts: string[] = []
   if (fact !== null) {
     parts.push(renderRemotePrompt(fact))
+    parts.push(modelPrompt('remoteStatus'))
     parts.push(modelPrompt('remoteNoSandbox'))
     parts.push(modelPrompt('remoteUploads', { dir: REMOTE_UPLOAD_DIR }))
     if (machine?.remoteApproval !== undefined && machine.remoteApproval !== 'off') {
@@ -736,7 +737,7 @@ export function registerWorkspaceTools(
    *   不随 UI 语言切换（ADR-0014）。
    *
    * REQ-I11（ADR-0021 §2.8）**两段分工**：
-   * - **稳定框架**（远程强调 + `remoteNoSandbox` + `remoteGateActive`）留在这条
+   * - **稳定框架**（远程强调 + `remoteStatus` + `remoteNoSandbox` + `remoteGateActive`）留在这条
    *   `section('sw-remote', order 90)`；
    * - **易变状态**（当前有效目录的远端路径与占位路径 + 本会话已连接机器清单
    *   + 副根清单 + 每台机器的远程组件是否生效）走
