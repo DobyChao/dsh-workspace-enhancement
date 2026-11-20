@@ -7,6 +7,11 @@
  * spawn**; REQ-I15 lets confined **reads** fall back to SFTP. danger may fall
  * back to SFTP via {@link CoreMissingError}.
  *
+ * A confined open that fails is remembered so the next read does not spawn
+ * another serve. Fence-environment failures (missing bubblewrap, an unusable
+ * bwrap, no Landlock) reopen once on the next require, then stay quiet for
+ * {@link CORE_BLOCKED_RETRY_MS}. Identity failures stay until `close`.
+ *
  * @module dsh-workspace-enhancement/core-hub
  */
 
@@ -54,6 +59,30 @@ import {
   interpolate,
 } from './remote-sandbox.ts'
 import type { SshTransport } from './transport.ts'
+
+/**
+ * Quiet period after a recoverable fence failure has already been retried
+ * once (BUG-31). Inside the window, `require` throws the cached refusal and
+ * does not exec `dsh-core serve`. Identity failures (version, proto,
+ * capability, provenance) and a missing core binary do not use this window:
+ * they stay until `close` / deploy, which is what clears them today.
+ */
+export const CORE_BLOCKED_RETRY_MS = 15_000
+
+/** Binary-identity refusals. Retrying them cannot succeed without a new core. */
+const STICKY_OPEN_FAILURE = /reports version |is not one this plugin shipped|core proto |is missing cap |core session opened without a client/
+
+/**
+ * The remote can clear these without a reconnect or a new core binary:
+ * bubblewrap missing or unusable, or Landlock unavailable. The Go refusal
+ * says `cannot be confined` (not the host prefix `cannot confine`).
+ */
+const RECOVERABLE_FENCE_FAILURE = /cannot be confined|\bbubblewrap\b|\bbwrap\b|\blandlock\b/i
+
+function isRecoverableFenceFailure(error: Error): boolean {
+  if (STICKY_OPEN_FAILURE.test(error.message)) return false
+  return RECOVERABLE_FENCE_FAILURE.test(error.message)
+}
 
 export interface CoreStatusView {
   ok: boolean
@@ -215,17 +244,56 @@ export function createCoreHub(
     idleMs?: number
     /** REQ-I14: deploy the shipped core on a confined open's missing/stale gap. */
     resolveGap?: CoreGapResolver
+    /** Clock for {@link CORE_BLOCKED_RETRY_MS}. Tests inject this; production is `Date.now`. */
+    now?: () => number
   } = {},
 ): CoreHub {
   const deps = options.deps ?? remoteSandboxDepsOf(ctx)
   const open = options.open ?? openOverSsh
   const idleMs = options.idleMs ?? CORE_IDLE_MS
   const resolveGap = options.resolveGap
+  const now = options.now ?? ((): number => Date.now())
   const live = new Map<string, LiveSession>()
   const known = new Map<string, Set<string>>()
   const opening = new Map<string, Promise<CoreClient>>()
-  /** Confined open failures (missing binary/cap). Cleared by close/deploy. */
-  const blocked = new Map<string, Error>()
+  /**
+   * Confined open failures. `reopen` is the one immediate retry a
+   * fence-environment failure gets (the require after bubblewrap is
+   * installed). After that, `until` holds the refusal. Identity failures
+   * use `until: Infinity`. Cleared by close/deploy.
+   */
+  const blocked = new Map<string, { error: Error; until: number; reopen: boolean }>()
+
+  const rememberBlocked = (key: string, error: Error): void => {
+    if (!isRecoverableFenceFailure(error)) {
+      blocked.set(key, { error, until: Number.POSITIVE_INFINITY, reopen: false })
+      return
+    }
+    const prior = blocked.get(key)
+    if (prior === undefined) {
+      blocked.set(key, { error, until: now() + CORE_BLOCKED_RETRY_MS, reopen: true })
+      return
+    }
+    // A failed reopen must not earn another immediate retry. Slide the
+    // window forward only once the previous one has elapsed.
+    const expired = now() >= prior.until
+    blocked.set(key, {
+      error,
+      until: expired ? now() + CORE_BLOCKED_RETRY_MS : prior.until,
+      reopen: false,
+    })
+  }
+
+  /** Cached refusal, or `undefined` when this require should open a serve. */
+  const cachedRefusal = (key: string): Error | undefined => {
+    const entry = blocked.get(key)
+    if (entry === undefined) return undefined
+    if (entry.reopen || now() >= entry.until) {
+      entry.reopen = false
+      return undefined
+    }
+    return entry.error
+  }
 
   const remember = (connectionId: string, workspace: string | undefined): void => {
     if (workspace === undefined || workspace === '/') return
@@ -392,10 +460,12 @@ export function createCoreHub(
       }
       drop(existing, true)
     }
-    const cached = blocked.get(key)
-    if (cached !== undefined) throw cached
+    // Join an open already in flight before consulting the failure cache, so
+    // the one allowed retry is a single serve rather than one per caller.
     const pending = opening.get(key)
     if (pending !== undefined) return pending
+    const cached = cachedRefusal(key)
+    if (cached !== undefined) throw cached
 
     const attempt = (async (): Promise<CoreClient> => {
       const connection = deps.connection(connectionId)
@@ -466,13 +536,13 @@ export function createCoreHub(
 
       const mapOpenError = (error: unknown): Error => {
         if (error instanceof RemoteSandboxError) {
-          if (confined) blocked.set(key, error)
+          if (confined) rememberBlocked(key, error)
           return error
         }
         const detail = error instanceof Error ? error.message : String(error)
         if (!confined) return new CoreMissingError(detail)
         const refusal = remoteSandboxUnavailable(refuseMode, detail)
-        blocked.set(key, refusal)
+        rememberBlocked(key, refusal)
         return refusal
       }
 

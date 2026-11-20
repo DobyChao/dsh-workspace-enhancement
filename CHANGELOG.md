@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### 修复
+
+- **装好 bubblewrap 后同会话围栏仍失败（`BUG-31`，Fixes #68）**：缺 bubblewrap、bwrap 不可用或没有 Landlock 时，下一次 `require` 会重新打开 serve。这次重试仍失败，则 15 秒内直接抛缓存错误，不再每条读都起 SSH serve。版本、协议、能力、溯源和缺组件的失败仍缓存到 `close` / 重新部署。
+
 ## [0.2.10](https://github.com/DobyChao/dsh-workspace-enhancement) (2026-11-13)
 
 0.2.9 之后的客户端修复。远程组件仍是 `0.2.9`（本版不改 Go 源码、不重部署）。peer 范围不变。
