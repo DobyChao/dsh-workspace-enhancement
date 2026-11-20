@@ -50,9 +50,9 @@
 
 | ID | 标题 | 状态 | 优先级 | 完成 | 备注 |
 |---|---|---|---|---|---|
-| FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | done | P3 | 2026-11-20 | -Smoke 兑换会话 cookie 后 POST /api/dsw/connections.list。 |
-| INFRA-12 | boot-smoke 成功后不退出 | done | P3 | 2026-11-20 | 显式 process.exit；只删 dsh-boot-smoke-*。SMOKE PASS 后 5s 内退出、码 0。 |
-| UX-18 | 系统提示叙述段未点名 sw_status | done | P3 | 2026-11-20 | sw-remote 补一句：何时调用 sw_status，措辞对齐 sw_connect / sw_exec。 |
+| FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | done | P3 | 2026-11-20 | -Smoke 兑换会话 cookie 后 POST /api/dsw/connections.list。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
+| INFRA-12 | boot-smoke 成功后不退出 | done | P3 | 2026-11-20 | 显式 process.exit；只删 dsh-boot-smoke-*。SMOKE PASS 后 5s 内退出、码 0。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
+| UX-18 | 系统提示叙述段未点名 sw_status | done | P3 | 2026-11-20 | sw-remote 补一句：何时调用 sw_status，措辞对齐 sw_connect / sw_exec。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
 | PUB-15 | 0.2.10 发布 | shipped | P1 | 2026-11-13 | tag [v0.2.10](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.10)；npm latest=0.2.10。档案 [R62](./rounds/R62-pub15-v0.2.10-release.md) |
 | BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | done | P1 | 2026-11-13 | PR [#99](https://github.com/DobyChao/dsh-workspace-enhancement/pull/99) 合入，随 0.2.10 发布。弹层 portal 到 document.body。尾巴：矩阵 U1 实机未记。 |
 | INFRA-25 | 发版前 UI 操作冒烟 | done | P2 | 2026-11-13 | 矩阵 §4.1 增加 U1，与 L2 一起在发版前跑。随 0.2.10 发布。尾巴：首轮实机没有完成记录。 |
