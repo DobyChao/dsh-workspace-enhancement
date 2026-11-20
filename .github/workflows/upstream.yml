@@ -211,11 +211,20 @@ jobs:
         # pins them all to one exact version.
         # The union peer pin claims FOUR families:
         # `^0.1.7-rc.2 || ^0.2.0-rc.1 || ^0.2.1-rc.1 || ^0.2.2-rc.1`.
-        # 0.2.2-rc.1 rides the moving `next` tag (host `latest` and seam `next`
-        # are 0.2.2-rc.1 as of 2026-11-06; `^0.2.2-rc.1` covers later
-        # prereleases of that same tuple, for example 0.2.2-rc.2, and not
-        # 0.2.2-alpha.*). 0.2.1-rc.1 left `next` with that move, so it has an
-        # exact-version channel again, same recipe as pinned-0.2.0-rc.1.
+        # 0.2.2 rides the moving `next` tag. Host `latest` and `next` are both
+        # 0.2.2-rc.5 as of 2026-11-20 (`npm view`; seam `next` matches; alpha
+        # is still 0.2.2-alpha.3). `^0.2.2-rc.1` covers later prereleases of
+        # that same tuple, including 0.2.2-rc.5, and not 0.2.2-alpha.*.
+        # Families `next` no longer installs keep an exact channel:
+        # pinned-0.2.1-rc.1, pinned-0.2.0-rc.1, pinned-0.1.7-rc.2.
+        # Those channels stay while peer still names the family (check.mjs
+        # gate 6 greps upstream.yml and the channel must actually install it).
+        # Retiring one means narrowing peer; that is an owner decision and is
+        # not done here. The 2026-10-29 red on the two older pins (issues
+        # #90 / #92) was check:static's overdue decision-queue deadline, the
+        # same failure as next and alpha that day; typecheck and npm test
+        # passed. Run 44522889580 (2026-11-19, master 46cd48a, next=0.2.2-rc.5)
+        # was green on all five channels, including boot.
         # Every seam peer publishes these versions, so the install step is the
         # existing tag-or-exact recipe.
         include:
