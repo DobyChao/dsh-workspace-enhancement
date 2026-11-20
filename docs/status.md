@@ -1,18 +1,18 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-11-13 05:00 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-11-20 08:28 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
 | 项 | 值 |
 |---|---|
 | package.json 版本 | `0.2.10` |
-| npm 已发布版本 | `0.2.9` |
-| 最新 tag | `v0.2.9` |
-| 分支 / HEAD | `fix/BUG-30-header-portal` / `4db735d` |
-| HEAD 提交 | `fix(client): portal the workspace dialog and add /workspace` (2026-11-13) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| npm 已发布版本 | `0.2.10` |
+| 最新 tag | `v0.2.10` |
+| 分支 / HEAD | `cursor/backlog-drift-pins-e2f6` / `46cd48a` |
+| HEAD 提交 | `fix(client): portal the session workspace dialog (#99)` (2026-11-13) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -22,17 +22,17 @@
 | 单测用例（静态计数） | 840 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
-| 轮次报告 | 60 |
+| 轮次报告 | 61 |
 
 ## 待办分布（docs/backlog.md）
 
 | 状态 | 数量 |
 |---|---|
 | `todo` | 12 |
-| `doing` | 10 |
+| `doing` | 1 |
 | `blocked` | 5 |
-| `done` | 107 |
-| `shipped` | 15 |
+| `done` | 116 |
+| `shipped` | 17 |
 | `dropped` | 17 |
 
 ## 被挡住 / 待拍板

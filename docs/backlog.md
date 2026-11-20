@@ -18,16 +18,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 备注 |
 |---|---|---|---|---|
-| UPSTREAM-14 | 0.2.2 文件接缝 patch/delete/move | doing | P1 | #97 已合入 master（#93 #91 已关）。SshFileSystem 实现 patchText/deleteFile/moveFile。0.2.9 把 13 个 seam peer 追加 `^0.2.2-rc.1`。 |
-| BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | doing | P0 | 混合 spawn 改写 argv 后搬移已有标记。无标记仍是 off。单测与 typecheck 已过。待 PR。 |
-| BUG-26 | 完全权限下 sw_connect 不部署远程组件 | doing | P1 | 完全权限有组件仍走 serve --sandbox off，缺了才退 SFTP。sw_connect 与首用缺口直接部署，不弹审批。现行规则在 architecture §4.1。 |
-| BUG-27 | 升级后官方远程组件过不了 sha 白名单 | doing | P1 | 白名单累计历次官方发布的二进制。同一条版本线且哈希在名单里继续用。名单外不运行，下次 sw_connect 替换。 |
 | REQ-I31 | 实验性切机器工具 | doing | P2 | 2026-10-27 已合入（PR #86）。待 owner a/b 复测 + UAT 步骤 5–15。见 [笔记](./notes/REQ-I31-switch-machine.md) |
-| BUG-28 | 远程会话用 bash 代替 grep/glob | doing | P1 | rg 打出的 POSIX 绝对路径在进收集器前改写成占位路径。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
-| BUG-29 | 组件状态被 refreshContext 刷掉 | doing | P1 | context provider 读探测缓存。待 PR #95 合并。验收见 [PR95](./uat/PR95-2026-11-01.md)。 |
-| UX-19 | 运行时目录标明远端与本地占位 | doing | P2 | 待 PR #95 审查。验收见 [UX-19](./uat/UX-19-cwd-placeholder.md)。 |
-| BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | doing | P1 | 宿主 0.2.2 标题簇 overflow:clip + mask，弹层 portal 到 document.body。0.2.1 无此裁切。随 0.2.10 发布。验收矩阵 U1。 |
-| INFRA-25 | 发版前 UI 操作冒烟 | doing | P2 | 矩阵 §4.1 增加 U1，与 L2 一起在发版前跑。现有 L0 仍是 boot 哨兵。首轮实机随 0.2.10。 |
 
 ## 2. 已排期（todo，按优先级）
 
@@ -61,7 +52,18 @@
 
 | ID | 标题 | 状态 | 优先级 | 完成 | 备注 |
 |---|---|---|---|---|---|
+| PUB-15 | 0.2.10 发布 | shipped | P1 | 2026-11-13 | tag [v0.2.10](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.10)；npm latest=0.2.10。档案 [R62](./rounds/R62-pub15-v0.2.10-release.md) |
+| BUG-30 | 0.2.2 标题栏「工作区」弹层被裁掉 | done | P1 | 2026-11-13 | PR [#99](https://github.com/DobyChao/dsh-workspace-enhancement/pull/99) 合入，随 0.2.10 发布。弹层 portal 到 document.body。尾巴：矩阵 U1 实机未记。 |
+| INFRA-25 | 发版前 UI 操作冒烟 | done | P2 | 2026-11-13 | 矩阵 §4.1 增加 U1，与 L2 一起在发版前跑。随 0.2.10 发布。尾巴：首轮实机没有完成记录。 |
+| PUB-14 | 0.2.9 发布 | shipped | P1 | 2026-11-09 | tag [v0.2.9](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.9)；Release 2026-11-09（tag 2026-11-06）。档案 [R61](./rounds/R61-v0.2.9-release.md) |
+| UPSTREAM-14 | 0.2.2 文件接缝 patch/delete/move | done | P1 | 2026-11-09 | PR [#97](https://github.com/DobyChao/dsh-workspace-enhancement/pull/97) 于 2026-11-05 合入，随 0.2.9 发布。SshFileSystem 实现 patchText/deleteFile/moveFile。 |
 | PUB-13 | 0.2.8 发布 | shipped | P1 | 2026-11-03 | tag [v0.2.8](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.8)；npm latest=0.2.8。档案 [R60](./rounds/R60-pub13-v0.2.8-release.md) |
+| BUG-25 | 远程 bash 丢掉 confine 标记跑 sandbox off | done | P0 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 于 2026-11-02 合入，随 0.2.8 发布。改写后的 argv 仍带 confine 标记。 |
+| BUG-26 | 完全权限下 sw_connect 不部署远程组件 | done | P1 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 合入，随 0.2.8 发布。完全权限有组件仍部署，走 serve --sandbox off。 |
+| BUG-27 | 升级后官方远程组件过不了 sha 白名单 | done | P1 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 合入，随 0.2.8 发布。同线官方哈希累计进白名单；名单外不运行。 |
+| BUG-28 | 远程会话用 bash 代替 grep/glob | done | P1 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 合入，随 0.2.8 发布。rg 的 POSIX 绝对路径在进收集器前改成占位路径。验收 [PR95](./uat/PR95-2026-11-01.md)。 |
+| BUG-29 | 组件状态被 refreshContext 刷掉 | done | P1 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 合入，随 0.2.8 发布。组件状态读探测缓存。验收 [PR95](./uat/PR95-2026-11-01.md)。 |
+| UX-19 | 运行时目录标明远端与本地占位 | done | P2 | 2026-11-03 | PR [#95](https://github.com/DobyChao/dsh-workspace-enhancement/pull/95) 合入，随 0.2.8 发布。验收 [UX-19](./uat/UX-19-cwd-placeholder.md)。 |
 | PUB-12 | 0.2.7 发布 | shipped | P1 | 2026-10-28 | tag [v0.2.7](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.7)；npm latest=0.2.7。档案 [R59](./rounds/R59-pub12-v0.2.7-release.md) |
 | UX-17 | 设为默认，并在机器列表露出不可编辑的本机 | done | P3 | 2026-10-30 | 设置页按钮改为「设为默认」。列表含本机：不可编辑、不能部署远程组件，可成为新建工作区的起始。脚本 [UX-17](./uat/UX-17-settings.md) |
 | PUB-11 | 0.2.6 发布 | shipped | P1 | 2026-10-26 | tag [v0.2.6](https://github.com/DobyChao/dsh-workspace-enhancement/releases/tag/v0.2.6)；npm latest=0.2.6。档案 [R57](./rounds/R57-pub11-v0.2.6-release.md) |
