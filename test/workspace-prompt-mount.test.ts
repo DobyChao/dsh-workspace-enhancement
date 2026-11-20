@@ -161,6 +161,7 @@ test('mount: a REMOTE session gets every section, in English only', () => {
     `expected ${EXPECTED_SECTIONS.join(' + ')}, got ${String(texts.length)} non-empty section(s)`)
   const joined = texts.join('\n')
   assert.ok(joined.includes('remote SSH workspace'))
+  assert.ok(joined.includes('Call sw_status first to orient on the current remote machine and connection health, or when an sw_* call fails.'))
   assert.ok(joined.includes('sw_exec executes a command on the specified server'))
   if (process.platform === 'win32') {
     assert.ok(joined.includes('The bash tool runs `bash -c` on this session\'s remote Linux workspace'))

@@ -28,6 +28,12 @@ export const MODEL_PROMPTS = {
   /** R4 remote emphasis paragraph (`sw-remote` section, order 90). */
   remoteEmphasis:
     '⚠ Your current workspace is a **remote SSH workspace**: `{endpoint}:{displayPath}` (routed through the local placeholder path `{placeholderRoot}\\{connectionId}\\…`; the placeholder path you see is only a routing alias — **all commands and file operations truly happen on the remote server**, and the working directory is a POSIX absolute path). Search this workspace with the grep and glob tools; they run on the remote server. Do not use bash find, grep, or rg for that.',
+  /**
+   * UX-18: `sw-remote` names `sw_status` the same way `tool:sw-exec` names
+   * `sw_connect` / `sw_exec` — one sentence for when to call it.
+   */
+  remoteStatus:
+    'Call sw_status first to orient on the current remote machine and connection health, or when an sw_* call fails.',
   /** One side-workspace line (REQ-I7: declaration only, no permission marks). */
   sideItem: '- Side workspace **{label}**: `{rootKey}`',
   /** A side root on the machine the effective cwd is already on. */
