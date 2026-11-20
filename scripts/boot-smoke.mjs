@@ -23,8 +23,10 @@
  * seam across the whole 0.1.5 line, so a 404/405 here is a regression and never
  * "a known break" — the `--channel-warn` escape hatch is gone for that reason.
  *
- * Exit code 0 = all probes passed, 1 = any probe failed. Never touches the
- * product profile: `DSH_HOME` always points at a fresh directory.
+ * Exit code 0 = all probes passed, 1 = any probe failed. The process calls
+ * `process.exit` so host handles cannot keep it alive after that line
+ * (INFRA-12). Never touches the product profile: `DSH_HOME` always points at
+ * a fresh directory, and cleanup deletes only a `dsh-boot-smoke-*` temp home.
  *
  * usage:
  *   node scripts/boot-smoke.mjs [--cli <bin.js>] [--plugin <dir>] [--home <dir>]
@@ -36,11 +38,11 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import {
-  mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, existsSync, lstatSync, writeFileSync,
+  closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, existsSync, lstatSync, writeFileSync,
 } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
@@ -98,6 +100,9 @@ const keep = args.flags.has('keep')
 
 let failures = 0
 let home = ''
+/** Host log fds. Left open, they keep the event loop alive after SMOKE PASS (INFRA-12). */
+let hostOutFd
+let hostErrFd
 const say = (line) => process.stdout.write(`${line}\n`)
 const fail = (line) => {
   failures += 1
@@ -194,6 +199,31 @@ function stop(proc) {
   }
 }
 
+/** Release the host log fds so they cannot pin this process open. */
+function closeHostLogs() {
+  for (const fd of [hostOutFd, hostErrFd]) {
+    if (fd === undefined) continue
+    try {
+      closeSync(fd)
+    } catch { /* already closed */ }
+  }
+  hostOutFd = undefined
+  hostErrFd = undefined
+}
+
+/**
+ * Delete only the throwaway directory this run created (`dsh-boot-smoke-*`).
+ * A custom `--home`, `--keep`, a failed run, or any other path — including the
+ * parent temp directory — is left in place (INFRA-12).
+ */
+function removeSmokeHome() {
+  if (keep || args.home !== undefined || home === '' || failures !== 0) return
+  if (!basename(home).startsWith('dsh-boot-smoke-')) return
+  try {
+    rmSync(home, { recursive: true, force: true })
+  } catch { /* keep the temp home for diagnosis */ }
+}
+
 async function main() {
   say(`boot smoke: cli=${cli}`)
   say(`boot smoke: plugin=${plugin}`)
@@ -217,13 +247,13 @@ async function main() {
   const port = await freePort()
   const outLog = join(home, 'host.stdout.log')
   const errLog = join(home, 'host.stderr.log')
-  const outFd = openSync(outLog, 'a')
-  const errFd = openSync(errLog, 'a')
+  hostOutFd = openSync(outLog, 'a')
+  hostErrFd = openSync(errLog, 'a')
 
   const proc = spawn(process.execPath, [cli, 'web', '--port', String(port), '--no-open'], {
     cwd: home,
     env: { ...process.env, DSH_HOME: home },
-    stdio: ['ignore', outFd, errFd],
+    stdio: ['ignore', hostOutFd, hostErrFd],
   })
 
   const read = (path) => {
@@ -325,11 +355,9 @@ try {
 } catch (error) {
   fail(`boot smoke crashed: ${error?.stack ?? String(error)}`)
 } finally {
-  if (!keep && args.home === undefined && home !== '' && failures === 0) {
-    // Best effort: a Windows host may still hold the log files for a moment.
-    try {
-      rmSync(home, { recursive: true, force: true })
-    } catch { /* keep the temp home for diagnosis */ }
-  }
-  process.exitCode = failures === 0 ? 0 : 1
+  closeHostLogs()
+  removeSmokeHome()
+  // Open host handles (child, fetch, log fds) otherwise keep the loop alive
+  // after the probes finish. Exit here so SMOKE PASS is followed by code 0.
+  process.exit(failures === 0 ? 0 : 1)
 }
