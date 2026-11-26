@@ -49,9 +49,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z      # 排队 .github/workflows/release.yml（还不会发布）
 ```
 
-> 推 tag 只是排队：publish 作业挂在 
-pm-publish environment 上，**必须在 Actions 页面点 Approve 才会真正 
-pm publish**——发布决定权始终在仓库所有者手里。
+> 推 tag 只是排队：publish 作业挂在 `npm-publish` environment 上，**必须在 Actions 页面点 Approve 才会真正 `npm publish`**——发布决定权始终在仓库所有者手里。
 
 ```
 
