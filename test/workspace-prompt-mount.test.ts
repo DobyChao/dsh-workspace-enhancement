@@ -10,7 +10,8 @@
  * - **易变状态**（本会话已连接机器清单 + 副根清单）在
  *   `systemPrompt.context('dsw-session-workspace')`——每次 assembly 求值、以耐久
  *   user-role 快照进入对话，所以 `sw_connect`/面板的改动在**同一会话**里可见。
- * 两段都必须「无远程事实 ⇒ 空串」，即本地零连接会话零注入。
+ * 稳定段在「无远程事实 ⇒ 空串」。运行时上下文另有 UX-20：注册表还有当前远程机器
+ * 以外的机器时，本地零连接会话也能看到 `ssh://` 文件路由；注册表没有这类机器才零注入。
  *
  * 与 `test/prompt-injection.test.ts` 的区别：那份只挂 `exec-tools` 的两段并逐个
  * 判定纯函数；这份把**整个插件行的宿主注册路径**跑一遍（含 `sw-remote` 的组合逻辑），
@@ -43,11 +44,19 @@ interface Mounted {
   toolNames: string[]
 }
 
+interface RegistryMachine {
+  id: string
+  username: string
+  host: string
+}
+
 interface MountOptions {
   /** The side-workspace store accessor (absent ⇒ no attachments). */
   sides?: () => SessionSideWorkspaceStore | undefined
   /** The connected-machine store accessor (absent ⇒ no session connections). */
   connections?: () => SessionConnectionsFace | undefined
+  /** Registry rows. Defaults to `c1`, which the implicit-main-machine union trusts. */
+  machines?: readonly RegistryMachine[]
 }
 
 /** Mount the whole workspace tool surface on a fake host context. */
@@ -55,14 +64,20 @@ function mount(options: MountOptions = {}): Mounted {
   const sections: CapturedEntry[] = []
   const contexts: CapturedEntry[] = []
   const toolNames: string[] = []
+  const machines = options.machines ?? [{ id: 'c1', username: 'root', host: '10.0.0.5' }]
   const registry = (): SshRegistry => ({
-    // `c1` is registered: the implicit-main-machine union of REQ-I11 validates
-    // the cwd route against the registry before trusting it.
-    get: (id: string) => (id === 'c1'
-      ? { id, endpoint: 'root@10.0.0.5', spec: { id, host: '10.0.0.5', port: 22, username: 'root' } }
-      : undefined),
+    // A cwd route is trusted only when `get` finds that id (REQ-I11 implicit main machine).
+    get: (id: string) => {
+      const found = machines.find(machine => machine.id === id)
+      if (found === undefined) return undefined
+      return {
+        id,
+        endpoint: `${found.username}@${found.host}`,
+        spec: { id, host: found.host, port: 22, username: found.username },
+      }
+    },
     getActive: () => null,
-    listMachines: () => ({ machines: [{ id: 'c1', username: 'root', host: '10.0.0.5' }], currentId: null }),
+    listMachines: () => ({ machines: machines.map(machine => ({ ...machine })), currentId: null }),
   }) as unknown as SshRegistry
   const ctx = {
     // No `settings` service → hostLocaleOf falls back to en (the normal case).
@@ -141,15 +156,33 @@ test('mount: the volatile-state contribution is registered as dsw-session-worksp
   assert.equal(mounted.contexts[0]?.order, 90)
 })
 
-test('mount: a LOCAL session (no route, no side workspace, no connection) gets ZERO plugin text', () => {
+test('mount: a LOCAL session with a registered machine sees the file route, and no stable section', () => {
   const mounted = mount()
   assert.deepEqual(mounted.sections.map(section => section.name).sort(), [...EXPECTED_SECTIONS].sort())
   const local = assemblyContext('C:\\Users\\me\\proj', 's1')
   assert.deepEqual(injectedTexts(mounted.sections, local), [])
-  // REQ-I11: the runtime-context contribution is silent too — this is the
-  // zero-injection rule on the connection axis.
+  // UX-20: zero connections, but the registry lists c1, so the runtime context
+  // tells the model how to read that machine. sw_exec framing stays off.
+  const contexts = injectedTexts(mounted.contexts, local)
+  assert.equal(contexts.length, 1)
+  assert.ok(contexts[0]?.includes('**Registered machines**:'), contexts[0])
+  assert.ok(contexts[0]?.includes('- `c1` — root@10.0.0.5'), contexts[0])
+  assert.ok(contexts[0]?.includes('`ssh://<id>/<absolute posix path>`'), contexts[0])
+  assert.ok(contexts[0]?.includes('Commands still use sw_exec'), contexts[0])
+  assert.ok(!contexts[0]?.includes('Machines connected to this session'), contexts[0])
+  assert.ok(!/[\p{Script=Han}]/u.test(contexts[0] ?? ''), contexts[0])
+  // A missing cwd is local too, and still sees the registry.
+  assert.deepEqual(injectedTexts(mounted.sections, assemblyContext(undefined, 's1')), [])
+  const missing = injectedTexts(mounted.contexts, assemblyContext(undefined, 's1'))
+  assert.equal(missing.length, 1)
+  assert.ok(missing[0]?.includes('`ssh://<id>/<absolute posix path>`'), missing[0])
+})
+
+test('mount: a LOCAL session whose registry is empty gets ZERO plugin text', () => {
+  const mounted = mount({ machines: [] })
+  const local = assemblyContext('C:\\Users\\me\\proj', 's1')
+  assert.deepEqual(injectedTexts(mounted.sections, local), [])
   assert.deepEqual(injectedTexts(mounted.contexts, local), [])
-  // A session whose cwd is simply missing is local too.
   assert.deepEqual(injectedTexts(mounted.sections, assemblyContext(undefined, 's1')), [])
   assert.deepEqual(injectedTexts(mounted.contexts, assemblyContext(undefined, 's1')), [])
 })
@@ -176,6 +209,13 @@ test('mount: a REMOTE session gets every section, in English only', () => {
   const contextTexts = injectedTexts(mounted.contexts, assemblyContext('ssh://c1/srv/work', 's1'))
   assert.equal(contextTexts.length, 1)
   assert.ok(contextTexts[0]?.includes('- `c1` — root@10.0.0.5'), contextTexts[0])
+  // UX-20: c1 is the current machine, and it is the only registered one.
+  // The file-route sentence must not appear, and the current path stays POSIX.
+  assert.ok(!contextTexts[0]?.includes('Registered machines'), contextTexts[0])
+  assert.ok(!contextTexts[0]?.includes('ssh://<id>/'), contextTexts[0])
+  assert.ok(contextTexts[0]?.includes('`/srv/work`'), contextTexts[0])
+  assert.ok(!joined.includes('Registered machines'))
+  assert.ok(!joined.includes('ssh://<id>/'))
 })
 
 test('mount: a side workspace alone (local cwd) renders through the runtime context', () => {
@@ -194,8 +234,12 @@ test('mount: a side workspace alone (local cwd) renders through the runtime cont
   const swExec = mounted.sections.find(section => section.name === 'tool:sw-exec')
   assert.ok(swExec !== undefined)
   assert.notEqual(textOf(swExec, local), '')
-  // A different session without attachments stays silent.
-  assert.deepEqual(injectedTexts(mounted.contexts, assemblyContext('C:\\Users\\me\\proj', 's2')), [])
+  // Another session has no side root. The registry still lists c1, so the
+  // file-route note is present and the side list is not. Stable sections stay off.
+  const other = injectedTexts(mounted.contexts, assemblyContext('C:\\Users\\me\\proj', 's2'))
+  assert.equal(other.length, 1)
+  assert.ok(other[0]?.includes('`ssh://<id>/<absolute posix path>`'), other[0])
+  assert.ok(!other[0]?.includes('Side workspace'), other[0])
   assert.deepEqual(injectedTexts(mounted.sections, assemblyContext('C:\\Users\\me\\proj', 's2')), [])
 })
 
@@ -211,8 +255,14 @@ test('mount: a connected machine alone (local cwd, no side root) turns the remot
   assert.equal(injected.length, 1)
   assert.equal(injected[0]?.split('Machines connected to this session').length, 2)
   assert.ok(injected[0]?.includes('`c1`'))
-  // A session with no connection keeps zero injection on both surfaces.
-  assert.deepEqual(injectedTexts(mounted.contexts, assemblyContext('C:\\Users\\me\\proj', 's2')), [])
+  assert.ok(injected[0]?.includes('`ssh://<id>/<absolute posix path>`'), injected[0])
+  // No connection on s2: sw_exec framing stays off. The registry file-route
+  // note is still there, and it is not the connected-machine list.
+  const other = injectedTexts(mounted.contexts, assemblyContext('C:\\Users\\me\\proj', 's2'))
+  assert.equal(other.length, 1)
+  assert.ok(other[0]?.includes('Registered machines'), other[0])
+  assert.ok(!other[0]?.includes('Machines connected to this session'), other[0])
+  assert.deepEqual(injectedTexts(mounted.sections, assemblyContext('C:\\Users\\me\\proj', 's2')), [])
 })
 
 test('mount: a REMOTE session lists the main machine once (context), never twice', () => {
@@ -228,6 +278,29 @@ test('mount: a REMOTE session lists the main machine once (context), never twice
   const sections = injectedTexts(mounted.sections, remote).join('\n')
   assert.ok(!sections.includes('Machines connected to this session'),
     'the machine list must not be duplicated in the stable section')
+  assert.ok(!sections.includes('Registered machines'),
+    'the file-route list must not be duplicated in the stable section')
+})
+
+test('mount: a remote session lists other registered machines for the ssh:// file route', () => {
+  const mounted = mount({
+    machines: [
+      { id: 'c1', username: 'root', host: '10.0.0.5' },
+      { id: 'c2', username: 'u', host: '10.0.0.6' },
+    ],
+  })
+  const remote = assemblyContext('ssh://c1/srv/work', 's1')
+  const context = injectedTexts(mounted.contexts, remote).join('\n')
+  assert.ok(context.includes('`/srv/work`'), context)
+  assert.ok(context.includes('do not prefix it with `ssh://`'), context)
+  const registered = context.slice(context.indexOf('**Registered machines**:'))
+  assert.ok(registered.startsWith('**Registered machines**:'), context)
+  assert.ok(registered.includes('- `c2` — u@10.0.0.6'), registered)
+  assert.ok(!registered.includes('`c1`'), registered)
+  assert.ok(registered.includes('`ssh://<id>/<absolute posix path>`'), registered)
+  const sections = injectedTexts(mounted.sections, remote).join('\n')
+  assert.ok(!sections.includes('Registered machines'))
+  assert.ok(!sections.includes('ssh://<id>/'))
 })
 
 test('mount: a cached component probe is part of the context provider text (BUG-29)', () => {

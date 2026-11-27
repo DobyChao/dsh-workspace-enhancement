@@ -205,6 +205,35 @@ export function renderConnectedMachines(facts: readonly ConnectedMachineFact[]):
   return `${modelPrompt('connectedHeading')}\n${lines.join('\n')}`
 }
 
+/**
+ * Settings sentinel for this computer (UX-17, `registry.ts` `LOCAL_CURRENT_ID`).
+ * It is not an SSH row and must not be offered as an `ssh://` file target.
+ */
+const LOCAL_REGISTRY_ID = 'local'
+
+/**
+ * UX-20: registered machines the official read/edit/glob/grep tools reach with
+ * `ssh://<id>/<absolute posix path>`, without `sw_connect` or a side root.
+ * The current remote machine is omitted so this block never contradicts the
+ * POSIX-path rule for the machine the session is already on. Empty → `''`
+ * (nothing else to address, including a local session whose registry is empty).
+ * @param machines - registry machines, in registry order.
+ * @param currentConnectionId - the effective cwd's machine, when the cwd is remote.
+ */
+export function renderRegisteredFileRoutes(
+  machines: readonly ConnectedMachineFact[],
+  currentConnectionId?: string,
+): string {
+  const others = machines.filter(machine =>
+    machine.id !== '' && machine.id !== LOCAL_REGISTRY_ID && machine.id !== currentConnectionId)
+  if (others.length === 0) return ''
+  const lines = others.map(fact => modelPrompt('registeredItem', {
+    id: fact.id,
+    endpoint: fact.endpoint,
+  }))
+  return `${modelPrompt('registeredHeading')}\n${lines.join('\n')}\n${modelPrompt('registeredFileRoute')}`
+}
+
 /** Render the `sw_status` connected-machine line (ids + endpoint, or the none text). */
 export function renderConnectedStatusLine(
   ids: readonly string[],
@@ -224,21 +253,24 @@ export function renderConnectedStatusLine(
  * rendered as ONE runtime-context contribution. Everything is re-evaluated
  * per assembly from the effective cwd, so a `sw_connect`, a panel toggle, or
  * `sw_use_machine` becomes visible inside the same conversation (a `section()`
- * alone would only be re-read in the header prompt). All empty → `''`, which
- * is how a local session with zero connections keeps zero injection.
- * ENGLISH ONLY (ADR-0014).
+ * alone would only be re-read in the header prompt). All empty → `''`.
+ * A local session with zero connections stays silent only when `registered`
+ * names no machine other than the current one (UX-20). ENGLISH ONLY (ADR-0014).
  * @param connected - one fact per connected machine, in connection order.
  * @param sides - the session's side roots (薄声明清单, REQ-I7).
  * @param remoteFiles - optional per-session remote file lines.
  * @param cwd - the effective session cwd for this assembly. A remote route
  *   adds the POSIX path next to its placeholder, and rewrites same-machine
  *   side roots to that POSIX path. A local cwd adds neither.
+ * @param registered - registry machines. File-route guidance lists every one
+ *   except the current remote machine. Omit to render no file-route block.
  */
 export function renderSessionWorkspaceContext(
   connected: readonly ConnectedMachineFact[],
   sides: readonly SideWorkspaceItem[],
   remoteFiles = '',
   cwd?: string,
+  registered: readonly ConnectedMachineFact[] = [],
 ): string {
   const parts: string[] = []
   const here = renderCurrentDirectory(cwd)
@@ -246,6 +278,8 @@ export function renderSessionWorkspaceContext(
   const machines = renderConnectedMachines(connected)
   if (machines !== '') parts.push(machines)
   const route = cwd === undefined ? null : remoteRouteFromCwd(cwd)
+  const fileRoutes = renderRegisteredFileRoutes(registered, route?.connectionId)
+  if (fileRoutes !== '') parts.push(fileRoutes)
   const side = renderSideWorkspaces(sides, route?.connectionId)
   if (side !== '') parts.push(side)
   if (remoteFiles !== '') parts.push(remoteFiles)
@@ -725,7 +759,7 @@ export function registerWorkspaceTools(
    * （dsh-agent-loop 的 `assembleContextFor` 返回 `{ agent, scope: agent }`；
    * 每会话 scope key 由 `ReactLoopAgent` 构造时的 `createScope(loopCtx, this)`
    * mint），agent 暴露 `session.header`（叶子字段：cwd + id）。因此：
-   * - 本地会话无副工作区、无连接机器：远程事实为空、易变清单为空 → ''，零注入。
+   * - 本地会话无副工作区、无连接机器：稳定段为空。注册表还有其它机器时，运行时上下文只带文件路由说明（UX-20）；否则零注入。
    * - 远程会话（cwd = `ssh://<id>/…` 或占位树）：按 route 找机器渲染强调提示。
    * - 不选方案 A（session/created 里为会话 createScope + 注册 scoped section）：
    *   注册需要持有一份带该 scope 标签的 ctx——agent 的 scoped ctx 对宿主行不可见；
@@ -740,7 +774,7 @@ export function registerWorkspaceTools(
    * - **稳定框架**（远程强调 + `remoteStatus` + `remoteNoSandbox` + `remoteGateActive`）留在这条
    *   `section('sw-remote', order 90)`；
    * - **易变状态**（当前有效目录的远端路径与占位路径 + 本会话已连接机器清单
-   *   + 副根清单 + 每台机器的远程组件是否生效）走
+   *   + 注册表里当前机器以外的机器及文件路由说明 + 副根清单 + 每台机器的远程组件是否生效）走
    *   `systemPrompt.context({ name: 'dsw-session-workspace', order 90 })`——
    *   `context()` 的契约是「每次 assembly 求值、以耐久 user-role 快照进入对话」，
    *   这正是「会话中途插入一条状态注记」的正典机制（宿主自己的运行时上下文也走
@@ -750,8 +784,9 @@ export function registerWorkspaceTools(
    *   结果进缓存。`text` 读这份缓存：宿主发请求前会 `refreshContext`，只保留
    *   provider 原文，assemble 追加的行留不住（BUG-29）。本会话有几台机器
    *   （store ∪ cwd 上的主工作区）就写几行。
-   * - 两段在「无远程事实」时都返回 '' ⇒ 本地零连接会话零注入；
-   *   清单**只在 context 里渲染一次**，section 不再重复。
+   * - 无远程事实时，稳定段与 `tool:sw-exec` 仍返回 ''。运行时上下文在注册表还有
+   *   「当前远程机器」以外的机器时多一块文件路由说明（UX-20），本地零连接也能看见；
+   *   注册表没有这类机器才零注入。清单**只在 context 里渲染一次**，section 不重复。
    */
   // REQ-I31: both prompt halves read the EFFECTIVE session cwd (projection
   // first, header fallback) so a `working_directory` change moves the
@@ -781,6 +816,10 @@ export function registerWorkspaceTools(
         attached,
         renderRemoteFileLines(facts.sessionId),
         cwd,
+        registry().listMachines().machines.map(entry => connectedMachineFact(
+          entry.id,
+          typeof entry.username === 'string' && typeof entry.host === 'string' ? entry : undefined,
+        )),
       )
       const lines = renderRemoteComponentContext(cachedComponentFacts(connectedIdsOf(sessionIdOf(context), cwd)))
       return appendComponentLines(body, lines)

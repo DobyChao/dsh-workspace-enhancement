@@ -55,6 +55,21 @@ export const MODEL_PROMPTS = {
   /** REQ-I11: the note appended to a machine that did not answer its ping. */
   connectedUnreachable: ' (was unreachable at connect time)',
   /**
+   * UX-20: heading of the registry machines the official file tools can reach
+   * without a session connection. The current remote machine is not in this
+   * list — paths on it stay POSIX ({@link sideItemSameMachine}).
+   */
+  registeredHeading: '**Registered machines**:',
+  /** UX-20: one registered machine the file-route sentence applies to. */
+  registeredItem: '- `{id}` — {endpoint}',
+  /**
+   * UX-20: registry-level file routing (ADR-0021). One guidance block under
+   * {@link registeredHeading}. Angle brackets, not `{id}`, so interpolation
+   * does not eat the example.
+   */
+  registeredFileRoute:
+    'Read, write, and search files on these machines with the official read, edit, glob, and grep tools using `ssh://<id>/<absolute posix path>`. Do not connect first and do not declare a side workspace. Commands still use sw_exec (connect that machine to this session first). This session\'s current remote machine is not in this list: keep its POSIX path and do not prefix it with `ssh://`.',
+  /**
    * Current effective directory in the runtime context: the POSIX path and
    * the concrete placeholder that names it. Recomputed every assembly.
    */
