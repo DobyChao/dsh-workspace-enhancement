@@ -2,23 +2,24 @@
 
 English | [中文](README.zh.md)
 
-![npm version](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![license](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![node version](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
+![npm version](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![license](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![node version](https://img.shields.io/badge/node-%3E%3D22.8-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-**A DeepSeek Harness workspace-enhancement plugin** — local and remote (SSH) workspaces managed in one place. A session can hold **multiple workspaces** (a main cwd plus a thin declaration list of side directories); machines, TOFU host keys and keychain passwords all live in your local `~/.dsh`. Built on [ssh2](https://github.com/mscdex/ssh2).
+**A DeepSeek Harness (DSH) plugin that lets the agent work in remote workspaces over SSH.** The agent runs on your machine; its shell, file and terminal tools run on the remote host. A session can hold **multiple workspaces** (a main directory plus side directories, local or remote), and the machines you register stay in your local `$DSH_HOME` (default `~/.dsh`). Built on [ssh2](https://github.com/mscdex/ssh2).
 
 ## Features
 
 | Feature | Description |
 |---|---|
-| Remote workspaces | One SSH chain (multi-hop) runs bash / files / PTY / directory browsing. Tools that already use `ctx.subprocess` / `ctx.fs` keep working remotely with no code changes |
-| Multi-workspace sessions | The「⊕ 工作区」button in the session header attaches extra directories (local or remote) as a declaration list — mount/unmount + label. The model is told about them and can operate them directly |
-| Add-workspace flow | Connection sidebar (saved machines, `~/.ssh/config` aliases, local) + directory browser (breadcrumbs, native chooser, new folder); remote "Connect & open" creates the session on the server |
-| Machine settings page | Machine CRUD / test / set-current / forget host key; OS-keychain passwords; TOFU host keys (`accept-new` default) |
-| Session awareness | Remote marker + online tri-state + reconnect in the sidebar; the session prompt states the remote / extra-workspace context |
-| Cross-server execution | `sw_exec(server, command)` runs a command on a **named registered machine** (defaults to the session's machine). The target OS is probed once per connection (`bash -c` on POSIX, `pwsh -Command` on win32). Windows hosts inject a `bash` tool only for remote-Linux workspace sessions |
-| Remote approval gate | Optional per-machine gate (**default off**): every shell-shaped remote command and every remote terminal asks before it runs — `human` asks you each time, `ai` auto-grants a short read-only whitelist (`pwd`, `ls`, `git status`, …) and asks for the rest |
-| Model tools | `sw_status`, `sw_connect` (attach this session to machines you already registered), `sw_exec` |
-| Runtime localization | UI copy, tool descriptions/errors, and routing errors follow the settings-page **Language** option (`zh`/`en`); the UI defaults to the browser language. Protocol-layer `bad-request:` diagnostics stay English |
+| Remote workspaces | One SSH connection (multi-hop jump chains) carries shell commands, files, a terminal and directory browsing. Tools built on `ctx.subprocess` / `ctx.fs` work remotely with no code changes |
+| Remote sandbox | The session's permission tier (`read-only`, `workspace-write`, `danger-full-access`) is enforced on the remote host |
+| Multi-workspace sessions | The **Workspace** button in the session header links extra directories (local or remote) as side workspaces the model can operate directly |
+| Add-workspace flow | Connection sidebar (local directory, saved machines, `~/.ssh/config` aliases) plus a directory browser |
+| Machine settings | Add / edit / test machines, set a default, forget a host key. Host keys are TOFU; passwords are stored in plain text in the local machine registry unless you opt in per machine to the OS keychain |
+| Session awareness | Sidebar rows show a remote marker and reachability (Checking / Reachable / Unreachable) and flag a changed host key |
+| Model tools | `sw_status`, `sw_connect`, `sw_exec` (run a command on a registered machine by name); experimental `sw_use_machine`, off by default |
+| Remote files | Uploads to a remote session land in the workspace's `.dsh-uploads/`; with [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) installed, a **Remote files** tab browses uploads and artifacts |
+| Approval gate (legacy) | Per-machine approval before remote commands and terminals run; off by default, with no UI switch any more |
+| Runtime localization | UI and tool copy follow the settings-page **Language** option (`zh` / `en`) |
 
 ## How it works
 
@@ -28,50 +29,53 @@ flowchart LR
         agent["agent loop<br/>orchestration · memory · LLM calls"] --> seam["this plugin<br/>ctx.subprocess · ctx.fs"]
     end
     subgraph remote["Remote host"]
+        core["dsh-core serve<br/>sandbox · file read/write · command execution · file search"]
         run["bash · files · PTY (terminal)"]
+        core --> run
     end
-    seam -- "one SSH connection (multi-hop jumps)" --> run
+    seam -- "one SSH connection (multi-hop jumps)" --> core
+    seam -- "ssh exec · SFTP · PTY (fallback, terminals)" --> run
 ```
 
-No DSH install on the remote: the model orchestrates locally, commands run remotely, results come back into context.
+No DSH install on the remote: the model orchestrates locally, commands run remotely, and results come back into context.
 
-How routing, the approval gate, the remote sandbox fence, and session connections actually work: [docs/architecture.md](./docs/architecture.md). Known security boundaries: [SECURITY.md](./SECURITY.md).
+### Remote component
+
+The npm package ships a first-party binary, `dsh-core` (Go, Linux x86_64 / arm64). The first time a session needs it, it is uploaded over SFTP to `~/.dsh-core/` on the remote, where it runs as a long-lived `dsh-core serve` process speaking framed JSON-RPC. It does four things:
+
+- **Sandbox** — under `read-only` / `workspace-write`, the process enters a bubblewrap or Landlock jail.
+- **File read/write** — file operations are syscalls inside the component; `write` goes to a temporary file and is `rename(2)`d into place, so it is atomic.
+- **Command execution** — the `argv` array is `exec`ed directly, with no shell command line; terminating a job sends `SIGKILL` to its whole process group.
+- **File search** — hosts without ripgrep get the `rg` deployed beside the component.
+
+Without the component — non-Linux remotes, Windows included, or a failed deploy — commands fall back to one `ssh exec` per command and files to SFTP, and `read-only` / `workspace-write` sessions are read-only until you approve full access. The same holds when the remote has neither bubblewrap nor Landlock (Linux 5.13+). The interactive terminal always opens a plain SSH PTY, component or not.
+
+Details and known boundaries: [SECURITY.md](./SECURITY.md) and [docs/architecture.md](./docs/architecture.md).
 
 ## Install
 
 ```sh
-# from npm (v0.1.0+)
+# from npm
 dsh plugin --profile web add dsh-workspace-enhancement
-# from source: npm run build first (host loads lib/)
+# from source: build first
+npm run build
 dsh plugin --profile web add <this-repo-path>
 ```
 
-> **First install with DSH's supply-chain pnpm**: native build scripts are blocked by default —
-> allow them once per profile in `pnpm-workspace.yaml` (unstrict `allowBuilds`):
-> `ssh2`, `cpu-features`, `koffi`, `node-pty`, `dsh-subprocess-local` — then run
-> `dsh plugin --profile web install`. Without it the first `add` exits non-zero
-> (`ERR_PNPM_IGNORED_BUILDS`) and the bundle is not appended.
+- Node ≥ 22.8. Building from source also needs Go 1.22+ for `dsh-core`; without Go the build succeeds but there is no sandbox.
+- If the first `add` fails because pnpm blocked install scripts, allow `ssh2` and `cpu-features` under `allowBuilds` in the profile's `pnpm-workspace.yaml`, then re-run it.
 
 ## Compatibility
 
-Which plugin version to install depends on the **DSH host family** you run — check it with `dsh --version`
-(and the family under your DSH install, e.g. `<npm root -g>/@deepseek-ai/`):
+Check your host with `dsh --version`:
 
-| Your DSH host | Install | Notes |
-|---|---|---|
-| **`0.2.2` line** (`0.2.2-rc.1`, …) | `0.2.9` | Official as of 2026-11-06. The union pin adds `^0.2.2-rc.1`, whose caret covers later prereleases of the same 0.2.2 tuple (`0.2.2-rc.2` included, `0.2.2-alpha.*` not). Host `latest` and `next` are both `0.2.2-rc.1` as of this release (`alpha` is `0.2.2-alpha.3`, which this caret does not match). devDependencies stay `^0.1.7-rc.2` |
-| **`0.2.1` line** (`0.2.1-rc.1`, `0.2.1-rc.2`, …) | `0.2.9` | Official as of 2026-10-19. The union pin adds `^0.2.1-rc.1`, whose caret covers later prereleases of the same 0.2.1 tuple (`0.2.1-rc.2` included, `0.2.1-alpha.*` not). Lab boot and gates passed on host `0.2.1-rc.2`; PR #76 classifies `watchLinuxScopeStart` as internal. npm/pnpm do not set `includePrerelease`, so `0.2.4` does not satisfy a 0.2.1 seam install — use `0.2.9` (this line stays `^0.2.1-rc.1`; `0.2.9` also adds `^0.2.2-rc.1`) |
-| **`0.2.0` line** (`0.2.0-rc.1`, …) | `0.2.3` or newer (`0.2.9` current) | Runtime-compatible as of 2026-09-29 — the union peer pin boots on a real `0.2.0-rc.1` host and mounts the channel (boot sentinel SMOKE PASS). **The 0.2.0 host ENFORCES plugin peerDependencies at boot** (an incompatible pin silently skips the whole bundle) — on 0.2.0 hosts install `0.2.3`+, not `0.2.2`. `0.2.9` keeps this line as `^0.2.0-rc.1` |
-| **`0.1.7` line** (`0.1.7-rc.2`, …) | next release after `0.2.2` | The family the peer pin targets as of 2026-09-28 (`^0.1.7-rc.2`, `UPSTREAM-9` — the host package's `latest` tag moved to it). Seam- and runtime-aligned: `watch` + `terminalEnvironment` on the mixed facades (`UPSTREAM-5`), localized-marker renders and background-job owners/outputs fixed for the rewritten settings and jobs contracts (`UPSTREAM-8`), verified by the drift sentinel plus 0.1.7-family typecheck/suite/boot locally |
-| `0.1.5` line (`0.1.5-rc.1`, `0.1.5-rc.2`, …) | `0.2.2` (the last release pinned to it) | Still works at runtime — the dual-family paths are kept (the boot sentinel on a 0.1.5 host stays green) — but releases after `0.2.2` require the `0.1.7` family, so stay on `0.2.2` until the host moves. The browser channel rides the official shared `/api` transport (`/api/dsw/<endpoint>`) |
-| `0.1.2-rc.1` family (`0.1.2`, `0.1.3` releases) | `0.1.3` — the last release of that line | **No longer supported** (retired 2026-09-11). That line moved the Connection seam — `connection.rpc.handle` can no longer register a channel — so no fix is backported to it |
-| any other / older line | — | Never supported |
+| DSH host | Install |
+|---|---|
+| The `0.2.2`, `0.2.1` and `0.2.0` lines, and `0.1.7-rc.2` | latest |
+| The `0.1.5` line | `0.2.2` |
+| `alpha` builds, the `0.1.2` family and older | not supported |
 
-**Host and plugin must move together.** The 0.1.4 line speaks `/api/dsw/*` while 0.1.3 and earlier speak
-`/dsw/*`, and 0.1.3 has no `readByteRange`. Mixing them leaves the connection / directory UI without a data
-channel (the host still boots, the UI silently cannot load machines or browse). Upgrading DSH means upgrading
-this plugin in the same step; the full window and the upstream drift log are in
-[docs/compatibility.md](./docs/compatibility.md).
+Host and plugin must be upgraded together. The full window and history are in [docs/compatibility.md](./docs/compatibility.md).
 
 ## Roadmap
 
@@ -79,10 +83,7 @@ Public progress: [docs/ROADMAP.md](./docs/ROADMAP.md). The single backlog is [do
 
 ## Development
 
-Start with [AGENTS.md](./AGENTS.md) (rules, commands, red lines). The document map — what lives where, and what must not be copied — is [docs/README.md](./docs/README.md).
-
-One gate for everything: `npm run check` (static constraints + typecheck + unit tests + build + pack smoke) —
-the same command CI runs.
+Rules and commands: [AGENTS.md](./AGENTS.md). Contribution flow: [CONTRIBUTING.md](./CONTRIBUTING.md). Document map: [docs/README.md](./docs/README.md) (the docs under `docs/` are in Chinese). One gate for everything: `npm run check`.
 
 ## References
 

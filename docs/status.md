@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-11-20 08:29 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-11-26 07:04 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,16 +10,16 @@
 | package.json 版本 | `0.2.10` |
 | npm 已发布版本 | `0.2.10` |
 | 最新 tag | `v0.2.10` |
-| 分支 / HEAD | `cursor/backlog-drift-pins-e2f6` / `ece478e` |
-| HEAD 提交 | `docs(backlog): record 0.2.8–0.2.10 and keep drift pins` (2026-11-20) |
+| 分支 / HEAD | `docs/INFRA-26-readme-refresh` / `0c20991` |
+| HEAD 提交 | `docs(readme): refresh the README around current features` (2026-11-26) |
 | 与远端 | 1 ahead / 0 behind origin/master |
 
 ## 质量
 
 | 项 | 值 |
 |---|---|
-| 单测文件 | 92 |
-| 单测用例（静态计数） | 840 |
+| 单测文件 | 93 |
+| 单测用例（静态计数） | 845 |
 | E2E 场景文件 | 8 |
 | ADR | 32 |
 | 轮次报告 | 61 |
@@ -28,10 +28,10 @@
 
 | 状态 | 数量 |
 |---|---|
-| `todo` | 12 |
-| `doing` | 1 |
+| `todo` | 9 |
+| `doing` | 2 |
 | `blocked` | 5 |
-| `done` | 116 |
+| `done` | 120 |
 | `shipped` | 17 |
 | `dropped` | 17 |
 

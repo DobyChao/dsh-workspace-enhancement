@@ -2,23 +2,24 @@
 
 [English](README.md) | 中文
 
-![npm 版本](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![许可证](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![Node 版本](https://img.shields.io/badge/node-%3E%3D22-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
+![npm 版本](https://img.shields.io/npm/v/dsh-workspace-enhancement) ![许可证](https://img.shields.io/npm/l/dsh-workspace-enhancement) ![Node 版本](https://img.shields.io/badge/node-%3E%3D22.8-339933) ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-2ea44f)
 
-**一个 DeepSeek Harness 工作区增强插件**：把本地和远程（SSH）工作区放到一个包里统一管理。一个会话可以挂**多个工作区**（主工作区 + 副目录声明清单）；机器、TOFU 指纹与钥匙串都存在你本机的 `~/.dsh` 下。底层用 [ssh2](https://github.com/mscdex/ssh2)。
+**一个 DeepSeek Harness（DSH）插件：让模型通过 SSH 在远程工作区里干活。** 模型在本机运行，shell、文件和终端工具在远端执行。一个会话可以挂**多个工作区**（主目录 + 一组副目录，本地或远程均可），注册的机器存在本机的 `$DSH_HOME`（默认 `~/.dsh`）。底层用 [ssh2](https://github.com/mscdex/ssh2)。
 
 ## 功能
 
-| 功能     | 说明 |
-| ------ | ------ |
-| 远程工作区 | 一条 SSH（可多级跳板）跑 bash / 文件 / PTY / 目录浏览。已经走 `ctx.subprocess` / `ctx.fs` 的工具不用改就能在远端跑 |
-| 多工作区会话 | 会话标题栏「⊕ 工作区」按钮：把额外目录（本地或远程）挂成声明清单——挂/卸 + 显示名。模型能看到清单并直接操作 |
-| 添加工作区流程 | 连接侧栏（已保存机器、`~/.ssh/config` 别名、本机）+ 目录浏览器（面包屑、系统选择器、新建文件夹）；远程「连接并打开」直接在服务器上建会话 |
-| 机器设置页 | 机器增删改 / 测试 / 设当前 / 忘指纹；OS 钥匙串存密码；TOFU 主机指纹（默认 accept-new） |
-| 会话感知 | 会话栏远程标识 + 未知/活跃/离线三态 + 重连；每会话提示里写明远程 / 副工作区上下文 |
-| 跨服务器执行 | `sw_exec(server, command)` 在**已注册的指定机器**上执行命令（缺省=当前会话机器）。目标 OS 每次连接探测一次（POSIX 跑 `bash -c`，win32 跑 `pwsh -Command`）。win32 宿主只在远程 Linux 工作区会话注入 `bash` 工具 |
-| 远程命令审批门 | 可选的逐机器审批门（**默认关闭**）：每条 shell 形状的远程命令与每个远程终端在执行前先问——`human` 每条都问人，`ai` 对只读白名单（`pwd`、`ls`、`git status` 等）自动放行、其余问人 |
-| 模型工具 | `sw_status`、`sw_connect`（把本会话接到你已经注册的机器）、`sw_exec` |
-| 运行时国际化 | UI 文案、工具描述/错误与路由错误跟随设置页 **Language** 选项（zh/en）；UI 默认跟随浏览器语言。仅协议层 `bad-request:` 诊断保留英文 |
+| 功能 | 说明 |
+|---|---|
+| 远程工作区 | 一条 SSH（可多级跳板）承载 shell 命令、文件、终端和目录浏览；基于 `ctx.subprocess` / `ctx.fs` 的工具不用改代码 |
+| 远程沙箱 | 会话权限档（`read-only` / `workspace-write` / `danger-full-access`）在远端生效 |
+| 多工作区会话 | 标题栏「工作区」按钮把额外目录（本地或远程）挂为副工作区，模型可直接操作 |
+| 添加工作区 | 连接侧栏（本机目录、已保存机器、`~/.ssh/config` 别名）+ 目录浏览器 |
+| 机器设置 | 机器增删改、测试、设为默认、忘记指纹。主机指纹走 TOFU；密码默认明文存在本机的机器注册表里，可按机器转存 OS 钥匙串 |
+| 会话感知 | 侧栏显示远程标识和可达性（检测中 / 可连接 / 不可连接），主机密钥变更会提示 |
+| 模型工具 | `sw_status`、`sw_connect`、`sw_exec`（在指定的已注册机器上执行命令）；实验性 `sw_use_machine` 默认关闭 |
+| 远程文件 | 远程会话的上传落到工作区的 `.dsh-uploads/`；装有 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) 时多一个「远程文件」页，浏览上传与产物 |
+| 审批门（遗留） | 远程命令和终端执行前的逐机器审批；默认关闭，已无界面开关 |
+| 运行时国际化 | UI 与工具文案跟随设置页的 **Language** 选项（zh / en） |
 
 ## 工作原理
 
@@ -28,59 +29,61 @@ flowchart LR
         agent["agent loop<br/>编排 · 记忆 · LLM 调用"] --> seam["本插件<br/>ctx.subprocess · ctx.fs"]
     end
     subgraph remote["远程主机"]
+        core["dsh-core serve<br/>沙箱 · 文件读写 · 命令执行 · 文件搜索"]
         run["bash · 文件 · PTY（终端）"]
+        core --> run
     end
-    seam -- "一条 SSH（可多级跳板）" --> run
+    seam -- "一条 SSH（可多级跳板）" --> core
+    seam -- "ssh exec · SFTP · PTY（回退、终端）" --> run
 ```
 
 远程不用装 DSH：模型在本地编排，命令在远程跑，结果再回本地进上下文。
 
-路由、审批门、远端围栏、会话连接怎么接：见 [docs/architecture.md](./docs/architecture.md)。已知安全边界：见 [SECURITY.md](./SECURITY.md)。
+### 远程组件
+
+npm 包自带一个第一方二进制 `dsh-core`（Go，Linux x86_64 / arm64）。会话第一次用到它时，它经 SFTP 自动上传到远端的 `~/.dsh-core/`，以长驻进程 `dsh-core serve` 的形式提供成帧 JSON-RPC。它负责四件事：
+
+- **沙箱**：`read-only` / `workspace-write` 档下，进程进入 bubblewrap 或 Landlock 隔离。
+- **文件读写**：文件操作是组件内的 syscall；`write` 先写临时文件再 `rename(2)`，是原子写。
+- **命令执行**：`argv` 数组直接 `exec`，不经 shell 命令行；终止时对整个进程组发 `SIGKILL`。
+- **文件搜索**：远端没有 ripgrep 时，使用随组件部署的 `rg`。
+
+没有组件时（非 Linux 远端、部署失败），命令退回每条一次的 `ssh exec`，文件退回 SFTP，`read-only` / `workspace-write` 会话只读，直到你批准完全权限。远端既没有 bubblewrap 也没有 Landlock（Linux 5.13+）时同样如此。交互式终端始终走裸 SSH PTY，不经组件。
+
+细节与已知边界见 [SECURITY.md](./SECURITY.md) 和 [docs/architecture.md](./docs/architecture.md)。
 
 ## 安装
 
 ```sh
-# 从 npm 安装（v0.1.0+）
+# 从 npm 安装
 dsh plugin --profile web add dsh-workspace-enhancement
-# 源码安装：先 npm run build（宿主加载 lib/）
+# 源码安装：先构建
+npm run build
 dsh plugin --profile web add <本仓库路径>
 ```
 
-> **DSH 供应链 pnpm 首次安装须知**：原生构建脚本默认被拦截。先在 profile 的
-> `pnpm-workspace.yaml`（非严格 `allowBuilds`）放行 `ssh2`、`cpu-features`、`koffi`、
-> `node-pty`、`dsh-subprocess-local`，再执行 `dsh plugin --profile web install`；
-> 否则首次 `add` 会以非 0 退出（`ERR_PNPM_IGNORED_BUILDS`）且 bundle 不会被追加。
+- 需要 Node ≥ 22.8。从源码构建还需要 Go 1.22+ 来编 `dsh-core`；没有 Go 时构建仍能完成，但没有沙箱。
+- 首次 `add` 若因 pnpm 拦截安装脚本而失败：在 profile 的 `pnpm-workspace.yaml` 里把 `ssh2` 和 `cpu-features` 加进 `allowBuilds`，然后重跑。
 
 ## 版本兼容
 
-装哪个版本的插件，取决于你跑的 **DSH 宿主家族**——用 `dsh --version` 查看（家族版本可看
-DSH 安装目录下的 `@deepseek-ai/`，如 `<npm root -g>/@deepseek-ai/`）：
+用 `dsh --version` 查看宿主版本：
 
-| 你的 DSH 宿主 | 该装哪个版本 | 说明 |
-|---|---|---|
-| **`0.2.2` 线**（`0.2.2-rc.1`…） | `0.2.9` | 2026-11-06 起正式支持。联合 pin 增加 `^0.2.2-rc.1`，caret 覆盖同一 0.2.2 tuple 的更晚预发布（含 `0.2.2-rc.2`，不含 `0.2.2-alpha.*`）。本版发布时宿主 `latest` 与 `next` 都是 `0.2.2-rc.1`（`alpha` 是 `0.2.2-alpha.3`，这条 caret 不匹配）。devDependencies 仍是 `^0.1.7-rc.2` |
-| **`0.2.1` 线**（`0.2.1-rc.1`、`0.2.1-rc.2`…） | `0.2.9` | 2026-10-19 起正式支持。联合 pin 增加 `^0.2.1-rc.1`，caret 覆盖同一 0.2.1 tuple 的更晚预发布（含 `0.2.1-rc.2`，不含 `0.2.1-alpha.*`）。lab 在宿主 `0.2.1-rc.2` 上 boot 与闸门通过；PR #76 把 `watchLinuxScopeStart` 归为内部方法。npm/pnpm 默认不开 `includePrerelease`，`0.2.4` 满足不了 0.2.1 seam 的安装——请装 `0.2.9`（这条线仍是 `^0.2.1-rc.1`；`0.2.9` 另外加上 `^0.2.2-rc.1`） |
-| **`0.2.0` 线**（`0.2.0-rc.1`…） | `0.2.3` 及更新（当前 `0.2.9`） | 2026-09-29 起运行时兼容——联合 peer pin 在真实 `0.2.0-rc.1` 宿主上 boot 并挂载通道（boot 哨兵 SMOKE PASS）。**0.2.0 宿主在 boot 时强制执行插件 peerDependencies**（pin 不符会静默跳过整个 bundle）——0.2.0 宿主请装 `0.2.3` 及更新，不要装 `0.2.2`。`0.2.9` 仍用 `^0.2.0-rc.1` 保住这条线 |
-| **`0.1.7` 线**（`0.1.7-rc.2`…） | `0.2.2` 之后的下一个发布物 | 2026-09-28 起 peer 锚定的家族（`^0.1.7-rc.2`，`UPSTREAM-9`——宿主包 `latest` 已翻到它）。接缝与运行时均已对齐：混合门面 `watch` + `terminalEnvironment`（`UPSTREAM-5`）；重写后的 settings/jobs 契约下的本地化标记渲染与后台 owner/输出已修（`UPSTREAM-8`）——drift 哨兵 + 本地 0.1.7 家族 typecheck/单测/boot 验证 |
-| `0.1.5` 线（`0.1.5-rc.1`、`0.1.5-rc.2`…） | `0.2.2`（该线的最后一个发布物） | 运行时仍可用——双家族路径保留（0.1.5 宿主 boot 哨兵保持绿）——但 `0.2.2` 之后的发布物要求 `0.1.7` 家族，宿主升级前请停在 `0.2.2`。浏览器通道挂官方共享 `/api`（`/api/dsw/<端点>`） |
-| `0.1.2-rc.1` 家族（`0.1.2`、`0.1.3` 发布物） | `0.1.3`——该线的最后一个版本 | **已停止支持**（2026-09-11 退场）。该线挪动了 Connection 接缝（`connection.rpc.handle` 已无法注册通道），不会再回填修复 |
-| 其它 / 更老的线 | — | 从未支持 |
+| DSH 宿主 | 安装 |
+|---|---|
+| `0.2.2`、`0.2.1`、`0.2.0` 线，以及 `0.1.7-rc.2` | 最新版 |
+| `0.1.5` 线 | `0.2.2` |
+| `alpha` 构建、`0.1.2` 家族及更早 | 不支持 |
 
-**宿主与插件必须同步升级。** 0.1.4 线说 `/api/dsw/*`，0.1.3 及更早说 `/dsw/*`，且 0.1.3 没有
-`readByteRange`：混用会让宿主起得来、但连接/目录 UI **静默拿不到数据**（机器列表读不出、目录浏览报错）。
-支持窗口与上游漂移记录见 [docs/compatibility.md](./docs/compatibility.md)。
+宿主与插件必须同步升级。完整支持窗口与历史见 [docs/compatibility.md](./docs/compatibility.md)。
 
 ## 路线图
 
-公开进度：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。唯一待办真相源是
-[docs/backlog.md](./docs/backlog.md)。
+公开进度见 [docs/ROADMAP.md](./docs/ROADMAP.md)。唯一待办真相源是 [docs/backlog.md](./docs/backlog.md)。
 
 ## 开发
 
-先读 [AGENTS.md](./AGENTS.md)（规则、命令、红线）。文档地图——什么在哪、什么不要抄——见
-[docs/README.md](./docs/README.md)。
-
-统一质量门：`npm run check`（静态闸门 + typecheck + 单测 + build + pack 冒烟）——CI 跑的就是这一条。
+规则与命令见 [AGENTS.md](./AGENTS.md)，贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)，文档地图见 [docs/README.md](./docs/README.md)（`docs/` 下的文档是中文）。统一质量门：`npm run check`。
 
 ## 参考项目
 
