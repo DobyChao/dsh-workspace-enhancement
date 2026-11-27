@@ -50,7 +50,7 @@
 
 | ID | 标题 | 状态 | 优先级 | 完成 | 备注 |
 |---|---|---|---|---|---|
-| INFRA-27 | README 能力声明对照源码收口 | done | P3 | 2026-11-27 | 收口过写项：无组件时围栏档写与命令拒绝；rg 为部署时拉取；Landlock 为较弱后备。核对表在 PR 描述。 |
+| INFRA-27 | README 能力声明对照源码收口 | done | P3 | 2026-11-27 | 收口过写项：无组件时围栏档写与命令拒绝；rg 为部署时拉取；Landlock 为较弱后备。PR [#105](https://github.com/DobyChao/dsh-workspace-enhancement/pull/105) |
 | INFRA-26 | README 对齐现状并精简 | done | P3 | 2026-11-26 | EN/ZH 重写：补远程沙箱与远程组件（沙箱 / 文件读写 / 命令执行 / 文件搜索），改正审批门、0.1.5 哨兵、钥匙串密码、首次安装放行清单四处过期说法，兼容表不再写死版本。PR [#104](https://github.com/DobyChao/dsh-workspace-enhancement/pull/104) |
 | FIX-8 | dev-lab.ps1 冒烟探针打已废弃的 /dsw 通道 | done | P3 | 2026-11-20 | -Smoke 兑换会话 cookie 后 POST /api/dsw/connections.list。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
 | INFRA-12 | boot-smoke 成功后不退出 | done | P3 | 2026-11-20 | 显式 process.exit；只删 dsh-boot-smoke-*。SMOKE PASS 后 5s 内退出、码 0。PR [#102](https://github.com/DobyChao/dsh-workspace-enhancement/pull/102) |
