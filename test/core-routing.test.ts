@@ -177,6 +177,65 @@ test('CoreRoutingFileSystem: fenced write uses core RPC (I9-1 dual: outside work
   client.close()
 })
 
+test('UX-20: a confined read deploys a missing core; a failed deploy or a failed reopen reads via SFTP', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsw-read-deploy-'))
+  mkdirSync(join(dir, 'work'), { recursive: true })
+  writeFileSync(join(dir, 'work', 'a.txt'), 'from-core\n')
+  const client = pair(dir, 'read-only')
+  const t = transport()
+  const ctx = ctxWith(t)
+  let opens = 0
+  let deploys = 0
+  const hub = createCoreHub(ctx, {
+    deps: deps('read-only', t),
+    open: async () => {
+      opens += 1
+      if (opens === 1) throw new Error('core binary missing')
+      return client
+    },
+    resolveGap: async () => {
+      deploys += 1
+      return true
+    },
+  })
+  const tracked = trackingSftp()
+  const fs = new CoreRoutingFileSystem(ctx, tracked.sftp as unknown as SshFileSystemEngine, hub)
+  assert.equal(await fs.readText(target('/work/a.txt')), 'from-core\n')
+  assert.equal(deploys, 1, 'a confined read deploys before it touches SFTP')
+  assert.equal(tracked.reads.includes('readText'), false)
+  client.close()
+
+  let declined = 0
+  const refused = createCoreHub(ctx, {
+    deps: deps('read-only', t),
+    open: async () => { throw new Error('core binary missing') },
+    resolveGap: async () => {
+      declined += 1
+      return false
+    },
+  })
+  const fallback = trackingSftp()
+  const fallbackFs = new CoreRoutingFileSystem(ctx, fallback.sftp as unknown as SshFileSystemEngine, refused)
+  assert.equal(await fallbackFs.readText(target('/work/a.txt')), 'from-sftp')
+  assert.equal(declined, 1)
+  assert.ok(fallback.reads.includes('readText'))
+
+  let reopens = 0
+  const reopened = createCoreHub(ctx, {
+    deps: deps('read-only', t),
+    open: async () => {
+      reopens += 1
+      throw new Error('core binary missing')
+    },
+    resolveGap: async () => true,
+  })
+  const afterReopen = trackingSftp()
+  const reopenFs = new CoreRoutingFileSystem(ctx, afterReopen.sftp as unknown as SshFileSystemEngine, reopened)
+  assert.equal(await reopenFs.readText(target('/work/a.txt')), 'from-sftp')
+  assert.ok(reopens >= 2, 'a successful deploy still reopens, and that reopen can fail')
+  assert.ok(afterReopen.reads.includes('readText'))
+})
+
 test('REQ-I15: fenced + dead core reads via SFTP; writes stay fail-closed', async () => {
   const t = transport()
   const ctx = ctxWith(t)

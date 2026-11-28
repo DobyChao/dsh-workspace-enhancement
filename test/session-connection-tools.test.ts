@@ -36,7 +36,7 @@ import {
 } from '../src/exec-tools.ts'
 import type { ProbeRegistryFace } from '../src/exec-tools.ts'
 import { sshRoutePlaceholder } from '../src/transport.ts'
-import { connectedMachineFact, registerWorkspaceTools, renderSessionWorkspaceContext } from '../src/tools.ts'
+import { connectedMachineFact, registerWorkspaceTools, renderRegisteredFileRoutes, renderSessionWorkspaceContext } from '../src/tools.ts'
 import type { CoreProvisionOutcome } from '../src/core-provision.ts'
 import type { SessionConnectionsFace } from '../src/session-remote-context.ts'
 import { CORE_COMPAT_HASHES } from '../src/core-protocol.ts'
@@ -542,6 +542,101 @@ test('renderSessionWorkspaceContext: a local cwd adds no directory pair', () => 
   )
   assert.ok(!text.includes('Current directory'), text)
   assert.ok(text.includes('`c1`'), text)
+})
+
+test('UX-20: a local session with registered machines states the ssh:// file route', () => {
+  const text = renderSessionWorkspaceContext(
+    [],
+    [],
+    '',
+    'C:\\Users\\me\\proj',
+    [connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' })],
+  )
+  assert.ok(text.includes('**Registered machines**:'), text)
+  assert.ok(text.includes('- `c1` — root@10.0.0.5'), text)
+  assert.ok(text.includes('official read, edit, glob, and grep tools'), text)
+  assert.ok(text.includes('`ssh://<id>/<absolute posix path>`'), text)
+  assert.ok(text.includes('Do not connect just to read or edit files'), text)
+  assert.ok(!text.includes('Do not connect first'), text)
+  assert.ok(text.includes('Open one only when the user\'s task needs that machine'), text)
+  assert.ok(text.includes('saved credentials'), text)
+  assert.ok(text.includes('accept-new'), text)
+  assert.ok(text.includes('records its host key'), text)
+  assert.ok(text.includes('including a read, may deploy the remote component'), text)
+  assert.ok(text.includes('falls back to SFTP when the component cannot be opened or deployed'), text)
+  assert.ok(!text.includes('only if that deploy fails'), text)
+  assert.ok(text.includes('Commands still use sw_exec'), text)
+  assert.ok(text.includes('sw_connect replaces the whole connected set'), text)
+  assert.ok(!text.includes('connect that machine to this session first'), text)
+  assert.ok(!text.includes('current remote machine is not in this list'), text)
+  assert.ok(!text.includes('Machines connected to this session'), text)
+  assert.ok(!text.includes('Current directory'), text)
+  assert.ok(!/[\p{Script=Han}]/u.test(text), 'model-facing text must be English only')
+})
+
+test('UX-20: the file-route sentence is absent when nothing besides the current machine is registered', () => {
+  assert.equal(renderRegisteredFileRoutes([]), '')
+  assert.equal(renderRegisteredFileRoutes([
+    connectedMachineFact('local', { username: 'me', host: 'localhost' }),
+  ]), '')
+  const onlyCurrent = renderSessionWorkspaceContext(
+    [],
+    [],
+    '',
+    'ssh://c1/home/uuz/eee',
+    [connectedMachineFact('c1', { username: 'u', host: 'h' })],
+  )
+  assert.ok(!onlyCurrent.includes('Registered machines'), onlyCurrent)
+  assert.ok(!onlyCurrent.includes('ssh://<id>/'), onlyCurrent)
+  assert.ok(onlyCurrent.includes('`/home/uuz/eee`'), onlyCurrent)
+  assert.ok(onlyCurrent.includes('grep, glob, and file tools'), onlyCurrent)
+})
+
+test('UX-20: another registered machine gets the ssh:// route; the current machine stays POSIX', () => {
+  const text = renderSessionWorkspaceContext(
+    [],
+    [
+      { id: 'sw-1', kind: 'remote', rootKey: 'ssh://c1/home/uuz/other', label: 'other' },
+      { id: 'sw-2', kind: 'remote', rootKey: 'ssh://c2/srv/away', label: 'away' },
+    ],
+    '',
+    'ssh://c1/home/uuz/eee',
+    [
+      connectedMachineFact('c1', { username: 'u', host: 'h1' }),
+      connectedMachineFact('c2', { username: 'u', host: 'h2' }),
+    ],
+  )
+  assert.ok(text.includes('`/home/uuz/other` on this machine'), text)
+  assert.ok(text.includes('Use this POSIX path; do not prefix it with `ssh://`.'), text)
+  assert.ok(!text.includes('ssh://c1/'), text)
+  const registered = text.slice(text.indexOf('**Registered machines**:'))
+  assert.ok(registered.startsWith('**Registered machines**:'), text)
+  assert.ok(registered.includes('- `c2` — u@h2'), registered)
+  assert.ok(!registered.includes('`c1`'), registered)
+  assert.ok(registered.includes('`ssh://<id>/<absolute posix path>`'), registered)
+  assert.ok(registered.includes('current remote machine is not in this list'), registered)
+  assert.ok(text.includes('`ssh://c2/srv/away`'), text)
+})
+
+test('UX-20: a connected machine is left out of the file-route list', () => {
+  const text = renderSessionWorkspaceContext(
+    [connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' })],
+    [],
+    '',
+    'C:\\Users\\me\\proj',
+    [
+      connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' }),
+      connectedMachineFact('c2', { username: 'u', host: '10.0.0.6' }),
+    ],
+  )
+  assert.ok(text.includes('- `c1` — root@10.0.0.5'), text)
+  const registered = text.slice(text.indexOf('**Registered machines**:'))
+  assert.ok(registered.startsWith('**Registered machines**:'), text)
+  assert.ok(registered.includes('- `c2` — u@10.0.0.6'), registered)
+  assert.ok(!registered.includes('`c1`'), registered)
+  assert.ok(registered.includes('sw_connect replaces the whole connected set'), registered)
+  assert.ok(!text.includes('connect that machine to this session first'), text)
+  assert.ok(!text.includes('current remote machine is not in this list'), text)
 })
 
 /* --------------------- REQ-I21: core provision inside the tool surface ----- */

@@ -49,7 +49,8 @@
   `sw_connect` 的连接集合决定**本会话看到什么**（`sw_exec` 是否可用、提示词里有没有机器清单），
   但它**拦不住**会拼路径的模型，两条已验证的绕行：
   1. **fs 面**：官方 `read`/`write`/`edit`/`glob`/`grep` 传 `ssh://<id>/…` 即直达该机器——路由是
-     **注册表级**（任何已注册机器都可解析），不查会话；
+     **注册表级**（任何已注册机器都可解析），不查会话。首次访问用注册表凭据建连；围栏档下这次访问
+     （包括读）在组件缺失或过旧时可能自动部署。组件打不开或部署不了时，读退回 SFTP；
   2. **exec 面**：官方 `bash`/`pwsh` 工具把模型给的 `workdir` **原样**当 `spec.cwd`
      （`dsh-tool-bash`：`...args.workdir !== void 0 ? { cwd: args.workdir } : {}`，`resolveWorkdir`
      只把**相对**路径接到会话 cwd），混合门面按 `worldOfCwd(spec.cwd)` 路由 ⇒ 零连接的本地会话
@@ -62,7 +63,7 @@
 - SSH 固有：远端 pid / 前台进程组不可见。
 - 围栏档不再要求用户预装 `bwrap` / `ripgrep`：两者打进远程组件 tarball，由设置页 `core.deploy`
   上传。远程组件缺失或架构不符时 fs 与 spawn **一起** `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
-  `read-only` 下官方 `write` 工作区外失败且文件不存在），读仍走 SFTP；只有 `danger-full-access`
+  `read-only` 下官方 `write` 工作区外失败且文件不存在）。组件打不开或部署不了时，读退回 SFTP（并非每次都会先部署）；只有 `danger-full-access`
   在没有组件时是 SFTP + 裸 exec。宿主组合里没有 `sandboxPolicy` 服务时按 `read-only` 处理（fail-safe）。
   交互终端见下一条（`ADR-0031` §4 拆两半）。供应链（二进制来源、签名、校验和）是新信任根。
 - **围栏改走 `confine` 逐次策略后的收窄清单（`ADR-0031` §5，所有者 2026-10-08 接受 / 10-11 实施）**：
