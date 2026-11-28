@@ -395,6 +395,7 @@
   gap: 2px;
   max-height: 200px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;

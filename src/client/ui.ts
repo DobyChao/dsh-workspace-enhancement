@@ -138,6 +138,30 @@ export function useDialogA11y(active: boolean, onClose: () => void): RefObject<H
 }
 
 /**
+ * BUG-32: keep a wheel gesture inside an overlay that is painted over the page
+ * but still lives under the host sidebar viewport in the DOM.
+ *
+ * `dsh-client-ui-sidebar` `createScrollHandoff` listens for `wheel` on that
+ * viewport (bubble, non-passive) and calls `preventDefault` unless the event
+ * target is inside the section scroller. The directory flow is rendered in
+ * place beneath the viewport and outside that scroller, so the hand-off
+ * cancels the list's native scroll and moves the sidebar instead. A listener
+ * on the overlay runs first on the way up and stops propagation. It must not
+ * call `preventDefault`: the browser's default action is what scrolls the
+ * list. React's `onWheel` is too late — it is delegated at the root, after
+ * the viewport listener has already cancelled the scroll.
+ * @param element - the overlay root (a descendant of the sidebar viewport).
+ * @returns remove the listener.
+ */
+export function bindOverlayWheelContainment(element: HTMLElement): () => void {
+  const stop = (event: WheelEvent): void => {
+    event.stopPropagation()
+  }
+  element.addEventListener('wheel', stop, { passive: true })
+  return () => { element.removeEventListener('wheel', stop) }
+}
+
+/**
  * BUG-14: backdrop-dismiss props that survive drag-selection. A plain
  * `onClick` guarded by `target === currentTarget` also fires for a click the
  * browser dispatches on the nearest COMMON ANCESTOR of mousedown and mouseup —

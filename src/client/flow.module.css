@@ -23,6 +23,10 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  /* Scrollport for the mask. A wheel that the inner list cannot consume
+     stops here instead of chaining to the page (BUG-32). */
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 /* The mask paints on the overlay's own pseudo-element, so every nested dialog
@@ -43,6 +47,7 @@
   width: min(920px, 100%);
   height: min(620px, calc(100vh - 48px));
   overflow: hidden;
+  overscroll-behavior: contain;
   border: 1px solid var(--dsw-alias-border-inverted);
   border-radius: 24px;
   background: var(--dsw-alias-bg-layer-2);
@@ -134,6 +139,7 @@
   width: 268px;
   padding: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-specific-sidebar-fill);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
@@ -573,6 +579,7 @@
   min-height: 200px;
   padding: 8px 12px 10px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
 }
@@ -990,6 +997,7 @@
   width: min(440px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
   border: 1px solid var(--dsw-alias-border-inverted);
   border-radius: 24px;
