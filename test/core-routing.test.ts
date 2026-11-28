@@ -177,7 +177,7 @@ test('CoreRoutingFileSystem: fenced write uses core RPC (I9-1 dual: outside work
   client.close()
 })
 
-test('UX-20: a confined read deploys a missing core, and uses SFTP only if that deploy fails', async () => {
+test('UX-20: a confined read deploys a missing core; a failed deploy or a failed reopen reads via SFTP', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsw-read-deploy-'))
   mkdirSync(join(dir, 'work'), { recursive: true })
   writeFileSync(join(dir, 'work', 'a.txt'), 'from-core\n')
@@ -219,6 +219,21 @@ test('UX-20: a confined read deploys a missing core, and uses SFTP only if that 
   assert.equal(await fallbackFs.readText(target('/work/a.txt')), 'from-sftp')
   assert.equal(declined, 1)
   assert.ok(fallback.reads.includes('readText'))
+
+  let reopens = 0
+  const reopened = createCoreHub(ctx, {
+    deps: deps('read-only', t),
+    open: async () => {
+      reopens += 1
+      throw new Error('core binary missing')
+    },
+    resolveGap: async () => true,
+  })
+  const afterReopen = trackingSftp()
+  const reopenFs = new CoreRoutingFileSystem(ctx, afterReopen.sftp as unknown as SshFileSystemEngine, reopened)
+  assert.equal(await reopenFs.readText(target('/work/a.txt')), 'from-sftp')
+  assert.ok(reopens >= 2, 'a successful deploy still reopens, and that reopen can fail')
+  assert.ok(afterReopen.reads.includes('readText'))
 })
 
 test('REQ-I15: fenced + dead core reads via SFTP; writes stay fail-closed', async () => {

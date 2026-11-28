@@ -69,7 +69,7 @@ export const MODEL_PROMPTS = {
    * in order to read: that call replaces the whole connected set.
    */
   registeredFileRoute:
-    'Read, write, and search files on these machines with the official read, edit, glob, and grep tools using `ssh://<id>/<absolute posix path>`. Do not connect just to read or edit files, and do not declare a side workspace. Open one only when the user\'s task needs that machine: the first access connects with its saved credentials and, under the default accept-new policy, records its host key; a confined first access, including a read, may deploy the remote component, and a read falls back to SFTP only if that deploy fails. Commands still use sw_exec on a machine already connected to this session. sw_connect replaces the whole connected set.',
+    'Read, write, and search files on these machines with the official read, edit, glob, and grep tools using `ssh://<id>/<absolute posix path>`. Do not connect just to read or edit files, and do not declare a side workspace. Open one only when the user\'s task needs that machine: the first access connects with its saved credentials and, under the default accept-new policy, records its host key; a confined first access, including a read, may deploy the remote component, and a read falls back to SFTP when the component cannot be opened or deployed. Commands still use sw_exec on a machine already connected to this session. sw_connect replaces the whole connected set.',
   /**
    * UX-20: appended only when this session's cwd is already on a remote
    * machine. A local session must not claim there is a current remote machine.
