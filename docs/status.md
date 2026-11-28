@@ -1,7 +1,7 @@
 # 项目状态（生成文件，请勿手改）
 
 > 由 `npm run status` 从 git / package.json / test/ / docs/backlog.md 生成。
-> 生成时间：2026-11-26 07:04 UTC · 唯一待办真相源：`docs/backlog.md`
+> 生成时间：2026-11-27 09:02 UTC · 唯一待办真相源：`docs/backlog.md`
 
 ## 版本与提交
 
@@ -10,9 +10,9 @@
 | package.json 版本 | `0.2.10` |
 | npm 已发布版本 | `0.2.10` |
 | 最新 tag | `v0.2.10` |
-| 分支 / HEAD | `docs/INFRA-26-readme-refresh` / `0c20991` |
-| HEAD 提交 | `docs(readme): refresh the README around current features` (2026-11-26) |
-| 与远端 | 1 ahead / 0 behind origin/master |
+| 分支 / HEAD | `cursor/readme-claim-audit-8d38` / `1163717` |
+| HEAD 提交 | `docs(readme): refresh the README around current features (#104)` (2026-11-27) |
+| 与远端 | in sync with origin/master |
 
 ## 质量
 
@@ -31,7 +31,7 @@
 | `todo` | 9 |
 | `doing` | 2 |
 | `blocked` | 5 |
-| `done` | 120 |
+| `done` | 121 |
 | `shipped` | 17 |
 | `dropped` | 17 |
 

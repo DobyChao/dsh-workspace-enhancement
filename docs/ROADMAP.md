@@ -8,10 +8,10 @@
 ## 现在在哪
 
 本地/远程工作区收在一个插件里：混合 `ctx.subprocess` /
-`ctx.fs`、多机注册表、`ssh://<id>/<path>` 路由、TOFU 与 OS 钥匙串、会话级机器连接、
+`ctx.fs`、多机注册表、`ssh://<id>/<path>` 路由、TOFU（默认 accept-new；密码默认明文，可按机器转存 OS 钥匙串）、会话级机器连接、
 副工作区薄声明清单、遗留审批门（默认关）、远端一个组件（围栏档走 RPC；无组件时读面降 SFTP、写/spawn
 仍拒；`danger` 有组件仍走组件 `--sandbox off`）、模型工具 `sw_status` / `sw_connect` /
-`sw_exec`（实验性 `sw_use_machine` 默认关）、运行时 zh/en。当前版本与待办计数见 [`status.md`](./status.md)，宿主支持窗口见 [`compatibility.md`](./compatibility.md)。
+`sw_exec`（实验性 `sw_use_machine` 默认关，0.2.1+ 才注册；调用要完全权限且机器已连接）、运行时 zh/en（词典工具错误跟随语言；沙箱拒绝、审批门错误和改用 bash/pwsh 的提示保持英文，工具描述与会话提示也是英文）。当前版本与待办计数见 [`status.md`](./status.md)，宿主支持窗口见 [`compatibility.md`](./compatibility.md)。
 
 ## 接下来
 
