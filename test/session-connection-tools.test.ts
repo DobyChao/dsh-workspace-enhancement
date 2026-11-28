@@ -557,8 +557,15 @@ test('UX-20: a local session with registered machines states the ssh:// file rou
   assert.ok(text.includes('official read, edit, glob, and grep tools'), text)
   assert.ok(text.includes('`ssh://<id>/<absolute posix path>`'), text)
   assert.ok(text.includes('Do not connect first and do not declare a side workspace.'), text)
+  assert.ok(text.includes('Open one only when the user\'s task needs that machine'), text)
+  assert.ok(text.includes('saved credentials'), text)
+  assert.ok(text.includes('accept-new'), text)
+  assert.ok(text.includes('records its host key'), text)
+  assert.ok(text.includes('may deploy the remote component'), text)
   assert.ok(text.includes('Commands still use sw_exec'), text)
-  assert.ok(text.includes('do not prefix it with `ssh://`'), text)
+  assert.ok(text.includes('sw_connect replaces the whole connected set'), text)
+  assert.ok(!text.includes('connect that machine to this session first'), text)
+  assert.ok(!text.includes('current remote machine is not in this list'), text)
   assert.ok(!text.includes('Machines connected to this session'), text)
   assert.ok(!text.includes('Current directory'), text)
   assert.ok(!/[\p{Script=Han}]/u.test(text), 'model-facing text must be English only')
@@ -604,7 +611,29 @@ test('UX-20: another registered machine gets the ssh:// route; the current machi
   assert.ok(registered.includes('- `c2` — u@h2'), registered)
   assert.ok(!registered.includes('`c1`'), registered)
   assert.ok(registered.includes('`ssh://<id>/<absolute posix path>`'), registered)
+  assert.ok(registered.includes('current remote machine is not in this list'), registered)
   assert.ok(text.includes('`ssh://c2/srv/away`'), text)
+})
+
+test('UX-20: a connected machine is left out of the file-route list', () => {
+  const text = renderSessionWorkspaceContext(
+    [connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' })],
+    [],
+    '',
+    'C:\\Users\\me\\proj',
+    [
+      connectedMachineFact('c1', { username: 'root', host: '10.0.0.5' }),
+      connectedMachineFact('c2', { username: 'u', host: '10.0.0.6' }),
+    ],
+  )
+  assert.ok(text.includes('- `c1` — root@10.0.0.5'), text)
+  const registered = text.slice(text.indexOf('**Registered machines**:'))
+  assert.ok(registered.startsWith('**Registered machines**:'), text)
+  assert.ok(registered.includes('- `c2` — u@10.0.0.6'), registered)
+  assert.ok(!registered.includes('`c1`'), registered)
+  assert.ok(registered.includes('sw_connect replaces the whole connected set'), registered)
+  assert.ok(!text.includes('connect that machine to this session first'), text)
+  assert.ok(!text.includes('current remote machine is not in this list'), text)
 })
 
 /* --------------------- REQ-I21: core provision inside the tool surface ----- */

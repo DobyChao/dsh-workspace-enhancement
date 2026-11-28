@@ -57,6 +57,8 @@ interface MountOptions {
   connections?: () => SessionConnectionsFace | undefined
   /** Registry rows. Defaults to `c1`, which the implicit-main-machine union trusts. */
   machines?: readonly RegistryMachine[]
+  /** `listMachines` throws, so the file-route block must be omitted. */
+  listMachinesThrows?: boolean
 }
 
 /** Mount the whole workspace tool surface on a fake host context. */
@@ -77,7 +79,10 @@ function mount(options: MountOptions = {}): Mounted {
       }
     },
     getActive: () => null,
-    listMachines: () => ({ machines: machines.map(machine => ({ ...machine })), currentId: null }),
+    listMachines: () => {
+      if (options.listMachinesThrows === true) throw new Error('registry unreadable')
+      return { machines: machines.map(machine => ({ ...machine })), currentId: null }
+    },
   }) as unknown as SshRegistry
   const ctx = {
     // No `settings` service → hostLocaleOf falls back to en (the normal case).
@@ -169,6 +174,10 @@ test('mount: a LOCAL session with a registered machine sees the file route, and 
   assert.ok(contexts[0]?.includes('- `c1` — root@10.0.0.5'), contexts[0])
   assert.ok(contexts[0]?.includes('`ssh://<id>/<absolute posix path>`'), contexts[0])
   assert.ok(contexts[0]?.includes('Commands still use sw_exec'), contexts[0])
+  assert.ok(contexts[0]?.includes('sw_connect replaces the whole connected set'), contexts[0])
+  assert.ok(contexts[0]?.includes('only when the user\'s task needs that machine'), contexts[0])
+  assert.ok(!contexts[0]?.includes('connect that machine to this session first'), contexts[0])
+  assert.ok(!contexts[0]?.includes('current remote machine is not in this list'), contexts[0])
   assert.ok(!contexts[0]?.includes('Machines connected to this session'), contexts[0])
   assert.ok(!/[\p{Script=Han}]/u.test(contexts[0] ?? ''), contexts[0])
   // A missing cwd is local too, and still sees the registry.
@@ -255,7 +264,9 @@ test('mount: a connected machine alone (local cwd, no side root) turns the remot
   assert.equal(injected.length, 1)
   assert.equal(injected[0]?.split('Machines connected to this session').length, 2)
   assert.ok(injected[0]?.includes('`c1`'))
-  assert.ok(injected[0]?.includes('`ssh://<id>/<absolute posix path>`'), injected[0])
+  // c1 is already connected, so it is not repeated as a file-route target.
+  assert.ok(!injected[0]?.includes('Registered machines'), injected[0])
+  assert.ok(!injected[0]?.includes('`ssh://<id>/<absolute posix path>`'), injected[0])
   // No connection on s2: sw_exec framing stays off. The registry file-route
   // note is still there, and it is not the connected-machine list.
   const other = injectedTexts(mounted.contexts, assemblyContext('C:\\Users\\me\\proj', 's2'))
@@ -301,6 +312,15 @@ test('mount: a remote session lists other registered machines for the ssh:// fil
   const sections = injectedTexts(mounted.sections, remote).join('\n')
   assert.ok(!sections.includes('Registered machines'))
   assert.ok(!sections.includes('ssh://<id>/'))
+})
+
+test('UX-20: a registry read failure omits the file-route block and does not throw', () => {
+  const mounted = mount({ listMachinesThrows: true })
+  const context = mounted.contexts.find(entry => entry.name === 'dsw-session-workspace')
+  assert.ok(context !== undefined)
+  const local = assemblyContext('C:\\Users\\me\\proj', 's1')
+  assert.doesNotThrow(() => textOf(context, local))
+  assert.equal(textOf(context, local), '')
 })
 
 test('mount: a cached component probe is part of the context provider text (BUG-29)', () => {

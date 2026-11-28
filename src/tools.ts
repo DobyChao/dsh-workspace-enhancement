@@ -214,24 +214,31 @@ const LOCAL_REGISTRY_ID = 'local'
 /**
  * UX-20: registered machines the official read/edit/glob/grep tools reach with
  * `ssh://<id>/<absolute posix path>`, without `sw_connect` or a side root.
- * The current remote machine is omitted so this block never contradicts the
- * POSIX-path rule for the machine the session is already on. Empty → `''`
- * (nothing else to address, including a local session whose registry is empty).
+ * Already-connected machines are omitted (they are `sw_exec` targets, and
+ * `sw_connect` would replace that set). The current remote machine is omitted
+ * too, and only then does the POSIX-path sentence appear. Empty → `''`.
  * @param machines - registry machines, in registry order.
  * @param currentConnectionId - the effective cwd's machine, when the cwd is remote.
+ * @param connectedIds - machines already connected to this session.
  */
 export function renderRegisteredFileRoutes(
   machines: readonly ConnectedMachineFact[],
   currentConnectionId?: string,
+  connectedIds: readonly string[] = [],
 ): string {
-  const others = machines.filter(machine =>
-    machine.id !== '' && machine.id !== LOCAL_REGISTRY_ID && machine.id !== currentConnectionId)
+  const skip = new Set<string>([LOCAL_REGISTRY_ID, ''])
+  if (currentConnectionId !== undefined && currentConnectionId !== '') skip.add(currentConnectionId)
+  for (const id of connectedIds) skip.add(id)
+  const others = machines.filter(machine => !skip.has(machine.id))
   if (others.length === 0) return ''
   const lines = others.map(fact => modelPrompt('registeredItem', {
     id: fact.id,
     endpoint: fact.endpoint,
   }))
-  return `${modelPrompt('registeredHeading')}\n${lines.join('\n')}\n${modelPrompt('registeredFileRoute')}`
+  const remoteNote = currentConnectionId !== undefined && currentConnectionId !== ''
+    ? `\n${modelPrompt('registeredFileRouteRemote')}`
+    : ''
+  return `${modelPrompt('registeredHeading')}\n${lines.join('\n')}\n${modelPrompt('registeredFileRoute')}${remoteNote}`
 }
 
 /** Render the `sw_status` connected-machine line (ids + endpoint, or the none text). */
@@ -254,16 +261,16 @@ export function renderConnectedStatusLine(
  * per assembly from the effective cwd, so a `sw_connect`, a panel toggle, or
  * `sw_use_machine` becomes visible inside the same conversation (a `section()`
  * alone would only be re-read in the header prompt). All empty → `''`.
- * A local session with zero connections stays silent only when `registered`
- * names no machine other than the current one (UX-20). ENGLISH ONLY (ADR-0014).
+ * A local session stays silent when `registered` names no machine that is
+ * neither connected nor the current remote machine (UX-20). ENGLISH ONLY (ADR-0014).
  * @param connected - one fact per connected machine, in connection order.
  * @param sides - the session's side roots (薄声明清单, REQ-I7).
  * @param remoteFiles - optional per-session remote file lines.
  * @param cwd - the effective session cwd for this assembly. A remote route
  *   adds the POSIX path next to its placeholder, and rewrites same-machine
  *   side roots to that POSIX path. A local cwd adds neither.
- * @param registered - registry machines. File-route guidance lists every one
- *   except the current remote machine. Omit to render no file-route block.
+ * @param registered - registry machines. File-route guidance lists those that
+ *   are neither connected nor the current remote machine. Omit for no block.
  */
 export function renderSessionWorkspaceContext(
   connected: readonly ConnectedMachineFact[],
@@ -278,7 +285,11 @@ export function renderSessionWorkspaceContext(
   const machines = renderConnectedMachines(connected)
   if (machines !== '') parts.push(machines)
   const route = cwd === undefined ? null : remoteRouteFromCwd(cwd)
-  const fileRoutes = renderRegisteredFileRoutes(registered, route?.connectionId)
+  const fileRoutes = renderRegisteredFileRoutes(
+    registered,
+    route?.connectionId,
+    connected.map(fact => fact.id),
+  )
   if (fileRoutes !== '') parts.push(fileRoutes)
   const side = renderSideWorkspaces(sides, route?.connectionId)
   if (side !== '') parts.push(side)
@@ -759,7 +770,7 @@ export function registerWorkspaceTools(
    * （dsh-agent-loop 的 `assembleContextFor` 返回 `{ agent, scope: agent }`；
    * 每会话 scope key 由 `ReactLoopAgent` 构造时的 `createScope(loopCtx, this)`
    * mint），agent 暴露 `session.header`（叶子字段：cwd + id）。因此：
-   * - 本地会话无副工作区、无连接机器：稳定段为空。注册表还有其它机器时，运行时上下文只带文件路由说明（UX-20）；否则零注入。
+   * - 本地会话无副工作区、无连接机器：稳定段为空。注册表还有尚未连接的机器时，运行时上下文只带文件路由说明（UX-20）；否则零注入。
    * - 远程会话（cwd = `ssh://<id>/…` 或占位树）：按 route 找机器渲染强调提示。
    * - 不选方案 A（session/created 里为会话 createScope + 注册 scoped section）：
    *   注册需要持有一份带该 scope 标签的 ctx——agent 的 scoped ctx 对宿主行不可见；
@@ -785,8 +796,8 @@ export function registerWorkspaceTools(
    *   provider 原文，assemble 追加的行留不住（BUG-29）。本会话有几台机器
    *   （store ∪ cwd 上的主工作区）就写几行。
    * - 无远程事实时，稳定段与 `tool:sw-exec` 仍返回 ''。运行时上下文在注册表还有
-   *   「当前远程机器」以外的机器时多一块文件路由说明（UX-20），本地零连接也能看见；
-   *   注册表没有这类机器才零注入。清单**只在 context 里渲染一次**，section 不重复。
+   *   尚未连接、且不是当前远程机器的机器时多一块文件路由说明（UX-20）；读注册表
+   *   失败则省掉这块，不让组装失败。清单**只在 context 里渲染一次**，section 不重复。
    */
   // REQ-I31: both prompt halves read the EFFECTIVE session cwd (projection
   // first, header fallback) so a `working_directory` change moves the
@@ -811,15 +822,22 @@ export function registerWorkspaceTools(
     text: (context) => {
       const facts = sessionWorkspaceContextOf(context, sides, projections)
       const { cwd, sides: attached } = facts
+      let registered: ConnectedMachineFact[] = []
+      try {
+        registered = registry().listMachines().machines.map(entry => connectedMachineFact(
+          entry.id,
+          typeof entry.username === 'string' && typeof entry.host === 'string' ? entry : undefined,
+        ))
+      } catch {
+        // A registry read must not fail prompt assembly. Omit the file-route block.
+        registered = []
+      }
       const body = renderSessionWorkspaceContext(
         connectedFactsOf(sessionIdOf(context), cwd),
         attached,
         renderRemoteFileLines(facts.sessionId),
         cwd,
-        registry().listMachines().machines.map(entry => connectedMachineFact(
-          entry.id,
-          typeof entry.username === 'string' && typeof entry.host === 'string' ? entry : undefined,
-        )),
+        registered,
       )
       const lines = renderRemoteComponentContext(cachedComponentFacts(connectedIdsOf(sessionIdOf(context), cwd)))
       return appendComponentLines(body, lines)

@@ -55,20 +55,27 @@ export const MODEL_PROMPTS = {
   /** REQ-I11: the note appended to a machine that did not answer its ping. */
   connectedUnreachable: ' (was unreachable at connect time)',
   /**
-   * UX-20: heading of the registry machines the official file tools can reach
-   * without a session connection. The current remote machine is not in this
-   * list — paths on it stay POSIX ({@link sideItemSameMachine}).
+   * UX-20: heading of registry machines the official file tools can reach
+   * without a session connection. Already-connected machines and the current
+   * remote machine are not in this list.
    */
   registeredHeading: '**Registered machines**:',
   /** UX-20: one registered machine the file-route sentence applies to. */
   registeredItem: '- `{id}` — {endpoint}',
   /**
-   * UX-20: registry-level file routing (ADR-0021). One guidance block under
+   * UX-20: registry-level file routing (ADR-0021). Under
    * {@link registeredHeading}. Angle brackets, not `{id}`, so interpolation
-   * does not eat the example.
+   * does not eat the example. Does not tell the model to call `sw_connect`
+   * in order to read: that call replaces the whole connected set.
    */
   registeredFileRoute:
-    'Read, write, and search files on these machines with the official read, edit, glob, and grep tools using `ssh://<id>/<absolute posix path>`. Do not connect first and do not declare a side workspace. Commands still use sw_exec (connect that machine to this session first). This session\'s current remote machine is not in this list: keep its POSIX path and do not prefix it with `ssh://`.',
+    'Read, write, and search files on these machines with the official read, edit, glob, and grep tools using `ssh://<id>/<absolute posix path>`. Do not connect first and do not declare a side workspace. Open one only when the user\'s task needs that machine: the first access connects with its saved credentials and, under the default accept-new policy, records its host key; a confined write or command may deploy the remote component. Commands still use sw_exec on a machine already connected to this session. sw_connect replaces the whole connected set.',
+  /**
+   * UX-20: appended only when this session's cwd is already on a remote
+   * machine. A local session must not claim there is a current remote machine.
+   */
+  registeredFileRouteRemote:
+    'This session\'s current remote machine is not in this list: keep its POSIX path and do not prefix it with `ssh://`.',
   /**
    * Current effective directory in the runtime context: the POSIX path and
    * the concrete placeholder that names it. Recomputed every assembly.
