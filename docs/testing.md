@@ -30,7 +30,7 @@
 
 `npm run test:agent` 的行为（`scripts/test-agent.mjs`）：
 
-1. 扫描 `test/*.test.ts`；**直接 import `.tsx` 的文件被跳过**（JSX 需要 esbuild），当前 4 个；
+1. 扫描 `test/*.test.ts`；**直接 import `.tsx` 的文件被跳过**（JSX 需要 esbuild），当前 5 个；
 2. 其余文件用 `node --experimental-transform-types --test --experimental-test-isolation=none` 单进程跑；
 3. 把失败按块分类：命中 `spawn EPERM` / `EACCES` / `SetFileSecurityW` 等标记的算 **沙箱受限**，
    只要没有"真失败"，退出码为 0 并打印 `SANDBOX-LIMITED PASS`。
