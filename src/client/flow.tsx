@@ -17,7 +17,7 @@ import type { ConnectionDraft } from './form.tsx'
 import type { MachineSaveView, ResolvedSshConfigView } from './machine-form.tsx'
 import { configHostProbeTarget, configHostRpc } from './config-host-status.ts'
 import { ConnStatusBadge, createStatusCenter, zhBaseline } from './status.tsx'
-import { backdropDismissProps, consumePathEditEscape, cx, pathEditMarker, useDialogA11y } from './ui.ts'
+import { backdropDismissProps, bindOverlayWheelContainment, consumePathEditEscape, cx, pathEditMarker, useDialogA11y } from './ui.ts'
 import { browsePathDraft, clampSplitWidth, connectionEndpoint, connectionHoverTitle, readSplitWidth, SPLIT_DEFAULT, SPLIT_MAX, SPLIT_MIN, SPLIT_STEP, SPLIT_STORAGE_KEY } from './browse-path.ts'
 import { initialBrowseTarget } from './browse-target.ts'
 import {
@@ -316,6 +316,14 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
   modeRef.current = mode
   const paneRef = useRef<Pane>(pane)
   paneRef.current = pane
+  const overlayRef = useRef<HTMLDivElement>(null)
+  // BUG-32: native listener, not onWheel. The host sidebar viewport
+  // preventDefaults bubbling wheels before React's root delegate runs.
+  useEffect(() => {
+    const node = overlayRef.current
+    if (!open || node === null) return undefined
+    return bindOverlayWheelContainment(node)
+  }, [open])
 
   const dialogRef = useDialogA11y(open, () => { onCancel() })
   const folderDialogRef = useDialogA11y(folderDraft !== null, () => { if (!folderBusy) setFolderDraft(null) })
@@ -750,7 +758,7 @@ export function SshWorkspaceFlow(props: FlowProps & FlowInjected & FlowTimed) {
   if (!open) return null
 
   return (
-    <div className={styles.overlay} {...backdropDismissProps(onCancel)}>
+    <div ref={overlayRef} className={styles.overlay} {...backdropDismissProps(onCancel)}>
       <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={t('flow.dialog.label')} ref={dialogRef}>
         <header className={styles.header}>
           <div className={styles.headerText}>

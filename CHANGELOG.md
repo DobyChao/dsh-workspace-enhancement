@@ -6,6 +6,7 @@
 
 ### 修复
 
+- **目录选择器滚轮透传到下层（`BUG-32`）**：选择器渲染在侧栏 viewport 内、不在 section scroller 里。宿主对冒泡上来的 wheel 调用 `preventDefault`，列表因此不滚动，下面的页面在滚。遮罩上用原生监听 `stopPropagation`（不 `preventDefault`），目录列表和连接列表加 `overscroll-behavior: contain`。
 - **装好 bubblewrap 后同会话围栏仍失败（`BUG-31`，Fixes #68）**：缺 bubblewrap、bwrap 不可用或没有 Landlock 时，下一次 `require` 会重新打开 serve。这次重试仍失败，则 15 秒内直接抛缓存错误，不再每条读都起 SSH serve。版本、协议、能力、溯源和缺组件的失败仍缓存到 `close` / 重新部署。
 - **dev-lab 冒烟探针（`FIX-8`）**：`-Smoke` 改为兑换会话 cookie 后 `POST /api/dsw/connections.list`，不再打已废弃的 `/dsw/connections.list`。
 - **boot-smoke 成功后退出（`INFRA-12`）**：探针结束后显式 `process.exit`；只删除 `dsh-boot-smoke-*` 临时目录。
