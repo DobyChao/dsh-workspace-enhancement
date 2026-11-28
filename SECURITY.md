@@ -61,7 +61,7 @@
   `danger-full-access` 有组件时同样进组件（`--sandbox off`），没有组件才是 SFTP + 裸 exec）。
 - SSH 固有：远端 pid / 前台进程组不可见。
 - 围栏档**不**把 `bwrap` 或 `rg` 打进远程组件 tarball（tarball 只有第一方 `dsh-core`，`ADR-0024` §3）。
-  bubblewrap 必须装在远端；没有可用的 bwrap 时，内核有 Landlock 就降到那一档（无独立 `/tmp`、无 PID 隔离），
+  bubblewrap 必须装在远端；没有可用的 bwrap 时，内核有 Landlock 就降到那一档（无独立 `/tmp`、无 PID 隔离；`workspace-write` 下 `/tmp` 可写但是共享的真实目录；Landlock ABI 1 限制不了 rename/reparent（REFER），ABI 低于 3 限制不了 truncate），
   两者都没有则围栏档只能读。远端没有 ripgrep 时，`core.deploy` 会试着拉取官方 `rg` 放到组件旁，失败不阻断部署。
   远程组件缺失或架构不符时，围栏档的写与 spawn 是 `SANDBOX_UNAVAILABLE`（UAT I9-9 **反转**：
   `read-only` 下官方 `write` 工作区外失败且文件不存在），读仍走 SFTP；只有 `danger-full-access`

@@ -16,10 +16,10 @@
 | 添加工作区 | 连接侧栏（本机目录、已保存机器、`~/.ssh/config` 别名）+ 目录浏览器 |
 | 机器设置 | 机器增删改、测试、设为默认、忘记指纹。主机指纹默认 TOFU（`accept-new`）；密码默认明文存在本机的机器注册表里，可按机器转存 OS 钥匙串 |
 | 会话感知 | 侧栏显示远程标识和可达性（检测中 / 可连接 / 不可连接），主机密钥变更会提示 |
-| 模型工具 | `sw_status`、`sw_connect`、`sw_exec`（在指定的已注册机器上执行命令）；实验性 `sw_use_machine` 默认关闭，且只在 0.2.1+ 宿主、`danger-full-access`、该机器已连接时注册 |
+| 模型工具 | `sw_status`、`sw_connect`、`sw_exec`（在指定的已注册机器上执行命令）。实验性 `sw_use_machine` 只在设置开关打开（默认关）且宿主为 0.2.1+ 时注册；调用仍要 `danger-full-access`，且目标机器已连到本会话 |
 | 远程文件 | 远程会话的上传落到工作区的 `.dsh-uploads/`；装有 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) 时多一个「远程文件」页，浏览上传与产物 |
 | 审批门（遗留） | 远程命令和终端执行前的逐机器审批；默认关闭，已无界面开关 |
-| 运行时国际化 | UI 文案和工具错误跟随设置页的 **Language** 选项（zh / en）。给模型看的工具描述和会话提示保持英文 |
+| 运行时国际化 | UI 文案跟随设置页的 **Language** 选项（zh / en），词典里的工具错误也跟随。沙箱拒绝、审批门错误，以及让模型改用 bash 或 pwsh 的提示保持英文；给模型看的工具描述和会话提示也保持英文 |
 
 ## 工作原理
 
@@ -34,7 +34,7 @@ flowchart LR
         core --> run
     end
     seam -- "一条 SSH（可多级跳板）" --> core
-    seam -- "ssh exec · SFTP（完全权限且无组件）· PTY（终端）" --> run
+    seam -- "ssh exec（完全权限且无组件）· SFTP（无组件：完全权限的文件，围栏档的读）· PTY（终端）" --> run
 ```
 
 远程不用装 DSH：模型在本地编排，命令在远程跑，结果再回本地进上下文。

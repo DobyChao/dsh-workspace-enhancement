@@ -16,10 +16,10 @@ English | [中文](README.zh.md)
 | Add-workspace flow | Connection sidebar (local directory, saved machines, `~/.ssh/config` aliases) plus a directory browser |
 | Machine settings | Add / edit / test machines, set a default, forget a host key. Host keys default to TOFU (`accept-new`); passwords are stored in plain text in the local machine registry unless you opt in per machine to the OS keychain |
 | Session awareness | Sidebar rows show a remote marker and reachability (Checking / Reachable / Unreachable) and flag a changed host key |
-| Model tools | `sw_status`, `sw_connect`, `sw_exec` (run a command on a registered machine by name); experimental `sw_use_machine`, off by default, and only on a 0.2.1+ host at `danger-full-access` with that machine already connected |
+| Model tools | `sw_status`, `sw_connect`, `sw_exec` (run a command on a registered machine by name). Experimental `sw_use_machine` registers only when its settings toggle is on (off by default) and the host is 0.2.1+; a call still needs `danger-full-access` and a machine already connected to this session |
 | Remote files | Uploads to a remote session land in the workspace's `.dsh-uploads/`; with [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) installed, a **Remote files** tab browses uploads and artifacts |
 | Approval gate (legacy) | Per-machine approval before remote commands and terminals run; off by default, with no UI switch any more |
-| Runtime localization | UI copy and tool errors follow the settings-page **Language** option (`zh` / `en`). Tool descriptions and the session prompt the model reads stay English |
+| Runtime localization | UI copy follows the settings-page **Language** option (`zh` / `en`), and so do dictionary tool errors. Sandbox refusals, approval-gate errors, and the retries that say to use bash or pwsh stay English, as do tool descriptions and the session prompt the model reads |
 
 ## How it works
 
@@ -34,7 +34,7 @@ flowchart LR
         core --> run
     end
     seam -- "one SSH connection (multi-hop jumps)" --> core
-    seam -- "ssh exec · SFTP (danger, no component) · PTY (terminals)" --> run
+    seam -- "ssh exec (danger, no component) · SFTP (no component: danger files, confined reads) · PTY (terminals)" --> run
 ```
 
 No DSH install on the remote: the model orchestrates locally, commands run remotely, and results come back into context.
