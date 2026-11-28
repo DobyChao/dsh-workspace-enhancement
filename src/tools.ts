@@ -822,24 +822,27 @@ export function registerWorkspaceTools(
     text: (context) => {
       const facts = sessionWorkspaceContextOf(context, sides, projections)
       const { cwd, sides: attached } = facts
+      const remoteFiles = renderRemoteFileLines(facts.sessionId)
+      let connected: ConnectedMachineFact[] = []
       let registered: ConnectedMachineFact[] = []
+      let componentIds: string[] = []
       try {
         registered = registry().listMachines().machines.map(entry => connectedMachineFact(
           entry.id,
           typeof entry.username === 'string' && typeof entry.host === 'string' ? entry : undefined,
         ))
+        // Connected facts and the implicit main machine also read the registry.
+        // A throw here must not fail prompt assembly (a remote cwd or a
+        // connected id both reach listMachines / get).
+        connected = connectedFactsOf(sessionIdOf(context), cwd)
+        componentIds = connectedIdsOf(sessionIdOf(context), cwd)
       } catch {
-        // A registry read must not fail prompt assembly. Omit the file-route block.
+        connected = []
         registered = []
+        componentIds = []
       }
-      const body = renderSessionWorkspaceContext(
-        connectedFactsOf(sessionIdOf(context), cwd),
-        attached,
-        renderRemoteFileLines(facts.sessionId),
-        cwd,
-        registered,
-      )
-      const lines = renderRemoteComponentContext(cachedComponentFacts(connectedIdsOf(sessionIdOf(context), cwd)))
+      const body = renderSessionWorkspaceContext(connected, attached, remoteFiles, cwd, registered)
+      const lines = renderRemoteComponentContext(cachedComponentFacts(componentIds))
       return appendComponentLines(body, lines)
     },
   })

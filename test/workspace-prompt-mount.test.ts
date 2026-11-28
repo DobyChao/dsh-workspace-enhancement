@@ -323,6 +323,30 @@ test('UX-20: a registry read failure omits the file-route block and does not thr
   assert.equal(textOf(context, local), '')
 })
 
+test('UX-20: a registry read failure with a connection or a remote cwd still assembles', () => {
+  const connected = mount({
+    listMachinesThrows: true,
+    connections: connStore({ s1: ['c1'] }),
+  })
+  const connectedContext = connected.contexts.find(entry => entry.name === 'dsw-session-workspace')
+  assert.ok(connectedContext !== undefined)
+  const local = assemblyContext('C:\\Users\\me\\proj', 's1')
+  assert.doesNotThrow(() => textOf(connectedContext, local))
+  const localText = textOf(connectedContext, local)
+  assert.ok(!localText.includes('Registered machines'), localText)
+  assert.ok(!localText.includes('Machines connected to this session'), localText)
+
+  const remoteMount = mount({ listMachinesThrows: true })
+  const remoteContext = remoteMount.contexts.find(entry => entry.name === 'dsw-session-workspace')
+  assert.ok(remoteContext !== undefined)
+  const remote = assemblyContext('ssh://c1/srv/work', 's1')
+  assert.doesNotThrow(() => textOf(remoteContext, remote))
+  const remoteText = textOf(remoteContext, remote)
+  assert.ok(remoteText.includes('`/srv/work`'), remoteText)
+  assert.ok(!remoteText.includes('Registered machines'), remoteText)
+  assert.ok(!remoteText.includes('Machines connected to this session'), remoteText)
+})
+
 test('mount: a cached component probe is part of the context provider text (BUG-29)', () => {
   clearCoreEffectCache()
   rememberCoreEffect('c1', { ok: true, version: CORE_ARTIFACT_VERSION, sha256: CORE_COMPAT_HASHES[0] })
